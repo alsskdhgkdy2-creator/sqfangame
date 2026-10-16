@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "shot": "node tools/shot.mjs"
+    "shot": "node tools/shot.mjs",
+    "postinstall": "node -e \"require('fs').writeFileSync('node_modules/.gdignore', '')\""
   },
   "devDependencies": {
     "playwright-core": "1.63.0"

@@ -16,3 +16,9 @@ export_credentials.cfg
 
 # Node 도구
 node_modules/
+
+# Python
+__pycache__/
+
+# 클라우드 시험 보고·임시 작업 폴더
+/tmp/

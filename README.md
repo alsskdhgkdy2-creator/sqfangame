@@ -15,6 +15,7 @@
 - `docs/design/02-tech-plan.md`: 기술 계획 (Godot 웹, 코드 구조, 데이터, 시험, 배포)
 - `docs/design/03-production-plan.md`: 그림 에셋 제작과 단계(M0~M3)별 수용 기준
 - `docs/design/04-world-and-art-direction.md`: 세계관(사이버펑크 + 마법)과 아트 방향
+- `docs/CLOUD_TESTS.md`: 무거운 시험을 클라우드로 보내는 기준과 방법
 
 ## 개발
 
@@ -25,5 +26,10 @@
 | 웹 빌드 | `tools/export_web.sh` → `build/web/` |
 | 웹 캡처 | `npm install` 뒤 `flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/shot.mjs build/shot.png 1280x720 20` |
 | 컨셉 그림 비교 시트 | `python3 tools/concept_sheet.py <출력.jpg> "<이름>=<그림>" ...` (아랫줄에 게임 화면 크기 판을 붙임, `assets/concept/compare/`) |
+| 텍스처 이음새 | `python3 tools/tile_check.py check <그림>...` / `preview <그림> <출력>` / `fix <그림> <출력> --size 512` |
+| 휴대폰 확인 | `python3 tools/serve_web.py` (127.0.0.1:8765, 큰 파일 gzip) 뒤 `cloudflared` 임시 주소 (`docs/CLOUD_TESTS.md`) |
+| 클라우드 시험 | `tools/cloud/test.sh --push --wait` (`docs/CLOUD_TESTS.md`) |
 
 - 글꼴: `assets/fonts/NotoSansKR-Regular-subset.otf` (Noto Sans CJK KR에서 ASCII·한글 음절·자모·문장부호만 남김, SIL OFL 1.1, `assets/fonts/OFL.txt`).
+- 그림의 `.import` 설정을 손으로 고치면 `godot --headless --import` 가 다시 가져오지 않는다. `.godot/imported/<파일 이름>-*` 를 지우고 가져온다.
+- Godot 는 프로젝트 폴더 전체를 가져온다. `node_modules/`·`build/`·`tmp/` 에는 `.gdignore` 를 둔다(`docs/CLOUD_TESTS.md`).
