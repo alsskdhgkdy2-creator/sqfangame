@@ -1,8 +1,9 @@
 # sqfangame — 「아보르 프로토콜」(가제)
 
-아틀라스 「세계수의 미궁(Etrian Odyssey)」 시리즈를 장르 모티브로 삼은 1인칭 그리드 던전 탐사 팬게임. 세계관은 사이버펑크와 마법의 융합: 사이버네틱 몸 위에 홀로그램으로 판타지 기사·마법사의 모습을 투사한다.
+아틀라스 「세계수의 미궁(Etrian Odyssey)」 시리즈의 비공식 팬게임. 신작을 기다리던 팬이 직접 만드는 2차 창작 후속작으로, 1인칭 그리드 탐사·손으로 그리는 지도·FOE·5인 직업 파티와 원작의 그림체를 이어받아 "사이버네틱한 세계수의 미궁"을 그린다: 사이버네틱 몸 위에 홀로그램으로 판타지 기사·마법사의 모습을 투사한다.
 
-- 비영리 팬 프로젝트다. 원작의 이름·문장·그림·음악을 그대로 쓰지 않고 시스템만 참고한다.
+- 비영리 팬 프로젝트이며 ATLUS·SEGA와 관계없는 비공식 2차 창작이다.
+- 원작 스타일(그림체·UI 문법·세계관 모티브·시리즈 용어)을 레퍼런스로 삼아 드러낸다. 그림·음악·문장은 새로 만들고, 원작 게임에서 추출한 파일은 넣지 않는다.
 - 엔진: Godot 4.7.2-stable (`godot` 명령, 경로를 바꿀 때는 `${GODOT:-godot}`)
 - 1차 대상: 웹 빌드 (확인 편의). 렌더러는 웹에서 동작하는 Compatibility(WebGL 2)를 쓴다.
 
@@ -23,5 +24,6 @@
 | 규칙 시험 | `godot --headless -s tests/run.gd` (실패하면 종료 코드 1) |
 | 웹 빌드 | `tools/export_web.sh` → `build/web/` |
 | 웹 캡처 | `npm install` 뒤 `flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/shot.mjs build/shot.png 1280x720 20` |
+| 컨셉 그림 비교 시트 | `python3 tools/concept_sheet.py <출력.jpg> "<이름>=<그림>" ...` (아랫줄에 게임 화면 크기 판을 붙임, `assets/concept/compare/`) |
 
 - 글꼴: `assets/fonts/NotoSansKR-Regular-subset.otf` (Noto Sans CJK KR에서 ASCII·한글 음절·자모·문장부호만 남김, SIL OFL 1.1, `assets/fonts/OFL.txt`).

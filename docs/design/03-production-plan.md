@@ -7,27 +7,31 @@
 ### 1.1. 원칙
 
 - 그림은 GPT 이미지 생성(Paseo 프로필 「이미지 작업 : 지피티」)으로 만든다. 생성 뒤 조정자가 직접 열어 검수하고, 통과한 것만 `assets/`에 넣는다.
-- 그림체 기준은 `~/projects/artstyle_reference`의 두 그림체다. 기준 문서(`styles/<이름>/STYLE.md`)의 특징 서술과 참고 이미지를 생성 요청에 함께 넘긴다.
-- 생성 요청에 원작 작품명·원작 일러스트레이터 이름·원작 직업명을 넣지 않는다. `thick-lineart-hard-cel/STYLE.md`의 기본 프롬프트 끝 문구(`in the vein of Etrian Odyssey character designs`)는 이 게임에서는 빼고 쓴다.
-- `artstyle_reference`의 `thick-lineart-hard-cel/generated/eo0*_*.png`는 원작 직업을 바탕으로 만든 시험작이다. 이 게임에 그대로 쓰지 않는다. 그림체 참고용으로만 넘긴다.
+- 그림체 기준은 `~/projects/artstyle_reference`의 그림체다. 원작 스타일을 드러내는 방향(01 §1.2)에서는 원작 캐릭터 일러스트의 결을 분석한 `thick-lineart-hard-cel`을 바탕으로 한다(D6 확정). 기준 문서(`styles/<이름>/STYLE.md`)의 특징 서술과 참고 이미지를 생성 요청에 함께 넘긴다.
+- 생성 요청에 작품명 구절(`in the vein of Etrian Odyssey character designs`, `unofficial Etrian Odyssey fan game`)과 원작 직업 계열 설명(예: `the series' classic paladin-type shield class`)을 넣는다. 현역 일러스트레이터 이름은 GPT 이미지가 거절하거나 무시할 수 있어 넣지 않고, 특징 서술과 참고 이미지로 대신한다(`thick-lineart-hard-cel/STYLE.md` 「화풍 기준 이름 넣기」).
+- `thick-lineart-hard-cel/generated/eo0*_*.png`(원작 1편 직업을 이 그림체로 그린 시험작)는 원작 결을 잡는 스타일 참고로 넘긴다. 게임의 직업 초상화는 이 게임의 직업(04 §2.3)으로 새로 그린다.
+- 직업 초상화끼리 한 파티처럼 보이게 하려면, 이 게임의 기준 그림 한 장을 다섯 번째 참고("world look reference": 기계 팔다리·천 옷·홀로그램을 그리는 방식만 따르고 얼굴·장비·문장은 따라 하지 않게 적음)로 넘긴다(04 §3.5에서 효과 확인). 문장 같은 표식이 옮겨 올 수 있어 새 캐릭터에는 "문장 없음"을 적는다.
+- 그림체 참고 이미지의 인물 특징(머리색·브릿지·표정)이 새 캐릭터로 옮겨 올 수 있다. 새 캐릭터와 머리색·표정이 겹치는 참고 그림은 그 생성에서 뺀다(04 §3.1.1).
 - 참고 이미지(`reference/`)는 이 저장소에 넣지 않는다. 저장소는 공개이고, 참고 이미지는 사용자가 따로 모은 자료다.
 
-### 1.2. 그림체 선택 (결정 필요 D6)
+### 1.2. 그림체 선택 (D6 확정)
 
 | 그림체 | 특징 | 이 게임에서의 장단점 |
 |---|---|---|
-| `flat-lineless-gouache` | 외곽선 없는 평면 채색, 과슈풍 그림자, 제한 팔레트(검정·흰색·금색 + 강조색 하나), 가늘고 긴 다리, 큰 무기 | 원작과 거리가 멀어 독자적인 인상. 제한 팔레트라 계층별 색 주제와 미궁 텍스처를 맞추기 쉽다. 캐릭터 분위기는 동화풍으로 가볍다 |
-| `thick-lineart-hard-cel` | 굵은 검정 외곽선, 각진 셀 그림자, 검은 그림자 덩어리, 4~5등신 | 장르(던전 RPG 설정화) 분위기가 강하다. 대신 원작 일러스트를 기준으로 분석한 그림체라 원작과 닮아 보일 여지가 크다 |
+| `flat-lineless-gouache` | 외곽선 없는 평면 채색, 과슈풍 그림자, 제한 팔레트(검정·흰색·금색 + 강조색 하나), 가늘고 긴 다리, 큰 무기 | 원작 결과 거리가 멀어, 원작 스타일을 드러내는 지금 방향과 맞지 않는다. 제한 팔레트라 계층별 색 주제와 미궁 텍스처를 맞추기는 쉽다. 캐릭터 분위기는 동화풍으로 가볍다 |
+| `thick-lineart-hard-cel` | 굵은 검정 외곽선, 각진 셀 그림자, 검은 그림자 덩어리, 4~5등신 | 원작 캐릭터 일러스트를 기준으로 분석한 그림체라 원작 팬이 바로 알아본다. 굵은 선과 검은 그림자 덩어리가 기계 몸의 무게와 홀로그램 발광의 대비를 살린다 |
 
-- **갱신(2026-10-16):** 사이버펑크 + 홀로그램 판타지 방향이 정해져 제안을 바꾼다. 04 문서 §3.2에 따라 `thick-lineart-hard-cel` 바탕 + 사이버·홀로그램 규칙을 먼저 시험한다. 아래 줄은 그 전의 판단이다.
-- (이전 제안) **주력은 `flat-lineless-gouache`**. "장르 모티브, 독자 표현" 방침에 더 맞고, 몬스터·텍스처·UI까지 한 팔레트 체계로 묶기 좋다.
-- 두 그림체를 한 화면에 섞지 않는다. 고르기 전에 같은 가칭 직업 두 개(방패지기·약초사)를 두 그림체로 한 장씩 만들어 나란히 비교하는 방법도 있다(생성 4장).
+- **확정(2026-10-16, D6·D9):** **`thick-lineart-hard-cel` 바탕 + 사이버 비중 B 반반**(04 §3.3~3.5). 원작 스타일을 드러내는 팬 후속작 방향(`00-decisions.md`)에 맞춘 선택이다.
+- 갱신 2(2026-10-16): 그 방향이 정해져 `thick-lineart-hard-cel` 바탕 위에서 사이버 비중을 3안으로 비교했다(04 §3.4).
+- 갱신 1(2026-10-16): 사이버펑크 + 홀로그램 판타지 방향이 정해져 `thick-lineart-hard-cel` 바탕 + 사이버·홀로그램 규칙을 먼저 시험하기로 했다(04 §3.2).
+- (처음 제안, 폐기) 주력은 `flat-lineless-gouache`. 원작과 거리를 두던 "장르 모티브, 독자 표현" 방침 때의 판단이다.
+- 두 그림체를 한 화면에 섞지 않는다.
 
 ### 1.3. 에셋 목록 (첫 수직 슬라이스)
 
 | 종류 | 수량 | 규격(제안) | 비고 |
 |---|---|---|---|
-| 캐릭터 초상화 | 직업 6 × 외형 2 = 12 | 1024×1536, 전신, 단색 배경 | 전투 칸·길드에서 잘라 쓴다 |
+| 캐릭터 초상화 | 직업 6 × 외형 2 = 12 | 1024×1536, 전신, 단색 배경 | 전투 칸·길드에서 잘라 쓴다. 기준 그림(04 §3.5) 하나를 다섯 번째 참고로 넘긴다 |
 | 일반 적 | 8 | 1024×1024, 단색 배경 | 전투 화면 2D 배치. 배경 제거 필요 |
 | FOE | 3 | 1024×1024 | 미궁 안에서는 단순 기호/빌보드, 전투에서 그림 |
 | 계층 보스 | 1 | 1536×1024 | |
@@ -48,12 +52,12 @@
 
 ```json
 {
-  "path": "assets/portraits/warden_a.png",
+  "path": "assets/portraits/holoknight_a.png",
   "kind": "portrait",
-  "style": "flat-lineless-gouache",
+  "style": "thick-lineart-hard-cel",
   "generator": "codex $imagegen (gpt-6-astra)",
-  "prompt_file": "assets/prompts/warden_a.md",
-  "reference_images": ["artstyle_reference: styles/flat-lineless-gouache/reference/01.png"],
+  "prompt_file": "assets/prompts/holoknight_a.md",
+  "reference_images": ["artstyle_reference: styles/thick-lineart-hard-cel/reference/ref3_crimson_hair_dark_dress.png", "assets/concept/holoknight_eo_b2.png"],
   "postprocess": ["bg-remove", "resize 768"],
   "reviewed": "2026-10-xx",
   "notes": ""
@@ -69,7 +73,7 @@
 - Godot 프로젝트 생성(Compatibility, 1280×720), 폴더 구조(02 문서 §4), 헤드리스 시험 실행기.
 - 웹 내보내기 설정(스레드 없음). 이 기기에서 내보내고 Chromium으로 열어 캡처, `cloudflared`로 휴대폰에서 열기.
 - `docs/CLOUD_TESTS.md`와 클라우드 실행 경로(Claude 클라우드).
-- 그림 생성 시험: 투명 배경·이음새·그림체 비교(D6).
+- 그림 생성 시험: 투명 배경·이음새·그림체 비교(D6, 비교는 끝남).
 
 진행 기록 (2026-10-16):
 
@@ -79,7 +83,8 @@
 | 시험 실행기 | `tests/run.gd`, 난수 결정성 시험 2개 통과, 일부러 넣은 실패 시험에서 종료 코드 1 확인 |
 | 웹 내보내기 | 스레드 없는 템플릿, 이 기기에서 34초. `index.wasm` 39.5MB(gzip 10.1MB), `index.pck` 1.4MB, `index.js` 0.28MB(gzip 0.07MB) |
 | 브라우저 캡처 | Chromium 153 + Xvfb + ANGLE(llvmpipe), 컨텍스트 잃음 없음, 오류 없음, 한글 표시 정상 |
-| 남음 | 휴대폰 실기 확인(`cloudflared`), `docs/CLOUD_TESTS.md`, 생성 그림의 투명 배경·이음새 시험, 그림체 결정(D6) |
+| 그림체 | D6·D9 확정: `thick-lineart-hard-cel` + 사이버 비중 B. 기준 그림 3장(04 §3.5) |
+| 남음 | 휴대폰 실기 확인(`cloudflared`), `docs/CLOUD_TESTS.md`, 생성 그림의 투명 배경·이음새 시험 |
 
 수용 기준: 빈 장면이 브라우저와 휴대폰에서 뜬다. `tests/run.gd`가 헤드리스로 돌고 실패를 종료 코드로 알린다. 웹 빌드 크기를 잰다.
 
@@ -115,6 +120,6 @@
 
 | 번호 | 항목 | 제안 |
 |---|---|---|
-| D6 | 주력 그림체 | `flat-lineless-gouache`, 또는 비교 생성 뒤 결정 |
+| D6 | 주력 그림체 | 확정: `thick-lineart-hard-cel` + 사이버 비중 B (`00-decisions.md`) |
 | D7 | 웹 공개 위치 | GitHub Pages(공개) / 공개하지 않고 임시 주소로만 확인 |
 | D8 | 음악·효과음 출처 | 공개 라이선스(CC0 등) 우선 |
