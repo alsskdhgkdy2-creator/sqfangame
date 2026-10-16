@@ -1,13 +1,17 @@
-## M0 확인용 장면: 격자 복도 한 줄과 한글 표시. 웹 내보내기·렌더러·글꼴 확인에 쓴다.
+## M0 확인용 장면: 격자 복도 한 줄과 한글 표시. 웹 내보내기·렌더러·글꼴·첫 계층 텍스처 확인에 쓴다.
 extends Node3D
 
 const CELL := 2.0
 const LENGTH := 6
+const WALL_TEX := preload("res://assets/textures/stratum1/wall.png")
+const FLOOR_TEX := preload("res://assets/textures/stratum1/floor.png")
 
 
 func _ready() -> void:
-	var wall := StandardMaterial3D.new()
-	wall.albedo_color = Color(0.08, 0.09, 0.12)
+	var wall := _textured(WALL_TEX)
+	var floor_mat := _textured(FLOOR_TEX)
+	var ceiling := StandardMaterial3D.new()
+	ceiling.albedo_color = Color(0.08, 0.09, 0.12)
 	var glow := StandardMaterial3D.new()
 	glow.albedo_color = Color(0.2, 0.9, 1.0)
 	glow.emission_enabled = true
@@ -16,8 +20,8 @@ func _ready() -> void:
 
 	for i in LENGTH:
 		var z := -i * CELL
-		_add_box(Vector3(0, -0.05, z), Vector3(CELL, 0.1, CELL), wall)
-		_add_box(Vector3(0, CELL + 0.05, z), Vector3(CELL, 0.1, CELL), wall)
+		_add_box(Vector3(0, -0.05, z), Vector3(CELL, 0.1, CELL), floor_mat)
+		_add_box(Vector3(0, CELL + 0.05, z), Vector3(CELL, 0.1, CELL), ceiling)
 		_add_box(Vector3(-CELL / 2 - 0.05, CELL / 2, z), Vector3(0.1, CELL, CELL), wall)
 		_add_box(Vector3(CELL / 2 + 0.05, CELL / 2, z), Vector3(0.1, CELL, CELL), wall)
 		_add_box(Vector3(-CELL / 2 + 0.01, 0.2, z), Vector3(0.02, 0.04, CELL * 0.9), glow)
@@ -52,6 +56,18 @@ func _ready() -> void:
 	label.add_theme_font_size_override("font_size", 28)
 	ui.add_child(label)
 	add_child(ui)
+
+
+## 세계 좌표 삼면 투영으로 칸 한 면에 텍스처 한 장을 칸 경계에 맞춰 붙인다.
+func _textured(tex: Texture2D) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mat.uv1_triplanar = true
+	mat.uv1_world_triplanar = true
+	mat.uv1_scale = Vector3.ONE / CELL
+	mat.uv1_offset = Vector3(0.5, 0.0, 0.5)
+	return mat
 
 
 func _add_box(pos: Vector3, size: Vector3, mat: Material) -> void:

@@ -1,0 +1,32 @@
+[
+  {
+    "path": "assets/textures/stratum1/wall.png",
+    "kind": "texture",
+    "style": "hand-painted dungeon texture",
+    "generator": "codex image_gen (gpt-6-astra)",
+    "prompt_file": "assets/prompts/stratum1_wall.md",
+    "source": "assets/concept/tests/stratum1_wall.png",
+    "reference_images": [],
+    "postprocess": [
+      "tile_check fix (periodic+smooth)",
+      "resize 512 (wrap)"
+    ],
+    "reviewed": "2026-10-16",
+    "notes": "M0 시험판, 첫 계층(배선 덩굴 네온 이끼 숲) 벽"
+  },
+  {
+    "path": "assets/textures/stratum1/floor.png",
+    "kind": "texture",
+    "style": "hand-painted dungeon texture",
+    "generator": "codex image_gen (gpt-6-astra)",
+    "prompt_file": "assets/prompts/stratum1_floor.md",
+    "source": "assets/concept/tests/stratum1_floor.png",
+    "reference_images": [],
+    "postprocess": [
+      "tile_check fix (periodic+smooth)",
+      "resize 512 (wrap)"
+    ],
+    "reviewed": "2026-10-16",
+    "notes": "M0 시험판, 첫 계층(배선 덩굴 네온 이끼 숲) 바닥"
+  }
+]
