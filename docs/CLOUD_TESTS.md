@@ -66,4 +66,4 @@ tools/cloud/test.sh --push --wait --force          # sim 범위 변경이 없어
 
 | 날짜 | 커밋 | 결과 |
 |---|---|---|
-| — | — | 아직 없음. 스크립트를 커밋해 origin 에 올린 뒤 `tools/cloud/test.sh --push --wait --force` 로 한 번 돌려 앱 권한·보고 회수를 확인한다 |
+| — | — | 아직 없음. 사용자 결정(2026-10-16): 시뮬레이션이 생기는 M2 때 처음 돌린다. 그때 `tools/cloud/test.sh --push --wait` 로 앱 권한·보고 회수를 함께 확인한다 |

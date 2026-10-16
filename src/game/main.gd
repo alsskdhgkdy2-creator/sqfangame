@@ -28,7 +28,9 @@ func _ready() -> void:
 		_add_box(Vector3(CELL / 2 - 0.01, 0.2, z), Vector3(0.02, 0.04, CELL * 0.9), glow)
 
 	var cam := Camera3D.new()
-	cam.position = Vector3(0, 1.0, CELL / 2)
+	# 칸 가운데에 둔다. 칸 경계 면(상자 정점이 있는 z)에 두면 그 정점이 카메라 깊이 0(w = 0)이 되어,
+	# 휴대폰 GPU 에서 그 정점을 가진 삼각형이 먼 꼭짓점에서 퍼지는 줄무늬로 그려진다(2026-10-16 실기 확인, PC 는 정상).
+	cam.position = Vector3(0, 1.0, 0.0)
 	cam.fov = 75
 	add_child(cam)
 
