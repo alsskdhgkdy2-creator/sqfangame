@@ -14,3 +14,14 @@
 - `docs/design/02-tech-plan.md`: 기술 계획 (Godot 웹, 코드 구조, 데이터, 시험, 배포)
 - `docs/design/03-production-plan.md`: 그림 에셋 제작과 단계(M0~M3)별 수용 기준
 - `docs/design/04-world-and-art-direction.md`: 세계관(사이버펑크 + 마법)과 아트 방향
+
+## 개발
+
+| 할 일 | 명령 |
+|---|---|
+| 처음 한 번(가져오기) | `godot --headless --import` |
+| 규칙 시험 | `godot --headless -s tests/run.gd` (실패하면 종료 코드 1) |
+| 웹 빌드 | `tools/export_web.sh` → `build/web/` |
+| 웹 캡처 | `npm install` 뒤 `flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/shot.mjs build/shot.png 1280x720 20` |
+
+- 글꼴: `assets/fonts/NotoSansKR-Regular-subset.otf` (Noto Sans CJK KR에서 ASCII·한글 음절·자모·문장부호만 남김, SIL OFL 1.1, `assets/fonts/OFL.txt`).

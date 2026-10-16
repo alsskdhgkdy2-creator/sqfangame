@@ -1,0 +1,11 @@
+{
+  "name": "sqfangame-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "shot": "node tools/shot.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.63.0"
+  }
+}

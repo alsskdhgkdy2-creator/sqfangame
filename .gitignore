@@ -13,3 +13,6 @@ export_credentials.cfg
 .DS_Store
 *.tmp
 .vscode/
+
+# Node 도구
+node_modules/
