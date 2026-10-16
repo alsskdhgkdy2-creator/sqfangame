@@ -83,6 +83,8 @@ Cyber-fantasy fusion. The character's real body is cybernetic: matte black and g
 
 ## 4. 결정 필요
 
+D1·D1-a·D1-b는 2026-10-16 제안대로 확정했다(`00-decisions.md`). D6만 남았다.
+
 | 번호 | 항목 | 제안 |
 |---|---|---|
 | D1 | 세계관 | 위 §2 초안(아보르, 에테르 신호=마법, 뿌리마을) |
