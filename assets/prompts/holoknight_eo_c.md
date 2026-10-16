@@ -1,0 +1,26 @@
+# holoknight_eo_c
+
+- 생성: 2026-10-16, Codex `image_gen` (gpt-6-astra), 1회 생성(재시도·차단 없음, 프롬프트 수정 없음)
+- 참고 이미지(스타일 참고, 이 순서): `artstyle_reference/styles/thick-lineart-hard-cel/` 의 `reference/ref1_purple_jacket_grin.png`, `reference/ref3_crimson_hair_dark_dress.png`, `reference/ref5_purple_robe_mage.png`, `generated/eo05_landsknecht.png`, `generated/eo06_medic.png`
+- 용도: 사이버 비중 비교 시험(D9) 변형 C「사이버 우선」. 게임에 쓰지 않는다. 비교 결과는 `docs/design/04-world-and-art-direction.md` §3.4
+- 결과: 1024×1536, 배경 모서리 RGB 253~255(순백 아님)
+
+```text
+Original character for an unofficial Etrian Odyssey fan game: a cyber-fantasy fan sequel in which explorer guilds descend a giant mechanical world-tree labyrinth. 2D anime-style full-body character stand art, clearly a drawn illustration, not a real person, not photorealistic.
+Use case: stylized-concept.
+Asset type: class concept art, one of three variants comparing how strongly the cybernetic layer shows. Generate ONE image, portrait 2:3, exactly 1024 x 1536 pixels.
+Input images 1–5 are STYLE REFERENCES ONLY: use all five for the linework, hard shadow shapes, face drawing, proportions and the classic Etrian Odyssey class-portrait finish; do not copy any reference character's face, hairstyle, costume, weapon or identity. This is a NEW class design, as if from a new numbered entry of the series.
+
+Scene/backdrop: perfectly flat solid pure white RGB (255,255,255), #FFFFFF. No floor, ground/contact shadow, vignette, gradient, paper grain, noise or tint.
+
+Class: Holo Knight, the party's front-row shield defender, a cyber-fantasy take on the series' classic paladin-type shield class.
+Character identity (identical across all three variants): one adult woman, steady and protective, with a confident slight smile. Warm chestnut-brown shoulder-length hair in chunky clumps with spiky split tips, one thick braid falling over her right shoulder. Both eyes clearly visible, amber irises. A slim cybernetic headset wraps around her ears with small swept-back fin guards, and a small translucent gold monocle HUD lens sits over her left eye only. Color scheme: deep navy, gunmetal and off-white, with gold as the only glow color. Original heraldic crest: a hollow diamond crossed by one vertical bar, with three short rays above it. A compact circular force-field emitter on her LEFT forearm projects a very large translucent gold kite-shaped shield bearing the crest. Her right hand holds a short broad one-handed sword low at her side, gunmetal blade with a thin gold edge glow.
+Composition/framing: full body, front view turned slightly into three-quarter view, feet planted wide in a braced guarding stance. Left forearm held forward presenting the shield, on the viewer's right; the shield sits beside the torso so the body stays legible. Keep the whole silhouette, hair, boots, sword and shield comfortably inside the canvas with clear white margin.
+
+Variant C (cyber first): the physical body is almost entirely machine — gunmetal and navy cyborg torso plates, fully mechanical arms and legs with exposed joints, small pistons and cable bundles, no cloth except a slim navy belt. Every fantasy element is hologram: a transparent GOLD full plate-armor outline (pauldrons, breastplate, gauntlets, greaves), an open-faced helmet outline with a tall swept-back plume (her face stays uncovered), a long flowing translucent cape behind her, and the large kite shield. The dark machinery stays visible through the projection.
+
+Hologram rendering: gold parts read as emitted light and transparent volume, never solid gold metal or opaque yellow armor. Fine horizontal scanlines, a few small rectangular glitch fragments at their edges, sparse abstract rune marks (nonlinguistic ornament, not readable text). Crisp restrained glow, no fog or background wash. The hologram may use thin luminous gold contours instead of black outlines.
+
+Style/medium: full-body anime character illustration in the vein of Etrian Odyssey character designs: thick bold black outlines, hard two-tone cel shading, flat colors, sharp-edged angular shadows, large near-black shadow masses (spot blacks) in hair and deep folds, small white planar highlights on metal and boots. Face with small pupils, thick upper eyelashes and small blush dots. Stocky stylized proportions about 4.5–5 heads tall: big head, short torso, thick thighs, wide stance, chunky boots. Hair in chunky clumps with sharp, spiky split tips. Practical adventurer gear in the series' tradition, with purposeful details rather than clutter.
+Rendering priority: bold thick black outer contours on all physical parts, simple flat two-tone fills, graphic spot blacks, stocky anatomy with crown-to-chin head height about 21–23% of standing height (excluding the plume). Body anatomically continuous in correct perspective; hands and the sword grip coherent and legible. Avoid white or silver hair, blindfolds or eye-covering visors, intricate micro-patterns, excessive stacked buckles and belts, soft gradients, painterly rendering, extra weapons and extra characters. No text, labels, watermark or signature.
+```
