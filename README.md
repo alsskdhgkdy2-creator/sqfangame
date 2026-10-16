@@ -8,5 +8,7 @@
 
 ## 문서
 
-- `docs/research/`: 원작 시리즈 시스템 조사 자료
-- `docs/design/`: 조사를 바탕으로 한 기획 문서
+- `docs/research/`: 원작 시리즈 시스템 조사 자료 (`README.md`에 작성 경위와 원문 대조 기록)
+- `docs/design/01-game-design.md`: 게임 기획 (방향, 범위, 탐색·전투·직업·마을·성장·저장 규칙)
+- `docs/design/02-tech-plan.md`: 기술 계획 (Godot 웹, 코드 구조, 데이터, 시험, 배포)
+- `docs/design/03-production-plan.md`: 그림 에셋 제작과 단계(M0~M3)별 수용 기준
