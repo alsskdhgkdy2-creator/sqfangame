@@ -12,3 +12,4 @@
 - `docs/design/01-game-design.md`: 게임 기획 (방향, 범위, 탐색·전투·직업·마을·성장·저장 규칙)
 - `docs/design/02-tech-plan.md`: 기술 계획 (Godot 웹, 코드 구조, 데이터, 시험, 배포)
 - `docs/design/03-production-plan.md`: 그림 에셋 제작과 단계(M0~M3)별 수용 기준
+- `docs/design/04-world-and-art-direction.md`: 세계관(사이버펑크 + 마법)과 아트 방향
