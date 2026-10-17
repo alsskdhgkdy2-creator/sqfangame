@@ -1,0 +1,385 @@
+{
+  "enemies": [
+    {
+      "id": "enemy.neon_rat",
+      "name_key": "enemy.neon_rat",
+      "max_hp": 90,
+      "stats": {
+        "STR": 32,
+        "INT": 8,
+        "VIT": 12,
+        "WIS": 8,
+        "AGI": 16,
+        "LUC": 8
+      },
+      "resist": {
+        "slash": 1000,
+        "pierce": 1000,
+        "bash": 1000,
+        "fire": 1500,
+        "ice": 1000,
+        "volt": 1000
+      },
+      "ailment_vuln": {
+        "poison": 1000,
+        "paralysis": 1000,
+        "sleep": 1000
+      },
+      "bind_vuln": {
+        "head": 1000,
+        "arm": 1000,
+        "leg": 1000
+      },
+      "on_bound": "fail",
+      "exp": 12,
+      "ai": [
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.bite",
+              "weight": 4,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.rending_howl",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.neon_rat_tail",
+          "chance": 600
+        }
+      ]
+    },
+    {
+      "id": "enemy.cable_moth",
+      "name_key": "enemy.cable_moth",
+      "max_hp": 78,
+      "stats": {
+        "STR": 27,
+        "INT": 24,
+        "VIT": 9,
+        "WIS": 14,
+        "AGI": 15,
+        "LUC": 10
+      },
+      "resist": {
+        "slash": 1000,
+        "pierce": 1500,
+        "bash": 1000,
+        "fire": 1000,
+        "ice": 1000,
+        "volt": 1500
+      },
+      "ailment_vuln": {
+        "poison": 1000,
+        "paralysis": 1000,
+        "sleep": 1000
+      },
+      "bind_vuln": {
+        "head": 1000,
+        "arm": 1000,
+        "leg": 1000
+      },
+      "on_bound": "fail",
+      "exp": 14,
+      "ai": [
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.corrode_powder",
+              "weight": 2,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.barb_quill",
+              "weight": 3,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.cable_scale",
+          "chance": 500
+        },
+        {
+          "item": "item.glow_scale",
+          "chance": 1000,
+          "if": {
+            "killed_by_element": [
+              "fire",
+              "ice",
+              "volt"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "enemy.spore_bloom",
+      "name_key": "enemy.spore_bloom",
+      "max_hp": 104,
+      "stats": {
+        "STR": 24,
+        "INT": 24,
+        "VIT": 12,
+        "WIS": 14,
+        "AGI": 8,
+        "LUC": 10
+      },
+      "resist": {
+        "slash": 1000,
+        "pierce": 1000,
+        "bash": 500,
+        "fire": 1500,
+        "ice": 1000,
+        "volt": 1000
+      },
+      "ailment_vuln": {
+        "poison": 1000,
+        "paralysis": 1000,
+        "sleep": 1000
+      },
+      "bind_vuln": {
+        "head": 1000,
+        "arm": 1000,
+        "leg": 1000
+      },
+      "on_bound": "switch",
+      "exp": 16,
+      "ai": [
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.sleep_spores",
+              "weight": 2,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.thorn_vine",
+              "weight": 3,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.spore_pouch",
+          "chance": 500
+        }
+      ]
+    },
+    {
+      "id": "enemy.wire_serpent",
+      "name_key": "enemy.wire_serpent",
+      "max_hp": 120,
+      "stats": {
+        "STR": 34,
+        "INT": 11,
+        "VIT": 14,
+        "WIS": 10,
+        "AGI": 14,
+        "LUC": 10
+      },
+      "resist": {
+        "slash": 1000,
+        "pierce": 1000,
+        "bash": 1000,
+        "fire": 1000,
+        "ice": 1500,
+        "volt": 500
+      },
+      "ailment_vuln": {
+        "poison": 1000,
+        "paralysis": 1000,
+        "sleep": 1000
+      },
+      "bind_vuln": {
+        "head": 1000,
+        "arm": 1000,
+        "leg": 1000
+      },
+      "on_bound": "fail",
+      "exp": 20,
+      "ai": [
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.shock_bite",
+              "weight": 3,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.coil",
+              "weight": 2,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.coated_scale",
+          "chance": 500
+        }
+      ]
+    },
+    {
+      "id": "enemy.drill_mole",
+      "name_key": "enemy.drill_mole",
+      "max_hp": 150,
+      "stats": {
+        "STR": 36,
+        "INT": 8,
+        "VIT": 18,
+        "WIS": 8,
+        "AGI": 9,
+        "LUC": 9
+      },
+      "resist": {
+        "slash": 1000,
+        "pierce": 500,
+        "bash": 1000,
+        "fire": 1000,
+        "ice": 1500,
+        "volt": 1000
+      },
+      "ailment_vuln": {
+        "poison": 1000,
+        "paralysis": 1000,
+        "sleep": 1000
+      },
+      "bind_vuln": {
+        "head": 1000,
+        "arm": 1000,
+        "leg": 1000
+      },
+      "on_bound": "fail",
+      "exp": 24,
+      "ai": [
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.drill_ram",
+              "weight": 2,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.claw",
+              "weight": 3,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.drill_claw",
+          "chance": 500
+        }
+      ]
+    },
+    {
+      "id": "enemy.clamp_beetle",
+      "name_key": "enemy.clamp_beetle",
+      "max_hp": 208,
+      "stats": {
+        "STR": 39,
+        "INT": 8,
+        "VIT": 24,
+        "WIS": 10,
+        "AGI": 7,
+        "LUC": 10
+      },
+      "resist": {
+        "slash": 500,
+        "pierce": 500,
+        "bash": 500,
+        "fire": 1500,
+        "ice": 1500,
+        "volt": 1500
+      },
+      "ailment_vuln": {
+        "poison": 1000,
+        "paralysis": 1000,
+        "sleep": 1000
+      },
+      "bind_vuln": {
+        "head": 1000,
+        "arm": 1000,
+        "leg": 1000
+      },
+      "on_bound": "fail",
+      "exp": 40,
+      "ai": [
+        {
+          "if": {
+            "charging": true
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.crush",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {
+            "turn_mod": [
+              3,
+              2
+            ]
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.raise_pincers",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.pinch",
+              "weight": 2,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.claw",
+              "weight": 3,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.beetle_plate",
+          "chance": 500
+        },
+        {
+          "item": "item.intact_pincer",
+          "chance": 1000,
+          "if": {
+            "killed_while_bound": "arm"
+          }
+        }
+      ]
+    }
+  ]
+}

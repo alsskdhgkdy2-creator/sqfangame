@@ -1,0 +1,43 @@
+{
+  "id": "class.blade_duelist",
+  "name_key": "class.blade_duelist",
+  "levels": {
+    "1": {
+      "hp": 52,
+      "tp": 32,
+      "STR": 19,
+      "INT": 8,
+      "VIT": 13,
+      "WIS": 10,
+      "AGI": 18,
+      "LUC": 13
+    }
+  },
+  "attack": {
+    "element": "slash",
+    "range": "melee"
+  },
+  "resist": {
+    "slash": 1000,
+    "pierce": 1000,
+    "bash": 1000,
+    "fire": 1000,
+    "ice": 1000,
+    "volt": 1000
+  },
+  "ailment_vuln": {
+    "poison": 1000,
+    "paralysis": 1000,
+    "sleep": 1000
+  },
+  "bind_vuln": {
+    "head": 1000,
+    "arm": 1000,
+    "leg": 1000
+  },
+  "skills": [
+    "skill.blade_duelist.high_slash",
+    "skill.blade_duelist.cross_sweep",
+    "skill.blade_duelist.overclock"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "id": "class.holo_knight",
+  "name_key": "class.holo_knight",
+  "levels": {
+    "1": {
+      "hp": 60,
+      "tp": 30,
+      "STR": 15,
+      "INT": 8,
+      "VIT": 19,
+      "WIS": 13,
+      "AGI": 11,
+      "LUC": 14
+    }
+  },
+  "attack": {
+    "element": "slash",
+    "range": "melee"
+  },
+  "resist": {
+    "slash": 1000,
+    "pierce": 1000,
+    "bash": 1000,
+    "fire": 1000,
+    "ice": 1000,
+    "volt": 1000
+  },
+  "ailment_vuln": {
+    "poison": 1000,
+    "paralysis": 1000,
+    "sleep": 1000
+  },
+  "bind_vuln": {
+    "head": 1000,
+    "arm": 1000,
+    "leg": 1000
+  },
+  "skills": [
+    "skill.holo_knight.front_guard",
+    "skill.holo_knight.aegis_cover",
+    "skill.holo_knight.defense_protocol"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "defense_k": 100,
+  "hit_min": 300,
+  "hit_max": 1000,
+  "crit_base": 50,
+  "crit_luck": 5,
+  "crit_max": 200,
+  "crit_mult": 1500,
+  "damage_roll": [
+    950,
+    1050
+  ],
+  "speed_roll": [
+    900,
+    1100
+  ],
+  "row_melee_mult": 500,
+  "guard_mult": 500,
+  "bind_stat_mult": 700,
+  "leg_evasion_mult": 500,
+  "paralysis_fail": 500,
+  "status_luck": 20,
+  "status_luck_clamp": [
+    500,
+    1500
+  ],
+  "resist_gain": 300,
+  "resist_max": 900,
+  "resist_decay": 100,
+  "escape_base": 600,
+  "escape_agi": 20,
+  "escape_clamp": [
+    200,
+    950
+  ],
+  "buff_slots": 3,
+  "debuff_slots": 3
+}

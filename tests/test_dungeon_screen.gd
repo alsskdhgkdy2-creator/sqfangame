@@ -329,7 +329,7 @@ func test_import_replaces_state_and_late_result_is_dropped() -> void:
 	s._import_epoch = s._epoch
 	s._on_import_result(s._import_token, "ok", text)
 	check_eq(kit.hash_now(), h, "제때 온 결과는 받는다")
-	s._on_import_result(s._import_token, "ok", SaveCodec.encode(ExplorationRules.new_game(s.floor_def, s.party_data.make_members(), 3, "floor")))
+	s._on_import_result(s._import_token, "ok", SaveCodec.encode(ExplorationRules.new_game(s.store.defs, 3, "floor")))
 	check_eq(kit.hash_now(), h, "이미 처리한 결과는 다시 받지 않는다")
 
 
@@ -393,7 +393,7 @@ func test_pending_battle_is_saved_and_reopened() -> void:
 
 func test_wiped_is_saved_and_reopened() -> void:
 	var s := await _open()
-	var copy := SaveCodec.decode(SaveCodec.encode(s.state), s.floor_def, s.party_data.make_members()).state
+	var copy := SaveCodec.decode(SaveCodec.encode(s.state), s.store.defs).state
 	for m in copy.party.members:
 		m.hp = 0
 	copy.wiped = true
@@ -639,7 +639,7 @@ func test_stale_file_dialog_callbacks_do_nothing() -> void:
 	var s := await _open()
 	var good := kit.dir + "/good.json"
 	var f := FileAccess.open(good, FileAccess.WRITE)
-	f.store_string(SaveCodec.encode(ExplorationRules.new_game(s.floor_def, s.party_data.make_members(), 3, "floor")))
+	f.store_string(SaveCodec.encode(ExplorationRules.new_game(s.store.defs, 3, "floor")))
 	f.close()
 	var h := kit.hash_now()
 	s._import()
@@ -692,7 +692,7 @@ func test_native_export_import_check_file_errors() -> void:
 	s._export()
 	s._file_dialog.file_selected.emit(out)
 	check_eq(s._toast.text, s.texts.t("msg.exported"), "정상 쓰기 = 내보냄 안내")
-	var exported := SaveCodec.decode(FileAccess.get_file_as_string(out), s.floor_def, s.party_data.make_members())
+	var exported := SaveCodec.decode(FileAccess.get_file_as_string(out), s.store.defs)
 	check(exported.ok() and SaveCodec.state_hash(exported.state) == kit.hash_now(), "내보낸 파일 = 지금 상태")
 	var h := kit.hash_now()
 	await kit.press_key(KEY_W)

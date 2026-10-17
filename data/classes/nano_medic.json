@@ -1,0 +1,43 @@
+{
+  "id": "class.nano_medic",
+  "name_key": "class.nano_medic",
+  "levels": {
+    "1": {
+      "hp": 42,
+      "tp": 54,
+      "STR": 9,
+      "INT": 14,
+      "VIT": 12,
+      "WIS": 20,
+      "AGI": 13,
+      "LUC": 14
+    }
+  },
+  "attack": {
+    "element": "bash",
+    "range": "melee"
+  },
+  "resist": {
+    "slash": 1000,
+    "pierce": 1000,
+    "bash": 1000,
+    "fire": 1000,
+    "ice": 1000,
+    "volt": 1000
+  },
+  "ailment_vuln": {
+    "poison": 1000,
+    "paralysis": 1000,
+    "sleep": 1000
+  },
+  "bind_vuln": {
+    "head": 1000,
+    "arm": 1000,
+    "leg": 1000
+  },
+  "skills": [
+    "skill.nano_medic.nano_repair",
+    "skill.nano_medic.refresh_patch",
+    "skill.nano_medic.reboot"
+  ]
+}

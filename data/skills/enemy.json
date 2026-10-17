@@ -1,0 +1,321 @@
+{
+  "skills": [
+    {
+      "id": "skill.enemy.bite",
+      "name_key": "skill.enemy.bite",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "slash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 100,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.rending_howl",
+      "name_key": "skill.enemy.rending_howl",
+      "user": "enemy",
+      "effect": "debuff",
+      "range": "ranged",
+      "target": "enemy_all",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 0,
+          "kind": "phys_def",
+          "value": 1250,
+          "turns": 3
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.corrode_powder",
+      "name_key": "skill.enemy.corrode_powder",
+      "user": "enemy",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 0,
+          "ailment": {
+            "id": "poison",
+            "chance": 550,
+            "turns": 3,
+            "damage": 6
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.barb_quill",
+      "name_key": "skill.enemy.barb_quill",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 80,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.sleep_spores",
+      "name_key": "skill.enemy.sleep_spores",
+      "user": "enemy",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_row",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 0,
+          "ailment": {
+            "id": "sleep",
+            "chance": 400,
+            "turns": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.thorn_vine",
+      "name_key": "skill.enemy.thorn_vine",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 80,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.shock_bite",
+      "name_key": "skill.enemy.shock_bite",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "volt",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 100,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 300,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.coil",
+      "name_key": "skill.enemy.coil",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "bash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 60,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 450,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.drill_ram",
+      "name_key": "skill.enemy.drill_ram",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 120,
+          "accuracy": 900,
+          "bind": {
+            "part": "head",
+            "chance": 350,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.claw",
+      "name_key": "skill.enemy.claw",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "slash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 100,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.pinch",
+      "name_key": "skill.enemy.pinch",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "bash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 80,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 400,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.raise_pincers",
+      "name_key": "skill.enemy.raise_pincers",
+      "user": "enemy",
+      "effect": "charge",
+      "range": "ranged",
+      "target": "self",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "charges": "skill.enemy.crush",
+      "levels": [
+        {
+          "tp": 0
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.crush",
+      "name_key": "skill.enemy.crush",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "bash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 230,
+          "accuracy": 1000
+        }
+      ]
+    }
+  ]
+}

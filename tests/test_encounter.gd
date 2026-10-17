@@ -61,21 +61,22 @@ func test_rejected_while_wiped_keeps_state() -> void:
 	for action in ALL_ACTIONS:
 		check_eq(ExplorationRules.apply(s, action, "floor"), [{"type": "rejected", "reason": "wiped"}] as Array[Dictionary], "전멸 중 거부 %d" % action)
 	check_eq(SaveCodec.state_hash(s), h, "상태 불변")
-	check(not ExplorationRules.resolve_battle(s), "전멸 중 전투 해결 거부")
+	check(not BattleRules.finish(s, "victory"), "전멸 중 전투 끝내기 거부")
 
 
-func test_resolve_battle_once() -> void:
+func test_finish_battle_once() -> void:
 	var s := _corridor(10, 20)
-	check(not ExplorationRules.resolve_battle(s), "대기 아닐 때 거부")
+	check(not BattleRules.finish(s, "victory"), "대기 아닐 때 거부")
 	while not s.encounter.pending:
 		ExplorationRules.apply(s, A.FORWARD, "floor")
 	var expect := GameRng.new()
 	expect.set_state(s.rng.get_state())
-	check(ExplorationRules.resolve_battle(s), "해결")
+	check(s.battle != null, "인카운트 걸음에서 전투가 열림")
+	check(BattleRules.finish(s, "victory"), "해결")
 	check_eq([s.encounter.danger, s.encounter.pending], [0, false], "위험도 0·대기 해제")
 	check_eq(s.encounter.threshold, expect.randi_range(10, 20), "한계값을 GameRng 로 새로 뽑음")
 	var h := SaveCodec.state_hash(s)
-	check(not ExplorationRules.resolve_battle(s), "두 번째 해결 거부")
+	check(not BattleRules.finish(s, "victory"), "두 번째 해결 거부")
 	check_eq(SaveCodec.state_hash(s), h, "중복 해결은 상태 불변")
 
 
@@ -86,8 +87,8 @@ func test_threshold_range_and_same_seed_sequence() -> void:
 		var s := Fx.game(f, 777)
 		var seq := [s.encounter.threshold]
 		for i in 30:
-			s.encounter.pending = true
-			ExplorationRules.resolve_battle(s)
+			BattleRules.start(s, "formation.f1.rats")
+			BattleRules.finish(s, "victory")
 			seq.append(s.encounter.threshold)
 		seqs.append(seq)
 	check_eq(seqs[0], seqs[1], "같은 시드면 같은 한계값 열")

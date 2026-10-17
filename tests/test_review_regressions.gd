@@ -15,7 +15,7 @@ func _f() -> FloorModel:
 
 
 func _store() -> SaveStore:
-	return SaveStore.new(_f(), Fx.members(), Fx.SAVE_DIR)
+	return SaveStore.new(Fx.defs(_f()), Fx.SAVE_DIR)
 
 
 func _state(steps: int) -> ExplorationState:
@@ -30,7 +30,7 @@ func _doc(s: ExplorationState) -> Dictionary:
 
 
 func _decode(doc: Dictionary) -> SaveCodec.LoadResult:
-	return SaveCodec.decode(JSON.stringify(doc), _f(), Fx.members())
+	return SaveCodec.decode(JSON.stringify(doc), Fx.defs(_f()))
 
 
 # ---- 1. .tmp 하나만 남은 정상 후보 ----
@@ -115,7 +115,12 @@ func test_pending_must_match_danger() -> void:
 	doc["state"]["encounter"] = {"danger": 120, "threshold": 120, "pending": false}
 	check(not _decode(doc).ok(), "danger ≥ threshold 인데 대기 아님 거부")
 	doc["state"]["encounter"] = {"danger": 120, "threshold": 120, "pending": true}
-	check(_decode(doc).ok(), "danger ≥ threshold 이고 대기 허용")
+	check(not _decode(doc).ok(), "2판: 대기인데 battle 이 없으면 거부")
+	var b := _state(1)
+	b.encounter.danger = b.encounter.threshold
+	BattleRules.start(b, "formation.f1.rats")
+	var r := _decode(_doc(b))
+	check(r.ok(), "danger ≥ threshold 이고 전투 중이면 허용 (%s)" % r.error)
 
 
 func test_wiped_state_keeps_pending_invariant() -> void:
@@ -125,7 +130,7 @@ func test_wiped_state_keeps_pending_invariant() -> void:
 		m.hp = 1
 	ExplorationRules.apply(s, A.FORWARD, "floor")
 	check(s.wiped and not s.encounter.pending and s.encounter.danger < s.encounter.threshold, "전멸한 걸음은 위험도를 더하지 않음")
-	var r := SaveCodec.decode(SaveCodec.encode(s), f, Fx.members())
+	var r := SaveCodec.decode(SaveCodec.encode(s), Fx.defs(f))
 	check(r.ok(), "전멸 상태 저장·읽기 (%s)" % r.error)
 
 
@@ -329,7 +334,7 @@ func test_main_and_tmp_both_valid() -> void:
 	var c := _state(3)
 	check_eq(store.save("auto", c), "", "다음 저장")
 	check(not FileAccess.file_exists(Fx.SAVE_DIR + "/auto.tmp"), "남았던 .tmp 는 덮어써져 본 파일이 됨")
-	var bak := SaveCodec.decode(FileAccess.get_file_as_string(Fx.SAVE_DIR + "/auto.bak"), _f(), Fx.members())
+	var bak := SaveCodec.decode(FileAccess.get_file_as_string(Fx.SAVE_DIR + "/auto.bak"), Fx.defs(_f()))
 	check(bak.ok() and SaveCodec.state_hash(bak.state) == SaveCodec.state_hash(a), ".bak 은 이전 본 파일 A")
 	l = store.load_slot("auto")
 	check(l.ok() and SaveCodec.state_hash(l.result.state) == SaveCodec.state_hash(c), "본 파일 C")
@@ -350,7 +355,7 @@ func test_generation_after_recovery() -> void:
 	check_eq(store.save("auto", l.result.state), "", "복구한 상태 저장")
 	check_eq(l.result.state.generation, 2, "읽은 1 에 이어 2")
 	check_eq(store.slot_info("auto").generation, 2, "본 파일 generation 2")
-	var bak := SaveCodec.decode(FileAccess.get_file_as_string(Fx.SAVE_DIR + "/auto.bak"), _f(), Fx.members())
+	var bak := SaveCodec.decode(FileAccess.get_file_as_string(Fx.SAVE_DIR + "/auto.bak"), Fx.defs(_f()))
 	check(bak.ok() and bak.generation == 1, "정리 단계가 올린 .tmp(1)가 .bak 으로")
 	Fx.clean_saves()
 
@@ -396,12 +401,12 @@ func _paths(node: Variant, prefix: Array, out: Array) -> void:
 
 ## 실패한 decode 가 지금 상태(같은 원문에서 읽은 것)와 원문을 건드리지 않았는지.
 func _check_rejected(original: String, doc: Dictionary, label: String) -> void:
-	var current := SaveCodec.decode(original, _f(), Fx.members()).state
+	var current := SaveCodec.decode(original, Fx.defs(_f())).state
 	var before := SaveCodec.state_hash(current)
-	var r := SaveCodec.decode(JSON.stringify(doc), _f(), Fx.members())
+	var r := SaveCodec.decode(JSON.stringify(doc), Fx.defs(_f()))
 	check(not r.ok() and r.state == null and not r.error.is_empty(), "%s: 거부되어야 한다" % label)
 	check_eq(SaveCodec.state_hash(current), before, "%s: 지금 상태 불변" % label)
-	check_eq(SaveCodec.state_hash(SaveCodec.decode(original, _f(), Fx.members()).state), before, "%s: 원문 그대로" % label)
+	check_eq(SaveCodec.state_hash(SaveCodec.decode(original, Fx.defs(_f())).state), before, "%s: 원문 그대로" % label)
 
 
 func test_every_required_field_is_required() -> void:
@@ -613,7 +618,7 @@ func test_read_failure_is_not_corruption() -> void:
 		var after := _files()
 		check(after.get("auto.json") == files_before["auto.json"], "③ %s: 본 파일 A 내용 그대로" % str(points))
 		check(after.get("auto.bak") == files_before["auto.bak"], "③ %s: .bak Z 내용 그대로" % str(points))
-		var tmp := SaveCodec.decode(str(after.get("auto.tmp", "")), _f(), Fx.members())
+		var tmp := SaveCodec.decode(str(after.get("auto.tmp", "")), Fx.defs(_f()))
 		check(tmp.ok() and SaveCodec.state_hash(tmp.state) == SaveCodec.state_hash(b), "③ %s: 새 .tmp 는 정상이고 B" % str(points))
 		check_eq(store.save("auto", b), "", "③ %s: 다음 저장은 성공" % str(points))
 	Fx.clean_saves()
@@ -639,7 +644,7 @@ func test_failure_after_real_bak_removed() -> void:
 	store.save("auto", z)
 	store.save("auto", a)
 	var bak_path := Fx.SAVE_DIR + "/auto.bak"
-	var bak := SaveCodec.decode(FileAccess.get_file_as_string(bak_path), _f(), Fx.members())
+	var bak := SaveCodec.decode(FileAccess.get_file_as_string(bak_path), Fx.defs(_f()))
 	check(bak.ok() and SaveCodec.state_hash(bak.state) == SaveCodec.state_hash(z) and SaveCodec.state_hash(z) != SaveCodec.state_hash(a), "준비: 본 파일 A, 내용이 다른 .bak Z")
 	var b := _state(3)
 	store.fail_points = ["after_bak_removed"]
@@ -678,7 +683,7 @@ func test_main_wins_over_newer_tmp() -> void:
 	store.stop_after_step = 2
 	store.save("auto", newer)
 	store.stop_after_step = 0
-	var tmp := SaveCodec.decode(FileAccess.get_file_as_string(Fx.SAVE_DIR + "/auto.tmp"), _f(), Fx.members())
+	var tmp := SaveCodec.decode(FileAccess.get_file_as_string(Fx.SAVE_DIR + "/auto.tmp"), Fx.defs(_f()))
 	check(tmp.ok() and tmp.generation == 6, "준비: 정상 .tmp 세대 6")
 	var l := store.load_slot("auto")
 	check(l.ok() and l.source_kind == "main" and l.result.generation == 1, "본 파일(세대 1)이 먼저")

@@ -1,0 +1,36 @@
+{
+  "materials": [
+    {
+      "id": "item.neon_rat_tail",
+      "name_key": "item.neon_rat_tail"
+    },
+    {
+      "id": "item.cable_scale",
+      "name_key": "item.cable_scale"
+    },
+    {
+      "id": "item.glow_scale",
+      "name_key": "item.glow_scale"
+    },
+    {
+      "id": "item.spore_pouch",
+      "name_key": "item.spore_pouch"
+    },
+    {
+      "id": "item.coated_scale",
+      "name_key": "item.coated_scale"
+    },
+    {
+      "id": "item.drill_claw",
+      "name_key": "item.drill_claw"
+    },
+    {
+      "id": "item.beetle_plate",
+      "name_key": "item.beetle_plate"
+    },
+    {
+      "id": "item.intact_pincer",
+      "name_key": "item.intact_pincer"
+    }
+  ]
+}

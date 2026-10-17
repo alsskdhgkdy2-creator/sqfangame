@@ -43,14 +43,14 @@ func _run(ops: Array, reload_at: int = -1, store: SaveStore = null) -> Dictionar
 				for e in ExplorationRules.apply(s, op[1], automap):
 					log.append(var_to_str(e))
 				if s.encounter.pending:
-					ExplorationRules.resolve_battle(s)
+					BattleRules.finish(s, "victory")
 					log.append("battle_resolved")
 	return {"log": log, "hash": SaveCodec.state_hash(s), "steps": s.steps, "visited": s.knowledge.visited.size()}
 
 
 func _reload(s: ExplorationState, store: SaveStore) -> ExplorationState:
 	if store == null:
-		var r := SaveCodec.decode(SaveCodec.encode(s), Fx.f1(), Fx.members())
+		var r := SaveCodec.decode(SaveCodec.encode(s), Fx.defs())
 		check(r.ok(), "중간 읽기 %s" % r.error)
 		return r.state
 	check_eq(store.save("auto", s), "", "중간 저장")
@@ -103,6 +103,6 @@ func test_reload_in_middle_keeps_hash() -> void:
 	check_eq(codec["hash"], straight["hash"], "중간 저장·읽기(변환) 뒤 같은 최종 해시")
 	check_eq(codec["log"], straight["log"], "중간 저장·읽기 뒤 같은 이벤트 열")
 	Fx.clean_saves()
-	var slot := _run(ops, 70, SaveStore.new(Fx.f1(), Fx.members(), Fx.SAVE_DIR))
+	var slot := _run(ops, 70, SaveStore.new(Fx.defs(), Fx.SAVE_DIR))
 	check_eq(slot.get("hash"), straight["hash"], "중간 슬롯 저장·읽기 뒤 같은 최종 해시")
 	Fx.clean_saves()

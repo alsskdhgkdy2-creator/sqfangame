@@ -28,7 +28,7 @@ func _walk(s: ExplorationState, route: Dictionary, seed_label: String) -> Array[
 		check(_count(ev, "rejected") == 0, "%s: %d번째 행동 거부" % [seed_label, i])
 		all.append_array(ev)
 		if s.encounter.pending:
-			ExplorationRules.resolve_battle(s)
+			BattleRules.finish(s, "victory")
 		while next_cp < checkpoints.size() and int(checkpoints[next_cp]["after"]) == i + 1:
 			var cp: Dictionary = checkpoints[next_cp]
 			var at := Vector2i(int(cp["at"][0]), int(cp["at"][1]))
@@ -64,7 +64,7 @@ func test_walkthrough() -> void:
 	for c in [Vector2i(2, 4), Vector2i(13, 17), Vector2i(18, 8), Vector2i(12, 14), Vector2i(10, 3)]:
 		check(s.knowledge.is_visited(c), "칸 %s 방문(숨은 방·얼음 방·피해 바닥)" % str(c))
 
-	var r := SaveCodec.decode(SaveCodec.encode(s), f, Fx.members())
+	var r := SaveCodec.decode(SaveCodec.encode(s), Fx.defs(f))
 	check(r.ok() and SaveCodec.state_hash(r.state) == SaveCodec.state_hash(s), "공략 뒤 저장·읽기 해시 같음")
 	if r.ok():
 		Fx.walk(r.state, "NEEE", "full")

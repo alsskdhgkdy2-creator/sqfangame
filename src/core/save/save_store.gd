@@ -49,8 +49,8 @@ class _FileCheck:
 
 
 var dir_path := "user://saves"
-var floor_def: FloorModel
-var members_def: Array[PartyState.Member] = []
+## 후보 읽기·쓰기 직후 검사가 같은 정의로 decode 한다(06 §8.2).
+var defs: GameDefs
 ## 시험용: 0이 아니면 쓰기 단계 ①~③ 가운데 그 단계를 마친 뒤 멈추고 실패로 돌려준다(중단 흉내).
 var stop_after_step := 0
 ## 시험용: 들어 있는 지점마다 파일 작업이 실패한 것처럼 한다(한 번의 저장에 여러 실패를 겹칠 수 있다).
@@ -60,9 +60,8 @@ var stop_after_step := 0
 var fail_points: Array[String] = []
 
 
-func _init(f: FloorModel, members: Array[PartyState.Member], path: String = "user://saves") -> void:
-	floor_def = f
-	members_def = members
+func _init(d: GameDefs, path: String = "user://saves") -> void:
+	defs = d
 	dir_path = path
 
 
@@ -168,7 +167,7 @@ func load_slot(slot: String) -> SlotLoad:
 		if not FileAccess.file_exists(path):
 			continue
 		out.had_candidates = true
-		var r := SaveCodec.decode(FileAccess.get_file_as_string(path), floor_def, members_def)
+		var r := SaveCodec.decode(FileAccess.get_file_as_string(path), defs)
 		if r.ok():
 			out.result = r
 			out.source = path
@@ -248,5 +247,5 @@ func _check_file(path: String, read_point: String) -> _FileCheck:
 	if err != OK and err != ERR_FILE_EOF:
 		c.read_error = "%s 을 읽을 수 없다 (%s)" % [path.get_file(), error_string(err)]
 		return c
-	c.error = SaveCodec.decode(text, floor_def, members_def).error
+	c.error = SaveCodec.decode(text, defs).error
 	return c

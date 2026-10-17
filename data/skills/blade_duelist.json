@@ -1,0 +1,73 @@
+{
+  "skills": [
+    {
+      "id": "skill.blade_duelist.high_slash",
+      "name_key": "skill.blade_duelist.high_slash",
+      "user": "party",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "slash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 4,
+          "power": 150,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.blade_duelist.cross_sweep",
+      "name_key": "skill.blade_duelist.cross_sweep",
+      "user": "party",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_row",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 900,
+      "stat": "STR",
+      "element": "slash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 6,
+          "power": 110,
+          "accuracy": 900
+        }
+      ]
+    },
+    {
+      "id": "skill.blade_duelist.overclock",
+      "name_key": "skill.blade_duelist.overclock",
+      "user": "party",
+      "effect": "buff",
+      "range": "ranged",
+      "target": "self",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 4,
+          "kind": "phys_atk",
+          "value": 1300,
+          "turns": 3
+        }
+      ]
+    }
+  ]
+}

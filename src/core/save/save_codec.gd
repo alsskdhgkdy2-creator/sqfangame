@@ -1,10 +1,14 @@
-## 저장 JSON 변환·검사·이전. 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
+## 저장 JSON 변환·검사·이전(06 §8.4~§8.6). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
 class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 1
-const RULES := "m1"
+const SCHEMA := 2
+const RULES := "m2"
+## 받는 (schema, rules) 쌍(06 §8.5). 1판은 읽을 때 2판으로 옮긴다(§8.6).
+const ACCEPTED := {1: "m1", 2: "m2"}
+## 1판 검사에 쓰는 옛 대원 표(06 §8.6 2단계): [id, 최대 HP], 칸 순서.
+const V1_MEMBERS := [["holo_knight", 60], ["blade_duelist", 52], ["rail_ranger", 46], ["nano_medic", 42], ["glyph_wizard", 40]]
 const MAX_SAFE_INT := 9007199254740992  # 2^53
 const MAX_GENERATION := 9007199254740990  # 2^53 − 2: 다음 저장의 +1 까지 실수로 정확하다
 
@@ -15,6 +19,8 @@ class LoadResult:
 	var error := ""
 	var saved_at := ""
 	var generation := 0
+	## 읽은 원본의 schema(1 이면 이전한 결과다).
+	var from_schema := 0
 
 	func ok() -> bool:
 		return error.is_empty() and state != null
@@ -73,7 +79,7 @@ static func state_hash(s: ExplorationState) -> String:
 static func is_utc_time(v: Variant) -> bool:
 	if typeof(v) != TYPE_STRING or v.length() != 20:
 		return false
-	var m := RegEx.create_from_string("^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})Z$").search(v)
+	var m := RegEx.create_from_string("\\A(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})Z\\z").search(v)
 	if m == null:
 		return false
 	var y := m.get_string(1).to_int()
@@ -97,7 +103,7 @@ static func now_utc() -> String:
 static func state_to_dict(s: ExplorationState) -> Dictionary:
 	var members: Array = []
 	for m in s.party.members:
-		members.append({"id": m.id, "hp": m.hp})
+		members.append({"id": m.id, "hp": m.hp, "tp": m.tp})
 	var k_edges := {}
 	for e in s.knowledge.edges:
 		k_edges[GridKey.edge(e)] = s.knowledge.edges[e]
@@ -122,6 +128,8 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 		"knowledge": {"visited": _cell_set(s.knowledge.visited), "edges": k_edges},
 		"annotation": {"floors": a_floors, "edges": a_edges, "auto_edges": _edge_set(a.auto_edges), "icons": icons, "memos": memos},
 		"encounter": {"danger": s.encounter.danger, "threshold": s.encounter.threshold, "pending": s.encounter.pending},
+		"materials": s.materials.duplicate(),
+		"battle": s.battle.to_dict() if s.battle != null else null,
 		"rng": {"state": str(s.rng.get_state())},
 		"steps": s.steps,
 		"wiped": s.wiped,
@@ -139,7 +147,8 @@ static func _cell_set(d: Dictionary) -> Array[String]:
 # ---- 읽기 ----
 
 ## 저장 문서를 읽어 새 상태를 만든다. 실패하면 error만 있고 state는 null.
-static func decode(text: String, floor_def: FloorModel, members_def: Array[PartyState.Member]) -> LoadResult:
+## 입력 글과 defs 만 읽고 공유 상태를 바꾸지 않는다. 1판은 §8.6 순서로 옮긴 뒤 2판 검사를 다시 거친다.
+static func decode(text: String, defs: GameDefs) -> LoadResult:
 	var r := LoadResult.new()
 	var json := JSON.new()
 	if json.parse(text) != OK:
@@ -152,31 +161,76 @@ static func decode(text: String, floor_def: FloorModel, members_def: Array[Party
 	r.error = _check_header(doc)
 	if not r.error.is_empty():
 		return r
-	doc = migrate(doc)
+	if to_int(doc["schema"]) == 1:
+		return migrate_v1(doc, defs)
 	var s := ExplorationState.new()
-	r.error = _read_state(doc["state"], floor_def, members_def, s)
+	r.error = _read_state(doc["state"], defs, _member_table(defs), true, s)
 	if not r.error.is_empty():
 		return r
 	s.generation = to_int(doc["generation"])
 	r.state = s
 	r.saved_at = doc["saved_at"]
 	r.generation = s.generation
+	r.from_schema = 2
 	return r
 
 
-## 이전 schema를 지금 판으로 옮긴다(지금은 1 → 1).
-static func migrate(doc: Dictionary) -> Dictionary:
-	return doc
+## 1판 → 2판(06 §8.6). doc 은 머리 검사를 통과한 1판 문서.
+## ① 1판 원본을 옛 대원 표로 다 검사 ② 통과한 임시 상태에서만 옮기기 ③ pending 이면 임시 상태의 난수로 전투 시작
+## ④ 원본 saved_at·generation 으로 2판 encode ⑤ 2판 읽기를 그대로 거친 결과만 돌려준다.
+static func migrate_v1(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var table := []
+	for x in V1_MEMBERS:
+		table.append({"id": x[0], "max_hp": x[1], "max_tp": 0})
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, table, false, old)
+	if not err.is_empty():
+		r.error = "1판 검사 실패: " + err
+		return r
+	if defs.party.ids.size() != V1_MEMBERS.size():
+		r.error = "1판 이전 실패: 지금 파티가 %d명이 아니다" % V1_MEMBERS.size()
+		return r
+	var members: Array[PartyState.Member] = []
+	for i in V1_MEMBERS.size():
+		var hp := old.party.members[i].hp
+		var old_max: int = V1_MEMBERS[i][1]
+		var new_max := defs.party.max_hps[i]
+		var tp := defs.party.max_tps[i]
+		members.append(PartyState.Member.new(defs.party.ids[i], new_max, (hp * new_max + old_max - 1) / old_max, tp, tp))
+	old.party.members = members
+	old.defs = defs
+	old.materials = {}
+	old.battle = null
+	if old.encounter.pending:
+		var ev := BattleRules.start(old, BattleRules.pick_formation(old))
+		if ev[0]["type"] != "battle_start":
+			r.error = "1판 이전 실패: 전투를 열 수 없다 (%s)" % ev[0].get("reason", "")
+			return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "1판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 1
+	return again
+
+
+## 2판 대원 표: 정의의 대원 순서·최대 HP·TP.
+static func _member_table(defs: GameDefs) -> Array:
+	var out := []
+	for i in defs.party.ids.size():
+		out.append({"id": defs.party.ids[i], "max_hp": defs.party.max_hps[i], "max_tp": defs.party.max_tps[i]})
+	return out
 
 
 static func _check_header(doc: Dictionary) -> String:
 	if not _is_str(doc.get("format"), FORMAT):
 		return "저장 형식(format)이 다르다"
 	var schema: Variant = to_int(doc.get("schema"))
-	if schema == null or schema < 1 or schema > SCHEMA:
+	if schema == null or not ACCEPTED.has(schema):
 		return "지원하지 않는 schema 다"
-	if not _is_str(doc.get("rules"), RULES):
-		return "규칙 판(rules)이 다르다"
+	if not _is_str(doc.get("rules"), ACCEPTED[schema]):
+		return "규칙 판(rules)이 schema %d 와 맞지 않다" % schema
 	if not is_utc_time(doc.get("saved_at")):
 		return "saved_at 이 YYYY-MM-DDTHH:MM:SSZ 꼴의 실제 UTC 시각이 아니다"
 	var gen: Variant = to_int(doc.get("generation"))
@@ -187,17 +241,50 @@ static func _check_header(doc: Dictionary) -> String:
 	return ""
 
 
-static func _read_state(d: Dictionary, f: FloorModel, members_def: Array[PartyState.Member], s: ExplorationState) -> String:
+## table: 대원마다 {id, max_hp, max_tp}. v2 면 대원 tp·materials·battle 도 읽고 2판 관계를 본다.
+static func _read_state(d: Dictionary, defs: GameDefs, table: Array, v2: bool, s: ExplorationState) -> String:
+	var f := defs.floor_def
 	if not _is_str(d.get("floor"), f.id):
 		return "알 수 없는 층이다: %s" % str(d.get("floor"))
 	s.floor_def = f
 	s.annotation = MapAnnotation.new(f.width, f.height)
-	var err := _read_party(d, s, members_def)
+	var err := _read_party(d, s, table, v2)
 	for part in ["world", "knowledge", "annotation", "encounter", "misc"]:
 		if not err.is_empty():
 			return err
 		err = _read_part(part, d, s)
-	return err if not err.is_empty() else _check_consistency(s)
+	if not err.is_empty():
+		return err
+	err = _check_consistency(s)
+	if not err.is_empty() or not v2:
+		return err
+	s.defs = defs
+	err = _read_materials(d, defs, s)
+	if not err.is_empty():
+		return err
+	if not d.has("battle"):
+		return "battle 이 없다(전투가 없으면 null)"
+	if d["battle"] != null:
+		err = BattleState.check_dict(d["battle"], defs, s.party.members)
+		if not err.is_empty():
+			return err
+		s.battle = BattleState.from_dict(d["battle"], defs, s.party.members)
+	if s.encounter.pending != (s.battle != null):
+		return "전투 대기(pending)와 battle 이 맞지 않다"
+	return ""
+
+
+static func _read_materials(d: Dictionary, defs: GameDefs, s: ExplorationState) -> String:
+	if typeof(d.get("materials")) != TYPE_DICTIONARY:
+		return "materials 가 객체가 아니다"
+	for k in d["materials"]:
+		if typeof(k) != TYPE_STRING or not defs.battle.materials.has(k):
+			return "materials 의 %s 는 모르는 소재다" % str(k)
+		var n: Variant = to_int(d["materials"][k])
+		if not BattleLimits.in_range("material", n):
+			return "materials.%s 가 정수 %s 가 아니다" % [k, BattleLimits.range_text("material")]
+		s.materials[k] = n
+	return ""
 
 
 static func _read_part(part: String, d: Dictionary, s: ExplorationState) -> String:
@@ -223,7 +310,7 @@ static func _dict(d: Dictionary, key: String) -> Dictionary:
 	return d[key] if typeof(d.get(key)) == TYPE_DICTIONARY else {}
 
 
-static func _read_party(d: Dictionary, s: ExplorationState, members_def: Array[PartyState.Member]) -> String:
+static func _read_party(d: Dictionary, s: ExplorationState, table: Array, v2: bool) -> String:
 	var p := _dict(d, "party")
 	var at := _cell_pair(p.get("at"), s.floor_def)
 	if not s.floor_def.is_cell(at):
@@ -232,17 +319,22 @@ static func _read_party(d: Dictionary, s: ExplorationState, members_def: Array[P
 	s.party.facing = Dir.from_name(p.get("facing"))
 	if s.party.facing < 0:
 		return "party.facing 이 N·E·S·W 가 아니다"
-	if typeof(p.get("members")) != TYPE_ARRAY or p["members"].size() != members_def.size():
-		return "party.members 가 정의 데이터의 %d명과 다르다" % members_def.size()
-	for i in members_def.size():
+	if typeof(p.get("members")) != TYPE_ARRAY or p["members"].size() != table.size():
+		return "party.members 가 정의 데이터의 %d명과 다르다" % table.size()
+	for i in table.size():
 		var m: Variant = p["members"][i]
-		var def := members_def[i]
-		if typeof(m) != TYPE_DICTIONARY or not _is_str(m.get("id"), def.id):
-			return "party.members[%d] 의 id 가 정의 데이터(%s)와 다르다" % [i, def.id]
+		var def: Dictionary = table[i]
+		if typeof(m) != TYPE_DICTIONARY or not _is_str(m.get("id"), def["id"]):
+			return "party.members[%d] 의 id 가 정의 데이터(%s)와 다르다" % [i, def["id"]]
 		var hp: Variant = to_int(m.get("hp"))
-		if hp == null or hp < 0 or hp > def.max_hp:
-			return "party.members[%d].hp 가 0~%d 정수가 아니다" % [i, def.max_hp]
-		s.party.members.append(PartyState.Member.new(def.id, def.max_hp, hp))
+		if hp == null or hp < 0 or hp > def["max_hp"]:
+			return "party.members[%d].hp 가 0~%d 정수가 아니다" % [i, def["max_hp"]]
+		var tp: Variant = 0
+		if v2:
+			tp = to_int(m.get("tp"))
+			if tp == null or tp < 0 or tp > def["max_tp"]:
+				return "party.members[%d].tp 가 0~%d 정수가 아니다" % [i, def["max_tp"]]
+		s.party.members.append(PartyState.Member.new(def["id"], def["max_hp"], hp, def["max_tp"], tp))
 	return ""
 
 
@@ -358,7 +450,7 @@ static func _check_consistency(s: ExplorationState) -> String:
 	if s.party.all_down() != s.wiped:
 		return "모든 대원 HP 0 과 wiped 가 맞지 않다"
 	if s.wiped and s.encounter.pending:
-		return "전멸 상태에서 전투 대기일 수 없다"
+		return "전멸 상태에서 전투 대기일 수 없다(전멸이면 battle 도 없다)"
 	if s.encounter.pending != (s.encounter.danger >= s.encounter.threshold):
 		return "전투 대기(pending)와 위험도 ≥ 한계값이 맞지 않다"
 	for e in s.knowledge.edges:

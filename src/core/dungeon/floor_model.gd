@@ -15,6 +15,8 @@ var start_facing := Dir.N
 var danger_per_step := 0
 var threshold_min := 1
 var threshold_max := 1
+## 인카운트 출현 표 ID(06 §8.2). 없으면 빈 문자열.
+var encounter_table := ""
 var damage := 0
 ## 구역: {"id": String, "rect": Rect2i, "danger_per_step": int}. 목록 순서대로 처음 맞는 것.
 var zones: Array[Dictionary] = []

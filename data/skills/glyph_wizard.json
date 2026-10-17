@@ -1,0 +1,101 @@
+{
+  "skills": [
+    {
+      "id": "skill.glyph_wizard.heat_glyph",
+      "name_key": "skill.glyph_wizard.heat_glyph",
+      "user": "party",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "INT",
+      "element": "fire",
+      "can_crit": false,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 5,
+          "power": 130,
+          "accuracy": 1000
+        }
+      ]
+    },
+    {
+      "id": "skill.glyph_wizard.frost_glyph",
+      "name_key": "skill.glyph_wizard.frost_glyph",
+      "user": "party",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "INT",
+      "element": "ice",
+      "can_crit": false,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 5,
+          "power": 130,
+          "accuracy": 1000
+        }
+      ]
+    },
+    {
+      "id": "skill.glyph_wizard.shock_glyph",
+      "name_key": "skill.glyph_wizard.shock_glyph",
+      "user": "party",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "INT",
+      "element": "volt",
+      "can_crit": false,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 5,
+          "power": 130,
+          "accuracy": 1000
+        }
+      ]
+    },
+    {
+      "id": "skill.glyph_wizard.corrode_glyph",
+      "name_key": "skill.glyph_wizard.corrode_glyph",
+      "user": "party",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 4,
+          "ailment": {
+            "id": "poison",
+            "chance": 700,
+            "turns": 3,
+            "damage": 15
+          }
+        }
+      ]
+    }
+  ]
+}

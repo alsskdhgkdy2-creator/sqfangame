@@ -3,12 +3,12 @@
 class_name ExplorationRules
 extends RefCounted
 
-enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE }
+enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, REST }
 
 ## 행동 이름(공략 행동열 파일·디버그용) → Action.
 const ACTION_NAMES := {
 	"forward": Action.FORWARD, "back": Action.BACK, "strafe_left": Action.STRAFE_LEFT, "strafe_right": Action.STRAFE_RIGHT,
-	"turn_left": Action.TURN_LEFT, "turn_right": Action.TURN_RIGHT, "investigate": Action.INVESTIGATE,
+	"turn_left": Action.TURN_LEFT, "turn_right": Action.TURN_RIGHT, "investigate": Action.INVESTIGATE, "rest": Action.REST,
 }
 const AUTOMAP_OFF := "off"
 const AUTOMAP_FLOOR := "floor"
@@ -16,16 +16,18 @@ const AUTOMAP_FULL := "full"
 const AUTOMAP_MODES := ["off", "floor", "full"]
 
 
-## 새 게임: 시작 칸을 방문·관찰·자동 기록하고 한계값을 처음 뽑는다.
-static func new_game(floor_def: FloorModel, members: Array[PartyState.Member], seed_value: int, automap: String) -> ExplorationState:
+## 새 게임: 시작 칸을 방문·관찰·자동 기록하고 한계값을 처음 뽑는다. 대원은 HP·TP 가득(defs.members()).
+## s.floor_def 는 M1 코드가 쓰므로 defs.floor_def 와 같은 객체로 둔다.
+static func new_game(defs: GameDefs, seed_value: int, automap: String) -> ExplorationState:
 	var s := ExplorationState.new()
+	var floor_def := defs.floor_def
+	s.defs = defs
 	s.floor_def = floor_def
 	s.annotation = MapAnnotation.new(floor_def.width, floor_def.height)
 	s.rng = GameRng.new(seed_value)
 	s.party.at = floor_def.start_at
 	s.party.facing = floor_def.start_facing
-	for m in members:
-		s.party.members.append(PartyState.Member.new(m.id, m.max_hp, m.max_hp))
+	s.party.members = defs.members()
 	s.encounter.roll_threshold(s.rng, floor_def.threshold_min, floor_def.threshold_max)
 	record_cell(s, floor_def.start_at, automap)
 	return s
@@ -59,19 +61,11 @@ static func apply(s: ExplorationState, action: int, automap: String) -> Array[Di
 			events.append({"type": "turned", "facing": s.party.facing})
 		Action.INVESTIGATE:
 			_investigate(s, events, automap)
+		Action.REST:
+			_rest(s, events)
 		_:
 			_move(s, _move_dir(s.party.facing, action), action == Action.FORWARD, events, automap)
 	return events
-
-
-## 전투 해결(자리표시 승리). pending일 때만 되고 아니면 false.
-static func resolve_battle(s: ExplorationState) -> bool:
-	if not s.encounter.pending or s.wiped:
-		return false
-	s.encounter.danger = 0
-	s.encounter.pending = false
-	s.encounter.roll_threshold(s.rng, s.floor_def.threshold_min, s.floor_def.threshold_max)
-	return true
 
 
 ## 지금 세계 상태에서 경계의 겉모습.
@@ -204,7 +198,21 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 		events.append({"type": "wiped"})
 		return
 	if s.encounter.add(f.danger_at(s.party.at)):
-		events.append({"type": "encounter"})
+		# 같은 행동 안에서 편성을 뽑고 전투를 연다(06 §8.3).
+		var formation := BattleRules.pick_formation(s)
+		BattleRules.start(s, formation)
+		events.append({"type": "encounter", "formation": formation})
+
+
+## 휴식(06 §8.8, M3 여관 자리표시): 층의 시작 칸에서만. 모든 대원 HP·TP 최대(쓰러진 대원도). 위험도·걸음·난수 그대로.
+static func _rest(s: ExplorationState, events: Array[Dictionary]) -> void:
+	if s.party.at != s.floor_def.start_at:
+		events.append({"type": "blocked", "reason": "not_rest_point"})
+		return
+	for m in s.party.members:
+		m.hp = m.max_hp
+		m.tp = m.max_tp
+	events.append({"type": "rested"})
 
 
 static func _cell_effect(s: ExplorationState, c: Vector2i, events: Array[Dictionary]) -> void:

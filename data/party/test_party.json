@@ -1,9 +1,95 @@
 {
   "members": [
-    {"id": "holo_knight", "name_key": "member.holo_knight", "max_hp": 60},
-    {"id": "blade_duelist", "name_key": "member.blade_duelist", "max_hp": 52},
-    {"id": "rail_ranger", "name_key": "member.rail_ranger", "max_hp": 46},
-    {"id": "nano_medic", "name_key": "member.nano_medic", "max_hp": 42},
-    {"id": "glyph_wizard", "name_key": "member.glyph_wizard", "max_hp": 40}
+    {
+      "id": "holo_knight",
+      "name_key": "member.holo_knight",
+      "class": "class.holo_knight",
+      "level": 1,
+      "row": "front",
+      "skills": {
+        "skill.holo_knight.front_guard": 1,
+        "skill.holo_knight.aegis_cover": 1,
+        "skill.holo_knight.defense_protocol": 1
+      },
+      "gear": {
+        "atk": 8,
+        "matk": 0,
+        "def": 10,
+        "mdef": 4
+      }
+    },
+    {
+      "id": "blade_duelist",
+      "name_key": "member.blade_duelist",
+      "class": "class.blade_duelist",
+      "level": 1,
+      "row": "front",
+      "skills": {
+        "skill.blade_duelist.high_slash": 1,
+        "skill.blade_duelist.cross_sweep": 1,
+        "skill.blade_duelist.overclock": 1
+      },
+      "gear": {
+        "atk": 14,
+        "matk": 0,
+        "def": 6,
+        "mdef": 2
+      }
+    },
+    {
+      "id": "blade_duelist_2",
+      "name_key": "member.blade_duelist_2",
+      "class": "class.blade_duelist",
+      "level": 1,
+      "row": "front",
+      "skills": {
+        "skill.blade_duelist.high_slash": 1,
+        "skill.blade_duelist.cross_sweep": 1,
+        "skill.blade_duelist.overclock": 1
+      },
+      "gear": {
+        "atk": 14,
+        "matk": 0,
+        "def": 6,
+        "mdef": 2
+      }
+    },
+    {
+      "id": "nano_medic",
+      "name_key": "member.nano_medic",
+      "class": "class.nano_medic",
+      "level": 1,
+      "row": "back",
+      "skills": {
+        "skill.nano_medic.nano_repair": 1,
+        "skill.nano_medic.refresh_patch": 1,
+        "skill.nano_medic.reboot": 1
+      },
+      "gear": {
+        "atk": 6,
+        "matk": 6,
+        "def": 5,
+        "mdef": 5
+      }
+    },
+    {
+      "id": "glyph_wizard",
+      "name_key": "member.glyph_wizard",
+      "class": "class.glyph_wizard",
+      "level": 1,
+      "row": "back",
+      "skills": {
+        "skill.glyph_wizard.heat_glyph": 1,
+        "skill.glyph_wizard.frost_glyph": 1,
+        "skill.glyph_wizard.shock_glyph": 1,
+        "skill.glyph_wizard.corrode_glyph": 1
+      },
+      "gear": {
+        "atk": 4,
+        "matk": 12,
+        "def": 3,
+        "mdef": 6
+      }
+    }
   ]
 }

@@ -95,16 +95,16 @@ var _file_dialog: FileDialog
 func _ready() -> void:
 	theme = _make_theme()
 	texts = TextDb.load_path(TEXT_PATH)
-	var fr := FloorLoader.load_path(FLOOR_PATH)
-	if not fr.ok():
-		push_error("층 정의를 읽지 못했다: %s" % "; ".join(fr.errors))
+	var dr := GameDefs.load_paths(FLOOR_PATH, PARTY_PATH, "res://data", texts)
+	if not dr.ok():
+		push_error("정의 데이터를 읽지 못했다: %s" % "; ".join(dr.errors))
 		return
-	floor_def = fr.floor_def
-	party_data = PartyData.load_path(PARTY_PATH)
+	floor_def = dr.defs.floor_def
+	party_data = dr.defs.party
 	for k in party_data.name_keys:
 		_member_names.append(texts.t(k))
 	settings = GameSettings.load_from(settings_path)
-	store = SaveStore.new(floor_def, party_data.make_members(), save_dir)
+	store = SaveStore.new(dr.defs, save_dir)
 	bridge = WebBridge.new(platform)
 	bridge.on_import = _on_import_result
 	_build_ui()
@@ -130,7 +130,7 @@ func _start() -> void:
 
 func _new_state() -> ExplorationState:
 	var seed_value := seed_override if seed_override >= 0 else ExplorationRules.fresh_seed()
-	return ExplorationRules.new_game(floor_def, party_data.make_members(), seed_value, settings.automap)
+	return ExplorationRules.new_game(store.defs, seed_value, settings.automap)
 
 
 ## 상태를 통째로 바꾼다(새 게임·불러오기·가져오기). 미리 받은 입력을 비우고 시야·지도를 다시 맞춘다.
@@ -486,7 +486,7 @@ func import_text(text: String) -> bool:
 	if text.to_utf8_buffer().size() > WebBridge.IMPORT_LIMIT:
 		_alert(texts.t("msg.import_too_large"))
 		return false
-	var r := SaveCodec.decode(text, floor_def, party_data.make_members())
+	var r := SaveCodec.decode(text, store.defs)
 	if not r.ok():
 		_alert(texts.t("msg.load_failed", {"reason": r.error}))
 		return false
@@ -554,7 +554,7 @@ func _open_battle() -> void:
 
 
 func _resolve_battle() -> void:
-	if not ExplorationRules.resolve_battle(state):
+	if not BattleRules.finish(state, "victory"):
 		return
 	_autosave()
 	modal.close()
@@ -1016,14 +1016,14 @@ func _on_debug_request(json_text: String) -> String:
 		"snapshot":
 			return JSON.stringify(debug_snapshot())
 		"simulate":
-			var copy := SaveCodec.decode(SaveCodec.encode(state), floor_def, party_data.make_members())
+			var copy := SaveCodec.decode(SaveCodec.encode(state), store.defs)
 			if not copy.ok():
 				return JSON.stringify({"error": copy.error})
 			var s := copy.state
 			var hashes := []
 			for name in req.get("actions", []):
 				if s.encounter.pending:
-					ExplorationRules.resolve_battle(s)
+					BattleRules.finish(s, "victory")
 				var a := ExplorationRules.action_from_name(str(name))
 				if a < 0:
 					return JSON.stringify({"error": "unknown action " + str(name)})
@@ -1031,7 +1031,7 @@ func _on_debug_request(json_text: String) -> String:
 				hashes.append(SaveCodec.state_hash(s))
 			return JSON.stringify({"hashes": hashes})
 		"hash_save":
-			var r := SaveCodec.decode(str(req.get("text", "")), floor_def, party_data.make_members())
+			var r := SaveCodec.decode(str(req.get("text", "")), store.defs)
 			if not r.ok():
 				return JSON.stringify({"error": r.error})
 			return JSON.stringify({"hash": SaveCodec.state_hash(r.state), "generation": r.generation})

@@ -1,0 +1,27 @@
+{
+  "base_seed": 20261017,
+  "stall_limit": 50,
+  "chain_cap": 40,
+  "floor": "res://data/floors/f1_test.json",
+  "party_template": "res://data/party/test_party.json",
+  "data_dir": "res://data",
+  "parties": {
+    "P1": [["class.holo_knight", "front"], ["class.blade_duelist", "front"], ["class.blade_duelist", "front"], ["class.nano_medic", "back"], ["class.glyph_wizard", "back"]],
+    "P2": [["class.holo_knight", "front"], ["class.blade_duelist", "front"], ["class.nano_medic", "back"], ["class.glyph_wizard", "back"], ["class.glyph_wizard", "back"]],
+    "P3": [["class.holo_knight", "front"], ["class.blade_duelist", "front"], ["class.glyph_wizard", "front"], ["class.nano_medic", "back"], ["class.glyph_wizard", "back"]]
+  },
+  "sizes": {
+    "probe": {"parties": ["P1"], "formations": "first", "policies": ["default"], "games_per_cell": 20, "chain_parties": ["P1"], "chains_per_party": 2, "save_check_games": 0},
+    "small": {"parties": ["P1", "P2", "P3"], "formations": "all", "policies": ["default", "attack_only", "full"], "games_per_cell": 100, "chain_parties": ["P1", "P2"], "chains_per_party": 50, "save_check_games": 5},
+    "large": {"parties": ["P1", "P2", "P3"], "formations": "all", "policies": ["default", "attack_only", "full"], "games_per_cell": 2000, "chain_parties": ["P1", "P2"], "chains_per_party": 500, "save_check_games": 20}
+  },
+  "acceptance": {
+    "weighted_turns": [3.0, 5.0],
+    "p1_formation_turns": [2.0, 7.0],
+    "wipe_rate_max": 0.03,
+    "wipe_rate_border": [0.023, 0.037],
+    "p1_chain_median": [3, 8],
+    "full_minus_default_max": 0.3,
+    "small_p1_weighted_turns": [2.5, 5.5]
+  }
+}

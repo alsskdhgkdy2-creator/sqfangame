@@ -24,7 +24,7 @@ func _f() -> FloorModel:
 
 
 func _store() -> SaveStore:
-	return SaveStore.new(_f(), Fx.members(), Fx.SAVE_DIR)
+	return SaveStore.new(Fx.defs(_f()), Fx.SAVE_DIR)
 
 
 ## 일방통행을 지나고, 숨은 통로를 찾고, 지름길을 연 상태(위치는 남쪽으로만 경계를 지난 (2,2)).
@@ -49,7 +49,7 @@ func _moved(dirs: String) -> ExplorationState:
 
 
 func _roundtrip(s: ExplorationState) -> SaveCodec.LoadResult:
-	return SaveCodec.decode(SaveCodec.encode(s), _f(), Fx.members())
+	return SaveCodec.decode(SaveCodec.encode(s), Fx.defs(_f()))
 
 
 func test_roundtrip_same_hash_and_devices() -> void:
@@ -74,7 +74,7 @@ func test_rng_state_signed_and_large_values() -> void:
 		s.rng.set_state(value)
 		var text := SaveCodec.encode(s)
 		check(text.contains("\"state\":\"%d\"" % value), "%d: 10진 문자열" % value)
-		var r := SaveCodec.decode(text, _f(), Fx.members())
+		var r := SaveCodec.decode(text, Fx.defs(_f()))
 		check(r.ok(), "%d: 읽기 %s" % [value, r.error])
 		if not r.ok():
 			continue
@@ -106,7 +106,7 @@ func _expect_reject(mutate: Callable, needle: String, label: String) -> void:
 	var before := SaveCodec.state_hash(s)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
 	mutate.call(doc)
-	var r := SaveCodec.decode(JSON.stringify(doc), _f(), Fx.members())
+	var r := SaveCodec.decode(JSON.stringify(doc), Fx.defs(_f()))
 	check(not r.ok() and r.state == null, "%s: 거부되어야 한다" % label)
 	check(r.error.contains(needle), "%s: 이유 '%s' 기대, 실제 '%s'" % [label, needle, r.error])
 	check_eq(SaveCodec.state_hash(s), before, "%s: 지금 상태 불변" % label)
@@ -114,13 +114,15 @@ func _expect_reject(mutate: Callable, needle: String, label: String) -> void:
 
 func test_rejects_bad_header() -> void:
 	_expect_reject(func(d): d["format"] = "other", "format", "형식")
-	_expect_reject(func(d): d["schema"] = 2, "schema", "새 schema")
+	_expect_reject(func(d): d["schema"] = 3, "schema", "새 schema")
+	_expect_reject(func(d): d["schema"] = 1, "rules", "schema 1 + rules m2 쌍")
 	_expect_reject(func(d): d["schema"] = 0, "schema", "schema 0")
 	_expect_reject(func(d): d["schema"] = 1.5, "schema", "schema 소수")
 	_expect_reject(func(d): d["rules"] = "m0", "rules", "규칙 판")
 	_expect_reject(func(d): d["state"]["floor"] = "f9", "층", "층 ID")
 	_expect_reject(func(d): d.erase("generation"), "generation", "generation 없음")
 	_expect_reject(func(d): d["saved_at"] = "2026-10-16 12:00", "saved_at", "saved_at 형식")
+	_expect_reject(func(d): d["saved_at"] = "2026-10-16T04:05:06Z\n", "saved_at", "saved_at 끝 줄바꿈")
 
 
 func test_rejects_bad_types() -> void:
@@ -226,7 +228,7 @@ func test_failed_write_keeps_generation() -> void:
 	var blocker := FileAccess.open(Fx.SAVE_DIR + "/blocker", FileAccess.WRITE)
 	blocker.store_string("파일")
 	blocker.close()
-	var store := SaveStore.new(_f(), Fx.members(), Fx.SAVE_DIR + "/blocker/sub")
+	var store := SaveStore.new(Fx.defs(_f()), Fx.SAVE_DIR + "/blocker/sub")
 	var s := _played()
 	var why := store.save("auto", s)
 	check(not why.is_empty(), "폴더 자리에 파일이 있으면 실패하고 사유를 돌려줌")
@@ -342,7 +344,7 @@ func test_pending_and_wiped_saved_and_restored() -> void:
 	var store := _store()
 	var p := _played()
 	p.encounter.danger = p.encounter.threshold
-	p.encounter.pending = true
+	BattleRules.start(p, "formation.f1.rats")
 	check_eq(store.save("auto", p), "", "전투 대기 자동 저장")
 	var l := store.load_slot("auto")
 	check(l.ok() and l.result.state.encounter.pending, "전투 대기 복구")

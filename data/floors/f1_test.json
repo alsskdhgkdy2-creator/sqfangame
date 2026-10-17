@@ -48,7 +48,7 @@
   ],
   "start": {"at": [2, 18], "facing": "N"},
   "shortcuts": [{"at": [5, 17], "dir": "W"}],
-  "encounter": {"danger_per_step": 10, "threshold_min": 120, "threshold_max": 240},
+  "encounter": {"danger_per_step": 10, "threshold_min": 120, "threshold_max": 240, "table": "encounter.f1_test"},
   "zones": [
     {"id": "safe", "rect": [1, 16, 4, 19], "danger_per_step": 0},
     {"id": "hazard", "rect": [6, 1, 13, 3], "danger_per_step": 15}

@@ -1,0 +1,61 @@
+{
+  "skills": [
+    {
+      "id": "skill.nano_medic.nano_repair",
+      "name_key": "skill.nano_medic.nano_repair",
+      "user": "party",
+      "effect": "heal",
+      "range": "ranged",
+      "target": "ally_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 5,
+          "base": 15,
+          "wis_pct": 100
+        }
+      ]
+    },
+    {
+      "id": "skill.nano_medic.refresh_patch",
+      "name_key": "skill.nano_medic.refresh_patch",
+      "user": "party",
+      "effect": "cure",
+      "range": "ranged",
+      "target": "ally_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "first",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 4
+        }
+      ]
+    },
+    {
+      "id": "skill.nano_medic.reboot",
+      "name_key": "skill.nano_medic.reboot",
+      "user": "party",
+      "effect": "revive",
+      "range": "ranged",
+      "target": "ally_dead",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 800,
+      "levels": [
+        {
+          "tp": 10,
+          "hp_permille": 250
+        }
+      ]
+    }
+  ]
+}

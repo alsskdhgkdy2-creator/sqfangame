@@ -1,0 +1,62 @@
+{
+  "skills": [
+    {
+      "id": "skill.holo_knight.front_guard",
+      "name_key": "skill.holo_knight.front_guard",
+      "user": "party",
+      "effect": "front_guard",
+      "range": "ranged",
+      "target": "self",
+      "parts": [
+        "arm"
+      ],
+      "priority": "first",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 4,
+          "value": 600
+        }
+      ]
+    },
+    {
+      "id": "skill.holo_knight.aegis_cover",
+      "name_key": "skill.holo_knight.aegis_cover",
+      "user": "party",
+      "effect": "cover",
+      "range": "ranged",
+      "target": "ally_other",
+      "parts": [
+        "arm"
+      ],
+      "priority": "first",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 3
+        }
+      ]
+    },
+    {
+      "id": "skill.holo_knight.defense_protocol",
+      "name_key": "skill.holo_knight.defense_protocol",
+      "user": "party",
+      "effect": "buff",
+      "range": "ranged",
+      "target": "ally_all",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 6,
+          "kind": "phys_def",
+          "value": 750,
+          "turns": 3
+        }
+      ]
+    }
+  ]
+}
