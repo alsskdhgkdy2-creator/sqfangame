@@ -16,6 +16,7 @@
 - `docs/design/03-production-plan.md`: 그림 에셋 제작과 단계(M0~M3)별 수용 기준
 - `docs/design/04-world-and-art-direction.md`: 세계관(사이버펑크 + 마법)과 아트 방향
 - `docs/design/05-m1-exploration.md`: M1 탐색 시제품 명세 (층 정의 형식, 이동 규칙, 지도, 저장, 화면, 시험)
+- `docs/design/06-m2-combat.md`: M2 전투 시제품 명세 (전투 규칙, 정의 데이터, 첫 수치, 시뮬레이션, 저장 2판, 화면, 시험)
 - `docs/CLOUD_TESTS.md`: 무거운 시험을 클라우드로 보내는 기준과 방법
 
 ## 개발
