@@ -1,0 +1,9 @@
+{
+  "members": [
+    {"id": "holo_knight", "name_key": "member.holo_knight", "max_hp": 60},
+    {"id": "blade_duelist", "name_key": "member.blade_duelist", "max_hp": 52},
+    {"id": "rail_ranger", "name_key": "member.rail_ranger", "max_hp": 46},
+    {"id": "nano_medic", "name_key": "member.nano_medic", "max_hp": 42},
+    {"id": "glyph_wizard", "name_key": "member.glyph_wizard", "max_hp": 40}
+  ]
+}

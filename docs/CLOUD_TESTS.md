@@ -23,11 +23,16 @@
 
 ```sh
 godot --headless --import                     # 처음 한 번, 그림·글꼴을 바꾼 뒤
-godot --headless -s tests/run.gd              # 규칙 시험(실패하면 종료 코드 1)
+timeout 600 godot --headless -s tests/run.gd  # 규칙 시험(실패하면 종료 코드 1, 시간 초과면 124)
 flock /tmp/voxel-test-heavy.lock bash -c 'tools/export_web.sh && xvfb-run -a node tools/shot.mjs build/shot.png 1280x720 20'
+flock /tmp/voxel-test-heavy.lock bash -c 'tools/export_web.sh && xvfb-run -a node tools/web_check.mjs 1280x720'  # 브라우저 자동 확인
 ```
 
+- 브라우저 자동 확인(`tools/web_check.mjs`)은 내보낸 웹 빌드를 헤드리스 Chromium 으로 열어 공략 경로를 걷고, 지도 편집·한국어 메모(브라우저 입력 창)·되돌리기·IndexedDB 자동 저장·새로 고침 뒤 상태 해시·내보내기·가져오기·1MB 초과 거부·파일 고르기 취소를 확인한다. 결과는 `build/check/`(캡처, 내보낸 파일, `report.json`), 실패가 하나라도 있으면 종료 코드 1. 2026-10-17 이 기기에서 빌드 포함 약 1분 50초–2분, 19/19 통과(늦게 끝난 앞 가져오기 버림 포함). 「공략 끝」 기록에 연출 보정 계획 시간(`plan_ms_max` 등)을 남긴다(단언 없음, 05 §9.2.1). 폰 브라우저의 사용자 활성화·IME·실제 손가락 입력은 이것으로 대신하지 못한다(05 §11.3).
+
+- 시험 명령에는 늘 `timeout` 을 붙인다. 실행기(`tests/run.gd`·`tests/harness.gd`)가 컴파일에 실패하면 Godot 가 종료 코드 없이 끝나지 않고 계속 돈다(2026-10-16 확인: 문법 오류 하나로 모든 시험 실행이 멈춤). 클라우드·CI 도 같다.
 - 웹 빌드·캡처는 공용 잠금 `/tmp/voxel-test-heavy.lock` 을 잡고 서버 전체에서 한 번에 하나씩 돌린다.
+- 이 프로젝트의 Godot 실행(시험·가져오기)끼리는 `flock /tmp/sqfangame-godot.lock` 으로 하나씩 돌린다. 시험이 같은 `user://` 임시 폴더와 가져오기 캐시를 쓰고, 장면 시험은 시작할 때 지난 실행의 임시 폴더를 지우기 때문이다(에이전트 여럿이 함께 일할 때 특히).
 - Godot 는 프로젝트 폴더 전체를 가져온다. `node_modules/`(npm `postinstall` 이 만든다)·`build/`(`tools/export_web.sh` 가 만든다)·`tmp/`(`tools/cloud/test.sh` 가 만든다)에는 `.gdignore` 를 둔다. 2026-10-16 `node_modules/` 의 playwright SVG 를 가져오다 같은 파일을 되풀이하며 멈췄고, 그동안 세션이 두 번 끊겼다.
 - 휴대폰 확인: `python3 tools/serve_web.py`(127.0.0.1:8765, wasm 39.5MB 를 gzip 으로 약 10MB 로 보낸다)를 띄우고 `cloudflared tunnel --no-autoupdate --url http://localhost:8765 --http-host-header localhost:8765` 로 잠깐 연다. 새 임시 주소는 열린 뒤 30초쯤 지나야 접속된다. 임시 주소는 켜 둔 동안 아는 사람 누구나 열 수 있으니 공개하지 않고, 확인이 끝나면 끈다. 스레드 없는 내보내기라 특별한 헤더가 필요 없다.
 
