@@ -1,8 +1,10 @@
 ## 미궁 탐색 화면(주 장면, 05 §9). 탐색 상태를 가지고 규칙 함수로만 바꾼다. 시야·지도·상태 표시는 읽기만 한다.
 ## 자동 저장(05 §8.4, 06 §8.7): 거부되지 않은 규칙 행동, 지도 편집 한 단계·실행 취소, 전투 턴 제출(전투 끝 포함, 전투 층이
-## 연출 전에 부른다), 새 게임, 수동 슬롯 불러오기, 가져오기 직후. 저장 쓰기는 한 프레임 안에서 끝낸다(웹 IndexedDB 반영, 05 §8.3).
+## 연출 전에 부른다), 새 게임, 수동 슬롯 불러오기, 가져오기 직후, 파티 메뉴의 배분 확정·장착 변경·임시 보급(07 §8.5).
+## 저장 쓰기는 한 프레임 안에서 끝낸다(웹 IndexedDB 반영, 05 §8.3).
 ## 입력(05 §9.3): 키보드는 _unhandled_input, 화면 단추는 TouchButton. 창이 열려 있거나 전투 중·전멸이면 이동을 받지 않는다.
 ## 전투(06 §9): 전투 중이면 전투 층(BattleLayer)을 덮는다. 3D 시야 크기는 그대로 두고 지도·이동 단추·메뉴를 감춘다.
+## 파티 메뉴(07 §9): 「파티」 단추·P 로 여는 불투명 전체 화면 층(PartyMenu). 열린 동안은 창이 열린 것과 같다(이동·지도·메뉴 키를 막는다).
 ## 미리 받는 입력은 하나(나중 것이 대신)이고, 창이 열릴 때·불러올 때·포커스를 잃을 때·입력 창이 닫힌 뒤 비운다.
 class_name DungeonScreen
 extends Control
@@ -46,6 +48,8 @@ var seed_override := -1
 ## 시험용 주소 인자 글("debug=1&seed=5"): 비어 있지 않으면 브라우저 주소 대신 이것을 본다.
 var url_query := ""
 var anim_speed := 1.0
+## 네이티브 디버그 실행인지(파티 메뉴의 임시 보급, 07 §5.7). 시험은 일반 실행을 보려고 false 로 바꾼다.
+var native_debug := OS.is_debug_build()
 
 # ---- 상태 ----
 var state: ExplorationState
@@ -67,11 +71,13 @@ var toolbar: MapToolbar
 var status: StatusPanel
 var modal: ModalLayer
 var battle_layer: BattleLayer
+var party_menu: PartyMenu
 ## 정의 읽기에 실패했을 때의 오류 화면(06 §5.6). 정상 시작이면 null.
 var start_error: Control
 var pad := {}  # 규칙 행동 → TouchButton
 var map_button: TouchButton
 var menu_button: TouchButton
+var party_button: TouchButton
 ## 휴식(06 §8.8): 층의 시작 칸에서만 보인다.
 var rest_button: TouchButton
 var _floor_label := Label.new()
@@ -165,6 +171,8 @@ func _set_state(s: ExplorationState) -> void:
 		# 다른 상태로 바뀌었다: 앞 상태의 전투 층은 알리지 않고 닫는다(새 상태의 전투는 _check_windows 가 연다).
 		battle_layer.close_layer(false)
 		_set_battle_view(false)
+	if party_menu.is_open():
+		party_menu.close_menu(false)  # 앞 상태의 초안·화면은 버린다
 	_clear_input()
 	view.rebuild(state.world)
 	view.set_pose(state.party.at, state.party.facing)
@@ -196,10 +204,11 @@ func _on_pad(action: int) -> void:
 	request_action(action)
 
 
-## 행동을 받지 않는 조건: 상태 없음, 창(메뉴·전멸·메모·파일 고르기 등)·전투 층이 열림, 전투 중·전멸,
+## 행동을 받지 않는 조건: 상태 없음, 창(메뉴·전멸·메모·파일 고르기 등)·전투 층·파티 메뉴가 열림, 전투 중·전멸,
 ## 지도에서 진행 중인 상호작용(그리기 획·끌어 이동·핀치·아이콘·메모 누르기).
 func _input_blocked() -> bool:
-	return state == null or modal.is_open() or battle_layer.is_open() or not ExplorationRules.can_act(state) or map.is_interacting()
+	return state == null or modal.is_open() or battle_layer.is_open() or party_menu.is_open() \
+		or not ExplorationRules.can_act(state) or map.is_interacting()
 
 
 func _do_action(action: int) -> void:
@@ -298,14 +307,17 @@ func _held_action() -> Array:
 
 
 ## 전멸이면 전멸 창, 전투 중이면 전투 층을 띄운다(이미 떠 있으면 그대로). 띄웠으면 true.
-## 전투 중에 다른 창(알림)이 떠 있으면 그 창이 닫힌 뒤 전투 층을 연다(_close_alert 가 다시 부른다).
+## 전투 중에 다른 창(알림·파티 메뉴)이 떠 있으면 그 창이 닫힌 뒤 전투 층을 연다(_close_alert·_on_party_closed 가 다시 부른다).
+## 전멸 창은 파티 메뉴를 닫고 띄운다(전멸이면 성장 조작을 받지 않는다).
 func _check_windows() -> bool:
 	if state.wiped:
+		if party_menu.is_open():
+			party_menu.close_menu(false)
 		if modal.kind != "wipe":
 			_open_wipe()
 		return true
 	if state.encounter.pending:
-		if not battle_layer.is_open() and not modal.is_open():
+		if not battle_layer.is_open() and not modal.is_open() and not party_menu.is_open():
 			_open_battle()
 		return true
 	return false
@@ -325,6 +337,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if battle_layer == null or battle_layer.is_open():
 		return  # 전투 층이 키를 받는다(메뉴도 열지 않는다, 06 §8.7)
+	if party_menu.is_open():
+		return  # 파티 메뉴가 키를 받는다(07 §9.4: 아래 Esc·Ctrl+Z·M·R·이동 키 갈래는 _input_blocked 를 보지 않는다)
 	if event.is_action_pressed("open_menu"):
 		get_viewport().set_input_as_handled()
 		if modal.kind == "menu" or modal.kind == "icons":
@@ -333,6 +347,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_open_menu()
 		return
 	if modal.is_open():
+		return
+	if event.is_action_pressed("open_party"):
+		get_viewport().set_input_as_handled()
+		_open_party()
 		return
 	if event.is_action_pressed("map_undo"):
 		get_viewport().set_input_as_handled()
@@ -384,6 +402,7 @@ func _clear_input() -> void:
 	if map_button != null:
 		map_button.cancel()
 		menu_button.cancel()
+		party_button.cancel()
 		rest_button.cancel()
 
 
@@ -611,6 +630,32 @@ func _set_battle_view(on: bool) -> void:
 
 ## 전투 층 저장 갈고리(제출 결과가 정해진 직후, 연출 전).
 func _on_battle_save() -> void:
+	_autosave()
+
+
+## 파티 메뉴를 연다(07 §9.1): 전투·전멸이 아니고, 다른 창(메뉴·메모·파일 고르기·전멸·전투)이 없고, 연출 중이 아닐 때만.
+## 열 때마다 상태 탭·칸 0 대원에서 시작한다. 임시 보급은 디버그 주소이거나 네이티브 디버그 실행일 때만 보인다(07 §5.7).
+func _open_party() -> void:
+	if state == null or party_menu.is_open() or battle_layer.is_open() or modal.is_open() or state.encounter.pending:
+		return
+	if not ExplorationRules.can_act(state) or _is_busy() or map.is_interacting():
+		return
+	party_menu.debug = _debug or (native_debug and not bridge.is_web())
+	party_menu.open(state)
+
+
+## 파티 메뉴가 닫혔다: 눌림·미리 받은 입력을 버리고(닫은 뒤 누르고 있던 이동 키가 걸음이 되지 않는다) 탐색 화면을 다시 맞춘다.
+func _on_party_closed() -> void:
+	_clear_input()
+	status.refresh()
+	_refresh_hud()
+	_debug_dirty = true
+	_debug_settle = 2
+	_check_windows()
+
+
+## 파티 메뉴 저장 갈고리(배분 확정·장착 변경·임시 보급이 받아들여진 직후).
+func _on_party_save() -> void:
 	_autosave()
 
 
@@ -853,6 +898,10 @@ func _build_ui() -> void:
 	menu_button.name = "MenuButton"
 	menu_button.activated.connect(_open_menu)
 	add_child(menu_button)
+	party_button = TouchButton.new()
+	party_button.name = "PartyButton"
+	party_button.activated.connect(_open_party)
+	add_child(party_button)
 
 	var pad_defs := [
 		[A.TURN_LEFT, "turn_left", ""], [A.FORWARD, "up", ""], [A.TURN_RIGHT, "turn_right", ""],
@@ -906,6 +955,21 @@ func _build_ui() -> void:
 		_debug_dirty = true
 		_debug_settle = 2)
 	battle_layer.submitted.connect(func(_e: Array) -> void: _debug_dirty = true)
+	# 파티 메뉴도 탐색 부품 위, 알림 줄·창 아래(저장 실패 알림이 메뉴에 가리지 않는다).
+	party_menu = PartyMenu.new()
+	party_menu.name = "PartyMenu"
+	add_child(party_menu)
+	party_menu.build(texts)
+	party_menu.save_hook = _on_party_save
+	party_menu.opened.connect(func() -> void:
+		_clear_input()
+		_debug_dirty = true
+		_debug_settle = 2)
+	party_menu.closed.connect(_on_party_closed)
+	party_menu.changed.connect(func(_e: Array) -> void:
+		status.refresh()
+		_debug_dirty = true)
+	party_button.setup("", texts.t("party.title"))
 	add_child(_toast)
 
 	modal = ModalLayer.new()
@@ -940,6 +1004,8 @@ func _layout() -> void:
 	menu_button.position = Vector2(view_w - 64 - 12, 10)
 	map_button.size = Vector2(64, 64)
 	map_button.position = Vector2(view_w - 2 * 64 - 20, 10)
+	party_button.size = Vector2(64, 64)
+	party_button.position = Vector2(view_w - 3 * 64 - 28, 10)
 	var pad_top := s.y - 2.0 * PAD_BUTTON - PAD_GAP - 16.0
 	var order := [A.TURN_LEFT, A.FORWARD, A.TURN_RIGHT, A.STRAFE_LEFT, A.BACK, A.STRAFE_RIGHT]
 	for i in order.size():
@@ -956,13 +1022,14 @@ func _layout() -> void:
 	rest_button.size = Vector2(PAD_BUTTON + 16.0, PAD_BUTTON)
 	rest_button.position = Vector2(rb.position.x, pad_top)
 	if _battle_view:
-		_toast.position = Vector2(0, BattleLayer.TOP_H + 8.0)
-		_toast.size = Vector2(s.x, 36)
+		_toast.position = Vector2(0, BattleLayer.TOAST_Y)
+		_toast.size = Vector2(s.x, BattleLayer.TOAST_H)
 	var explore := not _battle_view
 	for a in pad:
 		(pad[a] as TouchButton).visible = explore
 	map_button.visible = explore
 	menu_button.visible = explore
+	party_button.visible = explore
 	_floor_label.visible = explore
 	_steps_label.visible = explore
 	status.visible = explore
@@ -1035,7 +1102,9 @@ func _process(delta: float) -> void:
 		_flash.color.a = maxf(0.0, _flash.color.a - delta * 1.2)
 	if _debug:
 		var busy := _is_busy()
-		var sig := "%s/%s/%d/%s" % [battle_layer.phase, battle_layer.sub, battle_layer.member, str(battle_layer.log_view.visible)]
+		# 전투 층·파티 메뉴가 입력을 받으면 상태 요약을 다시 낸다(메뉴 안 탭·초안·확인 창도 요약에 있다).
+		var sig := "%s/%s/%d/%s/%s/%d" % [battle_layer.phase, battle_layer.sub, battle_layer.member, str(battle_layer.log_view.visible),
+			str(party_menu.is_open()), party_menu.accepted_inputs]
 		if sig != _debug_battle_sig:
 			_debug_battle_sig = sig
 			_debug_dirty = true
@@ -1074,13 +1143,17 @@ func _css(local_point: Vector2, from: CanvasItem) -> Array:
 
 func debug_snapshot() -> Dictionary:
 	var buttons := {}
-	for b in pad.values() + [rest_button, menu_button, map_button]:
-		if (b as TouchButton).is_visible_in_tree():
-			buttons[b.name] = _css(b.size / 2.0, b)
-	if toolbar.visible:
-		for key in toolbar.buttons:
-			var tb: TouchButton = toolbar.buttons[key]
-			buttons["Tool_" + key] = _css(tb.size / 2.0, tb)
+	var party := party_menu.debug_info(_css)
+	if party_menu.is_open():
+		buttons.merge(party["buttons"])  # 메뉴가 덮은 탐색 단추는 내지 않는다(누를 수 없다)
+	else:
+		for b in pad.values() + [rest_button, menu_button, map_button, party_button]:
+			if (b as TouchButton).is_visible_in_tree():
+				buttons[b.name] = _css(b.size / 2.0, b)
+		if toolbar.visible:
+			for key in toolbar.buttons:
+				var tb: TouchButton = toolbar.buttons[key]
+				buttons["Tool_" + key] = _css(tb.size / 2.0, tb)
 	var battle := battle_layer.debug_info(_css)
 	if battle_layer.is_open() and not modal.is_open():
 		buttons.merge(battle["buttons"])
@@ -1111,7 +1184,20 @@ func debug_snapshot() -> Dictionary:
 		# 지난 연출(끝난 연출 묶음)의 계획 횟수·누적 계획 시간, 지금까지 연출 하나의 가장 큰 누적·횟수.
 		"plan_count": view.last_anim_plan_count, "plan_ms_total": view.last_anim_plan_ms,
 		"plan_ms_total_max": view.max_anim_plan_ms, "plan_count_max": view.max_anim_plan_count,
+		# 성장(07 §8.6): 대원마다 레벨·경험치·남은 SP·스킬·장비와 §6 묶음의 능력치·공격·방어, 가방, 파티 메뉴.
+		"members": _debug_members(), "gear_bag": state.gear_bag.duplicate(), "party_menu": party,
 	}
+
+
+func _debug_members() -> Array:
+	var out := []
+	for i in state.party.members.size():
+		var m := state.party.members[i]
+		var p := GrowthRules.profile(state.defs, i, m)
+		out.append({"level": m.level, "exp": m.exp, "sp_left": GrowthRules.sp_left(state.defs, m), "skills": m.skills.duplicate(),
+			"equip": Array(m.equip), "stats": p["stats"], "gear": p["gear"], "max_hp": m.max_hp, "max_tp": m.max_tp,
+			"weapon": p["weapon"], "attack_element": (p["attack"] as BattleDb.SkillDef).element})
+	return out
 
 
 ## 연출 중(시야 이동·미리 받은 행동·전투 연출).
@@ -1120,13 +1206,14 @@ func _is_busy() -> bool:
 
 
 ## 요청 JSON: {"op": "snapshot"} | {"op": "simulate", "actions": ["forward", …]} | {"op": "hash_save", "text": 저장 글}
-##   | {"op": "battle_auto"} | {"op": "battle_finish"}
+##   | {"op": "battle_auto"} | {"op": "battle_finish"} | {"op": "supply", "item": 장비 ID, "n": 개수} | {"op": "grant_exp", "member": 칸, "n": 양}
 ## hash_save: 저장 글을 읽어 그 상태 해시·세대를 돌려준다(웹 확인이 IndexedDB 의 자동 저장이 화면 상태와 같은지 본다).
 ## simulate: 지금 상태의 복사본(저장 형식으로 옮긴 것)에서 행동열을 돌려 행동마다의 해시를 돌려준다.
 ## 전투 중이면 다음 행동 전에 battle_finish 와 같이 규칙의 finish(승리)로 끝낸다(전투 승패와 상관없이 같은 해시). 진짜 상태는 바꾸지 않는다.
 ## battle_auto: 지금 턴의 명령을 기본 정책으로 만들어 전투 층의 명령 입구로 제출한다(같은 막힘 조건·저장·연출).
 ## battle_finish: 전투 층의 디버그 끝내기로 규칙의 finish(승리) → 저장 → 연출 → 결과 창(「확인」은 따로 누른다).
-## 전투를 바꾸는 두 요청은 디버그 주소(?debug=1)에서만 받는다.
+## supply·grant_exp(07 §8.6): 파티 메뉴의 임시 보급 단추와 같은 규칙 함수(GrowthRules.supply·grant_exp) → 받아들여지면 자동 저장.
+## 상태를 바꾸는 이 네 요청은 디버그 주소(?debug=1)에서만 받는다.
 func _on_debug_request(json_text: String) -> String:
 	var req: Variant = JSON.parse_string(json_text)
 	if typeof(req) != TYPE_DICTIONARY:
@@ -1166,6 +1253,22 @@ func _on_debug_request(json_text: String) -> String:
 				ok = battle_layer.handle("finish", "victory")
 			_debug_dirty = true
 			return JSON.stringify({"ok": ok, "phase": battle_layer.phase})
+		"supply", "grant_exp":
+			if not _debug:
+				return JSON.stringify({"error": "debug only"})
+			var events: Array[Dictionary]
+			if req["op"] == "supply":
+				events = GrowthRules.supply(state, str(req.get("item", "")), req.get("n"))
+			else:
+				var who: Variant = SaveCodec.to_int(req.get("member")) if typeof(req.get("member")) != TYPE_BOOL else null
+				events = GrowthRules.grant_exp(state, who if who != null else -1, req.get("n"))
+			if events.size() == 1 and events[0]["type"] == "rejected":
+				return JSON.stringify({"ok": false, "reason": events[0]["reason"]})
+			_autosave()
+			status.refresh()
+			party_menu.refresh_view()
+			_debug_dirty = true
+			return JSON.stringify({"ok": true, "events": events})
 	return JSON.stringify({"error": "unknown op"})
 
 

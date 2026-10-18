@@ -32,6 +32,15 @@ const DETAIL_AT := 0.35
 ## 대상을 묻지 않고 바로 확정하는 대상 규칙(06 §9.2).
 const AUTO_TARGETS := ["self", "enemy_all", "ally_all"]
 const REASON_KEYS := ["no_tp", "bound_head", "bound_arm", "bound_leg", "no_target", "no_escape", "unknown_skill"]
+## 결과 창: 폭, 가장 작은 높이, 본문 시작(제목 아래), 본문과 「확인」 사이, 「확인」 아래 여백.
+const RESULT_W := 560.0
+const RESULT_MIN_H := 340.0
+const RESULT_TOP := 84.0
+const RESULT_GAP := 12.0
+const RESULT_BOTTOM := 20.0
+## 탐색 화면이 전투 중 알림 줄(저장 실패 등)을 띄우는 자리: 위 막대 바로 아래, 높이 TOAST_H. 결과 창은 이 줄 아래에 둔다.
+const TOAST_Y := TOP_H + 8.0
+const TOAST_H := 36.0
 
 # ---- 바깥에서 정하는 값 ----
 ## 0 이면 연출을 바로 끝 상태로 맞춘다(시험).
@@ -79,6 +88,10 @@ var result_ok: BattleButton
 var skip_catcher: Control
 var _result_title := Label.new()
 var _result_body := Label.new()
+## 결과 본문(넘치면 끌어 내린다, 07 §9.6).
+var result_scroll: PartyScroll
+## 결과 창 본문 줄(드롭·경험치·레벨업). 디버그 상태 요약도 이것을 낸다(07 §8.6).
+var result_lines: Array[String] = []
 var _built := false
 var _input_frame := -1
 var _notice := ""
@@ -154,10 +167,14 @@ func _build_result() -> void:
 	_result_title.add_theme_font_size_override("font_size", 30)
 	_result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	result_panel.add_child(_result_title)
+	result_scroll = PartyScroll.new()
+	result_scroll.name = "ResultBody"
+	result_panel.add_child(result_scroll)
 	_result_body.add_theme_font_size_override("font_size", 20)
 	_result_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_result_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	result_panel.add_child(_result_body)
+	_result_body.mouse_filter = MOUSE_FILTER_IGNORE
+	result_scroll.content.add_child(_result_body)
 	result_ok = BattleButton.new()
 	result_ok.name = "ResultOk"
 	result_ok.setup("", texts.t("ui.ok"))
@@ -196,6 +213,7 @@ func open(s: ExplorationState) -> void:
 	outcome = ""
 	end_event = {}
 	last_events.clear()
+	result_lines.clear()
 	_steps.clear()
 	_notice = ""
 	_announce = ""
@@ -762,18 +780,62 @@ func _show_result() -> void:
 				if capped.has(item):
 					line = texts.t("battle.result.drop_capped", {"item": texts.t(item)}) if line.is_empty() else line + " " + texts.t("battle.result.capped")
 				lines.append(line)
+		lines.append_array(growth_lines(end_event))
 	elif end_event.get("reason", "") == "turn_cap":
 		_result_title.text = texts.t("battle.result.ended")
 		lines.append(texts.t("battle.result.turn_cap"))
 	else:
 		_result_title.text = texts.t("battle.result.escaped")
 		lines.append(texts.t("battle.event.escaped"))
+	result_lines = lines
 	_result_body.text = "\n".join(lines)
+	result_scroll.scroll_to(0.0)
 	result_panel.visible = true
 	panel.show_none()
 	_cancel_pointers()
 	_layout()
 	_refresh()
+
+
+## 승리 battle_end 의 경험치·레벨업 줄(07 §3.5). 성장 필드가 없거나(도주·전멸·턴 상한) exp_total 이 0 이면 경험치 줄이 없다.
+## 모두 받았고 같은 양·상한 없음이면 「경험치 +7」 한 줄, 그 밖에는 머리 「경험치」 아래 대원마다 한 줄(칸 순).
+## 레벨이 오른 대원이 있으면 머리 「레벨 업」 아래 그 대원마다 「Lv 1 → 2  SP +1」.
+func growth_lines(end_ev: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var rows: Array = end_ev.get("members", [])
+	if int(end_ev.get("exp_total", 0)) <= 0 or rows.is_empty():
+		return out
+	var same := true
+	for r in rows:
+		if r["status"] != "received" or r["capped"] or int(r["gained"]) != int(rows[0]["gained"]):
+			same = false
+	if same:
+		out.append(texts.t("battle.result.exp", {"n": rows[0]["gained"]}))
+	else:
+		out.append(texts.t("battle.result.exp_head"))
+		for r in rows:
+			var who := _member_name(int(r["member"]))
+			match str(r["status"]):
+				"down":
+					out.append(texts.t("battle.result.exp_down", {"member": who}))
+				"at_cap":
+					out.append(texts.t("battle.result.exp_at_cap", {"member": who}))
+				_:
+					var key := "battle.result.exp_member_capped" if r["capped"] else "battle.result.exp_member"
+					out.append(texts.t(key, {"member": who, "n": r["gained"]}))
+	var head := true
+	for r in rows:
+		if int(r["to"]) > int(r["from"]):
+			if head:
+				out.append(texts.t("battle.result.level_up_head"))
+				head = false
+			var args := {"member": _member_name(int(r["member"])), "from": r["from"], "to": r["to"], "sp": r["sp_gained"]}
+			out.append(texts.t("battle.result.level_up_sp" if int(r["sp_gained"]) > 0 else "battle.result.level_up", args))
+	return out
+
+
+func _member_name(i: int) -> String:
+	return texts.t(state.defs.party.name_keys[i]) if state != null and i < state.defs.party.name_keys.size() else str(i)
 
 
 func _log(ev: Dictionary) -> void:
@@ -917,14 +979,26 @@ func _layout() -> void:
 	log_button.position = Vector2(s.x - LOG_BUTTON.x, 0)
 	log_view.position = Vector2(16, TOP_H + 8)
 	log_view.size = Vector2(s.x - 32, PANEL_BOTTOM - TOP_H - 8)
-	var rp := Vector2(560, 340)
+	# 결과 창: 본문 줄이 많으면 높이를 늘리되 알림 줄 아래부터 화면 아래 8 안에 둔다(알림 줄과 위 막대를 가리지 않는다).
+	# 그래도 넘치면 본문을 끌어 내린다(07 §9.6).
+	var body_w := RESULT_W - 40.0
+	_result_body.size = Vector2(body_w, _result_body.size.y)
+	var body_h := maxf(1.0, _result_body.get_line_count()) * (_result_body.get_line_height() + _result_body.get_theme_constant("line_spacing"))
+	var chrome := RESULT_TOP + RESULT_GAP + result_ok.size.y + RESULT_BOTTOM
+	var clear_top := TOAST_Y + TOAST_H + 4.0
+	var rp := Vector2(RESULT_W, clampf(chrome + body_h, RESULT_MIN_H, maxf(RESULT_MIN_H, s.y - 8.0 - clear_top)))
 	result_panel.size = rp
-	result_panel.position = ((Vector2(s.x, PARTY_TOP) - rp) / 2.0 + Vector2(0, TOP_H / 2.0)).round()
+	var py := roundf((PARTY_TOP - rp.y) / 2.0 + TOP_H / 2.0)
+	var low := maxf(8.0, s.y - 8.0 - rp.y)
+	result_panel.position = Vector2(roundf((s.x - rp.x) / 2.0), clampf(py, minf(clear_top, low), low))
 	_result_title.position = Vector2(20, 24)
 	_result_title.size = Vector2(rp.x - 40, 44)
-	_result_body.position = Vector2(20, 84)
-	_result_body.size = Vector2(rp.x - 40, rp.y - 84 - 96)
-	result_ok.position = Vector2((rp.x - result_ok.size.x) / 2.0, rp.y - result_ok.size.y - 20)
+	result_scroll.position = Vector2(20, RESULT_TOP)
+	result_scroll.size = Vector2(body_w, rp.y - chrome)
+	_result_body.position = Vector2.ZERO
+	_result_body.size = Vector2(body_w, body_h)
+	result_scroll.set_content_height(body_h)
+	result_ok.position = Vector2((rp.x - result_ok.size.x) / 2.0, rp.y - result_ok.size.y - RESULT_BOTTOM)
 	skip_catcher.position = Vector2.ZERO
 	skip_catcher.size = s
 	queue_redraw()
@@ -998,4 +1072,4 @@ func debug_info(css: Callable) -> Dictionary:
 	return {"open": true, "phase": phase, "sub": sub, "member": member, "turn": display.turn,
 		"targets": target_slots if sub == "target" else [], "target_side": target_side if sub == "target" else "",
 		"enemy_hp": enemy_hp, "charging": charging, "log": log_view.visible, "log_lines": log_view.lines.size(), "outcome": outcome,
-		"buttons": buttons}
+		"result_lines": result_lines if phase == "result" else [], "buttons": buttons}

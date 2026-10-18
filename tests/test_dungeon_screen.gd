@@ -973,3 +973,127 @@ func test_debug_hash_save_matches_snapshot() -> void:
 	check(typeof(r) == TYPE_DICTIONARY and r.get("hash") == snap["hash"] and int(r.get("generation", -1)) == int(snap["generation"]), "hash_save = 상태 요약 (%s)" % str(r))
 	var bad: Variant = JSON.parse_string(s._on_debug_request(JSON.stringify({"op": "hash_save", "text": "{"})))
 	check(typeof(bad) == TYPE_DICTIONARY and bad.has("error"), "깨진 글 = 오류")
+
+
+# ---- 성장 (07 §8.6·§9.5·§10.1, G-B2) ----
+
+func _req(s: DungeonScreen, req: Dictionary) -> Dictionary:
+	var r: Variant = JSON.parse_string(s._on_debug_request(JSON.stringify(req)))
+	return r if typeof(r) == TYPE_DICTIONARY else {}
+
+
+func test_status_panel_shows_level_and_updates_after_level_up() -> void:
+	var s := await _open("native", "debug=1")
+	check_eq(s.status.level_text(1), "Lv 1", "대원 칸의 「Lv 1」")
+	var r := _req(s, {"op": "grant_exp", "member": 1, "n": s.state.defs.battle.growth.cum(3)})
+	check(r.get("ok", false), "grant_exp: %s" % str(r))
+	check_eq(s.status.level_text(1), "Lv 3", "레벨업 뒤 바로 「Lv 3」")
+	check_eq(s.status.level_text(0), "Lv 1", "다른 대원 그대로")
+
+
+func test_debug_supply_and_grant_exp_requests_autosave() -> void:
+	var s := await _open("native", "debug=1")
+	var n := s.autosave_count
+	var r := _req(s, {"op": "supply", "item": "equip.ion_saber", "n": 2})
+	check(r.get("ok", false), "supply: %s" % str(r))
+	check_eq(s.state.gear_bag.get("equip.ion_saber", 0), 2, "가방 +2")
+	check_eq(s.autosave_count, n + 1, "자동 저장")
+	_check_auto_matches(s, "supply")
+	var h := kit.hash_now()
+	for bad in [{"op": "supply", "item": "equip.nope", "n": 1}, {"op": "supply", "item": "equip.ion_saber", "n": 0},
+			{"op": "grant_exp", "member": 9, "n": 10}, {"op": "grant_exp", "member": 0, "n": 0}, {"op": "grant_exp", "member": true, "n": 10}]:
+		r = _req(s, bad)
+		check(not r.get("ok", true) and r.has("reason"), "거부 %s → %s" % [str(bad), str(r)])
+	check_eq(kit.hash_now(), h, "거부는 상태를 바꾸지 않는다")
+	check_eq(s.autosave_count, n + 1, "거부는 저장하지 않는다")
+	r = _req(s, {"op": "grant_exp", "member": 0, "n": 30})
+	check(r.get("ok", false) and s.state.party.members[0].level == 2, "grant_exp → Lv 2: %s" % str(r))
+	check_eq(s.autosave_count, n + 2, "자동 저장")
+	_check_auto_matches(s, "grant_exp")
+	s._debug = false  # 디버그 주소가 아닌 화면과 같은 갈림
+	r = _req(s, {"op": "supply", "item": "equip.ion_saber", "n": 1})
+	check_eq(r.get("error"), "debug only", "supply 는 디버그 주소에서만")
+	r = _req(s, {"op": "grant_exp", "member": 0, "n": 1})
+	check_eq(r.get("error"), "debug only", "grant_exp 는 디버그 주소에서만")
+	check_eq(s.autosave_count, n + 2, "저장 없음")
+
+
+func test_snapshot_lists_party_menu_buttons_and_growth_fields() -> void:
+	var s := await _open("native", "debug=1")
+	var snap := s.debug_snapshot()
+	check(snap["buttons"].has("PartyButton") and snap["buttons"].has("Pad_forward"), "닫혀 있으면 탐색 단추")
+	check_eq(snap["party_menu"], {"open": false}, "메뉴 닫힘")
+	var m1: Dictionary = snap["members"][1]
+	for k in ["level", "exp", "sp_left", "skills", "equip", "stats", "gear", "max_hp", "max_tp", "weapon", "attack_element"]:
+		check(m1.has(k), "대원 필드 " + k)
+	check_eq([m1["level"], m1["sp_left"], m1["weapon"], m1["attack_element"]], [1, 0, "equip.twin_edge", "slash"], "듀얼리스트 A 값")
+	check(snap.has("gear_bag"), "가방")
+	await kit.press_key(KEY_P)
+	snap = s.debug_snapshot()
+	var b: Dictionary = snap["buttons"]
+	check(b.has("Tab_status") and b.has("Close") and b.has("Member_0"), "열려 있으면 메뉴 단추: %s" % str(b.keys()))
+	check(not b.has("Pad_forward") and not b.has("MapButton") and not b.has("PartyButton") and not b.has("Tool_wall"), "덮인 탐색 단추는 내지 않는다")
+	check_eq([snap["party_menu"]["open"], snap["party_menu"]["tab"], snap["party_menu"]["member"]], [true, "status", 0], "메뉴 필드")
+	s._on_debug_request(JSON.stringify({"op": "grant_exp", "member": 1, "n": 115}))
+	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_E)
+	await kit.tap(kit.center_of(s.party_menu.skill_tab.plus_button))
+	await kit.press_key(KEY_F)
+	snap = s.debug_snapshot()
+	var pm: Dictionary = snap["party_menu"]
+	check_eq([pm["tab"], pm["member"], pm["draft"], pm["dialog"], pm["dialog_pick"]], ["skills", 1, {"skill.blade_duelist.high_slash": 1}, "commit", 0], "초안·확인 창·고른 단추")
+	check_eq(pm["sp_line"], "남은 SP 2(배분 중 -1)", "남은 SP 줄")
+	check(snap["buttons"].has("DialogOk") and snap["buttons"].has("DialogBack") and not snap["buttons"].has("Tab_status"), "확인 창이 떠 있으면 그 단추만")
+	await kit.press_key(KEY_ESCAPE)
+	snap = s.debug_snapshot()
+	check(snap["party_menu"]["nodes"].has("skill.blade_duelist.leg_cutter"), "트리 노드 좌표(스킬 ID)")
+	var p: Array = snap["party_menu"]["nodes"]["skill.blade_duelist.high_slash"]
+	check_eq(p, s._css(s.party_menu.skill_tab.nodes[0].size / 2.0, s.party_menu.skill_tab.nodes[0]), "노드 좌표 = 노드 가운데")
+
+
+func test_debug_battle_finish_refused_without_living_ally_changes_nothing() -> void:
+	var s := await _open("native", "debug=1")
+	await _walk_into_battle(s)
+	check(s.battle_layer.is_open() and s.state.battle != null, "준비: 전투")
+	for u in s.state.battle.party:
+		u.hp = 0  # 살아 있는 아군 없음(구성): 승리 끝내기는 규칙이 거부한다(07 §3.4)
+	var h := kit.hash_now()
+	var n := s.autosave_count
+	var gen := kit.auto_generation()
+	var r := _req(s, {"op": "battle_finish"})
+	await kit.frames(3)
+	check_eq(r.get("ok"), false, "battle_finish 거부: %s" % str(r))
+	check_eq(kit.hash_now(), h, "상태 그대로")
+	check_eq(s.autosave_count, n, "자동 저장 없음")
+	check_eq(kit.auto_generation(), gen, "저장 파일 세대 그대로")
+	check(s.battle_layer.phase == "command" and s.state.encounter.pending and not s.state.wiped, "전투 그대로(결과 창·전멸 없음)")
+
+
+## 웹 확인 승리 경로의 고정 저장(tools/web_check_victory_save.json, 07 §10.5 7)이 지금 정의로 읽히고 고정 조건을 지키는지.
+## 데이터가 바뀌어 이 시험이 실패하면 고정 저장을 다시 만든다(조건은 web_check.mjs 머리말과 같다).
+func test_web_check_victory_save_fixture() -> void:
+	var s := await _open("native", "debug=1")
+	var text := FileAccess.get_file_as_string("res://tools/web_check_victory_save.json")
+	var r := SaveCodec.decode(text, s.store.defs)
+	check(r.ok(), "3판 저장으로 읽힌다: %s" % (r.error if not r.ok() else ""))
+	if not r.ok():
+		return
+	var st := r.state
+	var b := st.battle
+	check(b != null and b.formation == "formation.f1.rats" and st.encounter.pending, "편성 formation.f1.rats 전투 중")
+	for j in 2:
+		check(b.enemies[j].hp == 0 and not b.enemies[j].kill.is_empty() and int(b.enemies[j].kill["turn"]) <= b.turn, "쥐 %d: HP 0·처치 기록" % j)
+	check(b.enemies[2].hp > 0 and b.enemies[2].kill.is_empty() and b.enemies[2].charging.is_empty(), "쥐 2: 살아 있음·처치 기록 없음·준비 없음")
+	for i in st.party.members.size():
+		var m := st.party.members[i]
+		check(m.hp == m.max_hp and m.tp == m.max_tp, "대원 %d HP·TP 가득" % i)
+		check_eq(m.exp, st.defs.battle.growth.cum(2) - 4 if i == 1 else 0, "대원 %d exp" % i)
+	for u in b.party + b.enemies:
+		check(u.ailment.is_empty() and u.binds.is_empty() and u.buffs.is_empty() and u.debuffs.is_empty() and u.resist_acc.is_empty(), "유닛 상태 깨끗")
+	var events: Array[Dictionary] = []
+	check(BattleRules.finish(st, "victory", events), "finish(victory)")
+	var end: Dictionary = events.filter(func(e: Dictionary) -> bool: return e["type"] == "battle_end")[0]
+	check_eq([end["exp_total"], end["exp_alive"], end["exp_share"]], [24, 5, 4], "E 24·n 5·몫 4")
+	s.battle_layer.state = st
+	var lines := s.battle_layer.growth_lines(end)
+	check_eq(lines, ["경험치 +4", "레벨 업", "듀얼리스트 A  Lv 1 → 2  SP +1"] as Array[String], "결과 창 줄")

@@ -1457,3 +1457,133 @@ func test_log_button_press_does_not_survive_log_toggle() -> void:
 		check(not layer.log_view.visible, how + ": 닫기 전에 시작한 누르기를 떼도 로그가 다시 열리지 않는다")
 	await kit.tap(p)
 	check(layer.log_view.visible, "새 누르기는 연다")
+
+
+# ---- 결과 창의 경험치·레벨업 줄 (07 §3.5·§9.6·§10.4, G-B2) ----
+# 성장 필드를 넣은 battle_end 를 층의 입구(_commit: 저장 갈고리 → 연출 → 결과 창)로 보낸다. 결과는 구성으로 정한다(D15).
+
+const ITEMS := ["item.neon_rat_tail", "item.cable_scale", "item.glow_scale", "item.spore_pouch", "item.coated_scale",
+	"item.drill_claw", "item.beetle_plate", "item.intact_pincer"]
+
+
+func _exp_row(i: int, status: String = "received", gained: int = 7, capped: bool = false, from: int = 1, to: int = 1, sp: int = 0) -> Dictionary:
+	return {"member": i, "status": status, "gained": gained, "capped": capped, "from": from, "to": to, "sp_gained": sp, "hp_gain": 0, "tp_gain": 0}
+
+
+func _growth(rows: Array, total: int = 36) -> Dictionary:
+	return {"exp_total": total, "exp_alive": 5, "exp_share": 7, "members": rows}
+
+
+func _mname(i: int) -> String:
+	return texts.t(Fx.defs().party.name_keys[i])
+
+
+## 승리 결과 창을 띄운다. end 는 battle_end 에 더할 필드, before 는 그 앞 이벤트.
+func _result_with(end: Dictionary, size: Vector2 = Vector2.ZERO, before: Array = [], outcome: String = "victory") -> void:
+	var s := _calm_state()
+	await _open(s, 0.0, size)
+	var ev := {"type": "battle_end", "outcome": outcome, "drops": [], "enemy_hp": [0, 0, 0]}
+	ev.merge(end, true)
+	var events: Array[Dictionary] = []
+	for e in before:
+		events.append(e)
+	events.append(ev)
+	layer._commit(events)
+	await kit.frames(2)
+	check_eq(layer.phase, "result", "준비: 결과 창")
+
+
+func test_result_exp_one_line_when_all_received_the_same() -> void:
+	await _result_with(_growth([_exp_row(0), _exp_row(1), _exp_row(2), _exp_row(3), _exp_row(4)]))
+	var lines := layer.result_lines
+	check(lines.has("경험치 +7"), "한 줄 「경험치 +7」: %s" % str(lines))
+	check_eq(lines.filter(func(l: String) -> bool: return l.contains("+7")).size(), 1, "대원마다 줄을 따로 내지 않는다")
+	check(layer._result_body.text.contains("경험치 +7"), "본문 글")
+	check(not lines.has("경험치") and not lines.has("레벨 업"), "한 줄 꼴에는 머리 줄이 없다(레벨업도 없다)")
+
+
+func test_result_exp_per_member_lines_when_mixed() -> void:
+	var rows := [_exp_row(0, "received", 9), _exp_row(1, "received", 3, true), _exp_row(2, "down", 0),
+		_exp_row(3, "at_cap", 0, true, 30, 30), _exp_row(4, "received", 7)]
+	await _result_with(_growth(rows))
+	var want: Array[String] = ["%s +9" % _mname(0), "%s +3(레벨 상한)" % _mname(1), "%s 받지 못함(전투 불능)" % _mname(2),
+		"%s 받지 못함(레벨 상한)" % _mname(3), "%s +7" % _mname(4)]
+	var got := layer.result_lines.filter(func(l: String) -> bool: return want.has(l))
+	check_eq(got, want, "대원마다 한 줄, 칸 순, §3.5 문구")
+	check(not layer.result_lines.has("경험치 +7"), "한 줄 요약은 없다")
+	check_eq(layer.result_lines.find("경험치"), layer.result_lines.find(want[0]) - 1, "대원별 줄 바로 위에 머리 「경험치」")
+	check(not layer.result_lines.has("레벨 업"), "오른 대원이 없으면 「레벨 업」 머리도 없다")
+
+
+func test_result_has_no_exp_line_when_total_is_zero() -> void:
+	await _result_with(_growth([_exp_row(0, "received", 0), _exp_row(1, "received", 0), _exp_row(2, "received", 0),
+		_exp_row(3, "received", 0), _exp_row(4, "received", 0)], 0))
+	check_eq(layer.result_lines, [texts.t("battle.result.no_drops")] as Array[String], "드롭 줄만, 경험치 줄 없음")
+
+
+func test_result_level_up_lines_with_and_without_sp() -> void:
+	var rows := [_exp_row(0, "received", 30, false, 1, 2, 0), _exp_row(1, "received", 30, false, 1, 3, 2), _exp_row(2, "received", 30),
+		_exp_row(3, "received", 30), _exp_row(4, "received", 30)]
+	await _result_with(_growth(rows))
+	var lines := layer.result_lines
+	check(lines.has("%s  Lv 1 → 2" % _mname(0)), "sp_gained 0 이면 「SP」 없음: %s" % str(lines))
+	check(lines.has("%s  Lv 1 → 3  SP +2" % _mname(1)), "sp_gained 2 → 「SP +2」")
+	check_eq(lines.filter(func(l: String) -> bool: return l.contains("Lv ")).size(), 2, "오른 대원만")
+	check_eq(lines.find("경험치 +30"), lines.size() - 4, "경험치 줄 다음에 레벨업 머리와 줄: %s" % str(lines))
+	check_eq(lines.find("레벨 업"), lines.size() - 3, "레벨업 줄 바로 위에 머리 「레벨 업」(한 번)")
+	check_eq(lines.count("레벨 업"), 1, "머리는 한 번")
+
+
+func test_result_without_growth_fields_has_no_exp_lines() -> void:
+	await _result_with({}, Vector2.ZERO, [], "escaped")
+	check_eq(layer.result_lines, [texts.t("battle.event.escaped")] as Array[String], "도주: 경험치 줄 없음")
+	check(layer.growth_lines({"type": "battle_end", "outcome": "wiped"}).is_empty(), "전멸 battle_end(성장 필드 없음)도 경험치 줄 없음")
+	check(layer.growth_lines({"type": "battle_end", "outcome": "escaped", "reason": "turn_cap"}).is_empty(), "턴 상한도")
+
+
+func test_result_many_lines_keep_ok_on_screen_and_body_scrolls() -> void:
+	var rows := []
+	for i in 5:
+		rows.append(_exp_row(i, "received", 30 + i, i == 2, 1, 2 + i % 2, 1 + i % 2))
+	var drops := []
+	for item in ITEMS:
+		drops.append({"item": item, "amount": 1, "capped": false})
+	for sz in [Vector2(1280, 720), Vector2(1728, 720)]:
+		var end := _growth(rows)
+		end["drops"] = drops
+		await _result_with(end, sz)
+		var ok := _btn("ResultOk")
+		var r := Rect2(ok.get_global_position() - layer.get_global_position(), ok.size)
+		check(Rect2(Vector2.ZERO, sz).encloses(r), "%s: 「확인」 %s 이 화면 안" % [str(sz), str(r)])
+		check(ok.size.x >= 64 and ok.size.y >= 64, "「확인」 64px 이상")
+		var pr := Rect2(layer.result_panel.position, layer.result_panel.size)
+		check(Rect2(Vector2.ZERO, sz).encloses(pr), "%s: 결과 창 %s 이 화면 안" % [str(sz), str(pr)])
+		check(pr.position.y >= BattleLayer.TOAST_Y + BattleLayer.TOAST_H, "%s: 결과 창 위 %d 이 알림 줄 아래" % [str(sz), pr.position.y])
+		check_eq(layer.result_lines.size(), 1 + ITEMS.size() + 1 + 5 + 1 + 5, "드롭 머리 + 드롭 8 + 경험치 머리 + 대원 5 + 레벨업 머리 + 레벨업 5")
+		check(layer.result_scroll.max_scroll() > 0.0, "%s: 줄이 넘치면 본문을 끌어 내릴 수 있다" % str(sz))
+		var c := kit.center_of(layer.result_scroll)
+		kit.touch(0, c, true)
+		kit.drag(0, c, c - Vector2(0, 120))
+		kit.touch(0, c - Vector2(0, 120), false)
+		await kit.frames(3)
+		check(layer.result_scroll.scroll > 0.0, "%s: 끌어서 내렸다" % str(sz))
+		check_eq(layer.phase, "result", "끌기는 「확인」이 아니다")
+		await _tap_btn("ResultOk")
+		check(not layer.is_open(), "%s: 「확인」으로 닫힌다" % str(sz))
+
+
+func test_log_and_cards_show_exp_and_level_up() -> void:
+	var lv := {"type": "level_up", "member": 1, "from": 1, "to": 2, "sp_gained": 1, "max_hp": 61, "max_tp": 35, "hp_gain": 3, "tp_gain": 1,
+		"stats": {"STR": 19, "INT": 8, "VIT": 13, "WIS": 10, "AGI": 18, "LUC": 13}}
+	var ex := {"type": "exp", "member": 1, "gained": 4, "exp": 30, "capped": false}
+	var s := _calm_state()
+	var hp_before := s.battle.party[1].hp
+	await _open(s)
+	var events: Array[Dictionary] = [ex, lv, {"type": "battle_end", "outcome": "victory", "drops": [], "enemy_hp": [0, 0, 0]}]
+	layer._commit(events)
+	await kit.frames(2)
+	var lines: Array = layer.log_view.lines
+	check(lines.has("%s 경험치 +4" % _mname(1)), "로그: 경험치 줄 %s" % str(lines.slice(-3)))
+	check(lines.has("%s Lv 1 → 2" % _mname(1)), "로그: 레벨업 줄")
+	var u := layer.display.party[1]
+	check_eq([u.max_hp, u.max_tp, u.hp], [61, 35, hp_before + 3], "레벨업이 칸의 최대·현재 HP 에 반영")

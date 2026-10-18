@@ -1,4 +1,4 @@
-## 위험도 게이지와 대원 5명 HP(05 §6, §9.1). 상태를 읽기만 한다.
+## 위험도 게이지와 대원 5명 레벨·HP(05 §6, §9.1, 07 §9.5). 상태를 읽기만 한다.
 class_name StatusPanel
 extends Control
 
@@ -25,6 +25,11 @@ func refresh() -> void:
 	queue_redraw()
 
 
+## 대원 칸의 「Lv n」(07 §9.5). 레벨업 뒤 refresh 로 바로 바뀐다.
+func level_text(i: int) -> String:
+	return texts.t("hud.level", {"level": state.party.members[i].level})
+
+
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.03, 0.05, 0.07, 0.92))
 	if state == null:
@@ -46,7 +51,8 @@ func _draw() -> void:
 		var name := member_names[i] if i < member_names.size() else m.id
 		var col := Color(0.9, 0.95, 1.0) if m.alive() else Color(0.5, 0.4, 0.4)
 		var ty := y + row_h * i + row_h * 0.7
-		draw_string(font, Vector2(x0, ty), name, HORIZONTAL_ALIGNMENT_LEFT, w * 0.5, 16, col)
+		draw_string(font, Vector2(x0, ty), name, HORIZONTAL_ALIGNMENT_LEFT, w * 0.37, 16, col)
+		draw_string(font, Vector2(x0 + w * 0.37, ty), level_text(i), HORIZONTAL_ALIGNMENT_RIGHT, w * 0.13, 14, Color(1.0, 0.86, 0.45) if m.alive() else col)
 		var hb := Rect2(x0 + w * 0.52, y + row_h * i + row_h * 0.25, w * 0.3, row_h * 0.45)
 		draw_rect(hb, Color(0.1, 0.13, 0.16))
 		var ratio := float(m.hp) / maxf(1.0, m.max_hp)

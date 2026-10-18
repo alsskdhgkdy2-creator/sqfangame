@@ -145,6 +145,14 @@ func apply(ev: Dictionary) -> void:
 			if t != null:
 				t.hp = 0
 				t.clear_on_down()
+		"level_up":
+			# 승리 뒤 레벨업(07 §3.4): 최대값은 새 값, 현재값은 늘어난 만큼(HP 0 대원은 HP 그대로, hp_gain 0).
+			var t := unit({"side": BattleUnit.PARTY, "slot": int(ev["member"])})
+			if t != null:
+				t.max_hp = int(ev["max_hp"])
+				t.max_tp = int(ev["max_tp"])
+				t.hp += int(ev["hp_gain"])
+				t.tp += int(ev["tp_gain"])
 		"woke":
 			var t := unit(ev["target"])
 			if t != null:
@@ -311,6 +319,12 @@ func describe(ev: Dictionary) -> String:
 			return texts.t(key, {"item": texts.t(str(ev["item"]))})
 		"turn_end":
 			return texts.t("battle.event.turn_end", {"n": int(ev["turn"]) + 1})
+		"exp":
+			var who := name_of({"side": BattleUnit.PARTY, "slot": int(ev["member"])})
+			return texts.t("battle.event.exp_capped" if ev.get("capped", false) else "battle.event.exp", {"member": who, "gained": ev["gained"]})
+		"level_up":
+			var who := name_of({"side": BattleUnit.PARTY, "slot": int(ev["member"])})
+			return texts.t("battle.event.level_up", {"member": who, "from": ev["from"], "to": ev["to"]})
 	return ""
 
 
