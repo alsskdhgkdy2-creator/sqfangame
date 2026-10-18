@@ -20,6 +20,25 @@ const WIN_OUTER := Color(0.0, 0.015, 0.03)
 const WIN_INNER := Color(0.38, 0.85, 0.95)
 const WIN_GLOW := Color(0.38, 0.85, 0.95, 0.16)
 const WIN_CHAMFER := 12.0
+## 층 겹침(M2.6 2.5단계, research 04): 바탕 위에 뜬 반투명 카드(glass)·알림 띠·바탕 어둡게·문패.
+## 반투명 채움 위 글자는 가장 나쁜 바탕(흰색) 위에 겹친 색(over_white)과 4.5:1 이상(시험).
+const GLASS_ALPHA := 0.88
+## 연출 알림·안내 띠(위쪽, 누르기를 받지 않는다).
+const BANNER_FILL := Color(0.0, 0.02, 0.04, 0.8)
+## 전투 바탕(3D 시야)을 어둡게(장면이 보이게 절반).
+const BATTLE_DIM := Color(0, 0, 0, 0.5)
+## 파티 메뉴 뒤 3D 시야를 어둡게(탐색 HUD 는 메뉴가 열린 동안 감춘다: 장면이 보이게 전투와 비슷하게).
+const MENU_DIM := Color(0.0, 0.01, 0.02, 0.55)
+## 문패(창 테두리에 걸치는 이름표): 높이·기울기·채움.
+const PLATE_H := 30.0
+const PLATE_SLANT := 12.0
+const PLATE_PAD := 22.0
+const PLATE_TOP := Color(0.09, 0.26, 0.31)
+const PLATE_BOTTOM := Color(0.04, 0.12, 0.17)
+## 반투명 카드 위 흐린 글자(전투 불능·못 고르는 대상).
+const GLASS_DIM_TEXT := Color(0.7, 0.7, 0.72)
+## 반투명 카드 위 「전투 불능」 글자.
+const GLASS_DOWN_TEXT := Color(1.0, 0.58, 0.52)
 ## 창 위에 쓰는 글자: 머리(제목·묶음 머리), 본문, 흐린 본문.
 const HEAD_TEXT := Color(1.0, 0.88, 0.5)
 const TEXT := Color(0.9, 0.96, 1.0)
@@ -134,6 +153,13 @@ static func _build_looks() -> Dictionary:
 	win["glow"] = WIN_GLOW
 	win["chamfer"] = WIN_CHAMFER
 	d["window"] = win
+	# 바탕 위에 뜬 반투명 카드(전투 대원 칸·스킬 설명 띠): 창과 같은 모양, 채움만 GLASS_ALPHA.
+	var glass := win.duplicate()
+	glass["top"] = Color(WIN_TOP, GLASS_ALPHA)
+	glass["bottom"] = Color(WIN_BOTTOM, GLASS_ALPHA)
+	glass["muted"] = GLASS_DIM_TEXT
+	glass["reason"] = GLASS_DOWN_TEXT
+	d["glass"] = glass
 	return d
 
 
@@ -153,6 +179,52 @@ static func state_of(held: bool, selected: bool, checked: bool = false, disabled
 
 static func draw_window(ci: CanvasItem, r: Rect2) -> void:
 	paint(ci.get_canvas_item(), r, look("window"))
+
+
+## 바탕 위에 뜬 반투명 카드(창과 같은 모양).
+static func draw_glass(ci: CanvasItem, r: Rect2) -> void:
+	paint(ci.get_canvas_item(), r, look("glass"))
+
+
+## 흰 바탕 위에 겹친 색(반투명 채움 위 글자 대비를 가장 나쁜 바탕으로 볼 때).
+static func over_white(c: Color) -> Color:
+	return Color(1, 1, 1).lerp(Color(c, 1.0), c.a)
+
+
+## 위쪽 알림·연출 띠(반투명, 모서리 깎음, 테두리 없음).
+static func draw_banner(ci: CanvasItem, r: Rect2) -> void:
+	var c := minf(WIN_CHAMFER, minf(r.size.x, r.size.y) * 0.3)
+	ci.draw_colored_polygon(chamfer_points(r, c), BANNER_FILL)
+
+
+## 문패 하나의 크기(글자 폭 + 좌우 여백 + 기울기).
+static func plate_size(font: Font, text: String, fs: int) -> Vector2:
+	return Vector2(ceilf(font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 2.0 * PLATE_PAD + PLATE_SLANT), PLATE_H)
+
+
+## 기울어진 평행사변형(위는 오른쪽으로 slant 만큼 밀린다).
+static func plate_points(r: Rect2, slant: float = PLATE_SLANT) -> PackedVector2Array:
+	return PackedVector2Array([Vector2(r.position.x + slant, r.position.y), Vector2(r.end.x, r.position.y),
+		Vector2(r.end.x - slant, r.end.y), Vector2(r.position.x, r.end.y)])
+
+
+## 문패: 기울어진 판(위 → 아래 그라데이션, 어두운 바깥 선 + 밝은 안쪽 선)과 가운데 글자. 누르기를 받지 않는 장식이다.
+static func draw_plate(ci: Control, r: Rect2, text: String, fs: int, col: Color = HEAD_TEXT) -> void:
+	var rid := ci.get_canvas_item()
+	var pts := plate_points(r)
+	var cols := PackedColorArray()
+	for p in pts:
+		cols.append(PLATE_TOP.lerp(PLATE_BOTTOM, (p.y - r.position.y) / maxf(1.0, r.size.y)))
+	RenderingServer.canvas_item_add_polygon(rid, pts, cols)
+	var outer := plate_points(r.grow(-1.0))
+	outer.append(outer[0])
+	RenderingServer.canvas_item_add_polyline(rid, outer, PackedColorArray([WIN_OUTER]), 2.0, true)
+	var inner := plate_points(r.grow(-4.0), PLATE_SLANT * 0.8)
+	inner.append(inner[0])
+	RenderingServer.canvas_item_add_polyline(rid, inner, PackedColorArray([WIN_INNER]), 1.2, true)
+	var font: Font = ci.get_theme_default_font()
+	ci.draw_string(font, Vector2(r.position.x + PLATE_SLANT * 0.5, r.get_center().y + fs * 0.36), text, HORIZONTAL_ALIGNMENT_CENTER,
+		r.size.x - PLATE_SLANT, fs, col)
 
 
 ## 상태 모양으로 칸을 그리고 그 모양을 돌려준다(글자색은 그 모양의 몫에서 고른다).

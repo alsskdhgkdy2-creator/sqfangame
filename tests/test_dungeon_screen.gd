@@ -619,9 +619,13 @@ func test_one_action_per_frame() -> void:
 
 
 func _modal_text(s: DungeonScreen) -> String:
+	# 제목·묶음 머리는 문패(UiPlate), 본문은 Label.
 	var out := ""
-	for n in s.modal.find_children("*", "Label", true, false):
-		out += (n as Label).text + "\n"
+	for n in s.modal.find_children("*", "Control", true, false):
+		if n is Label:
+			out += (n as Label).text + "\n"
+		elif n is UiPlate:
+			out += (n as UiPlate).text + "\n"
 	return out
 
 

@@ -27,7 +27,12 @@ const CHIP_H := 21.0
 const CHIP_GAP := 3.0
 const CHIP_PAD := 4.0
 const CHIP_TRI := 10.0
-const MEMBER_CHIP_TOP := 102.0
+const MEMBER_CHIP_TOP := 100.0
+## 대원 카드(반투명) 위 글자: 본문·고른 명령. 흐린 글자·「전투 불능」은 UiTheme.GLASS_DIM_TEXT·GLASS_DOWN_TEXT.
+const MEMBER_TEXT := Color(0.92, 0.97, 1.0)
+const COMMAND_TEXT := Color(1.0, 0.9, 0.45)
+## 못 고르는 대상의 이유 글자(검은 외곽선을 두른다).
+const REASON_TEXT := Color(1.0, 0.7, 0.55)
 const ENEMY_BAR_FROM_BOTTOM := 64.0
 
 var display: BattleDisplay
@@ -202,8 +207,8 @@ func _draw_member(u: BattleDisplay.DUnit) -> void:
 	var cc: Color = CLASS_COLORS.get(class_id, Color(0.7, 0.7, 0.7))
 	var down := not u.alive()
 	var dim := target_mark == "invalid"
-	# 바탕은 공용 창 모양, 그 위에 누르는 중(밝은 안쪽 선)·지금 대원(직업색)·대상 표시(노랑) 테두리를 덧그린다.
-	UiTheme.draw_window(self, r)
+	# 바탕은 반투명 카드(전투 바탕이 비친다), 그 위에 누르는 중(밝은 안쪽 선)·지금 대원(직업색)·대상 표시(노랑) 테두리를 덧그린다.
+	UiTheme.draw_glass(self, r)
 	if held:
 		UiTheme.draw_outline(self, r.grow(-4), UiTheme.BTN_HELD_BORDER, 2, UiTheme.WIN_CHAMFER)
 	var bw := 3
@@ -217,14 +222,14 @@ func _draw_member(u: BattleDisplay.DUnit) -> void:
 	UiTheme.fill_top_round(self, Rect2(bw + 4, bw, size.x - 2 * bw - 8, 10), cc if not down else cc.darkened(0.6), 6)
 	if cursor and target_mark != "invalid":
 		UiTheme.draw_outline(self, r.grow(-7), Color(1, 1, 1, 0.9), 2)
-	var fg := Color(0.92, 0.97, 1.0)
+	var fg := MEMBER_TEXT
 	if down or dim:
-		fg = Color(0.55, 0.55, 0.58)
+		fg = UiTheme.GLASS_DIM_TEXT
 	var x0 := 14.0
 	var w := size.x - 28.0
 	draw_string(font, Vector2(x0, 35), u.name, HORIZONTAL_ALIGNMENT_LEFT, w * 0.62, 19, fg)
 	if not command_text.is_empty():
-		draw_string(font, Vector2(x0 + w * 0.5, 35), command_text, HORIZONTAL_ALIGNMENT_RIGHT, w * 0.5, 16, Color(1.0, 0.9, 0.45))
+		draw_string(font, Vector2(x0 + w * 0.5, 35), command_text, HORIZONTAL_ALIGNMENT_RIGHT, w * 0.5, 16, COMMAND_TEXT)
 	draw_string(font, Vector2(x0, 55), "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, fg)
 	draw_string(font, Vector2(x0, 55), "%d/%d" % [roundi(shown_hp), u.max_hp], HORIZONTAL_ALIGNMENT_RIGHT, w, 17, fg)
 	_bar(Rect2(x0, 60, w, 9), shown_hp / maxf(1.0, u.max_hp), hp_bar_color(), down)
@@ -232,12 +237,12 @@ func _draw_member(u: BattleDisplay.DUnit) -> void:
 	draw_string(font, Vector2(x0, 85), "%d/%d" % [roundi(shown_tp), u.max_tp], HORIZONTAL_ALIGNMENT_RIGHT, w, 15, fg)
 	_bar(Rect2(x0, 90, w, 6), shown_tp / maxf(1.0, u.max_tp), UiTheme.TP_BAR, down)
 	if down:
-		draw_string(font, Vector2(x0, MEMBER_CHIP_TOP + 18), display.texts.t("battle.ui.down"), HORIZONTAL_ALIGNMENT_LEFT, w, 16, Color(1.0, 0.45, 0.4))
+		draw_string(font, Vector2(x0, MEMBER_CHIP_TOP + 18), display.texts.t("battle.ui.down"), HORIZONTAL_ALIGNMENT_LEFT, w, 16, UiTheme.GLASS_DOWN_TEXT)
 	else:
 		_draw_chips(drawn_chips())
 	if dim and not reason.is_empty():
 		draw_string_outline(font, Vector2(0, size.y * 0.5 + 6), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, 5, Color(0, 0, 0, 0.9))
-		draw_string(font, Vector2(0, size.y * 0.5 + 6), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, Color(1.0, 0.7, 0.55))
+		draw_string(font, Vector2(0, size.y * 0.5 + 6), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, REASON_TEXT)
 
 
 ## 적 자리 상자(색 상자 그대로).

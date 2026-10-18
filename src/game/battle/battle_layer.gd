@@ -1,4 +1,7 @@
-## 전투 층(06 §9): 미궁 화면 위에 덮는 전체 화면 Control. 3D 시야 크기는 바꾸지 않고 뒤를 검정 75%로 어둡게 한다.
+## 전투 층(06 §9): 미궁 화면 위에 덮는 전체 화면 Control. 바탕은 화면 전체 3D 시야(U1)를 UiTheme.BATTLE_DIM 으로 어둡게 한 것.
+## 층 겹침(M2.6 2.5단계, research 04): 트리 순서 = 그리는 순서 = 누르는 순서(z_index 를 쓰지 않는다).
+##   L0 바탕(어둡게, _draw) · L1 적 칸(enemy_area) · L2 HUD(턴 문패 _draw, 파티 카드 party_cards, 로그 단추) ·
+##   L3 창(명령 창 panel·스킬 설명 띠 skill_info·로그 창) · L4 결과 창 · 건너뛰기 받개 · L5 알림·연출 띠(hud_toast, 누르기 없음).
 ## 상태는 규칙 함수(BattleRules)로만 바꾸고, 그리는 값은 BattleDisplay 에서 읽는다(06 §8.1).
 ##
 ## 입력 입구 하나(06 §9.5, 05 §9.3): 명령 단추·스킬 목록·대상 누르기·키보드·「실행」·「뒤로」·건너뛰기·로그·결과 확인이
@@ -16,12 +19,30 @@ signal closed(outcome: String)
 ## 제출이 받아들여졌다(저장 갈고리 뒤, 연출 전). 시험·디버그용.
 signal submitted(events: Array)
 
+## 적 영역 위(턴 문패 줄 아래).
 const TOP_H := 64.0
 const PANEL_W := 340.0
+## 명령 창: 오른쪽 여백, 위 가장자리(이름 문패가 걸친다), 아래쪽 대원 카드 위로 겹쳐도 되는 폭(창 테두리만 겹친다: 단추는 겹치지 않는다).
+const PANEL_MARGIN := 8.0
+const PANEL_TOP := 96.0
+const PANEL_OVERLAP := 12.0
+## 로그 창 아래(예전 명령 칸 아래 끝).
 const PANEL_BOTTOM := 516.0
 const ENEMY_BOTTOM := 420.0
+## 파티 카드 영역 위(카드는 그 안 아래쪽에 붙는다, PartyCards).
 const PARTY_TOP := 516.0
 const LOG_BUTTON := Vector2(80, 64)
+## 턴 문패(왼쪽 위)와 위쪽 알림·연출 띠.
+const TURN_PLATE := Rect2(12, 12, 150, 44)
+const TURN_FS := 24
+const BANNER_Y := 14.0
+const BANNER_H := 40.0
+const BANNER_FS := 22
+## 연출 알림 글자 · 안내(못 고르는 이유 등) 글자(BANNER_FILL 위).
+const ANNOUNCE_TEXT := Color(1.0, 0.95, 0.7)
+const NOTICE_TEXT := Color(1.0, 0.7, 0.5)
+## 명령 창 가장 작은 높이에 더하는 것(「뒤로」 하나 + 여백).
+const BACK_MIN_H := 96.0
 const NOTICE_SEC := 2.0
 ## 연출 한 단계의 길이(초, anim_speed 1). 행동 하나 약 0.6초, 독 한 번 약 0.3초(06 §9.3).
 const STEP_SEC := {"action": 0.6, "failed": 0.5, "idle": 0.4, "guarding": 0.35, "poison_tick": 0.3, "turn_end": 0.15, "": 0.3}
@@ -38,7 +59,9 @@ const RESULT_W := 560.0
 const RESULT_FS := 20
 const RESULT_HEAD_FS := 24
 const RESULT_MIN_H := 340.0
-const RESULT_TOP := 84.0
+## 결과 창 제목 문패 글자 크기(문패는 창 위 가장자리에 걸친다), 본문 시작(창 위에서).
+const RESULT_TITLE_FS := 26
+const RESULT_TOP := 40.0
 const RESULT_GAP := 12.0
 const RESULT_BOTTOM := 20.0
 ## 탐색 화면이 전투 중 알림 줄(저장 실패 등)을 띄우는 자리: 위 막대 바로 아래, 높이 TOAST_H. 결과 창은 이 줄 아래에 둔다.
@@ -95,7 +118,10 @@ var log_view: BattleLogView
 var result_panel: Control
 var result_ok: BattleButton
 var skip_catcher: Control
-var _result_title := Label.new()
+## 결과 창 제목 문패(창 위 가장자리에 걸친다).
+var _result_title := UiPlate.new()
+## L5 알림·연출 띠(맨 위, 누르기를 받지 않는다).
+var hud_toast: Control
 var _result_body := RichTextLabel.new()
 ## 결과 본문(넘치면 끌어 내린다, 07 §9.6).
 var result_scroll: PartyScroll
@@ -136,6 +162,14 @@ func build(text_db: TextDb) -> void:
 	party_cards = PartyCards.new()
 	party_cards.name = "PartyCards"
 	add_child(party_cards)
+	# L2 HUD 의 로그 단추는 L3 창보다 앞(아래)에 둔다.
+	log_button = BattleButton.new()
+	log_button.name = "LogButton"
+	log_button.setup("", texts.t("battle.ui.log"))
+	log_button.font_size = 18
+	log_button.size = LOG_BUTTON
+	add_child(log_button)
+	log_button.activated.connect(func() -> void: handle("log"))
 	panel = CommandPanel.new()
 	panel.name = "CommandPanel"
 	add_child(panel)
@@ -147,13 +181,6 @@ func build(text_db: TextDb) -> void:
 	skill_info.visible = false
 	skill_info.draw.connect(_draw_skill_info)
 	add_child(skill_info)
-	log_button = BattleButton.new()
-	log_button.name = "LogButton"
-	log_button.setup("", texts.t("battle.ui.log"))
-	log_button.font_size = 18
-	log_button.size = LOG_BUTTON
-	add_child(log_button)
-	log_button.activated.connect(func() -> void: handle("log"))
 	log_view = BattleLogView.new()
 	log_view.name = "BattleLog"
 	add_child(log_view)
@@ -166,6 +193,11 @@ func build(text_db: TextDb) -> void:
 	skip_catcher.visible = false
 	skip_catcher.gui_input.connect(_on_catcher_input)
 	add_child(skip_catcher)
+	hud_toast = Control.new()
+	hud_toast.name = "HudToast"
+	hud_toast.mouse_filter = MOUSE_FILTER_IGNORE
+	hud_toast.draw.connect(_draw_toast)
+	add_child(hud_toast)
 	_layout()
 
 
@@ -176,8 +208,9 @@ func _build_result() -> void:
 	result_panel.visible = false
 	result_panel.draw.connect(func() -> void: UiTheme.draw_window(result_panel, Rect2(Vector2.ZERO, result_panel.size)))
 	add_child(result_panel)
-	_result_title.add_theme_font_size_override("font_size", 30)
-	_result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_result_title.name = "ResultTitle"
+	_result_title.font_size = RESULT_TITLE_FS
+	_result_title.color = UiTheme.TEXT
 	result_panel.add_child(_result_title)
 	result_scroll = PartyScroll.new()
 	result_scroll.name = "ResultBody"
@@ -592,7 +625,7 @@ func _reason_text(code: String) -> String:
 func _show_notice(t: String) -> void:
 	_notice = t
 	_notice_left = NOTICE_SEC
-	queue_redraw()
+	_redraw_hud()
 
 
 # ---- 제출 (06 §8.7) ----
@@ -663,7 +696,7 @@ func _process(delta: float) -> void:
 		_notice_left -= delta
 		if _notice_left <= 0.0:
 			_notice = ""
-			queue_redraw()
+			_redraw_hud()
 	if phase != "anim":
 		return
 	_step_t += delta * anim_speed
@@ -701,7 +734,7 @@ func _begin_step(st: Dictionary, animate: bool) -> void:
 		if head["type"] == "poison_tick" and c != null:
 			c.pop(str(head["amount"]), Color(0.95, 0.72, 1.0))
 	_refresh_cards()
-	queue_redraw()
+	_redraw_hud()
 
 
 func _apply_details(st: Dictionary, animate: bool) -> void:
@@ -930,7 +963,7 @@ func _refresh() -> void:
 	_refresh_cards()
 	_refresh_panel()
 	_refresh_skill_info()
-	queue_redraw()
+	_redraw_hud()
 
 
 func _refresh_cards() -> void:
@@ -964,7 +997,8 @@ func _refresh_cards() -> void:
 			c.current = phase == "command" and i == member
 			c.command_text = _command_label(commands[i]) if phase == "command" and i < commands.size() else ""
 		c.queue_redraw()
-	party_cards.queue_redraw()
+	party_cards.refresh()
+	_fit_panel()
 
 
 func _command_label(c: Variant) -> String:
@@ -1039,7 +1073,7 @@ func _refresh_skill_info() -> void:
 
 
 func _draw_skill_info() -> void:
-	UiTheme.draw_window(skill_info, Rect2(Vector2.ZERO, skill_info.size))
+	UiTheme.draw_glass(skill_info, Rect2(Vector2.ZERO, skill_info.size))
 	var font := get_theme_default_font()
 	var w := skill_info.size.x - 32.0
 	skill_info.draw_string(font, Vector2(16, 30), skill_info_title, HORIZONTAL_ALIGNMENT_LEFT, w, 19, UiTheme.HEAD_TEXT)
@@ -1052,16 +1086,18 @@ func _layout() -> void:
 	var s := size
 	if s.x <= 0.0:
 		s = get_viewport_rect().size
-	var left_w := s.x - PANEL_W
+	var left_w := s.x - PANEL_W - PANEL_MARGIN
 	enemy_area.position = Vector2(0, TOP_H)
 	enemy_area.size = Vector2(left_w, ENEMY_BOTTOM - TOP_H)
-	panel.position = Vector2(left_w, TOP_H)
-	panel.size = Vector2(PANEL_W, PANEL_BOTTOM - TOP_H)
 	skill_info.position = Vector2(16, ENEMY_BOTTOM + INFO_GAP)
 	skill_info.size = Vector2(left_w - 32, PARTY_TOP - ENEMY_BOTTOM - 2.0 * INFO_GAP)
 	party_cards.position = Vector2(0, PARTY_TOP)
 	party_cards.size = Vector2(s.x, s.y - PARTY_TOP)
-	log_button.position = Vector2(s.x - LOG_BUTTON.x, 0)
+	panel.position = Vector2(s.x - PANEL_W - PANEL_MARGIN, PANEL_TOP)
+	_fit_panel()
+	log_button.position = Vector2(s.x - LOG_BUTTON.x - PANEL_MARGIN, PANEL_MARGIN)
+	hud_toast.position = Vector2.ZERO
+	hud_toast.size = s
 	log_view.position = Vector2(16, TOP_H + 8)
 	log_view.size = Vector2(s.x - 32, PANEL_BOTTOM - TOP_H - 8)
 	# 결과 창: 본문 줄이 많으면 높이를 늘리되 알림 줄 아래부터 화면 아래 8 안에 둔다(알림 줄과 위 막대를 가리지 않는다).
@@ -1070,14 +1106,14 @@ func _layout() -> void:
 	_result_body.size = Vector2(body_w, 0)
 	var body_h := maxf(1.0, float(_result_body.get_content_height()))
 	var chrome := RESULT_TOP + RESULT_GAP + result_ok.size.y + RESULT_BOTTOM
-	var clear_top := TOAST_Y + TOAST_H + 4.0
+	# 제목 문패가 창 위로 반 나온다: 문패도 알림 줄 아래에.
+	var clear_top := TOAST_Y + TOAST_H + 4.0 + _result_title.size.y / 2.0
 	var rp := Vector2(RESULT_W, clampf(chrome + body_h, RESULT_MIN_H, maxf(RESULT_MIN_H, s.y - 8.0 - clear_top)))
 	result_panel.size = rp
 	var py := roundf((PARTY_TOP - rp.y) / 2.0 + TOP_H / 2.0)
 	var low := maxf(8.0, s.y - 8.0 - rp.y)
 	result_panel.position = Vector2(roundf((s.x - rp.x) / 2.0), clampf(py, minf(clear_top, low), low))
-	_result_title.position = Vector2(20, 24)
-	_result_title.size = Vector2(rp.x - 40, 44)
+	_result_title.position = Vector2(roundf((rp.x - _result_title.size.x) / 2.0), -_result_title.size.y / 2.0)
 	result_scroll.position = Vector2(20, RESULT_TOP)
 	result_scroll.size = Vector2(body_w, rp.y - chrome)
 	_result_body.position = Vector2.ZERO
@@ -1086,21 +1122,68 @@ func _layout() -> void:
 	result_ok.position = Vector2((rp.x - result_ok.size.x) / 2.0, rp.y - result_ok.size.y - RESULT_BOTTOM)
 	skip_catcher.position = Vector2.ZERO
 	skip_catcher.size = s
+	_redraw_hud()
+
+
+## 명령 창 높이: 내용에 맞추되 그 아래 대원 카드의 위 가장자리(+ PANEL_OVERLAP, 창 테두리만 겹친다)까지.
+## 창 아래에 보이는 열 문패가 있으면 그 문패 위까지(문패를 가리지 않는다).
+func _fit_panel() -> void:
+	var px := Rect2(panel.position.x, 0, PANEL_W, size.y)
+	var bottom := size.y - 8.0
+	if party_cards != null:
+		for i in party_cards.cards.size():
+			var c := party_cards.cards[i]
+			var r := Rect2(party_cards.position + c.position, c.size)
+			if r.position.x < px.end.x and r.end.x > px.position.x:
+				bottom = minf(bottom, r.position.y + PANEL_OVERLAP)
+			var p := party_cards.plates[i]
+			var pr := Rect2(party_cards.position + p.position, p.size)
+			if p.visible and pr.position.x < px.end.x and pr.end.x > px.position.x:
+				bottom = minf(bottom, pr.position.y - 2.0)
+	panel.size.x = PANEL_W
+	panel.max_height = maxf(UiTheme.PLATE_H + BACK_MIN_H, bottom - panel.position.y)
+	panel.fit_height(panel.skill_rows.filter(func(b: PartyButton) -> bool: return b.visible).size())
+
+
+## 턴 문패 자리.
+func turn_plate_rect() -> Rect2:
+	return TURN_PLATE
+
+
+## 위쪽 알림·연출 띠 자리(턴 문패와 로그 단추 사이).
+func banner_rect() -> Rect2:
+	var x0 := TURN_PLATE.end.x + 12.0
+	return Rect2(x0, BANNER_Y, maxf(0.0, log_button.position.x - 12.0 - x0), BANNER_H)
+
+
+## 지금 띠에 보일 글(연출 중 알림, 아니면 안내).
+func banner_text() -> String:
+	return _announce if phase == "anim" else _notice
+
+
+func _redraw_hud() -> void:
 	queue_redraw()
+	if hud_toast != null:
+		hud_toast.queue_redraw()
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.75))
-	# 위 막대: 공용 창 모양의 위·옆 테두리를 화면 밖으로 밀어 아래 선만 보인다.
-	UiTheme.draw_window(self, Rect2(-8, -8, size.x + 16, TOP_H + 8))
+	draw_rect(Rect2(Vector2.ZERO, size), UiTheme.BATTLE_DIM)
 	if display == null:
 		return
-	var font := get_theme_default_font()
-	draw_string(font, Vector2(20, 42), texts.t("battle.ui.turn", {"n": display.turn + 1}), HORIZONTAL_ALIGNMENT_LEFT, 140, 24, Color(0.9, 0.97, 1.0))
-	var line := _announce if phase == "anim" else _notice
-	if not line.is_empty():
-		var col := Color(1.0, 0.95, 0.7) if phase == "anim" else Color(1.0, 0.7, 0.5)
-		draw_string(font, Vector2(150, 42), line, HORIZONTAL_ALIGNMENT_CENTER, size.x - 150 - LOG_BUTTON.x - 20, 22, col)
+	UiTheme.draw_plate(self, TURN_PLATE, texts.t("battle.ui.turn", {"n": display.turn + 1}), TURN_FS, UiTheme.TEXT)
+
+
+## L5: 알림·연출 띠(창과 결과 창 위, 누르기를 받지 않는다).
+func _draw_toast() -> void:
+	var line := banner_text()
+	if line.is_empty() or phase == "closed":
+		return
+	var r := banner_rect()
+	UiTheme.draw_banner(hud_toast, r)
+	var col := ANNOUNCE_TEXT if phase == "anim" else NOTICE_TEXT
+	hud_toast.draw_string(get_theme_default_font(), Vector2(r.position.x, r.get_center().y + BANNER_FS * 0.36), line,
+		HORIZONTAL_ALIGNMENT_CENTER, r.size.x, BANNER_FS, col)
 
 
 ## 로그 창 위에 보이는 지금 상태 전부(06 §9.1 상태 표의 전체 보기). 적 HP 숫자는 쓰지 않는다(D13).

@@ -28,7 +28,7 @@
 | 규칙 시험 | `timeout 600 godot --headless -s tests/run.gd` (실패하면 종료 코드 1, 시간 초과면 124). 파일 하나만: 끝에 `-- <파일 이름 일부>` |
 | 웹 빌드 | `tools/export_web.sh` → `build/web/` |
 | 웹 캡처 | `npm install` 뒤 `flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/shot.mjs build/shot.png 1280x720 20` |
-| 브라우저 자동 확인 | 웹 빌드 뒤 `flock /tmp/voxel-test-heavy.lock flock /tmp/sqfangame-godot.lock xvfb-run -a node tools/web_check.mjs 1280x720` → `build/check/` (공략·전투·지도 편집·저장·새로 고침·내보내기·가져오기·전멸 창, 실패하면 종료 코드 1. 느린 기기 상태면 `WEB_CHECK_IDB_MS=60000`, `docs/CLOUD_TESTS.md`) |
+| 브라우저 자동 확인 | 웹 빌드 뒤 `flock /tmp/voxel-test-heavy.lock flock /tmp/sqfangame-godot.lock xvfb-run -a node tools/web_check.mjs 1280x720 [a|b|all]` → `build/check/` (A = 탐색·전투, B = 성장·전멸, 기본 `all`은 A 다음 B. 2400×1000은 5분 한도 때문에 `a`·`b`를 따로 돌린다. 공략·전투·지도 편집·저장·새로 고침·내보내기·가져오기·전멸 창, 실패하면 종료 코드 1. 느린 기기 상태면 `WEB_CHECK_IDB_MS=60000`, `docs/CLOUD_TESTS.md`) |
 | 컨셉 그림 비교 시트 | `python3 tools/concept_sheet.py <출력.jpg> "<이름>=<그림>" ...` (아랫줄에 게임 화면 크기 판을 붙임, `assets/concept/compare/`) |
 | 텍스처 이음새 | `python3 tools/tile_check.py check <그림>...` / `preview <그림> <출력>` / `fix <그림> <출력> --size 512` |
 | 휴대폰 확인 | `python3 tools/serve_web.py` (127.0.0.1:8765, 큰 파일 gzip) 뒤 `cloudflared` 임시 주소 (`docs/CLOUD_TESTS.md`) |

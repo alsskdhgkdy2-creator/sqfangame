@@ -9,11 +9,17 @@ signal closed(kind: String)
 ## 창과 창 단추 모양은 공용 UiTheme(원작 옵션 창처럼): 고른 것(키보드 포커스·포인터 위)은 따뜻한 채움 + 어두운 글자,
 ## 켜진 것(지금 고른 설정)은 밝은 청록 채움 + 어두운 글자. 못 누르는 단추도 키보드 포커스는 받는다(이동이 건너뛰지 않는다).
 
+## 제목 문패 글자 크기와, 문패가 창 안으로 들어오는 만큼 비워 두는 위 여백.
+const TITLE_FS := 24
+const TITLE_ROOM := 14
+
 ## 지금 열린 창 종류("" 이면 없음).
 var kind := ""
 
 var _panel := PanelContainer.new()
 var _box := VBoxContainer.new()
+## 제목 문패(창 위 가장자리에 걸친다, 누르기를 받지 않는다). 창보다 뒤에 붙여 위에 그린다.
+var title_plate := UiPlate.new()
 
 
 func _init() -> void:
@@ -30,10 +36,16 @@ func _init() -> void:
 	center.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	center.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(center)
-	_panel.add_theme_stylebox_override("panel", UiTheme.window_box(22))
+	var box := UiTheme.window_box(22)
+	box.content_margin_top = 22 + TITLE_ROOM
+	_panel.add_theme_stylebox_override("panel", box)
 	center.add_child(_panel)
 	_box.add_theme_constant_override("separation", 10)
 	_panel.add_child(_box)
+	title_plate.name = "TitlePlate"
+	title_plate.font_size = TITLE_FS
+	add_child(title_plate)
+	_panel.item_rect_changed.connect(_place_title)
 
 
 func is_open() -> bool:
@@ -47,16 +59,12 @@ func open(new_kind: String, title: String, rows: Array[Control]) -> void:
 	for c in _box.get_children():
 		_box.remove_child(c)
 		c.queue_free()
-	var head := Label.new()
-	head.text = title
-	head.add_theme_font_size_override("font_size", 26)
-	head.add_theme_color_override("font_color", UiTheme.HEAD_TEXT)
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_box.add_child(head)
+	title_plate.text = title
 	for r in rows:
 		_box.add_child(r)
 	kind = new_kind
 	visible = true
+	_place_title.call_deferred()
 	opened.emit(kind)
 
 
@@ -76,7 +84,7 @@ func close() -> void:
 static func button(text: String, on_press: Callable, enabled: bool = true) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(240, 60)
+	b.custom_minimum_size = Vector2(240, 64)  # 누르는 칸은 64 이상(05 §9.1)
 	b.disabled = not enabled
 	b.add_theme_font_size_override("font_size", 20)
 	UiTheme.style_button(b, false)
@@ -92,6 +100,22 @@ static func set_checked(b: Button, on: bool) -> void:
 
 static func is_checked(b: Button) -> bool:
 	return bool(b.get_meta("checked", false))
+
+
+## 창 가운데 위 가장자리에 제목 문패를 건다(창 크기·자리가 바뀔 때마다).
+func _place_title() -> void:
+	var r := _panel.get_global_rect()
+	title_plate.global_position = Vector2(roundf(r.get_center().x - title_plate.size.x / 2.0), roundf(r.position.y - title_plate.size.y / 2.0))
+
+
+## 창 안 묶음 머리(저장·불러오기·자동 지도): 작은 문패(장식, 누르기를 받지 않는다).
+static func section(text: String) -> Control:
+	var p := UiPlate.new()
+	p.font_size = 17
+	p.color = UiTheme.TEXT
+	p.text = text
+	p.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	return p
 
 
 static func label(text: String, font_size: int = 18) -> Label:

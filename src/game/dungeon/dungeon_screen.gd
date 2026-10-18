@@ -30,6 +30,8 @@ const PAD_GAP := 8.0
 const TOP_BAR := 64.0
 const SIDE_COLLAPSED := 300.0
 const STATUS_H := 190.0
+## 지도를 닫았을 때 시야 위에 뜬 상태 칸의 바깥 여백(오른쪽·위).
+const FLOAT_MARGIN := 10.0
 const PROMPT_BLOCKED_MS := 40
 ## 누르고 있기 반복은 누른 지 이만큼 지나야 시작한다(연출이 없는 행동 뒤 짧은 누르기가 두 번 되지 않게).
 const HOLD_REPEAT_MS := 220
@@ -630,6 +632,13 @@ func _set_battle_view(on: bool) -> void:
 	_layout()
 
 
+## 탐색 HUD(지도 패널·도구 줄·이동 단추·휴식·파티/지도/메뉴 단추·상태 칸·층 이름·걸음)를 감추고 3D 시야만 화면 전체로 두는지.
+## 전투 층이 열린 동안(06 §9.1, U1)과 파티 메뉴가 열린 동안(M2.6 2.5단계: 메뉴 뒤에는 어둡게 한 3D 시야만 보인다).
+## 감춘 단추는 누르기를 받지 않는다. 파티 메뉴가 열리고 닫힐 때(어느 길로 닫혀도: 키·「닫기」·상태 바꾸기) visibility_changed 로 다시 맞춘다.
+func _hud_hidden() -> bool:
+	return _battle_view or (party_menu != null and party_menu.is_open())
+
+
 ## 전투 층 저장 갈고리(제출 결과가 정해진 직후, 연출 전).
 func _on_battle_save() -> void:
 	_autosave()
@@ -698,7 +707,7 @@ func _open_menu() -> void:
 		var on: bool = settings.automap == mode
 		var ab := ModalLayer.button(("● " if on else "") + texts.t("menu.automap." + mode), _set_automap.bind(mode))
 		ab.name = "Automap_" + mode
-		ab.custom_minimum_size = Vector2(150, 56)
+		ab.custom_minimum_size = Vector2(150, 64)
 		ModalLayer.set_checked(ab, on)
 		auto_row.append(ab)
 	var export_b := ModalLayer.button(texts.t("menu.export"), _export)
@@ -710,10 +719,10 @@ func _open_menu() -> void:
 	var close_b := ModalLayer.button(texts.t("menu.close"), modal.close)
 	close_b.name = "Close"
 	var rows: Array[Control] = [
-		ModalLayer.label(texts.t("menu.save")), ModalLayer.row(save_row),
-		ModalLayer.label(texts.t("menu.load")), ModalLayer.row(load_row),
+		ModalLayer.section(texts.t("menu.save")), ModalLayer.row(save_row),
+		ModalLayer.section(texts.t("menu.load")), ModalLayer.row(load_row),
 		ModalLayer.row([export_b, import_b] as Array[Control]),
-		ModalLayer.label(texts.t("menu.automap")), ModalLayer.row(auto_row),
+		ModalLayer.section(texts.t("menu.automap")), ModalLayer.row(auto_row),
 		ModalLayer.row([new_b, close_b] as Array[Control]),
 	]
 	modal.open("menu", texts.t("menu.title"), rows)
@@ -978,6 +987,7 @@ func _build_ui() -> void:
 		_debug_dirty = true
 		_debug_settle = 2)
 	party_menu.closed.connect(_on_party_closed)
+	party_menu.visibility_changed.connect(_layout)
 	party_menu.changed.connect(func(_e: Array) -> void:
 		status.refresh()
 		_debug_dirty = true)
@@ -1005,9 +1015,12 @@ func _layout() -> void:
 	if s.x <= 0.0:
 		s = get_viewport_rect().size
 	var side_w := roundf(s.x * 0.4) if _map_open else SIDE_COLLAPSED
-	var view_w := s.x - side_w
-	# 전투 중에는 3D 시야가 화면 전체(전투 층이 어둡게 덮는 배경, 지도 칸 자리가 빈 판으로 남지 않는다). 끝나면 탐색 배치로.
-	var stage_w := s.x if _battle_view else view_w
+	# 지도를 열면 시야 6 : 지도 4(HD 리마스터 배치). 닫으면 시야가 화면 전체이고 상태 칸이 시야 오른쪽 위에 떠 있다
+	# (옆 칸 아래가 빈 판으로 남지 않는다, M2.6 2.5단계). view_w 는 시야 위 단추·알림 줄이 쓰는 폭(상태 칸 왼쪽까지).
+	var view_w := s.x - side_w if _map_open else s.x - SIDE_COLLAPSED - FLOAT_MARGIN
+	# 전투 중·파티 메뉴가 열린 동안에는 3D 시야가 화면 전체(그 층이 어둡게 덮는 배경, 지도 칸 자리가 빈 판으로 남지 않는다).
+	# 닫히면 탐색 배치로.
+	var stage_w := s.x if _hud_hidden() or not _map_open else view_w
 	view_container.position = Vector2.ZERO
 	view_container.size = Vector2(stage_w, s.y)
 	_flash.position = Vector2.ZERO
@@ -1038,7 +1051,7 @@ func _layout() -> void:
 	if _battle_view:
 		_toast.position = Vector2(0, BattleLayer.TOAST_Y)
 		_toast.size = Vector2(s.x, BattleLayer.TOAST_H)
-	var explore := not _battle_view
+	var explore := not _hud_hidden()
 	for a in pad:
 		(pad[a] as TouchButton).visible = explore
 	map_button.visible = explore
@@ -1061,8 +1074,8 @@ func _layout() -> void:
 		status.position = Vector2(x0, s.y - STATUS_H)
 		status.size = Vector2(side_w, STATUS_H)
 	else:
-		status.position = Vector2(x0, 0)
-		status.size = Vector2(side_w, STATUS_H)
+		status.position = Vector2(s.x - SIDE_COLLAPSED - FLOAT_MARGIN, FLOAT_MARGIN)
+		status.size = Vector2(SIDE_COLLAPSED, STATUS_H)
 	map.refresh()
 	_debug_dirty = true
 	_debug_settle = 2
@@ -1078,7 +1091,7 @@ func _refresh_hud() -> void:
 func _refresh_rest_button() -> void:
 	if rest_button == null:
 		return
-	var show := not _battle_view and state != null and ExplorationRules.can_act(state) and state.party.at == floor_def.start_at
+	var show := not _hud_hidden() and state != null and ExplorationRules.can_act(state) and state.party.at == floor_def.start_at
 	if rest_button.visible != show:
 		rest_button.visible = show
 		if not show:

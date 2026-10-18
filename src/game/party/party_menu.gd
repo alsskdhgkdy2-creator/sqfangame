@@ -1,4 +1,7 @@
-## 파티 메뉴(07 §9): 미궁 화면 위에 덮는 불투명 전체 화면 층. 머리 줄(제목·탭 넷·닫기)·대원 열·탭 내용(상태·스킬·장비·소지품).
+## 파티 메뉴(07 §9): 미궁 화면 위에 덮는 전체 화면 층. 층 겹침(M2.6 2.5단계, research 04): 열린 동안 탐색 화면은 HUD 를 감추고
+## 3D 시야만 화면 전체로 두며(DungeonScreen._hud_hidden), 메뉴는 그것을 어둡게(MENU_DIM) 하고 그 위에 「파티」 문패·대원 카드 열
+## (간격을 두고 뜬다)·내용 창(탭 내용)을 띄운다. 탭 넷과 「닫기」는 내용 창 위 가장자리에
+## 걸친 폴더 탭이다(트리에서 창보다 뒤: 겹친 곳을 누르면 탭이 받는다).
 ## 값은 규칙의 읽기 함수(GrowthRules.profile·learn_block·equip_block·sp_left 등)에서 읽고 화면이 다시 계산하지 않는다(07 §11.4).
 ## 상태는 규칙 함수(allocate·equip·supply·grant_exp)로만 바꾸고, 받아들여지면 save_hook(자동 저장, 07 §8.5) 뒤 changed 를 낸다.
 ## 스킬 배분 초안은 화면 것이라 저장하지 않는다. 메뉴를 닫으면 없어지고, 열 때는 늘 상태 탭·칸 0 대원에서 시작한다(07 §9.1).
@@ -14,14 +17,21 @@ signal closed
 ## 규칙 함수가 상태를 바꿨다(저장 갈고리 뒤). 탐색 화면이 상태 칸을 새로 그린다.
 signal changed(events: Array)
 
-const HEADER_H := 72.0
 const TOP := 80.0
-const MEMBER_W := 292.0
+## 대원 카드 열(왼쪽 여백·폭).
+const MEMBER_X := 6.0
+const MEMBER_W := 280.0
+## 내용 창: 왼쪽(탭 내용 TAB_X 조금 앞)·위(폴더 탭이 걸친다: 탭 아래쪽 TAB_OVERLAP 만큼이 창 위에 겹친다).
+const CONTENT_X := 292.0
+const TAB_Y := 4.0
+const TAB_OVERLAP := 20.0
 const CELL_H := 120.0
 const CELL_GAP := 8.0
 const TAB_X := 300.0
 const TAB_SIZE := Vector2(152, 64)
 const TAB_GAP := 8.0
+## 안내 글자(반투명 알림 띠 UiTheme.BANNER_FILL 위).
+const NOTICE_TEXT := Color(1.0, 0.85, 0.55)
 const CLOSE_SIZE := Vector2(112, 64)
 const DIALOG_SIZE := Vector2(560, 240)
 const DIALOG_BUTTON := Vector2(200, 64)
@@ -62,7 +72,8 @@ var tabs: Array[Control] = []
 var dialog_layer: Control
 var dialog_buttons: Array[PartyButton] = []
 var _dialog_text := Label.new()
-var _title := Label.new()
+## 「파티」 문패(장식).
+var _title := UiPlate.new()
 var _notice_label := Label.new()
 var _notice_left := 0.0
 ## 버리기 확인 창의 「버리기」 뒤에 할 일(탭·대원 바꾸기·닫기).
@@ -85,9 +96,9 @@ func build(text_db: TextDb) -> void:
 		return
 	_built = true
 	texts = text_db
+	_title.name = "TitlePlate"
+	_title.font_size = 24
 	_title.text = texts.t("party.title")
-	_title.add_theme_font_size_override("font_size", 28)
-	_title.position = Vector2(24, 16)
 	add_child(_title)
 	for i in TAB_KEYS.size():
 		var b := PartyButton.new()
@@ -105,7 +116,7 @@ func build(text_db: TextDb) -> void:
 	add_child(close_button)
 	_notice_label.name = "Notice"
 	_notice_label.add_theme_font_size_override("font_size", 15)
-	_notice_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.55))
+	_notice_label.add_theme_color_override("font_color", NOTICE_TEXT)
 	_notice_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_notice_label.max_lines_visible = 2
 	_notice_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -462,6 +473,7 @@ func show_notice(t: String) -> void:
 	_notice_left = NOTICE_SEC
 	_notice_label.text = t
 	_notice_label.modulate.a = 1.0
+	queue_redraw()
 
 
 ## 알림 줄을 비운다(글·남은 시간·흐림 모두): 닫았다 다시 열 때 앞 알림이 남지 않는다.
@@ -470,6 +482,7 @@ func _clear_notice() -> void:
 	_notice_left = 0.0
 	_notice_label.text = ""
 	_notice_label.modulate.a = 1.0
+	queue_redraw()
 
 
 func _process(delta: float) -> void:
@@ -548,14 +561,16 @@ func _layout() -> void:
 	var s := size
 	if s.x <= 0.0:
 		s = get_viewport_rect().size
+	_title.position = Vector2(MEMBER_X + 4.0, roundf((TOP - _title.size.y) / 2.0))
 	for i in tab_buttons.size():
-		tab_buttons[i].position = Vector2(TAB_X + i * (TAB_SIZE.x + TAB_GAP), 4)
-	close_button.position = Vector2(s.x - CLOSE_SIZE.x - 8, 4)
+		tab_buttons[i].position = Vector2(TAB_X + i * (TAB_SIZE.x + TAB_GAP), TAB_Y)
+	close_button.position = Vector2(s.x - CLOSE_SIZE.x - 8, TAB_Y)
 	var nx := TAB_X + tab_buttons.size() * (TAB_SIZE.x + TAB_GAP) + 4
-	_notice_label.position = Vector2(nx, 4)
-	_notice_label.size = Vector2(maxf(0.0, close_button.position.x - 8 - nx), 64)
+	_notice_label.position = Vector2(nx + 8, TAB_Y + 4)
+	_notice_label.size = Vector2(maxf(0.0, close_button.position.x - 16 - nx - 8), content_rect().position.y - TAB_Y - 8)
 	for i in cells.size():
-		cells[i].position = Vector2(0, TOP + i * (CELL_H + CELL_GAP))
+		cells[i].size = Vector2(MEMBER_W, CELL_H)
+		cells[i].position = Vector2(MEMBER_X, TOP + i * (CELL_H + CELL_GAP))
 	for t in tabs:
 		var c := t as Control
 		c.position = Vector2.ZERO
@@ -572,10 +587,23 @@ func _layout() -> void:
 	queue_redraw()
 
 
+## 내용 창(탭 내용이 그 안에 놓인다). 위 가장자리는 폴더 탭 아래쪽에 걸친다.
+func content_rect() -> Rect2:
+	var s := size if size.x > 0.0 else get_viewport_rect().size
+	var top := TAB_Y + TAB_SIZE.y - TAB_OVERLAP
+	return Rect2(CONTENT_X, top, s.x - CONTENT_X - 6.0, s.y - top - 6.0)
+
+
+## 안내 글 뒤 띠 자리(안내가 있을 때만 그린다).
+func notice_rect() -> Rect2:
+	return Rect2(_notice_label.position - Vector2(8, 4), _notice_label.size + Vector2(16, 8))
+
+
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.025, 0.04, 0.055))
-	# 머리 띠: 공용 창 모양의 위·옆 테두리를 화면 밖으로 밀어 아래 선만 보인다.
-	UiTheme.draw_window(self, Rect2(-8, -8, size.x + 16, HEADER_H + 12))
+	draw_rect(Rect2(Vector2.ZERO, size), UiTheme.MENU_DIM)
+	UiTheme.draw_window(self, content_rect())
+	if not notice.is_empty() and _notice_label.visible:
+		UiTheme.draw_banner(self, notice_rect())
 
 
 func _draw_dialog() -> void:
