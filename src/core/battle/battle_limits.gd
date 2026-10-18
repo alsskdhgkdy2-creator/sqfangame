@@ -41,9 +41,30 @@ const RANGES := {
 	"exp": [0, 99999],
 	"level": [1, 99],
 	"tp_cost": [0, 9999],
+	# 성장(07 §7.7). level 은 형식 범위이고 대원 레벨은 관계 검사로 level_cap 까지.
+	"level_cap": [2, 99],
+	"skill_level": [1, 10],
+	"initial_sp": [0, 99], "sp_per_level": [0, 9],
+	"exp_next": [1, 999999],
+	"exp_total": [0, 99999999],
+	"exp_grant": [1, 999999],
+	"tree_size": [1, 15],
+	"tree_col": [0, 3], "tree_row": [0, 4],
+	"passive_stat": [0, 99], "passive_max": [0, 999],
+	"equip_stat": [-99, 99],
+	"equip_delta": [-3000, 3000],
+	"bag": [1, 99],
 	"battle_turn": [0, TURN_MAX], "battle_seq": [1, SEQ_MAX],
 }
 const MATERIAL_MAX := 9999
+## 장비(07 §5.1·§5.2·§5.6): 대원마다 칸 넷(칸 0 은 무기만), 종류, 같은 종류 제한, 가방 한 장비 상한.
+const EQUIP_SLOTS := 4
+const WEAPON_KINDS := ["sword", "staff"]
+const ARMOR_KINDS := ["shield", "body", "head", "hands", "feet", "accessory"]
+const KIND_LIMIT := {"shield": 1, "body": 1, "head": 1, "hands": 1, "feet": 1, "accessory": 2}
+const BAG_MAX := 99
+## 패시브 bonus 키(07 §4.3).
+const PASSIVE_KEYS := ["STR", "INT", "VIT", "WIS", "AGI", "LUC", "max_hp", "max_tp"]
 const PARTY_SIZE := 5
 const ROW_MAX := 3
 

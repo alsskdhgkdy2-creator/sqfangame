@@ -7,18 +7,20 @@
 ## 강화·약화 칸은 미리 가득). 전투가 일찍 끝나지 않게 적 HP 를 크게 두고(적 스킬 시험은 대원 HP 도), 적은 아무것도 하지 않는다
 ## (구성. 움직이는 적은 적 스킬 시험의 그 적과, 전열 방어·커버 시험에서 공격하는 적 하나뿐).
 ## 시험이 모르는 효과·대상·레벨 줄 키가 정의에 나오면 실패한다(새 스킬이 확인 없이 빠지지 않게).
+## 패시브(effect passive, 07 §4.3)는 전투 명령이 아니라 이 파일의 반복에서 빼고 test_growth_rules 의 패시브 시험이 맡는다(07 §10.7).
+## 쓰는 대원은 시험 파티에서 그 스킬이 트리에 있는 첫 대원이고, 선행·관문까지 채워 그 레벨로 배운다(Fx.party_with_skills, SP 99).
 extends TestCase
 
 const Fx := preload("res://tests/fixtures.gd")
 
 ## 시험이 확인할 줄 아는 효과·대상·레벨 줄 키. 정의(BattleDb)에 새 값이 생기면 확인과 함께 늘린다.
-const EFFECT_CHECKS := ["damage", "ailment", "heal", "cure", "revive", "buff", "debuff", "front_guard", "cover", "charge"]
+const EFFECT_CHECKS := ["damage", "ailment", "heal", "cure", "revive", "buff", "debuff", "front_guard", "cover", "charge", "passive"]
 const TARGET_CHECKS := ["enemy_one", "enemy_row", "enemy_all", "ally_one", "ally_dead", "ally_other", "ally_all", "ally_row", "self"]
 const LEVEL_KEYS := {
 	"damage": ["tp", "power", "accuracy", "ailment", "bind"], "ailment": ["tp", "ailment", "accuracy"],
 	"heal": ["tp", "base", "wis_pct"], "cure": ["tp"], "revive": ["tp", "hp_permille"],
 	"buff": ["tp", "kind", "value", "turns"], "debuff": ["tp", "kind", "value", "turns"],
-	"front_guard": ["tp", "value"], "cover": ["tp"], "charge": ["tp"],
+	"front_guard": ["tp", "value"], "cover": ["tp"], "charge": ["tp"], "passive": ["bonus"],
 }
 ## 구성: 받는 쪽 취약 배율(상태 확률이 상한 1000 에 닿는다)과 전투가 끝나지 않을 HP.
 const SURE_VULN := 1000000
@@ -51,12 +53,12 @@ func test_every_definition_is_known() -> void:
 	for sid in db.skill_ids:
 		var s := db.skill(sid)
 		check(EFFECT_CHECKS.has(s.effect), "%s: 시험이 모르는 효과 %s" % [sid, s.effect])
-		check(TARGET_CHECKS.has(s.target), "%s: 시험이 모르는 대상 %s" % [sid, s.target])
+		check(TARGET_CHECKS.has(s.target) or (s.passive() and s.target.is_empty()), "%s: 시험이 모르는 대상 %s" % [sid, s.target])
 		for i in s.levels.size():
 			for k in s.levels[i]:
 				check(LEVEL_KEYS.get(s.effect, []).has(k), "%s levels[%d]: 시험이 모르는 키 %s" % [sid, i, k])
 		if s.user == "party":
-			var owners := db.class_ids.filter(func(c: String) -> bool: return db.classes[c].skills.has(sid))
+			var owners := db.class_ids.filter(func(c: String) -> bool: return db.classes[c].tree_index.has(sid))
 			check(owners.any(func(c: String) -> bool: return party_classes.has(c)), "%s: 시험 파티에 이 스킬을 가진 직업이 없다" % sid)
 
 
@@ -68,15 +70,15 @@ func test_party_skills_every_level() -> void:
 	var done: Array[String] = []
 	for sid in db.skill_ids:
 		var s := db.skill(sid)
-		if s.user != "party":
+		if s.user != "party" or s.passive():
 			continue
 		var levels := [1] if s.levels.size() == 1 else [1, s.levels.size()]
 		for level in levels:
 			for fixed in [false, true]:
 				_party_case(sid, level, fixed)
 		done.append(sid)
-	var want := db.skill_ids.filter(func(id: String) -> bool: return db.skill(id).user == "party")
-	check_eq(str(done), str(want), "아군 스킬 전부")
+	var want := db.skill_ids.filter(func(id: String) -> bool: return db.skill(id).user == "party" and not db.skill(id).passive())
+	check_eq(str(done), str(want), "아군 액티브 스킬 전부")
 	_print_table()
 
 
@@ -111,6 +113,9 @@ func _party_case(sid: String, level: int, fixed: bool) -> void:
 		"heal", "cover":
 			chosen = _other_member(b, ui)
 			b.party[chosen].hp = 1  # 회복량이 보이게 / 적 공격(lowest_hp)이 이 대원을 노리게
+			if sk.target in ["ally_all", "ally_row"]:
+				for t in b.party:
+					t.hp = 1  # 범위 회복: 받는 대원 모두 회복량이 보이게
 		"cure":
 			chosen = _other_member(b, ui)
 			var t := b.party[chosen]
@@ -493,20 +498,16 @@ func _print_table() -> void:
 			print(line)
 
 ## data/ 사본 정의. formations = {이름: [[적 ID, 열], …]}(편성 ID formation.t.<이름>), ai = {적 ID: AI 규칙},
-## levels = {스킬 ID: 그 스킬을 가진 대원의 스킬 레벨}. 오류면 null(defs_from 이 push_error).
+## levels = {스킬 ID: 그 스킬이 트리에 있는 첫 대원이 배울 레벨}(선행·관문은 Fx.party_with_skills 가 채운다, SP 는 initial_sp 99).
+## 오류면 null(defs_from 이 push_error).
 func _defs(formations: Dictionary, ai: Dictionary, levels: Dictionary = {}) -> GameDefs:
-	var files := Fx.battle_files(Fx.test_files([], [], formations))
+	var files := Fx.with_growth(Fx.battle_files(Fx.test_files([], [], formations)), {"initial_sp": 99})
 	for path in files:
 		if str(path).begins_with("enemies/"):
 			for e in files[path]["enemies"]:
 				if ai.has(e["id"]):
 					e["ai"] = ai[e["id"]]
-	var party := Fx.party_dict()
-	for m in party["members"]:
-		for sid in levels:
-			if m["skills"].has(sid):
-				m["skills"][sid] = levels[sid]
-	return Fx.defs_from(files, party)
+	return Fx.defs_from(files, Fx.party_with_skills(_db(), levels))
 
 
 ## data/ 의 모든 적이 아무것도 하지 않는 AI(자기 0 회복).

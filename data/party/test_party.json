@@ -11,12 +11,12 @@
         "skill.holo_knight.aegis_cover": 1,
         "skill.holo_knight.defense_protocol": 1
       },
-      "gear": {
-        "atk": 8,
-        "matk": 0,
-        "def": 10,
-        "mdef": 4
-      }
+      "equip": [
+        "equip.training_sword",
+        "equip.training_shield",
+        "equip.padded_coat",
+        null
+      ]
     },
     {
       "id": "blade_duelist",
@@ -29,12 +29,12 @@
         "skill.blade_duelist.cross_sweep": 1,
         "skill.blade_duelist.overclock": 1
       },
-      "gear": {
-        "atk": 14,
-        "matk": 0,
-        "def": 6,
-        "mdef": 2
-      }
+      "equip": [
+        "equip.twin_edge",
+        "equip.padded_coat",
+        "equip.grip_gloves",
+        null
+      ]
     },
     {
       "id": "blade_duelist_2",
@@ -47,12 +47,12 @@
         "skill.blade_duelist.cross_sweep": 1,
         "skill.blade_duelist.overclock": 1
       },
-      "gear": {
-        "atk": 14,
-        "matk": 0,
-        "def": 6,
-        "mdef": 2
-      }
+      "equip": [
+        "equip.twin_edge",
+        "equip.padded_coat",
+        "equip.grip_gloves",
+        null
+      ]
     },
     {
       "id": "nano_medic",
@@ -65,12 +65,12 @@
         "skill.nano_medic.refresh_patch": 1,
         "skill.nano_medic.reboot": 1
       },
-      "gear": {
-        "atk": 6,
-        "matk": 6,
-        "def": 5,
-        "mdef": 5
-      }
+      "equip": [
+        "equip.nano_rod",
+        "equip.medic_coat",
+        "equip.sensor_cap",
+        null
+      ]
     },
     {
       "id": "glyph_wizard",
@@ -81,15 +81,14 @@
       "skills": {
         "skill.glyph_wizard.heat_glyph": 1,
         "skill.glyph_wizard.frost_glyph": 1,
-        "skill.glyph_wizard.shock_glyph": 1,
-        "skill.glyph_wizard.corrode_glyph": 1
+        "skill.glyph_wizard.shock_glyph": 1
       },
-      "gear": {
-        "atk": 4,
-        "matk": 12,
-        "def": 3,
-        "mdef": 6
-      }
+      "equip": [
+        "equip.glyph_stylus",
+        "equip.glyph_robe",
+        "equip.signal_charm",
+        null
+      ]
     }
   ]
 }

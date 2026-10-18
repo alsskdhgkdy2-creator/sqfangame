@@ -346,3 +346,41 @@ static func battle_clone(s: ExplorationState) -> ExplorationState:
 		push_error("저장 왕복 실패: %s" % r.error)
 		return null
 	return r.state
+
+
+# ---- 성장 시험 도우미 (07 §10.7) ----
+
+## files["rules/growth.json"] 에 덮어쓴다(level_cap 을 바꾸면 exp_next 도 함께 준다). files 를 돌려준다.
+static func with_growth(files: Dictionary, overrides: Dictionary) -> Dictionary:
+	files["rules/growth.json"].merge(overrides.duplicate(true), true)
+	return files
+
+
+## 시험 파티 사전: 스킬마다 그 스킬이 트리에 있는 첫 대원에게 그 레벨로 배우게 하고, 선행을 요구 레벨까지 채우며(거슬러 올라감),
+## 대원 level 을 배운 스킬의 관문(min_level) 가운데 가장 큰 값까지 올린다. SP 는 따지지 않으므로 with_growth(…, {"initial_sp": 99}) 와 함께 쓴다.
+## 이미 더 높은 레벨로 배운 스킬은 내리지 않는다.
+static func party_with_skills(db: BattleDb, levels: Dictionary, party: Dictionary = {}) -> Dictionary:
+	var p: Dictionary = (party if not party.is_empty() else party_dict()).duplicate(true)
+	for sid in levels:
+		for m in p["members"]:
+			var c: BattleDb.ClassDef = db.classes.get(m["class"])
+			if c != null and c.tree_index.has(sid):
+				_learn(db, c, m, sid, levels[sid])
+				break
+	return p
+
+
+static func _learn(db: BattleDb, c: BattleDb.ClassDef, m: Dictionary, sid: String, level: int) -> void:
+	var e := c.tree_entry(sid)
+	for r in e["requires"]:
+		_learn(db, c, m, r["skill"], r["level"])
+	m["skills"][sid] = maxi(int(m["skills"].get(sid, 0)), level)
+	m["level"] = maxi(int(m["level"]), int(e["min_level"]))
+
+
+## 시험 전용 스킬 정의(skill 사전)를 그 직업의 스킬 파일(skills/<직업>.json)에, 트리 항목을 직업 파일(class_file, 예 "classes/glyph_wizard.json")에 함께 더한다.
+## requires = [{skill, level}, …]. files 를 돌려준다.
+static func add_tree_skill(files: Dictionary, class_file: String, skill: Dictionary, pos: Array, requires: Array = [], min_level: int = 1) -> Dictionary:
+	files[class_file.replace("classes/", "skills/")]["skills"].append(skill.duplicate(true))
+	files[class_file]["tree"].append({"skill": skill["id"], "pos": pos.duplicate(), "requires": requires.duplicate(true), "min_level": min_level})
+	return files

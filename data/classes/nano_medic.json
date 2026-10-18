@@ -11,6 +11,296 @@
       "WIS": 20,
       "AGI": 13,
       "LUC": 14
+    },
+    "2": {
+      "hp": 44,
+      "tp": 56,
+      "STR": 9,
+      "INT": 14,
+      "VIT": 12,
+      "WIS": 20,
+      "AGI": 13,
+      "LUC": 14
+    },
+    "3": {
+      "hp": 47,
+      "tp": 58,
+      "STR": 9,
+      "INT": 15,
+      "VIT": 12,
+      "WIS": 21,
+      "AGI": 14,
+      "LUC": 15
+    },
+    "4": {
+      "hp": 50,
+      "tp": 60,
+      "STR": 10,
+      "INT": 15,
+      "VIT": 13,
+      "WIS": 22,
+      "AGI": 14,
+      "LUC": 15
+    },
+    "5": {
+      "hp": 52,
+      "tp": 62,
+      "STR": 10,
+      "INT": 16,
+      "VIT": 13,
+      "WIS": 23,
+      "AGI": 15,
+      "LUC": 16
+    },
+    "6": {
+      "hp": 55,
+      "tp": 65,
+      "STR": 10,
+      "INT": 16,
+      "VIT": 14,
+      "WIS": 24,
+      "AGI": 15,
+      "LUC": 16
+    },
+    "7": {
+      "hp": 58,
+      "tp": 67,
+      "STR": 11,
+      "INT": 17,
+      "VIT": 14,
+      "WIS": 25,
+      "AGI": 16,
+      "LUC": 17
+    },
+    "8": {
+      "hp": 60,
+      "tp": 69,
+      "STR": 11,
+      "INT": 17,
+      "VIT": 15,
+      "WIS": 26,
+      "AGI": 16,
+      "LUC": 17
+    },
+    "9": {
+      "hp": 63,
+      "tp": 71,
+      "STR": 11,
+      "INT": 18,
+      "VIT": 15,
+      "WIS": 27,
+      "AGI": 17,
+      "LUC": 18
+    },
+    "10": {
+      "hp": 66,
+      "tp": 74,
+      "STR": 12,
+      "INT": 19,
+      "VIT": 16,
+      "WIS": 28,
+      "AGI": 18,
+      "LUC": 19
+    },
+    "11": {
+      "hp": 69,
+      "tp": 76,
+      "STR": 12,
+      "INT": 19,
+      "VIT": 16,
+      "WIS": 29,
+      "AGI": 18,
+      "LUC": 19
+    },
+    "12": {
+      "hp": 72,
+      "tp": 78,
+      "STR": 12,
+      "INT": 20,
+      "VIT": 17,
+      "WIS": 30,
+      "AGI": 19,
+      "LUC": 20
+    },
+    "13": {
+      "hp": 76,
+      "tp": 81,
+      "STR": 12,
+      "INT": 20,
+      "VIT": 17,
+      "WIS": 31,
+      "AGI": 19,
+      "LUC": 20
+    },
+    "14": {
+      "hp": 79,
+      "tp": 83,
+      "STR": 13,
+      "INT": 21,
+      "VIT": 18,
+      "WIS": 32,
+      "AGI": 20,
+      "LUC": 21
+    },
+    "15": {
+      "hp": 83,
+      "tp": 86,
+      "STR": 13,
+      "INT": 22,
+      "VIT": 18,
+      "WIS": 33,
+      "AGI": 20,
+      "LUC": 21
+    },
+    "16": {
+      "hp": 86,
+      "tp": 88,
+      "STR": 13,
+      "INT": 22,
+      "VIT": 19,
+      "WIS": 34,
+      "AGI": 21,
+      "LUC": 22
+    },
+    "17": {
+      "hp": 89,
+      "tp": 90,
+      "STR": 14,
+      "INT": 23,
+      "VIT": 19,
+      "WIS": 35,
+      "AGI": 21,
+      "LUC": 22
+    },
+    "18": {
+      "hp": 93,
+      "tp": 93,
+      "STR": 14,
+      "INT": 23,
+      "VIT": 20,
+      "WIS": 36,
+      "AGI": 22,
+      "LUC": 23
+    },
+    "19": {
+      "hp": 96,
+      "tp": 95,
+      "STR": 14,
+      "INT": 24,
+      "VIT": 20,
+      "WIS": 37,
+      "AGI": 22,
+      "LUC": 23
+    },
+    "20": {
+      "hp": 100,
+      "tp": 98,
+      "STR": 15,
+      "INT": 25,
+      "VIT": 21,
+      "WIS": 38,
+      "AGI": 23,
+      "LUC": 24
+    },
+    "21": {
+      "hp": 104,
+      "tp": 100,
+      "STR": 15,
+      "INT": 25,
+      "VIT": 21,
+      "WIS": 39,
+      "AGI": 23,
+      "LUC": 24
+    },
+    "22": {
+      "hp": 108,
+      "tp": 103,
+      "STR": 15,
+      "INT": 26,
+      "VIT": 22,
+      "WIS": 40,
+      "AGI": 24,
+      "LUC": 25
+    },
+    "23": {
+      "hp": 112,
+      "tp": 105,
+      "STR": 15,
+      "INT": 26,
+      "VIT": 22,
+      "WIS": 41,
+      "AGI": 24,
+      "LUC": 25
+    },
+    "24": {
+      "hp": 116,
+      "tp": 108,
+      "STR": 16,
+      "INT": 27,
+      "VIT": 23,
+      "WIS": 42,
+      "AGI": 25,
+      "LUC": 26
+    },
+    "25": {
+      "hp": 121,
+      "tp": 111,
+      "STR": 16,
+      "INT": 28,
+      "VIT": 23,
+      "WIS": 43,
+      "AGI": 25,
+      "LUC": 27
+    },
+    "26": {
+      "hp": 125,
+      "tp": 113,
+      "STR": 16,
+      "INT": 28,
+      "VIT": 24,
+      "WIS": 44,
+      "AGI": 26,
+      "LUC": 27
+    },
+    "27": {
+      "hp": 129,
+      "tp": 116,
+      "STR": 17,
+      "INT": 29,
+      "VIT": 24,
+      "WIS": 45,
+      "AGI": 26,
+      "LUC": 28
+    },
+    "28": {
+      "hp": 133,
+      "tp": 118,
+      "STR": 17,
+      "INT": 29,
+      "VIT": 25,
+      "WIS": 46,
+      "AGI": 27,
+      "LUC": 28
+    },
+    "29": {
+      "hp": 137,
+      "tp": 121,
+      "STR": 17,
+      "INT": 30,
+      "VIT": 25,
+      "WIS": 47,
+      "AGI": 27,
+      "LUC": 29
+    },
+    "30": {
+      "hp": 142,
+      "tp": 124,
+      "STR": 18,
+      "INT": 31,
+      "VIT": 26,
+      "WIS": 48,
+      "AGI": 28,
+      "LUC": 30
     }
   },
   "attack": {
@@ -35,9 +325,82 @@
     "arm": 1000,
     "leg": 1000
   },
-  "skills": [
-    "skill.nano_medic.nano_repair",
-    "skill.nano_medic.refresh_patch",
-    "skill.nano_medic.reboot"
+  "equip_kinds": [
+    "staff",
+    "body",
+    "head",
+    "hands",
+    "feet",
+    "accessory"
+  ],
+  "tree": [
+    {
+      "skill": "skill.nano_medic.nano_repair",
+      "pos": [
+        0,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.nano_medic.refresh_patch",
+      "pos": [
+        1,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.nano_medic.reboot",
+      "pos": [
+        2,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.nano_medic.nano_mastery",
+      "pos": [
+        3,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.nano_medic.wide_repair",
+      "pos": [
+        0,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.nano_medic.nano_repair",
+          "level": 3
+        },
+        {
+          "skill": "skill.nano_medic.nano_mastery",
+          "level": 2
+        }
+      ],
+      "min_level": 5
+    },
+    {
+      "skill": "skill.nano_medic.shock_baton",
+      "pos": [
+        3,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.nano_medic.nano_mastery",
+          "level": 1
+        }
+      ],
+      "min_level": 1
+    }
   ]
 }

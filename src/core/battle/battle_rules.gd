@@ -22,7 +22,7 @@ const EVENT_TYPES := [
 	"rejected", "battle_start", "guarding", "idle", "action", "failed", "covered", "missed", "damaged", "defeated", "woke",
 	"ailment", "ailment_resisted", "ailment_blocked", "bound", "bind_resisted", "buffed", "healed", "cured", "revived",
 	"front_guard", "cover_set", "charging", "charge_lost", "row_shift", "escaped", "escape_failed",
-	"turn_end", "poison_tick", "expired", "drop", "battle_end",
+	"turn_end", "poison_tick", "expired", "drop", "exp", "level_up", "battle_end",
 ]
 
 
@@ -580,14 +580,18 @@ static func _turn_end(state: ExplorationState, events: Array[Dictionary]) -> voi
 
 # ---- 전투 끝 (06 §3.17) ----
 
-## 전투를 끝낸다. 거부하면 false 이고 상태·난수를 바꾸지 않는다.
-## 이벤트(drop…·battle_end)는 events 에 덧붙인다: submit 은 자기 이벤트 열을 넘기고, 시험·디버그는 필요하면 배열을 넘긴다.
-## battle_end 는 battle 을 지우기 전에 결과(턴·적 HP·드롭)를 복사해 담는다. reason 이 있으면 battle_end.reason(턴 상한 "turn_cap").
+## 전투를 끝낸다. 거부하면 false 이고 상태·난수·events 를 바꾸지 않는다.
+## 거부: battle 없음·pending 거짓·wiped 참·모르는 outcome, 그리고 끝 결과와 아군 전원 쓰러짐이 맞지 않을 때
+## ((outcome == "wiped") != 아군 전원 HP 0: 살아 있는 아군 없는 승리·도주, 살아 있는 아군 있는 전멸, 07 §3.4). 그래서 받은 끝 상태는 늘 저장할 수 있다.
+## 이벤트(drop…·exp·level_up…·battle_end)는 events 에 덧붙인다: submit 은 자기 이벤트 열을 넘기고, 시험·디버그는 필요하면 배열을 넘긴다.
+## 승리 순서(07 §3.4): 드롭(난수) → 경험치·레벨업(대원 칸 순, 난수 없음) → 위험도 0·한계값(난수) → battle_end → battle = null.
+## battle_end 는 battle 을 지우기 전에 결과(턴·적 HP·드롭, 승리면 성장 필드 07 §3.5)를 복사해 담는다. reason 이 있으면 battle_end.reason(턴 상한 "turn_cap").
 static func finish(state: ExplorationState, outcome: String, events: Array[Dictionary] = [], reason: String = "") -> bool:
 	var b := state.battle
 	if b == null or not state.encounter.pending or state.wiped or not OUTCOMES.has(outcome):
 		return false
-	if outcome == "wiped" and not b.all_down(BattleUnit.PARTY):
+	var all_down := b.all_down(BattleUnit.PARTY)
+	if (outcome == "wiped") != all_down:
 		return false
 	var drops := []
 	if outcome == "victory":
@@ -605,6 +609,9 @@ static func finish(state: ExplorationState, outcome: String, events: Array[Dicti
 					var ev := drop.duplicate()
 					ev["type"] = "drop"
 					events.append(ev)
+	var growth := {}
+	if outcome == "victory":
+		growth = GrowthRules.victory_exp(state, b, events)
 	var enemy_hp: Array[int] = []
 	for u in b.enemies:
 		enemy_hp.append(u.hp)
@@ -615,6 +622,7 @@ static func finish(state: ExplorationState, outcome: String, events: Array[Dicti
 	else:
 		state.encounter.roll_threshold(state.rng, state.floor_def.threshold_min, state.floor_def.threshold_max)
 	var end := {"type": "battle_end", "outcome": outcome, "turn": b.turn, "enemy_hp": enemy_hp, "drops": drops}
+	end.merge(growth)
 	if not reason.is_empty():
 		end["reason"] = reason
 	events.append(end)

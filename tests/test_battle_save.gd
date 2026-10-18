@@ -127,7 +127,7 @@ func test_v2_rejects_each_save_table_row() -> void:
 		["강화 turns 10", func(d): d["battle"]["party"][1]["buffs"][0]["turns"] = 10, "battle.party[1].buffs[0].turns"],
 		["resist 값 resist_max 초과", func(d): d["battle"]["party"][3]["resist"]["sleep"] = 901, "battle.party[3].resist.sleep"],
 		["resist 키", func(d): d["battle"]["party"][3]["resist"]["fire"] = 100, "battle.party[3].resist.fire"],
-		["적 hp 초과", func(d): d["battle"]["enemies"][0]["hp"] = 9999, "battle.enemies[0].hp"],
+		["적 hp 초과", func(d): d["battle"]["enemies"][0]["hp"] = s.battle.enemies[0].max_hp + 1, "battle.enemies[0].hp: 정수 0~%d" % s.battle.enemies[0].max_hp],
 		["charging 이 강공격 아님", func(d): d["battle"]["enemies"][0]["charging"] = "skill.enemy.pinch", "battle.enemies[0].charging"],
 		["kill element", func(d): d["battle"]["enemies"][1]["kill"]["element"] = "dark", "battle.enemies[1].kill.element"],
 		["kill ailment", func(d): d["battle"]["enemies"][1]["kill"]["ailment"] = "blind", "battle.enemies[1].kill.ailment"],

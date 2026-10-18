@@ -21,6 +21,26 @@
           "tp": 5,
           "power": 130,
           "accuracy": 1000
+        },
+        {
+          "tp": 5,
+          "power": 140,
+          "accuracy": 1000
+        },
+        {
+          "tp": 6,
+          "power": 150,
+          "accuracy": 1000
+        },
+        {
+          "tp": 6,
+          "power": 165,
+          "accuracy": 1000
+        },
+        {
+          "tp": 7,
+          "power": 180,
+          "accuracy": 1000
         }
       ]
     },
@@ -45,6 +65,26 @@
           "tp": 5,
           "power": 130,
           "accuracy": 1000
+        },
+        {
+          "tp": 5,
+          "power": 140,
+          "accuracy": 1000
+        },
+        {
+          "tp": 6,
+          "power": 150,
+          "accuracy": 1000
+        },
+        {
+          "tp": 6,
+          "power": 165,
+          "accuracy": 1000
+        },
+        {
+          "tp": 7,
+          "power": 180,
+          "accuracy": 1000
         }
       ]
     },
@@ -68,6 +108,26 @@
         {
           "tp": 5,
           "power": 130,
+          "accuracy": 1000
+        },
+        {
+          "tp": 5,
+          "power": 140,
+          "accuracy": 1000
+        },
+        {
+          "tp": 6,
+          "power": 150,
+          "accuracy": 1000
+        },
+        {
+          "tp": 6,
+          "power": 165,
+          "accuracy": 1000
+        },
+        {
+          "tp": 7,
+          "power": 180,
           "accuracy": 1000
         }
       ]
@@ -94,6 +154,210 @@
             "turns": 3,
             "damage": 15
           }
+        },
+        {
+          "tp": 4,
+          "ailment": {
+            "id": "poison",
+            "chance": 750,
+            "turns": 3,
+            "damage": 18
+          }
+        },
+        {
+          "tp": 5,
+          "ailment": {
+            "id": "poison",
+            "chance": 800,
+            "turns": 3,
+            "damage": 21
+          }
+        },
+        {
+          "tp": 5,
+          "ailment": {
+            "id": "poison",
+            "chance": 850,
+            "turns": 3,
+            "damage": 25
+          }
+        },
+        {
+          "tp": 6,
+          "ailment": {
+            "id": "poison",
+            "chance": 900,
+            "turns": 3,
+            "damage": 30
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.glyph_wizard.glyph_mastery",
+      "name_key": "skill.glyph_wizard.glyph_mastery",
+      "user": "party",
+      "effect": "passive",
+      "levels": [
+        {
+          "bonus": {
+            "INT": 1,
+            "max_tp": 2
+          }
+        },
+        {
+          "bonus": {
+            "INT": 1,
+            "max_tp": 4
+          }
+        },
+        {
+          "bonus": {
+            "INT": 2,
+            "max_tp": 6
+          }
+        },
+        {
+          "bonus": {
+            "INT": 2,
+            "max_tp": 8
+          }
+        },
+        {
+          "bonus": {
+            "INT": 3,
+            "max_tp": 10
+          }
+        },
+        {
+          "bonus": {
+            "INT": 4,
+            "max_tp": 13
+          }
+        },
+        {
+          "bonus": {
+            "INT": 4,
+            "max_tp": 16
+          }
+        },
+        {
+          "bonus": {
+            "INT": 5,
+            "max_tp": 19
+          }
+        },
+        {
+          "bonus": {
+            "INT": 6,
+            "max_tp": 22
+          }
+        },
+        {
+          "bonus": {
+            "INT": 8,
+            "max_tp": 26
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.glyph_wizard.sleep_glyph",
+      "name_key": "skill.glyph_wizard.sleep_glyph",
+      "user": "party",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 6,
+          "ailment": {
+            "id": "sleep",
+            "chance": 400,
+            "turns": 2
+          }
+        },
+        {
+          "tp": 6,
+          "ailment": {
+            "id": "sleep",
+            "chance": 450,
+            "turns": 2
+          }
+        },
+        {
+          "tp": 7,
+          "ailment": {
+            "id": "sleep",
+            "chance": 500,
+            "turns": 2
+          }
+        },
+        {
+          "tp": 7,
+          "ailment": {
+            "id": "sleep",
+            "chance": 550,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 8,
+          "ailment": {
+            "id": "sleep",
+            "chance": 600,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.glyph_wizard.heat_wave",
+      "name_key": "skill.glyph_wizard.heat_wave",
+      "user": "party",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_row",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "INT",
+      "element": "fire",
+      "can_crit": false,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 9,
+          "power": 100,
+          "accuracy": 1000
+        },
+        {
+          "tp": 9,
+          "power": 110,
+          "accuracy": 1000
+        },
+        {
+          "tp": 10,
+          "power": 120,
+          "accuracy": 1000
+        },
+        {
+          "tp": 10,
+          "power": 130,
+          "accuracy": 1000
+        },
+        {
+          "tp": 11,
+          "power": 145,
+          "accuracy": 1000
         }
       ]
     }

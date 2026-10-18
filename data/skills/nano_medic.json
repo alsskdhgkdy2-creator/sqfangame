@@ -17,6 +17,26 @@
           "tp": 5,
           "base": 15,
           "wis_pct": 100
+        },
+        {
+          "tp": 5,
+          "base": 20,
+          "wis_pct": 110
+        },
+        {
+          "tp": 6,
+          "base": 25,
+          "wis_pct": 120
+        },
+        {
+          "tp": 6,
+          "base": 30,
+          "wis_pct": 130
+        },
+        {
+          "tp": 7,
+          "base": 40,
+          "wis_pct": 150
         }
       ]
     },
@@ -35,6 +55,18 @@
       "levels": [
         {
           "tp": 4
+        },
+        {
+          "tp": 4
+        },
+        {
+          "tp": 3
+        },
+        {
+          "tp": 3
+        },
+        {
+          "tp": 2
         }
       ]
     },
@@ -54,6 +86,199 @@
         {
           "tp": 10,
           "hp_permille": 250
+        },
+        {
+          "tp": 10,
+          "hp_permille": 300
+        },
+        {
+          "tp": 9,
+          "hp_permille": 350
+        },
+        {
+          "tp": 9,
+          "hp_permille": 400
+        },
+        {
+          "tp": 8,
+          "hp_permille": 500
+        }
+      ]
+    },
+    {
+      "id": "skill.nano_medic.nano_mastery",
+      "name_key": "skill.nano_medic.nano_mastery",
+      "user": "party",
+      "effect": "passive",
+      "levels": [
+        {
+          "bonus": {
+            "WIS": 1,
+            "max_tp": 2
+          }
+        },
+        {
+          "bonus": {
+            "WIS": 1,
+            "max_tp": 4
+          }
+        },
+        {
+          "bonus": {
+            "WIS": 2,
+            "max_tp": 6
+          }
+        },
+        {
+          "bonus": {
+            "WIS": 2,
+            "max_tp": 8
+          }
+        },
+        {
+          "bonus": {
+            "WIS": 3,
+            "max_tp": 10
+          }
+        },
+        {
+          "bonus": {
+            "WIS": 4,
+            "max_tp": 13
+          }
+        },
+        {
+          "bonus": {
+            "WIS": 4,
+            "max_tp": 16
+          }
+        },
+        {
+          "bonus": {
+            "WIS": 5,
+            "max_tp": 19
+          }
+        },
+        {
+          "bonus": {
+            "WIS": 6,
+            "max_tp": 22
+          }
+        },
+        {
+          "bonus": {
+            "WIS": 8,
+            "max_tp": 26
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.nano_medic.wide_repair",
+      "name_key": "skill.nano_medic.wide_repair",
+      "user": "party",
+      "effect": "heal",
+      "range": "ranged",
+      "target": "ally_all",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 12,
+          "base": 10,
+          "wis_pct": 60
+        },
+        {
+          "tp": 12,
+          "base": 13,
+          "wis_pct": 65
+        },
+        {
+          "tp": 13,
+          "base": 16,
+          "wis_pct": 70
+        },
+        {
+          "tp": 13,
+          "base": 20,
+          "wis_pct": 80
+        },
+        {
+          "tp": 14,
+          "base": 25,
+          "wis_pct": 90
+        }
+      ]
+    },
+    {
+      "id": "skill.nano_medic.shock_baton",
+      "name_key": "skill.nano_medic.shock_baton",
+      "user": "party",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "bash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 4,
+          "power": 90,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 300,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 4,
+          "power": 100,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 350,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 5,
+          "power": 110,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 400,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 5,
+          "power": 120,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 450,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 130,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 500,
+            "turns": 3
+          }
         }
       ]
     }

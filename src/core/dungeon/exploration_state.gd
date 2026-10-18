@@ -9,6 +9,8 @@ var defs: GameDefs
 var battle: BattleState
 ## 소재 ID → 수량(1~9999, 0개는 키를 두지 않는다).
 var materials := {}
+## 장비 가방(07 §5.6): 장착하지 않은 장비 ID → 개수(1~99, 0개는 키를 두지 않는다).
+var gear_bag := {}
 var world := WorldState.new()
 var knowledge := ExplorationKnowledge.new()
 var annotation := MapAnnotation.new()

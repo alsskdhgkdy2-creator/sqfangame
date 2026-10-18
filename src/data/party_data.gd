@@ -1,9 +1,10 @@
-## 시험 파티 정의(data/party/*.json, 06 §5.3). 대원마다 id·name_key·class·level·row·skills·gear. 순서가 칸 순서다.
-## 최대 HP·TP 는 직업 레벨 표에서 온다: resolve(BattleDb) 가 참조를 검사하며 채운다.
+## 시작 파티 정의(data/party/*.json, 3판 형식 07 §7.6). 대원마다 id·name_key·class·level·row·skills·equip. 순서가 칸 순서다.
+## skills 는 시작 배분(스킬 ID → 스킬 레벨), equip 은 칸 넷(장비 ID 또는 null).
+## resolve(BattleDb) 가 참조와 트리·SP·장착 규칙을 검사한다. 최대 HP·TP 는 대원 상태에서 성장 묶음으로 계산한다(GrowthRules.profile).
 class_name PartyData
 extends RefCounted
 
-const MEMBER_KEYS := ["id", "name_key", "class", "level", "row", "skills", "gear"]
+const MEMBER_KEYS := ["id", "name_key", "class", "level", "row", "skills", "equip"]
 const MEMBER_ID_PATTERN := "\\A[a-z0-9_]+\\z"
 
 var ids: Array[String] = []
@@ -11,13 +12,10 @@ var name_keys: Array[String] = []
 var class_ids: Array[String] = []
 var levels: Array[int] = []
 var rows: Array[String] = []
-## 대원마다 스킬 ID → 스킬 레벨.
+## 대원마다 시작 배분: 스킬 ID → 스킬 레벨.
 var skills: Array[Dictionary] = []
-## 대원마다 {atk, matk, def, mdef}.
-var gears: Array[Dictionary] = []
-## resolve() 뒤에 채워진다.
-var max_hps: Array[int] = []
-var max_tps: Array[int] = []
+## 대원마다 시작 장비 칸 넷(빈 칸 "").
+var equips: Array[Array] = []
 var errors: Array[String] = []
 var source := ""
 
@@ -50,6 +48,7 @@ static func parse_dict(data: Variant, src: String) -> PartyData:
 	if list.size() != BattleLimits.PARTY_SIZE:
 		p._err("members", "대원은 %d명이어야 한다(지금 %d명)" % [BattleLimits.PARTY_SIZE, list.size()])
 	var id_re := RegEx.create_from_string(MEMBER_ID_PATTERN)
+	var equip_re := RegEx.create_from_string(BattleDb.ID_PATTERN)
 	var per_row := {"front": 0, "back": 0}
 	for i in list.size():
 		var path := "members[%d]" % i
@@ -89,23 +88,22 @@ static func parse_dict(data: Variant, src: String) -> PartyData:
 		else:
 			for sid in m["skills"]:
 				var lv: Variant = SaveCodec.to_int(m["skills"][sid])
-				if lv == null or typeof(m["skills"][sid]) == TYPE_BOOL or not BattleLimits.in_range("level", lv):
-					p._err("%s.skills.%s" % [path, sid], "스킬 레벨은 정수 %s 이어야 한다" % BattleLimits.range_text("level"))
+				if lv == null or typeof(m["skills"][sid]) == TYPE_BOOL or not BattleLimits.in_range("skill_level", lv):
+					p._err("%s.skills.%s" % [path, sid], "스킬 레벨은 정수 %s 이어야 한다" % BattleLimits.range_text("skill_level"))
 				else:
 					sk[sid] = lv
-		var gear := {}
-		if typeof(m["gear"]) != TYPE_DICTIONARY:
-			p._err(path + ".gear", "객체여야 한다")
+		var eq: Array[String] = []
+		var ev: Variant = m["equip"]
+		if typeof(ev) != TYPE_ARRAY or ev.size() != BattleLimits.EQUIP_SLOTS:
+			p._err(path + ".equip", "길이 %d 의 배열이어야 한다(칸마다 장비 ID 또는 null)" % BattleLimits.EQUIP_SLOTS)
 		else:
-			for k in BattleLimits.GEAR:
-				var v: Variant = SaveCodec.to_int(m["gear"].get(k))
-				if v == null or typeof(m["gear"].get(k)) == TYPE_BOOL or not BattleLimits.in_range("gear", v):
-					p._err("%s.gear.%s" % [path, k], "정수 %s 이어야 한다" % BattleLimits.range_text("gear"))
+			for j in ev.size():
+				if ev[j] == null:
+					eq.append("")
+				elif typeof(ev[j]) != TYPE_STRING or equip_re.search(ev[j]) == null or not str(ev[j]).begins_with("equip."):
+					p._err("%s.equip[%d]" % [path, j], "null 또는 equip. 로 시작하는 장비 ID 여야 한다")
 				else:
-					gear[k] = v
-			for k in m["gear"]:
-				if not BattleLimits.GEAR.has(k):
-					p._err("%s.gear.%s" % [path, k], "모르는 필드")
+					eq.append(ev[j])
 		if p.errors.size() != before:
 			continue
 		p.ids.append(m["id"])
@@ -114,47 +112,37 @@ static func parse_dict(data: Variant, src: String) -> PartyData:
 		p.levels.append(level)
 		p.rows.append(m["row"])
 		p.skills.append(sk)
-		p.gears.append(gear)
+		p.equips.append(eq)
 	for row in BattleDb.ROWS:
 		if per_row[row] > BattleLimits.ROW_MAX:
 			p._err("members", "%s 줄이 %d명을 넘는다" % [row, BattleLimits.ROW_MAX])
 	return p
 
 
-## 전투 정의와 맞춰 본다: 직업이 있음, 레벨이 직업 레벨 표에 있음, 대원 스킬은 그 직업의 스킬, 스킬 레벨 ≤ 줄 수.
-## 오류는 errors 에 더하고, 오류가 없으면 max_hps·max_tps 를 채운다.
+## 전투·성장 정의와 맞춰 본다(07 §7.8 「파티」): 직업이 있음, 레벨 1~level_cap, 시작 배분이 그 직업 트리·최대 레벨·선행·관문·SP 를
+## 지킴, 시작 장비가 있고 장착 규칙(칸 종류·직업·같은 종류 제한)을 지킴. 판정은 GrowthRules 의 같은 함수(저장 검사와 같다).
 func resolve(db: BattleDb) -> void:
-	var before := errors.size()
-	var hps: Array[int] = []
-	var tps: Array[int] = []
 	for i in ids.size():
 		var path := "members[%d]" % i
 		var c: BattleDb.ClassDef = db.classes.get(class_ids[i])
 		if c == null:
 			_err(path + ".class", "없는 직업 %s" % class_ids[i])
 			continue
-		if not c.levels.has(levels[i]):
-			_err(path + ".level", "%s 레벨 표에 %d 이 없다" % [class_ids[i], levels[i]])
+		if levels[i] > db.growth.level_cap:
+			_err(path + ".level", "레벨 %d 이 level_cap %d 을 넘는다" % [levels[i], db.growth.level_cap])
 			continue
-		for sid in skills[i]:
-			var s: BattleDb.SkillDef = db.skills.get(sid)
-			if s == null or not c.skills.has(sid):
-				_err("%s.skills.%s" % [path, sid], "%s 의 스킬이 아니다" % class_ids[i])
-			elif skills[i][sid] > s.levels.size():
-				_err("%s.skills.%s" % [path, sid], "스킬 레벨 %d 이 줄 수 %d 를 넘는다" % [skills[i][sid], s.levels.size()])
-		hps.append(c.levels[levels[i]]["hp"])
-		tps.append(c.levels[levels[i]]["tp"])
-	if errors.size() == before:
-		max_hps = hps
-		max_tps = tps
-
-
-## HP·TP를 가득 채운 대원 목록. 부를 때마다 새 객체다.
-func make_members() -> Array[PartyState.Member]:
-	var out: Array[PartyState.Member] = []
-	for i in mini(ids.size(), max_hps.size()):
-		out.append(PartyState.Member.new(ids[i], max_hps[i], max_hps[i], max_tps[i], max_tps[i]))
-	return out
+		var bad := GrowthRules.skills_problem(db, c, levels[i], skills[i])
+		if not bad.is_empty():
+			_err("%s.skills%s" % [path, "" if bad[0].is_empty() else "." + bad[0]], bad[1])
+		var unknown := false
+		for j in equips[i].size():
+			if not equips[i][j].is_empty() and db.equip(equips[i][j]) == null:
+				_err("%s.equip[%d]" % [path, j], "없는 장비 %s" % equips[i][j])
+				unknown = true
+		if not unknown:
+			bad = GrowthRules.equip_problem(db, c, equips[i])
+			if not bad.is_empty():
+				_err("%s.equip[%d]" % [path, bad[0]], bad[1])
 
 
 func _err(path: String, msg: String) -> void:

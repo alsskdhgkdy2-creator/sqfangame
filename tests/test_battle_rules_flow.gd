@@ -46,14 +46,13 @@ func _enemies() -> Array:
 	]
 
 
-## 시험용 파일: 위저드에 수면 글리프(시험 전용)를 더한다.
+## 시험용 파일: 위저드 트리에 수면 글리프(시험 전용, 빈 칸·선행 없음·관문 1)를 더한다. 위저드 배분이 SP 4 가 되므로 initial_sp 99(07 §10.7).
 func _files(formations: Dictionary, rules: Dictionary = Fx.EXACT) -> Dictionary:
 	var files := Fx.battle_files(Fx.test_files(_skills(), _enemies(), formations), rules)
-	files["skills/glyph_wizard.json"]["skills"].append({"id": SLEEP_GLYPH, "name_key": SLEEP_GLYPH, "user": "party", "effect": "ailment",
+	Fx.add_tree_skill(files, "classes/glyph_wizard.json", {"id": SLEEP_GLYPH, "name_key": SLEEP_GLYPH, "user": "party", "effect": "ailment",
 		"range": "ranged", "target": "enemy_one", "parts": [], "priority": "normal", "speed": 1000, "sure_hit": true,
-		"levels": [{"tp": 1, "ailment": {"id": "sleep", "chance": 1000, "turns": 2}}]})
-	files["classes/glyph_wizard.json"]["skills"].append(SLEEP_GLYPH)
-	return files
+		"levels": [{"tp": 1, "ailment": {"id": "sleep", "chance": 1000, "turns": 2}}]}, [1, 4])
+	return Fx.with_growth(files, {"initial_sp": 99})
 
 
 func _party() -> Dictionary:
@@ -211,7 +210,7 @@ func test_cure_target_fallen_is_no_target_and_keeps_tp() -> void:
 func test_revive_target_alive_fails_without_retarget() -> void:
 	var p := _party()
 	p["members"][4] = {"id": "nano_medic_2", "name_key": "member.nano_medic", "class": "class.nano_medic", "level": 1, "row": "back",
-		"skills": {REPAIR: 1, PATCH: 1, REBOOT: 1}, "gear": {"atk": 6, "matk": 6, "def": 5, "mdef": 5}}
+		"skills": {REPAIR: 1, PATCH: 1, REBOOT: 1}, "equip": ["equip.nano_rod", "equip.medic_coat", "equip.sensor_cap", null]}
 	var s := _game({"d": [[Fx.DUMMY, "front"]]}, "d", 1, Fx.EXACT, p)
 	s.party.members[2].hp = 0
 	var ev := BattleRules.submit(s, Fx.cmds(s, {3: Fx.use(REBOOT, 2), 4: Fx.use(REBOOT, 2)}))

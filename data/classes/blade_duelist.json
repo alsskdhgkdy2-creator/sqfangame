@@ -11,6 +11,296 @@
       "WIS": 10,
       "AGI": 18,
       "LUC": 13
+    },
+    "2": {
+      "hp": 55,
+      "tp": 33,
+      "STR": 19,
+      "INT": 8,
+      "VIT": 13,
+      "WIS": 10,
+      "AGI": 18,
+      "LUC": 13
+    },
+    "3": {
+      "hp": 58,
+      "tp": 34,
+      "STR": 20,
+      "INT": 8,
+      "VIT": 14,
+      "WIS": 10,
+      "AGI": 19,
+      "LUC": 14
+    },
+    "4": {
+      "hp": 62,
+      "tp": 35,
+      "STR": 21,
+      "INT": 8,
+      "VIT": 14,
+      "WIS": 11,
+      "AGI": 20,
+      "LUC": 14
+    },
+    "5": {
+      "hp": 65,
+      "tp": 36,
+      "STR": 22,
+      "INT": 8,
+      "VIT": 15,
+      "WIS": 11,
+      "AGI": 21,
+      "LUC": 15
+    },
+    "6": {
+      "hp": 68,
+      "tp": 38,
+      "STR": 23,
+      "INT": 9,
+      "VIT": 15,
+      "WIS": 11,
+      "AGI": 22,
+      "LUC": 15
+    },
+    "7": {
+      "hp": 72,
+      "tp": 39,
+      "STR": 24,
+      "INT": 9,
+      "VIT": 16,
+      "WIS": 12,
+      "AGI": 23,
+      "LUC": 16
+    },
+    "8": {
+      "hp": 75,
+      "tp": 40,
+      "STR": 25,
+      "INT": 9,
+      "VIT": 16,
+      "WIS": 12,
+      "AGI": 24,
+      "LUC": 16
+    },
+    "9": {
+      "hp": 78,
+      "tp": 41,
+      "STR": 26,
+      "INT": 9,
+      "VIT": 17,
+      "WIS": 12,
+      "AGI": 25,
+      "LUC": 17
+    },
+    "10": {
+      "hp": 82,
+      "tp": 43,
+      "STR": 27,
+      "INT": 10,
+      "VIT": 18,
+      "WIS": 13,
+      "AGI": 26,
+      "LUC": 18
+    },
+    "11": {
+      "hp": 86,
+      "tp": 44,
+      "STR": 28,
+      "INT": 10,
+      "VIT": 18,
+      "WIS": 13,
+      "AGI": 26,
+      "LUC": 18
+    },
+    "12": {
+      "hp": 90,
+      "tp": 45,
+      "STR": 29,
+      "INT": 10,
+      "VIT": 19,
+      "WIS": 13,
+      "AGI": 27,
+      "LUC": 19
+    },
+    "13": {
+      "hp": 95,
+      "tp": 46,
+      "STR": 30,
+      "INT": 10,
+      "VIT": 19,
+      "WIS": 14,
+      "AGI": 28,
+      "LUC": 19
+    },
+    "14": {
+      "hp": 99,
+      "tp": 48,
+      "STR": 31,
+      "INT": 11,
+      "VIT": 20,
+      "WIS": 14,
+      "AGI": 29,
+      "LUC": 20
+    },
+    "15": {
+      "hp": 104,
+      "tp": 49,
+      "STR": 32,
+      "INT": 11,
+      "VIT": 21,
+      "WIS": 15,
+      "AGI": 30,
+      "LUC": 20
+    },
+    "16": {
+      "hp": 108,
+      "tp": 50,
+      "STR": 33,
+      "INT": 11,
+      "VIT": 21,
+      "WIS": 15,
+      "AGI": 31,
+      "LUC": 21
+    },
+    "17": {
+      "hp": 112,
+      "tp": 52,
+      "STR": 34,
+      "INT": 12,
+      "VIT": 22,
+      "WIS": 15,
+      "AGI": 32,
+      "LUC": 21
+    },
+    "18": {
+      "hp": 117,
+      "tp": 53,
+      "STR": 35,
+      "INT": 12,
+      "VIT": 22,
+      "WIS": 16,
+      "AGI": 33,
+      "LUC": 22
+    },
+    "19": {
+      "hp": 121,
+      "tp": 54,
+      "STR": 36,
+      "INT": 12,
+      "VIT": 23,
+      "WIS": 16,
+      "AGI": 34,
+      "LUC": 22
+    },
+    "20": {
+      "hp": 126,
+      "tp": 56,
+      "STR": 37,
+      "INT": 13,
+      "VIT": 24,
+      "WIS": 17,
+      "AGI": 35,
+      "LUC": 23
+    },
+    "21": {
+      "hp": 131,
+      "tp": 57,
+      "STR": 38,
+      "INT": 13,
+      "VIT": 24,
+      "WIS": 17,
+      "AGI": 36,
+      "LUC": 23
+    },
+    "22": {
+      "hp": 136,
+      "tp": 58,
+      "STR": 39,
+      "INT": 13,
+      "VIT": 25,
+      "WIS": 17,
+      "AGI": 37,
+      "LUC": 24
+    },
+    "23": {
+      "hp": 142,
+      "tp": 60,
+      "STR": 40,
+      "INT": 13,
+      "VIT": 25,
+      "WIS": 18,
+      "AGI": 38,
+      "LUC": 24
+    },
+    "24": {
+      "hp": 147,
+      "tp": 61,
+      "STR": 41,
+      "INT": 14,
+      "VIT": 26,
+      "WIS": 18,
+      "AGI": 39,
+      "LUC": 25
+    },
+    "25": {
+      "hp": 153,
+      "tp": 63,
+      "STR": 42,
+      "INT": 14,
+      "VIT": 27,
+      "WIS": 19,
+      "AGI": 40,
+      "LUC": 26
+    },
+    "26": {
+      "hp": 158,
+      "tp": 64,
+      "STR": 43,
+      "INT": 14,
+      "VIT": 27,
+      "WIS": 19,
+      "AGI": 41,
+      "LUC": 26
+    },
+    "27": {
+      "hp": 163,
+      "tp": 65,
+      "STR": 44,
+      "INT": 15,
+      "VIT": 28,
+      "WIS": 19,
+      "AGI": 42,
+      "LUC": 27
+    },
+    "28": {
+      "hp": 169,
+      "tp": 67,
+      "STR": 45,
+      "INT": 15,
+      "VIT": 28,
+      "WIS": 20,
+      "AGI": 43,
+      "LUC": 27
+    },
+    "29": {
+      "hp": 174,
+      "tp": 68,
+      "STR": 46,
+      "INT": 15,
+      "VIT": 29,
+      "WIS": 20,
+      "AGI": 44,
+      "LUC": 28
+    },
+    "30": {
+      "hp": 180,
+      "tp": 70,
+      "STR": 48,
+      "INT": 16,
+      "VIT": 30,
+      "WIS": 21,
+      "AGI": 45,
+      "LUC": 29
     }
   },
   "attack": {
@@ -35,9 +325,82 @@
     "arm": 1000,
     "leg": 1000
   },
-  "skills": [
-    "skill.blade_duelist.high_slash",
-    "skill.blade_duelist.cross_sweep",
-    "skill.blade_duelist.overclock"
+  "equip_kinds": [
+    "sword",
+    "body",
+    "head",
+    "hands",
+    "feet",
+    "accessory"
+  ],
+  "tree": [
+    {
+      "skill": "skill.blade_duelist.high_slash",
+      "pos": [
+        0,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.blade_duelist.cross_sweep",
+      "pos": [
+        1,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.blade_duelist.overclock",
+      "pos": [
+        2,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.blade_duelist.blade_mastery",
+      "pos": [
+        3,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.blade_duelist.leg_cutter",
+      "pos": [
+        0,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.blade_duelist.high_slash",
+          "level": 2
+        }
+      ],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.blade_duelist.quick_draw",
+      "pos": [
+        2,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.blade_duelist.blade_mastery",
+          "level": 3
+        },
+        {
+          "skill": "skill.blade_duelist.overclock",
+          "level": 1
+        }
+      ],
+      "min_level": 5
+    }
   ]
 }

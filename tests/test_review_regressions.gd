@@ -436,9 +436,19 @@ func test_every_node_rejects_wrong_container_type() -> void:
 				continue
 			var doc: Dictionary = JSON.parse_string(original)
 			_at(doc, path.slice(0, -1))[path[-1]] = wrong
+			if wrong == null and _is_equip_slot(path):
+				# 장비 칸의 null 은 정의된 빈 칸이다(07 §8.2): 거부가 아니라 「그 칸을 비운 상태」로 받는다.
+				var r := SaveCodec.decode(JSON.stringify(doc), Fx.defs(_f()))
+				check(r.ok() and r.state.party.members[path[3]].equip[path[5]] == "", "%s → null: 빈 칸으로 받는다 %s" % [str(path), r.error])
+				continue
 			_check_rejected(original, doc, "%s → %s" % [str(path), str(wrong)])
 			n += 1
 	check(n >= 150, "자료형 바꾸기 %d가지 확인" % n)
+
+
+## state.party.members[i].equip[j] 경로인지.
+func _is_equip_slot(path: Array) -> bool:
+	return path.size() == 6 and path[0] == "state" and path[1] == "party" and path[2] == "members" and str(path[4]) == "equip"
 
 
 ## JSON 숫자는 실수로 읽히므로 정수·실수를 같은 종류로 본다.

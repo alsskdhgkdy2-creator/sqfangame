@@ -114,8 +114,10 @@ func _expect_reject(mutate: Callable, needle: String, label: String) -> void:
 
 func test_rejects_bad_header() -> void:
 	_expect_reject(func(d): d["format"] = "other", "format", "형식")
-	_expect_reject(func(d): d["schema"] = 3, "schema", "새 schema")
-	_expect_reject(func(d): d["schema"] = 1, "rules", "schema 1 + rules m2 쌍")
+	_expect_reject(func(d): d["schema"] = 4, "schema", "새 schema")
+	_expect_reject(func(d): d["schema"] = 1, "rules", "schema 1 + rules m2g 쌍")
+	_expect_reject(func(d): d["rules"] = "m2", "rules", "schema 3 + rules m2 쌍")
+	_expect_reject(func(d): d.merge({"schema": 2, "rules": "m2g"}, true), "rules", "schema 2 + rules m2g 쌍")
 	_expect_reject(func(d): d["schema"] = 0, "schema", "schema 0")
 	_expect_reject(func(d): d["schema"] = 1.5, "schema", "schema 소수")
 	_expect_reject(func(d): d["rules"] = "m0", "rules", "규칙 판")

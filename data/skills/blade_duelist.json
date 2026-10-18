@@ -21,6 +21,26 @@
           "tp": 4,
           "power": 150,
           "accuracy": 950
+        },
+        {
+          "tp": 4,
+          "power": 160,
+          "accuracy": 950
+        },
+        {
+          "tp": 5,
+          "power": 170,
+          "accuracy": 950
+        },
+        {
+          "tp": 5,
+          "power": 185,
+          "accuracy": 950
+        },
+        {
+          "tp": 6,
+          "power": 200,
+          "accuracy": 950
         }
       ]
     },
@@ -45,6 +65,26 @@
           "tp": 6,
           "power": 110,
           "accuracy": 900
+        },
+        {
+          "tp": 6,
+          "power": 118,
+          "accuracy": 900
+        },
+        {
+          "tp": 7,
+          "power": 126,
+          "accuracy": 900
+        },
+        {
+          "tp": 7,
+          "power": 135,
+          "accuracy": 900
+        },
+        {
+          "tp": 8,
+          "power": 150,
+          "accuracy": 900
         }
       ]
     },
@@ -66,6 +106,211 @@
           "kind": "phys_atk",
           "value": 1300,
           "turns": 3
+        },
+        {
+          "tp": 4,
+          "kind": "phys_atk",
+          "value": 1325,
+          "turns": 3
+        },
+        {
+          "tp": 5,
+          "kind": "phys_atk",
+          "value": 1350,
+          "turns": 3
+        },
+        {
+          "tp": 5,
+          "kind": "phys_atk",
+          "value": 1375,
+          "turns": 4
+        },
+        {
+          "tp": 6,
+          "kind": "phys_atk",
+          "value": 1400,
+          "turns": 4
+        }
+      ]
+    },
+    {
+      "id": "skill.blade_duelist.blade_mastery",
+      "name_key": "skill.blade_duelist.blade_mastery",
+      "user": "party",
+      "effect": "passive",
+      "levels": [
+        {
+          "bonus": {
+            "STR": 1,
+            "AGI": 0
+          }
+        },
+        {
+          "bonus": {
+            "STR": 1,
+            "AGI": 1
+          }
+        },
+        {
+          "bonus": {
+            "STR": 2,
+            "AGI": 1
+          }
+        },
+        {
+          "bonus": {
+            "STR": 2,
+            "AGI": 1
+          }
+        },
+        {
+          "bonus": {
+            "STR": 3,
+            "AGI": 2
+          }
+        },
+        {
+          "bonus": {
+            "STR": 4,
+            "AGI": 2
+          }
+        },
+        {
+          "bonus": {
+            "STR": 4,
+            "AGI": 2
+          }
+        },
+        {
+          "bonus": {
+            "STR": 5,
+            "AGI": 3
+          }
+        },
+        {
+          "bonus": {
+            "STR": 6,
+            "AGI": 3
+          }
+        },
+        {
+          "bonus": {
+            "STR": 8,
+            "AGI": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.blade_duelist.leg_cutter",
+      "name_key": "skill.blade_duelist.leg_cutter",
+      "user": "party",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "slash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 5,
+          "power": 100,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 400,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 5,
+          "power": 110,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 450,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 120,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 500,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 130,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 550,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 7,
+          "power": 140,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 600,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.blade_duelist.quick_draw",
+      "name_key": "skill.blade_duelist.quick_draw",
+      "user": "party",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "first",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "slash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 4,
+          "power": 90,
+          "accuracy": 950
+        },
+        {
+          "tp": 4,
+          "power": 100,
+          "accuracy": 950
+        },
+        {
+          "tp": 5,
+          "power": 110,
+          "accuracy": 950
+        },
+        {
+          "tp": 5,
+          "power": 120,
+          "accuracy": 950
+        },
+        {
+          "tp": 6,
+          "power": 130,
+          "accuracy": 950
         }
       ]
     }

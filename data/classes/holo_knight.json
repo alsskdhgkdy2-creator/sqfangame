@@ -11,6 +11,296 @@
       "WIS": 13,
       "AGI": 11,
       "LUC": 14
+    },
+    "2": {
+      "hp": 64,
+      "tp": 31,
+      "STR": 15,
+      "INT": 8,
+      "VIT": 20,
+      "WIS": 13,
+      "AGI": 11,
+      "LUC": 14
+    },
+    "3": {
+      "hp": 68,
+      "tp": 32,
+      "STR": 16,
+      "INT": 8,
+      "VIT": 21,
+      "WIS": 14,
+      "AGI": 11,
+      "LUC": 15
+    },
+    "4": {
+      "hp": 72,
+      "tp": 34,
+      "STR": 17,
+      "INT": 9,
+      "VIT": 22,
+      "WIS": 14,
+      "AGI": 12,
+      "LUC": 15
+    },
+    "5": {
+      "hp": 76,
+      "tp": 35,
+      "STR": 17,
+      "INT": 9,
+      "VIT": 23,
+      "WIS": 15,
+      "AGI": 12,
+      "LUC": 16
+    },
+    "6": {
+      "hp": 80,
+      "tp": 36,
+      "STR": 18,
+      "INT": 9,
+      "VIT": 24,
+      "WIS": 15,
+      "AGI": 13,
+      "LUC": 16
+    },
+    "7": {
+      "hp": 84,
+      "tp": 38,
+      "STR": 19,
+      "INT": 10,
+      "VIT": 25,
+      "WIS": 16,
+      "AGI": 13,
+      "LUC": 17
+    },
+    "8": {
+      "hp": 88,
+      "tp": 39,
+      "STR": 19,
+      "INT": 10,
+      "VIT": 26,
+      "WIS": 16,
+      "AGI": 14,
+      "LUC": 17
+    },
+    "9": {
+      "hp": 92,
+      "tp": 40,
+      "STR": 20,
+      "INT": 10,
+      "VIT": 27,
+      "WIS": 17,
+      "AGI": 14,
+      "LUC": 18
+    },
+    "10": {
+      "hp": 96,
+      "tp": 42,
+      "STR": 21,
+      "INT": 11,
+      "VIT": 28,
+      "WIS": 18,
+      "AGI": 15,
+      "LUC": 19
+    },
+    "11": {
+      "hp": 101,
+      "tp": 43,
+      "STR": 21,
+      "INT": 11,
+      "VIT": 29,
+      "WIS": 18,
+      "AGI": 15,
+      "LUC": 19
+    },
+    "12": {
+      "hp": 106,
+      "tp": 44,
+      "STR": 22,
+      "INT": 11,
+      "VIT": 30,
+      "WIS": 19,
+      "AGI": 16,
+      "LUC": 20
+    },
+    "13": {
+      "hp": 112,
+      "tp": 46,
+      "STR": 23,
+      "INT": 11,
+      "VIT": 31,
+      "WIS": 19,
+      "AGI": 16,
+      "LUC": 20
+    },
+    "14": {
+      "hp": 117,
+      "tp": 47,
+      "STR": 23,
+      "INT": 12,
+      "VIT": 32,
+      "WIS": 20,
+      "AGI": 17,
+      "LUC": 21
+    },
+    "15": {
+      "hp": 123,
+      "tp": 49,
+      "STR": 24,
+      "INT": 12,
+      "VIT": 33,
+      "WIS": 21,
+      "AGI": 17,
+      "LUC": 22
+    },
+    "16": {
+      "hp": 128,
+      "tp": 50,
+      "STR": 25,
+      "INT": 12,
+      "VIT": 34,
+      "WIS": 21,
+      "AGI": 18,
+      "LUC": 22
+    },
+    "17": {
+      "hp": 133,
+      "tp": 51,
+      "STR": 25,
+      "INT": 13,
+      "VIT": 35,
+      "WIS": 22,
+      "AGI": 18,
+      "LUC": 23
+    },
+    "18": {
+      "hp": 139,
+      "tp": 53,
+      "STR": 26,
+      "INT": 13,
+      "VIT": 36,
+      "WIS": 22,
+      "AGI": 19,
+      "LUC": 23
+    },
+    "19": {
+      "hp": 144,
+      "tp": 54,
+      "STR": 27,
+      "INT": 13,
+      "VIT": 37,
+      "WIS": 23,
+      "AGI": 19,
+      "LUC": 24
+    },
+    "20": {
+      "hp": 150,
+      "tp": 56,
+      "STR": 28,
+      "INT": 14,
+      "VIT": 39,
+      "WIS": 24,
+      "AGI": 20,
+      "LUC": 25
+    },
+    "21": {
+      "hp": 156,
+      "tp": 57,
+      "STR": 28,
+      "INT": 14,
+      "VIT": 40,
+      "WIS": 24,
+      "AGI": 20,
+      "LUC": 25
+    },
+    "22": {
+      "hp": 163,
+      "tp": 58,
+      "STR": 29,
+      "INT": 14,
+      "VIT": 41,
+      "WIS": 25,
+      "AGI": 21,
+      "LUC": 26
+    },
+    "23": {
+      "hp": 169,
+      "tp": 60,
+      "STR": 30,
+      "INT": 14,
+      "VIT": 42,
+      "WIS": 25,
+      "AGI": 21,
+      "LUC": 26
+    },
+    "24": {
+      "hp": 176,
+      "tp": 61,
+      "STR": 31,
+      "INT": 15,
+      "VIT": 43,
+      "WIS": 26,
+      "AGI": 22,
+      "LUC": 27
+    },
+    "25": {
+      "hp": 182,
+      "tp": 63,
+      "STR": 32,
+      "INT": 15,
+      "VIT": 44,
+      "WIS": 27,
+      "AGI": 22,
+      "LUC": 28
+    },
+    "26": {
+      "hp": 189,
+      "tp": 64,
+      "STR": 32,
+      "INT": 15,
+      "VIT": 45,
+      "WIS": 27,
+      "AGI": 23,
+      "LUC": 28
+    },
+    "27": {
+      "hp": 195,
+      "tp": 65,
+      "STR": 33,
+      "INT": 16,
+      "VIT": 46,
+      "WIS": 28,
+      "AGI": 23,
+      "LUC": 29
+    },
+    "28": {
+      "hp": 202,
+      "tp": 67,
+      "STR": 34,
+      "INT": 16,
+      "VIT": 47,
+      "WIS": 28,
+      "AGI": 24,
+      "LUC": 29
+    },
+    "29": {
+      "hp": 208,
+      "tp": 68,
+      "STR": 35,
+      "INT": 16,
+      "VIT": 48,
+      "WIS": 29,
+      "AGI": 24,
+      "LUC": 30
+    },
+    "30": {
+      "hp": 215,
+      "tp": 70,
+      "STR": 36,
+      "INT": 17,
+      "VIT": 50,
+      "WIS": 30,
+      "AGI": 25,
+      "LUC": 31
     }
   },
   "attack": {
@@ -35,9 +325,83 @@
     "arm": 1000,
     "leg": 1000
   },
-  "skills": [
-    "skill.holo_knight.front_guard",
-    "skill.holo_knight.aegis_cover",
-    "skill.holo_knight.defense_protocol"
+  "equip_kinds": [
+    "sword",
+    "shield",
+    "body",
+    "head",
+    "hands",
+    "feet",
+    "accessory"
+  ],
+  "tree": [
+    {
+      "skill": "skill.holo_knight.front_guard",
+      "pos": [
+        0,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.holo_knight.aegis_cover",
+      "pos": [
+        1,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.holo_knight.defense_protocol",
+      "pos": [
+        2,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.holo_knight.shield_mastery",
+      "pos": [
+        3,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.holo_knight.shield_bash",
+      "pos": [
+        3,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.holo_knight.shield_mastery",
+          "level": 2
+        }
+      ],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.holo_knight.photon_wall",
+      "pos": [
+        2,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.holo_knight.defense_protocol",
+          "level": 2
+        },
+        {
+          "skill": "skill.holo_knight.shield_mastery",
+          "level": 3
+        }
+      ],
+      "min_level": 5
+    }
   ]
 }

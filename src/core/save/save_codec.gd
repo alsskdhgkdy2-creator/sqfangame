@@ -1,14 +1,18 @@
-## 저장 JSON 변환·검사·이전(06 §8.4~§8.6). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
+## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
 class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 2
-const RULES := "m2"
-## 받는 (schema, rules) 쌍(06 §8.5). 1판은 읽을 때 2판으로 옮긴다(§8.6).
-const ACCEPTED := {1: "m1", 2: "m2"}
+const SCHEMA := 3
+const RULES := "m2g"
+## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2). 1판·2판은 읽을 때 3판으로 바로 옮긴다(07 §8.4).
+const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g"}
 ## 1판 검사에 쓰는 옛 대원 표(06 §8.6 2단계): [id, 최대 HP], 칸 순서.
 const V1_MEMBERS := [["holo_knight", 60], ["blade_duelist", 52], ["rail_ranger", 46], ["nano_medic", 42], ["glyph_wizard", 40]]
+## 2판 검사에 쓰는 고정 대원 표(07 §8.4 2단계): [id, 최대 HP, 최대 TP], 칸 순서(06 §6.1). 정의에서 읽지 않는다.
+const V2_MEMBERS := [["holo_knight", 60, 30], ["blade_duelist", 52, 32], ["blade_duelist_2", 52, 32], ["nano_medic", 42, 54], ["glyph_wizard", 40, 60]]
+## 3판 대원 객체의 키(07 §8.3).
+const MEMBER_KEYS := ["id", "hp", "tp", "level", "exp", "skills", "equip"]
 const MAX_SAFE_INT := 9007199254740992  # 2^53
 const MAX_GENERATION := 9007199254740990  # 2^53 − 2: 다음 저장의 +1 까지 실수로 정확하다
 
@@ -19,7 +23,7 @@ class LoadResult:
 	var error := ""
 	var saved_at := ""
 	var generation := 0
-	## 읽은 원본의 schema(1 이면 이전한 결과다).
+	## 읽은 원본의 schema(1·2 면 이전한 결과다).
 	var from_schema := 0
 
 	func ok() -> bool:
@@ -103,7 +107,10 @@ static func now_utc() -> String:
 static func state_to_dict(s: ExplorationState) -> Dictionary:
 	var members: Array = []
 	for m in s.party.members:
-		members.append({"id": m.id, "hp": m.hp, "tp": m.tp})
+		var equip := []
+		for id in m.equip:
+			equip.append(id if not id.is_empty() else null)
+		members.append({"id": m.id, "hp": m.hp, "tp": m.tp, "level": m.level, "exp": m.exp, "skills": m.skills.duplicate(), "equip": equip})
 	var k_edges := {}
 	for e in s.knowledge.edges:
 		k_edges[GridKey.edge(e)] = s.knowledge.edges[e]
@@ -129,6 +136,7 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 		"annotation": {"floors": a_floors, "edges": a_edges, "auto_edges": _edge_set(a.auto_edges), "icons": icons, "memos": memos},
 		"encounter": {"danger": s.encounter.danger, "threshold": s.encounter.threshold, "pending": s.encounter.pending},
 		"materials": s.materials.duplicate(),
+		"gear_bag": s.gear_bag.duplicate(),
 		"battle": s.battle.to_dict() if s.battle != null else null,
 		"rng": {"state": str(s.rng.get_state())},
 		"steps": s.steps,
@@ -147,7 +155,7 @@ static func _cell_set(d: Dictionary) -> Array[String]:
 # ---- 읽기 ----
 
 ## 저장 문서를 읽어 새 상태를 만든다. 실패하면 error만 있고 state는 null.
-## 입력 글과 defs 만 읽고 공유 상태를 바꾸지 않는다. 1판은 §8.6 순서로 옮긴 뒤 2판 검사를 다시 거친다.
+## 입력 글과 defs 만 읽고 공유 상태를 바꾸지 않는다. 1판·2판은 07 §8.4 순서로 옮긴 뒤 3판 검사를 다시 거친다.
 static func decode(text: String, defs: GameDefs) -> LoadResult:
 	var r := LoadResult.new()
 	var json := JSON.new()
@@ -161,30 +169,34 @@ static func decode(text: String, defs: GameDefs) -> LoadResult:
 	r.error = _check_header(doc)
 	if not r.error.is_empty():
 		return r
-	if to_int(doc["schema"]) == 1:
-		return migrate_v1(doc, defs)
+	match to_int(doc["schema"]):
+		1:
+			return migrate_v1(doc, defs)
+		2:
+			return migrate_v2(doc, defs)
 	var s := ExplorationState.new()
-	r.error = _read_state(doc["state"], defs, _member_table(defs), true, s)
+	r.error = _read_state(doc["state"], defs, [], 3, s)
 	if not r.error.is_empty():
 		return r
 	s.generation = to_int(doc["generation"])
 	r.state = s
 	r.saved_at = doc["saved_at"]
 	r.generation = s.generation
-	r.from_schema = 2
+	r.from_schema = 3
 	return r
 
 
-## 1판 → 2판(06 §8.6). doc 은 머리 검사를 통과한 1판 문서.
-## ① 1판 원본을 옛 대원 표로 다 검사 ② 통과한 임시 상태에서만 옮기기 ③ pending 이면 임시 상태의 난수로 전투 시작
-## ④ 원본 saved_at·generation 으로 2판 encode ⑤ 2판 읽기를 그대로 거친 결과만 돌려준다.
+## 1판 → 3판(07 §8.4, 2판 문서를 거치지 않는다). doc 은 머리 검사를 통과한 1판 문서.
+## ① 1판 원본을 옛 대원 표로 다 검사 ② 통과한 임시 상태에서만 대원 ID·성장 기본값·최대치·HP 비율을 옮긴다
+## ③ pending 이면 성장 값이 들어간 임시 상태의 난수로 전투를 정확히 한 번 연다 ④ 원본 saved_at·generation 으로 3판 encode
+## ⑤ 3판 읽기를 그대로 거친 결과만 돌려준다.
 static func migrate_v1(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	var r := LoadResult.new()
 	var table := []
 	for x in V1_MEMBERS:
 		table.append({"id": x[0], "max_hp": x[1], "max_tp": 0})
 	var old := ExplorationState.new()
-	var err := _read_state(doc["state"], defs, table, false, old)
+	var err := _read_state(doc["state"], defs, table, 1, old)
 	if not err.is_empty():
 		r.error = "1판 검사 실패: " + err
 		return r
@@ -195,12 +207,13 @@ static func migrate_v1(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	for i in V1_MEMBERS.size():
 		var hp := old.party.members[i].hp
 		var old_max: int = V1_MEMBERS[i][1]
-		var new_max := defs.party.max_hps[i]
-		var tp := defs.party.max_tps[i]
-		members.append(PartyState.Member.new(defs.party.ids[i], new_max, (hp * new_max + old_max - 1) / old_max, tp, tp))
+		var m := GrowthRules.start_member(defs, i)
+		m.hp = (hp * m.max_hp + old_max - 1) / old_max
+		members.append(m)
 	old.party.members = members
 	old.defs = defs
 	old.materials = {}
+	old.gear_bag = {}
 	old.battle = null
 	if old.encounter.pending:
 		var ev := BattleRules.start(old, BattleRules.pick_formation(old))
@@ -215,12 +228,43 @@ static func migrate_v1(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
-## 2판 대원 표: 정의의 대원 순서·최대 HP·TP.
-static func _member_table(defs: GameDefs) -> Array:
-	var out := []
-	for i in defs.party.ids.size():
-		out.append({"id": defs.party.ids[i], "max_hp": defs.party.max_hps[i], "max_tp": defs.party.max_tps[i]})
-	return out
+## 2판 → 3판(07 §8.4). doc 은 머리 검사를 통과한 2판 문서.
+## ① 2판 원본을 고정 2판 대원 표로 다 검사(battle 은 check_dict 로 검사만) ② 대원을 성장 기본값으로 옮기고 HP·TP 는 새 최대로 자름
+## ③ 2판 battle 이 있으면 옮긴 대원으로 from_dict(난수 없음, 전투를 새로 열지 않는다) ④ 원본 saved_at·generation 으로 3판 encode
+## ⑤ 3판 읽기를 그대로 거친 결과만 돌려준다. 시작 배분에 없는 스킬(글리프 위저드의 부식 글리프)은 잃는다(07 §8.4 이전 정책).
+static func migrate_v2(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var table := []
+	for x in V2_MEMBERS:
+		table.append({"id": x[0], "max_hp": x[1], "max_tp": x[2]})
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, table, 2, old)
+	if not err.is_empty():
+		r.error = "2판 검사 실패: " + err
+		return r
+	if Array(defs.party.ids) != V2_MEMBERS.map(func(x: Array) -> String: return x[0]):
+		r.error = "2판 이전 실패: 지금 파티가 2판 파티(%d명)와 다르다" % V2_MEMBERS.size()
+		return r
+	var members: Array[PartyState.Member] = []
+	for i in V2_MEMBERS.size():
+		var m := GrowthRules.start_member(defs, i)
+		m.hp = mini(old.party.members[i].hp, m.max_hp)
+		m.tp = mini(old.party.members[i].tp, m.max_tp)
+		members.append(m)
+	old.party.members = members
+	old.gear_bag = {}
+	var bd: Variant = doc["state"]["battle"]
+	if bd != null:
+		old.battle = BattleState.from_dict(bd, defs, members)
+		if old.battle == null:
+			r.error = "2판 이전 실패: 전투를 옮길 수 없다"
+			return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "2판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 2
+	return again
 
 
 static func _check_header(doc: Dictionary) -> String:
@@ -241,14 +285,17 @@ static func _check_header(doc: Dictionary) -> String:
 	return ""
 
 
-## table: 대원마다 {id, max_hp, max_tp}. v2 면 대원 tp·materials·battle 도 읽고 2판 관계를 본다.
-static func _read_state(d: Dictionary, defs: GameDefs, table: Array, v2: bool, s: ExplorationState) -> String:
+## schema 1·2: table 은 대원마다 {id, max_hp, max_tp}(고정 표). schema 2 부터 대원 tp·materials·battle 도 읽는다.
+## schema 3: 대원 성장 필드를 먼저 읽어 최대 HP·TP 를 정한 뒤 hp·tp·battle 을 본다(07 §8.3). gear_bag 도 읽는다.
+## schema 2 의 battle 은 검사만 하고 만들지 않는다(옮긴 대원으로 migrate_v2 가 만든다).
+static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int, s: ExplorationState) -> String:
 	var f := defs.floor_def
 	if not _is_str(d.get("floor"), f.id):
 		return "알 수 없는 층이다: %s" % str(d.get("floor"))
 	s.floor_def = f
 	s.annotation = MapAnnotation.new(f.width, f.height)
-	var err := _read_party(d, s, table, v2)
+	s.defs = defs
+	var err := _read_party(d, s, table, schema)
 	for part in ["world", "knowledge", "annotation", "encounter", "misc"]:
 		if not err.is_empty():
 			return err
@@ -256,21 +303,38 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, v2: bool, s
 	if not err.is_empty():
 		return err
 	err = _check_consistency(s)
-	if not err.is_empty() or not v2:
+	if not err.is_empty() or schema == 1:
 		return err
-	s.defs = defs
 	err = _read_materials(d, defs, s)
 	if not err.is_empty():
 		return err
+	if schema >= 3:
+		err = _read_gear_bag(d, defs, s)
+		if not err.is_empty():
+			return err
 	if not d.has("battle"):
 		return "battle 이 없다(전투가 없으면 null)"
 	if d["battle"] != null:
 		err = BattleState.check_dict(d["battle"], defs, s.party.members)
 		if not err.is_empty():
 			return err
-		s.battle = BattleState.from_dict(d["battle"], defs, s.party.members)
-	if s.encounter.pending != (s.battle != null):
+		if schema >= 3:
+			s.battle = BattleState.from_dict(d["battle"], defs, s.party.members)
+	if s.encounter.pending != (d["battle"] != null):
 		return "전투 대기(pending)와 battle 이 맞지 않다"
+	return ""
+
+
+static func _read_gear_bag(d: Dictionary, defs: GameDefs, s: ExplorationState) -> String:
+	if typeof(d.get("gear_bag")) != TYPE_DICTIONARY:
+		return "gear_bag 이 객체가 아니다"
+	for k in d["gear_bag"]:
+		if typeof(k) != TYPE_STRING or defs.battle.equip(k) == null:
+			return "gear_bag 의 %s 는 모르는 장비다" % str(k)
+		var n: Variant = to_int(d["gear_bag"][k])
+		if not BattleLimits.in_range("bag", n):
+			return "gear_bag.%s 가 정수 %s 가 아니다" % [k, BattleLimits.range_text("bag")]
+		s.gear_bag[k] = n
 	return ""
 
 
@@ -310,7 +374,7 @@ static func _dict(d: Dictionary, key: String) -> Dictionary:
 	return d[key] if typeof(d.get(key)) == TYPE_DICTIONARY else {}
 
 
-static func _read_party(d: Dictionary, s: ExplorationState, table: Array, v2: bool) -> String:
+static func _read_party(d: Dictionary, s: ExplorationState, table: Array, schema: int) -> String:
 	var p := _dict(d, "party")
 	var at := _cell_pair(p.get("at"), s.floor_def)
 	if not s.floor_def.is_cell(at):
@@ -319,6 +383,8 @@ static func _read_party(d: Dictionary, s: ExplorationState, table: Array, v2: bo
 	s.party.facing = Dir.from_name(p.get("facing"))
 	if s.party.facing < 0:
 		return "party.facing 이 N·E·S·W 가 아니다"
+	if schema >= 3:
+		return _read_members_v3(p, s)
 	if typeof(p.get("members")) != TYPE_ARRAY or p["members"].size() != table.size():
 		return "party.members 가 정의 데이터의 %d명과 다르다" % table.size()
 	for i in table.size():
@@ -330,11 +396,85 @@ static func _read_party(d: Dictionary, s: ExplorationState, table: Array, v2: bo
 		if hp == null or hp < 0 or hp > def["max_hp"]:
 			return "party.members[%d].hp 가 0~%d 정수가 아니다" % [i, def["max_hp"]]
 		var tp: Variant = 0
-		if v2:
+		if schema >= 2:
 			tp = to_int(m.get("tp"))
 			if tp == null or tp < 0 or tp > def["max_tp"]:
 				return "party.members[%d].tp 가 0~%d 정수가 아니다" % [i, def["max_tp"]]
 		s.party.members.append(PartyState.Member.new(def["id"], def["max_hp"], hp, def["max_tp"], tp))
+	return ""
+
+
+## 3판 대원(07 §8.3): 키가 정확히 MEMBER_KEYS, 성장 필드를 먼저 읽고 검사한 뒤(최대 HP·TP 가 여기서 정해진다) hp·tp.
+## 배운 스킬·장비 판정은 배분·장착 규칙과 같은 함수(GrowthRules.skills_problem·equip_problem)다.
+static func _read_members_v3(p: Dictionary, s: ExplorationState) -> String:
+	var defs := s.defs
+	var db := defs.battle
+	var g := db.growth
+	var n := defs.party.ids.size()
+	if typeof(p.get("members")) != TYPE_ARRAY or p["members"].size() != n:
+		return "party.members 가 정의 데이터의 %d명과 다르다" % n
+	for i in n:
+		var m: Variant = p["members"][i]
+		var path := "party.members[%d]" % i
+		if typeof(m) != TYPE_DICTIONARY or not _is_str(m.get("id"), defs.party.ids[i]):
+			return "%s 의 id 가 정의 데이터(%s)와 다르다" % [path, defs.party.ids[i]]
+		for k in MEMBER_KEYS:
+			if not m.has(k):
+				return "%s.%s 가 없다" % [path, k]
+		for k in m:
+			if not MEMBER_KEYS.has(k):
+				return "%s.%s 는 모르는 필드다" % [path, str(k)]
+		var c := defs.class_of(i)
+		var level: Variant = to_int(m["level"])
+		if level == null or level < 1 or level > g.level_cap:
+			return "%s.level 이 정수 1~%d 가 아니다" % [path, g.level_cap]
+		var xp: Variant = to_int(m["exp"])
+		if not BattleLimits.in_range("exp_total", xp):
+			return "%s.exp 가 정수 %s 가 아니다" % [path, BattleLimits.range_text("exp_total")]
+		if level < g.level_cap and (xp < g.cum(level) or xp >= g.cum(level + 1)):
+			return "%s.exp 가 레벨 %d 의 범위(%d 이상 %d 미만)가 아니다" % [path, level, g.cum(level), g.cum(level + 1)]
+		if level == g.level_cap and xp != g.cum(level):
+			return "%s.exp 가 레벨 상한의 누적 경험치 %d 이 아니다" % [path, g.cum(level)]
+		if typeof(m["skills"]) != TYPE_DICTIONARY:
+			return "%s.skills 가 객체가 아니다" % path
+		var skills := {}
+		for sid in m["skills"]:
+			var lv: Variant = to_int(m["skills"][sid])
+			if lv == null:
+				return "%s.skills.%s 가 정수가 아니다" % [path, str(sid)]
+			skills[sid] = lv
+		var bad := GrowthRules.skills_problem(db, c, level, skills)
+		if not bad.is_empty():
+			return "%s.skills%s: %s" % [path, "" if bad[0].is_empty() else "." + bad[0], bad[1]]
+		var ev: Variant = m["equip"]
+		if typeof(ev) != TYPE_ARRAY or ev.size() != BattleLimits.EQUIP_SLOTS:
+			return "%s.equip 이 길이 %d 의 배열이 아니다" % [path, BattleLimits.EQUIP_SLOTS]
+		var equip: Array[String] = []
+		for j in ev.size():
+			if ev[j] == null:
+				equip.append("")
+			elif typeof(ev[j]) != TYPE_STRING or db.equip(ev[j]) == null:
+				return "%s.equip[%d] 가 null 또는 장비 ID 가 아니다" % [path, j]
+			else:
+				equip.append(ev[j])
+		bad = GrowthRules.equip_problem(db, c, equip)
+		if not bad.is_empty():
+			return "%s.equip[%d]: %s" % [path, bad[0], bad[1]]
+		var mem := PartyState.Member.new(defs.party.ids[i])
+		mem.level = level
+		mem.exp = xp
+		mem.skills = skills
+		mem.equip = equip
+		GrowthRules.refresh_max(defs, i, mem)
+		var hp: Variant = to_int(m["hp"])
+		if hp == null or hp < 0 or hp > mem.max_hp:
+			return "%s.hp 가 0~%d 정수가 아니다" % [path, mem.max_hp]
+		var tp: Variant = to_int(m["tp"])
+		if tp == null or tp < 0 or tp > mem.max_tp:
+			return "%s.tp 가 0~%d 정수가 아니다" % [path, mem.max_tp]
+		mem.hp = hp
+		mem.tp = tp
+		s.party.members.append(mem)
 	return ""
 
 

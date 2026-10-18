@@ -11,6 +11,296 @@
       "WIS": 17,
       "AGI": 12,
       "LUC": 15
+    },
+    "2": {
+      "hp": 42,
+      "tp": 62,
+      "STR": 8,
+      "INT": 22,
+      "VIT": 8,
+      "WIS": 17,
+      "AGI": 12,
+      "LUC": 15
+    },
+    "3": {
+      "hp": 44,
+      "tp": 65,
+      "STR": 8,
+      "INT": 23,
+      "VIT": 8,
+      "WIS": 18,
+      "AGI": 12,
+      "LUC": 16
+    },
+    "4": {
+      "hp": 47,
+      "tp": 68,
+      "STR": 8,
+      "INT": 24,
+      "VIT": 9,
+      "WIS": 19,
+      "AGI": 13,
+      "LUC": 16
+    },
+    "5": {
+      "hp": 49,
+      "tp": 70,
+      "STR": 8,
+      "INT": 25,
+      "VIT": 9,
+      "WIS": 20,
+      "AGI": 13,
+      "LUC": 17
+    },
+    "6": {
+      "hp": 52,
+      "tp": 73,
+      "STR": 9,
+      "INT": 26,
+      "VIT": 9,
+      "WIS": 20,
+      "AGI": 14,
+      "LUC": 17
+    },
+    "7": {
+      "hp": 54,
+      "tp": 76,
+      "STR": 9,
+      "INT": 27,
+      "VIT": 10,
+      "WIS": 21,
+      "AGI": 14,
+      "LUC": 18
+    },
+    "8": {
+      "hp": 57,
+      "tp": 78,
+      "STR": 9,
+      "INT": 28,
+      "VIT": 10,
+      "WIS": 22,
+      "AGI": 15,
+      "LUC": 18
+    },
+    "9": {
+      "hp": 59,
+      "tp": 81,
+      "STR": 9,
+      "INT": 29,
+      "VIT": 10,
+      "WIS": 23,
+      "AGI": 15,
+      "LUC": 19
+    },
+    "10": {
+      "hp": 62,
+      "tp": 84,
+      "STR": 10,
+      "INT": 30,
+      "VIT": 11,
+      "WIS": 24,
+      "AGI": 16,
+      "LUC": 20
+    },
+    "11": {
+      "hp": 65,
+      "tp": 86,
+      "STR": 10,
+      "INT": 31,
+      "VIT": 11,
+      "WIS": 24,
+      "AGI": 16,
+      "LUC": 20
+    },
+    "12": {
+      "hp": 68,
+      "tp": 89,
+      "STR": 10,
+      "INT": 32,
+      "VIT": 11,
+      "WIS": 25,
+      "AGI": 17,
+      "LUC": 21
+    },
+    "13": {
+      "hp": 71,
+      "tp": 92,
+      "STR": 10,
+      "INT": 33,
+      "VIT": 11,
+      "WIS": 26,
+      "AGI": 17,
+      "LUC": 21
+    },
+    "14": {
+      "hp": 74,
+      "tp": 95,
+      "STR": 10,
+      "INT": 34,
+      "VIT": 12,
+      "WIS": 27,
+      "AGI": 18,
+      "LUC": 22
+    },
+    "15": {
+      "hp": 78,
+      "tp": 98,
+      "STR": 11,
+      "INT": 35,
+      "VIT": 12,
+      "WIS": 28,
+      "AGI": 18,
+      "LUC": 23
+    },
+    "16": {
+      "hp": 81,
+      "tp": 100,
+      "STR": 11,
+      "INT": 36,
+      "VIT": 12,
+      "WIS": 28,
+      "AGI": 19,
+      "LUC": 23
+    },
+    "17": {
+      "hp": 84,
+      "tp": 103,
+      "STR": 11,
+      "INT": 37,
+      "VIT": 13,
+      "WIS": 29,
+      "AGI": 19,
+      "LUC": 24
+    },
+    "18": {
+      "hp": 87,
+      "tp": 106,
+      "STR": 11,
+      "INT": 38,
+      "VIT": 13,
+      "WIS": 30,
+      "AGI": 20,
+      "LUC": 24
+    },
+    "19": {
+      "hp": 90,
+      "tp": 109,
+      "STR": 11,
+      "INT": 39,
+      "VIT": 13,
+      "WIS": 31,
+      "AGI": 20,
+      "LUC": 25
+    },
+    "20": {
+      "hp": 94,
+      "tp": 112,
+      "STR": 12,
+      "INT": 41,
+      "VIT": 14,
+      "WIS": 32,
+      "AGI": 21,
+      "LUC": 26
+    },
+    "21": {
+      "hp": 98,
+      "tp": 115,
+      "STR": 12,
+      "INT": 42,
+      "VIT": 14,
+      "WIS": 32,
+      "AGI": 21,
+      "LUC": 26
+    },
+    "22": {
+      "hp": 102,
+      "tp": 118,
+      "STR": 12,
+      "INT": 43,
+      "VIT": 14,
+      "WIS": 33,
+      "AGI": 22,
+      "LUC": 27
+    },
+    "23": {
+      "hp": 106,
+      "tp": 121,
+      "STR": 12,
+      "INT": 44,
+      "VIT": 14,
+      "WIS": 34,
+      "AGI": 22,
+      "LUC": 27
+    },
+    "24": {
+      "hp": 110,
+      "tp": 124,
+      "STR": 12,
+      "INT": 45,
+      "VIT": 15,
+      "WIS": 35,
+      "AGI": 23,
+      "LUC": 28
+    },
+    "25": {
+      "hp": 114,
+      "tp": 127,
+      "STR": 13,
+      "INT": 46,
+      "VIT": 15,
+      "WIS": 36,
+      "AGI": 23,
+      "LUC": 29
+    },
+    "26": {
+      "hp": 118,
+      "tp": 130,
+      "STR": 13,
+      "INT": 47,
+      "VIT": 15,
+      "WIS": 36,
+      "AGI": 24,
+      "LUC": 29
+    },
+    "27": {
+      "hp": 122,
+      "tp": 133,
+      "STR": 13,
+      "INT": 48,
+      "VIT": 16,
+      "WIS": 37,
+      "AGI": 24,
+      "LUC": 30
+    },
+    "28": {
+      "hp": 126,
+      "tp": 136,
+      "STR": 13,
+      "INT": 49,
+      "VIT": 16,
+      "WIS": 38,
+      "AGI": 25,
+      "LUC": 30
+    },
+    "29": {
+      "hp": 130,
+      "tp": 139,
+      "STR": 13,
+      "INT": 50,
+      "VIT": 16,
+      "WIS": 39,
+      "AGI": 25,
+      "LUC": 31
+    },
+    "30": {
+      "hp": 134,
+      "tp": 142,
+      "STR": 14,
+      "INT": 52,
+      "VIT": 17,
+      "WIS": 40,
+      "AGI": 26,
+      "LUC": 32
     }
   },
   "attack": {
@@ -35,10 +325,95 @@
     "arm": 1000,
     "leg": 1000
   },
-  "skills": [
-    "skill.glyph_wizard.heat_glyph",
-    "skill.glyph_wizard.frost_glyph",
-    "skill.glyph_wizard.shock_glyph",
-    "skill.glyph_wizard.corrode_glyph"
+  "equip_kinds": [
+    "staff",
+    "body",
+    "head",
+    "feet",
+    "accessory"
+  ],
+  "tree": [
+    {
+      "skill": "skill.glyph_wizard.heat_glyph",
+      "pos": [
+        0,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.glyph_wizard.frost_glyph",
+      "pos": [
+        1,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.glyph_wizard.shock_glyph",
+      "pos": [
+        2,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.glyph_wizard.glyph_mastery",
+      "pos": [
+        3,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.glyph_wizard.corrode_glyph",
+      "pos": [
+        3,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.glyph_wizard.glyph_mastery",
+          "level": 1
+        }
+      ],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.glyph_wizard.sleep_glyph",
+      "pos": [
+        3,
+        2
+      ],
+      "requires": [
+        {
+          "skill": "skill.glyph_wizard.corrode_glyph",
+          "level": 2
+        }
+      ],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.glyph_wizard.heat_wave",
+      "pos": [
+        0,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.glyph_wizard.heat_glyph",
+          "level": 3
+        },
+        {
+          "skill": "skill.glyph_wizard.glyph_mastery",
+          "level": 3
+        }
+      ],
+      "min_level": 5
+    }
   ]
 }

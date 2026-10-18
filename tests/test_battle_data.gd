@@ -52,8 +52,9 @@ func test_real_data_loads_without_errors_or_warnings() -> void:
 	check_eq(db.table_formations("encounter.f1_test").size(), 6, "편성 여섯")
 	check_eq(r.defs.floor_def.encounter_table, "encounter.f1_test", "층 출현 표")
 	check_eq(r.defs.party.ids, ["holo_knight", "blade_duelist", "blade_duelist_2", "nano_medic", "glyph_wizard"] as Array[String], "D12 파티")
-	check_eq(r.defs.party.max_hps, [60, 52, 52, 42, 40] as Array[int], "최대 HP 는 직업 레벨 표")
-	check_eq(r.defs.party.max_tps, [30, 32, 32, 54, 60] as Array[int], "최대 TP")
+	var ms := r.defs.members()
+	check_eq(ms.map(func(m): return m.max_hp), [60, 52, 52, 42, 40], "최대 HP 는 직업 레벨 표(시작 파티 Lv1)")
+	check_eq(ms.map(func(m): return m.max_tp), [30, 32, 32, 54, 60], "최대 TP")
 	var hs: BattleDb.SkillDef = db.skill("skill.blade_duelist.high_slash")
 	check_eq([hs.effect, hs.range_kind, hs.target, hs.parts, hs.speed, hs.levels[0]["power"], hs.levels[0]["tp"]],
 		["damage", "melee", "enemy_one", ["arm"] as Array[String], 1000, 150, 4], "하이 슬래시 정의")
@@ -71,15 +72,15 @@ func test_members_are_new_objects_each_call() -> void:
 	check_eq(b[0].tp, 30, "TP 도 그대로")
 	check_eq(defs.members()[0].hp, 60, "다시 불러도 가득")
 	check(a[0] != b[0], "다른 객체")
-	check_eq(defs.party.max_hps[0], 60, "정의 그대로")
+	check_eq([defs.party.levels[0], defs.party.skills[0].size(), defs.party.equips[0][0]], [1, 3, "equip.training_sword"], "정의 그대로")
 
 
 func test_party_max_values_come_from_class_table() -> void:
 	var p := PartyData.read_path("res://data/party/test_party.json")
 	check_eq(p.errors, [] as Array[String], "오류 없음")
-	check(p.make_members().is_empty(), "resolve 전에는 최대 HP·TP 를 모른다")
-	p.resolve(BattleDb.load_dir("res://data"))
-	var m := p.make_members()
+	var r := GameDefs.from_parts(Fx.f1(), p, BattleDb.load_dir("res://data"))
+	check(r.ok(), "정의 %s" % str(r.errors))
+	var m := r.defs.members()
 	check_eq(m.size(), 5, "다섯")
 	check_eq([m[2].id, m[2].max_hp, m[2].hp, m[2].max_tp, m[2].tp], ["blade_duelist_2", 52, 52, 32, 32], "칸 2")
 
@@ -136,14 +137,14 @@ func test_id_checks() -> void:
 	_rejects("접두사", func(f): f[DU]["id"] = "klass.blade_duelist", "%s: id: class. 로 시작" % DU)
 	_rejects("적 스킬 접두사", func(f): f[ES]["skills"][0]["id"] = "skill.rat.bite", "%s: skills[0].id: 적 스킬 ID" % ES)
 	_rejects("중복", func(f): f[EN]["enemies"][1]["id"] = "enemy.neon_rat", "%s: enemies[1].id: ID enemy.neon_rat 가 중복" % EN)
-	_rejects("직업의 스킬 참조", func(f): f[DU]["skills"][0] = "skill.blade_duelist.nope", "%s: class.blade_duelist.skills[0]: 없는 스킬" % DU)
+	_rejects("직업의 스킬 참조", func(f): f[DU]["tree"][0]["skill"] = "skill.blade_duelist.nope", "%s: class.blade_duelist.tree[0].skill: 없는 스킬" % DU)
 	_rejects("적 AI 스킬 참조", func(f): f[EN]["enemies"][0]["ai"][0]["use"][0]["skill"] = "skill.enemy.nope", "%s: enemy.neon_rat.ai[0].use[0].skill: 없는 스킬" % EN)
 	_rejects("편성의 적 참조", func(f): f[ENC]["formations"][0]["enemies"][0]["enemy"] = "enemy.nope", "%s: formation.f1.rats.enemies[0].enemy: 없는 적" % ENC)
 	_rejects("출현 표의 편성 참조", func(f): f[ENC]["table"][0]["formation"] = "formation.f1.nope", "%s: table[0].formation: formation.f1.nope 이 이 파일의 formations 에 없다" % ENC)
 	_rejects("드롭 소재 참조", func(f): f[EN]["enemies"][0]["drops"][0]["item"] = "item.nope", "%s: enemy.neon_rat.drops[0].item: 없는 소재" % EN)
 	_rejects("charges 참조", func(f): f[ES]["skills"][11]["charges"] = "skill.enemy.nope", "%s: skill.enemy.raise_pincers.charges: 없는 스킬" % ES)
 	_has(_party_errors(func(p): p["members"][1]["class"] = "class.nope"), "test_party.json: members[1].class: 없는 직업", "파티 직업 참조")
-	_has(_party_errors(func(p): p["members"][1]["skills"]["skill.holo_knight.front_guard"] = 1), "members[1].skills.skill.holo_knight.front_guard: class.blade_duelist 의 스킬이 아니다", "파티 스킬 참조")
+	_has(_party_errors(func(p): p["members"][1]["skills"]["skill.holo_knight.front_guard"] = 1), "members[1].skills.skill.holo_knight.front_guard: class.blade_duelist 트리에 없는 스킬이다", "파티 스킬 참조")
 
 
 func test_enum_checks() -> void:
@@ -191,7 +192,9 @@ func test_common_range_checks() -> void:
 	_rejects("소생 0", func(f): f["skills/nano_medic.json"]["skills"][2]["levels"][0]["hp_permille"] = 0, "skills/nano_medic.json: skills[2].levels[0].hp_permille: 정수 1~1000")
 	_rejects("speed 99", func(f): f[ES]["skills"][0]["speed"] = 99, "%s: skills[0].speed: 정수 100~3000" % ES)
 	_rejects("speed 3001", func(f): f[ES]["skills"][0]["speed"] = 3001, "%s: skills[0].speed: 정수 100~3000" % ES)
-	_has(_party_errors(func(p): p["members"][0]["gear"]["atk"] = 1000), "members[0].gear.atk: 정수 0~999", "장비 1000")
+	_has(_party_errors(func(p): p["members"][0]["equip"].pop_back()), "members[0].equip: 길이 4 의 배열", "장비 칸 셋")
+	_has(_party_errors(func(p): p["members"][0]["equip"][3] = "equip.nope"), "members[0].equip[3]: 없는 장비 equip.nope", "모르는 장비 ID")
+	_has(_party_errors(func(p): p["members"][0]["gear"] = {"atk": 8, "matk": 0, "def": 10, "mdef": 4}), "members[0].gear: 모르는 필드", "2판 이전 파티 형식의 gear")
 
 
 func test_other_range_checks() -> void:
@@ -260,7 +263,7 @@ func test_relation_checks() -> void:
 	_rejects("AI 후보 필드", func(f): f[EN]["enemies"][0]["ai"][0]["use"][0].erase("target"), "%s: enemies[0].ai[0].use[0].target: 필수 필드가 없다" % EN)
 	_rejects("charging 규칙에 강공격 없음", func(f): f[EN]["enemies"][5]["ai"][0]["use"][0]["skill"] = "skill.enemy.claw", "%s: enemy.clamp_beetle.ai[0].if.charging:" % EN)
 	_rejects("charging 규칙에 charge 스킬 없음", func(f): f[EN]["enemies"][5]["ai"][1]["use"][0]["skill"] = "skill.enemy.claw", "%s: enemy.clamp_beetle.ai[0].if.charging:" % EN)
-	_rejects("직업 스킬 user", func(f): f[DU]["skills"][0] = "skill.enemy.bite", "%s: class.blade_duelist.skills[0]: skill.enemy.bite 의 user 가 party 가 아니다" % DU)
+	_rejects("직업 스킬 user", func(f): f[DU]["tree"][0]["skill"] = "skill.enemy.bite", "%s: class.blade_duelist.tree[0].skill: skill.enemy.bite 의 user 가 party 가 아니다" % DU)
 	_rejects("파티 스킬 tp 0", func(f): f["skills/blade_duelist.json"]["skills"][0]["levels"][0]["tp"] = 0, "skills/blade_duelist.json: skills[0].levels[0].tp: 파티 스킬의 tp 는 1 이상")
 	_rejects("적 스킬 tp 1", func(f): f[ES]["skills"][0]["levels"][0]["tp"] = 1, "%s: skills[0].levels[0].tp: 적 스킬의 tp 는 0" % ES)
 	_rejects("effect 별 필드(heal 에 element)", func(f): f["skills/nano_medic.json"]["skills"][0]["element"] = "fire", "skills/nano_medic.json: skills[0].element: 모르는 필드")
@@ -271,11 +274,12 @@ func test_relation_checks() -> void:
 	# 쓰는 쪽과 effect 조합(USER_EFFECTS): M2 가 수명 주기를 정하지 않은 조합은 읽기에서 막는다.
 	var revive := Fx.enemy_skill("skill.enemy.t_revive", "revive", "ally_dead", {}, {"hp_permille": 500})
 	_rejects("적 revive", func(f): f[ES]["skills"].append(revive), "%s: skills[13].effect: user enemy 에는 effect revive 를 쓸 수 없다" % ES)
+	var bd_next: int = Fx.data_files()["skills/blade_duelist.json"]["skills"].size()  # 듀얼리스트 파일에 덧붙인 스킬의 칸
 	var charge: Dictionary = Fx.data_files()[ES]["skills"][11].duplicate(true)
 	charge.merge({"id": "skill.blade_duelist.t_charge", "user": "party", "levels": [{"tp": 1}]}, true)
-	_rejects("파티 charge", func(f): f["skills/blade_duelist.json"]["skills"].append(charge), "skills/blade_duelist.json: skills[3].effect: user party 에는 effect charge 를 쓸 수 없다")
+	_rejects("파티 charge", func(f): f["skills/blade_duelist.json"]["skills"].append(charge), "skills/blade_duelist.json: skills[%d].effect: user party 에는 effect charge 를 쓸 수 없다" % bd_next)
 	_rejects("파티 debuff", func(f): f["skills/blade_duelist.json"]["skills"].append(Fx.effect_skill("skill.t.howl", false, [["phys_def", 1250, 3]]).merged({"user": "party", "effect": "debuff", "target": "enemy_one"}, true)),
-		"skills/blade_duelist.json: skills[3].effect: user party 에는 effect debuff 를")
+		"skills/blade_duelist.json: skills[%d].effect: user party 에는 effect debuff 를" % bd_next)
 	_rejects("적 buff", func(f): f[ES]["skills"].append(Fx.effect_skill("skill.enemy.t_pump", true, [["phys_atk", 1300, 3]]).merged({"effect": "buff", "target": "self"}, true)),
 		"%s: skills[13].effect: user enemy 에는 effect buff 를" % ES)
 	for e in ["cure", "cover", "front_guard"]:
@@ -289,7 +293,7 @@ func test_relation_checks() -> void:
 		_rejects("적 " + e, func(f): f[ES]["skills"].append(d), "%s: skills[13].effect: user enemy 에는 effect %s 를" % [ES, e])
 	# 강화·약화는 모든 줄의 kind 가 같아야 한다(06 §5.4).
 	var mixed := Fx.effect_skill("skill.t.mixed", false, [["phys_atk", 1300, 3], ["phys_def", 500, 3]])
-	_rejects("강화 줄마다 다른 kind", func(f): f["skills/blade_duelist.json"]["skills"].append(mixed), "skills/blade_duelist.json: skills[3].levels[1].kind: buff 스킬은 모든 줄의 kind 가 같아야 한다")
+	_rejects("강화 줄마다 다른 kind", func(f): f["skills/blade_duelist.json"]["skills"].append(mixed), "skills/blade_duelist.json: skills[%d].levels[1].kind: buff 스킬은 모든 줄의 kind 가 같아야 한다" % bd_next)
 	var mixed_d := Fx.effect_skill("skill.enemy.t_mixed", true, [["phys_def", 1300, 3], ["elem_def", 1300, 3], ["phys_def", 1200, 3]])
 	_rejects("약화 줄마다 다른 kind", func(f): f[ES]["skills"].append(mixed_d), "%s: skills[13].levels[1].kind: debuff 스킬은" % ES)
 	var same := Fx.effect_skill("skill.t.same", false, [["phys_atk", 1300, 3], ["phys_atk", 1100, 5]])
@@ -297,8 +301,9 @@ func test_relation_checks() -> void:
 	_has(_party_errors(func(p): p["members"].pop_back()), "test_party.json: members: 대원은 5명", "파티 넷")
 	_has(_party_errors(func(p): p["members"][3]["row"] = "front"), "test_party.json: members: front 줄이 3명을 넘는다", "한 줄 넷")
 	_has(_party_errors(func(p): p["members"][2]["id"] = "blade_duelist"), "members[2].id: 대원 ID blade_duelist 가 중복", "대원 ID 중복")
-	_has(_party_errors(func(p): p["members"][1]["skills"]["skill.blade_duelist.high_slash"] = 2), "members[1].skills.skill.blade_duelist.high_slash: 스킬 레벨 2 이 줄 수 1 를 넘는다", "스킬 레벨 > 줄 수")
-	_has(_party_errors(func(p): p["members"][1]["level"] = 2), "members[1].level: class.blade_duelist 레벨 표에 2 이 없다", "레벨 표 없음")
+	_has(_party_errors(func(p): p["members"][1]["skills"]["skill.blade_duelist.high_slash"] = 6), "members[1].skills.skill.blade_duelist.high_slash: 스킬 레벨 6 이 1~최대 레벨 5 이 아니다", "스킬 레벨 > 줄 수")
+	_has(_party_errors(func(p): p["members"][1]["skills"]["skill.blade_duelist.high_slash"] = 2), "members[1].skills: 배운 스킬 레벨의 합 4 이 얻은 SP 3 을 넘는다", "시작 배분 SP 초과(Lv1 SP 3)")
+	_has(_party_errors(func(p): p["members"][1]["level"] = 31), "members[1].level: 레벨 31 이 level_cap 30 을 넘는다", "레벨 상한 초과")
 	_has(_party_errors(func(p): p["members"][1]["max_hp"] = 52), "members[1].max_hp: 모르는 필드", "M1 의 max_hp 는 없앰")
 
 

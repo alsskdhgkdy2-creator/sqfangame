@@ -36,22 +36,21 @@ static func create(defs: GameDefs, members: Array[PartyState.Member], formation_
 	b.no_escape = f.no_escape
 	for i in members.size():
 		var u := BattleUnit.new()
-		var c := defs.class_of(i)
-		var st := defs.member_stats(i)
+		# 능력치·장비·배율·배운 액티브 스킬·일반 공격(무기 속성 사본)은 성장 묶음 한 곳에서(07 §6). 모두 새 사전·새 객체다.
+		var p := GrowthRules.profile(defs, i, members[i])
 		u.side = BattleUnit.PARTY
 		u.slot = i
 		u.member = members[i]
 		u.def_id = members[i].id
 		u.name_key = defs.party.name_keys[i]
 		u.row = defs.party.rows[i]
-		for k in BattleLimits.STATS:
-			u.stats[k] = st[k]
-		u.gear = defs.party.gears[i].duplicate()
-		u.resist = c.resist
-		u.ailment_vuln = c.ailment_vuln
-		u.bind_vuln = c.bind_vuln
-		u.skills = defs.party.skills[i]
-		u.attack = c.attack
+		u.stats = p["stats"]
+		u.gear = p["gear"]
+		u.resist = p["resist"]
+		u.ailment_vuln = p["ailment_vuln"]
+		u.bind_vuln = p["bind_vuln"]
+		u.skills = p["skills"]
+		u.attack = p["attack"]
 		b.party.append(u)
 	for j in f.enemies.size():
 		var e: BattleDb.EnemyDef = defs.battle.enemies[f.enemies[j]["enemy"]]

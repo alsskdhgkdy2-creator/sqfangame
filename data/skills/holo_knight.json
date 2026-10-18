@@ -16,6 +16,22 @@
         {
           "tp": 4,
           "value": 600
+        },
+        {
+          "tp": 4,
+          "value": 580
+        },
+        {
+          "tp": 5,
+          "value": 560
+        },
+        {
+          "tp": 5,
+          "value": 540
+        },
+        {
+          "tp": 6,
+          "value": 500
         }
       ]
     },
@@ -34,6 +50,18 @@
       "levels": [
         {
           "tp": 3
+        },
+        {
+          "tp": 3
+        },
+        {
+          "tp": 2
+        },
+        {
+          "tp": 2
+        },
+        {
+          "tp": 1
         }
       ]
     },
@@ -55,6 +83,212 @@
           "kind": "phys_def",
           "value": 750,
           "turns": 3
+        },
+        {
+          "tp": 6,
+          "kind": "phys_def",
+          "value": 730,
+          "turns": 3
+        },
+        {
+          "tp": 7,
+          "kind": "phys_def",
+          "value": 710,
+          "turns": 3
+        },
+        {
+          "tp": 7,
+          "kind": "phys_def",
+          "value": 690,
+          "turns": 4
+        },
+        {
+          "tp": 8,
+          "kind": "phys_def",
+          "value": 650,
+          "turns": 4
+        }
+      ]
+    },
+    {
+      "id": "skill.holo_knight.shield_mastery",
+      "name_key": "skill.holo_knight.shield_mastery",
+      "user": "party",
+      "effect": "passive",
+      "levels": [
+        {
+          "bonus": {
+            "VIT": 1,
+            "max_hp": 3
+          }
+        },
+        {
+          "bonus": {
+            "VIT": 1,
+            "max_hp": 6
+          }
+        },
+        {
+          "bonus": {
+            "VIT": 2,
+            "max_hp": 9
+          }
+        },
+        {
+          "bonus": {
+            "VIT": 2,
+            "max_hp": 12
+          }
+        },
+        {
+          "bonus": {
+            "VIT": 3,
+            "max_hp": 16
+          }
+        },
+        {
+          "bonus": {
+            "VIT": 4,
+            "max_hp": 20
+          }
+        },
+        {
+          "bonus": {
+            "VIT": 4,
+            "max_hp": 24
+          }
+        },
+        {
+          "bonus": {
+            "VIT": 5,
+            "max_hp": 28
+          }
+        },
+        {
+          "bonus": {
+            "VIT": 6,
+            "max_hp": 33
+          }
+        },
+        {
+          "bonus": {
+            "VIT": 8,
+            "max_hp": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.holo_knight.shield_bash",
+      "name_key": "skill.holo_knight.shield_bash",
+      "user": "party",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "bash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 5,
+          "power": 110,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 250,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 5,
+          "power": 120,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 300,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 130,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 350,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 140,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 400,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 7,
+          "power": 160,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 450,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.holo_knight.photon_wall",
+      "name_key": "skill.holo_knight.photon_wall",
+      "user": "party",
+      "effect": "buff",
+      "range": "ranged",
+      "target": "ally_all",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 6,
+          "kind": "elem_def",
+          "value": 750,
+          "turns": 3
+        },
+        {
+          "tp": 6,
+          "kind": "elem_def",
+          "value": 730,
+          "turns": 3
+        },
+        {
+          "tp": 7,
+          "kind": "elem_def",
+          "value": 710,
+          "turns": 3
+        },
+        {
+          "tp": 7,
+          "kind": "elem_def",
+          "value": 690,
+          "turns": 4
+        },
+        {
+          "tp": 8,
+          "kind": "elem_def",
+          "value": 650,
+          "turns": 4
         }
       ]
     }

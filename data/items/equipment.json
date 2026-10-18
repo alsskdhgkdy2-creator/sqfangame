@@ -1,0 +1,311 @@
+{
+  "equipment": [
+    {
+      "id": "equip.training_sword",
+      "name_key": "equip.training_sword",
+      "kind": "sword",
+      "atk": 8,
+      "matk": 0,
+      "def": 0,
+      "mdef": 0,
+      "element": "slash",
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.twin_edge",
+      "name_key": "equip.twin_edge",
+      "kind": "sword",
+      "atk": 14,
+      "matk": 0,
+      "def": 0,
+      "mdef": 0,
+      "element": "slash",
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.nano_rod",
+      "name_key": "equip.nano_rod",
+      "kind": "staff",
+      "atk": 6,
+      "matk": 6,
+      "def": 0,
+      "mdef": 0,
+      "element": "bash",
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.glyph_stylus",
+      "name_key": "equip.glyph_stylus",
+      "kind": "staff",
+      "atk": 4,
+      "matk": 12,
+      "def": 0,
+      "mdef": 0,
+      "element": "bash",
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.training_shield",
+      "name_key": "equip.training_shield",
+      "kind": "shield",
+      "atk": 0,
+      "matk": 0,
+      "def": 6,
+      "mdef": 2,
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.padded_coat",
+      "name_key": "equip.padded_coat",
+      "kind": "body",
+      "atk": 0,
+      "matk": 0,
+      "def": 4,
+      "mdef": 2,
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.grip_gloves",
+      "name_key": "equip.grip_gloves",
+      "kind": "hands",
+      "atk": 0,
+      "matk": 0,
+      "def": 2,
+      "mdef": 0,
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.medic_coat",
+      "name_key": "equip.medic_coat",
+      "kind": "body",
+      "atk": 0,
+      "matk": 0,
+      "def": 3,
+      "mdef": 3,
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.sensor_cap",
+      "name_key": "equip.sensor_cap",
+      "kind": "head",
+      "atk": 0,
+      "matk": 0,
+      "def": 2,
+      "mdef": 2,
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.glyph_robe",
+      "name_key": "equip.glyph_robe",
+      "kind": "body",
+      "atk": 0,
+      "matk": 0,
+      "def": 2,
+      "mdef": 4,
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.signal_charm",
+      "name_key": "equip.signal_charm",
+      "kind": "accessory",
+      "atk": 0,
+      "matk": 0,
+      "def": 1,
+      "mdef": 2,
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.ion_saber",
+      "name_key": "equip.ion_saber",
+      "kind": "sword",
+      "atk": 22,
+      "matk": 0,
+      "def": 0,
+      "mdef": 0,
+      "element": "volt",
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.focus_staff",
+      "name_key": "equip.focus_staff",
+      "kind": "staff",
+      "atk": 8,
+      "matk": 20,
+      "def": 0,
+      "mdef": 0,
+      "element": "bash",
+      "stats": {
+        "INT": 3
+      },
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.tactical_baton",
+      "name_key": "equip.tactical_baton",
+      "kind": "staff",
+      "atk": 12,
+      "matk": 0,
+      "def": 0,
+      "mdef": 0,
+      "element": "bash",
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "only_classes": [
+        "class.nano_medic",
+        "class.holo_knight"
+      ]
+    },
+    {
+      "id": "equip.aegis_plate",
+      "name_key": "equip.aegis_plate",
+      "kind": "shield",
+      "atk": 0,
+      "matk": 0,
+      "def": 12,
+      "mdef": 4,
+      "stats": {},
+      "resist": {
+        "fire": -300
+      },
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.mesh_armor",
+      "name_key": "equip.mesh_armor",
+      "kind": "body",
+      "atk": 0,
+      "matk": 0,
+      "def": 9,
+      "mdef": 3,
+      "stats": {
+        "AGI": -2
+      },
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "only_classes": [
+        "class.holo_knight",
+        "class.blade_duelist"
+      ]
+    },
+    {
+      "id": "equip.visor",
+      "name_key": "equip.visor",
+      "kind": "head",
+      "atk": 0,
+      "matk": 0,
+      "def": 3,
+      "mdef": 1,
+      "stats": {
+        "LUC": 2
+      },
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.servo_gauntlet",
+      "name_key": "equip.servo_gauntlet",
+      "kind": "hands",
+      "atk": 0,
+      "matk": 0,
+      "def": 3,
+      "mdef": 0,
+      "stats": {
+        "STR": 3
+      },
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.mag_boots",
+      "name_key": "equip.mag_boots",
+      "kind": "feet",
+      "atk": 0,
+      "matk": 0,
+      "def": 3,
+      "mdef": 1,
+      "stats": {
+        "AGI": 2
+      },
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {
+        "leg": -500
+      }
+    },
+    {
+      "id": "equip.antitox_chip",
+      "name_key": "equip.antitox_chip",
+      "kind": "accessory",
+      "atk": 0,
+      "matk": 0,
+      "def": 0,
+      "mdef": 0,
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {
+        "poison": -1000
+      },
+      "bind_vuln": {}
+    },
+    {
+      "id": "equip.thermal_ring",
+      "name_key": "equip.thermal_ring",
+      "kind": "accessory",
+      "atk": 0,
+      "matk": 0,
+      "def": 0,
+      "mdef": 2,
+      "stats": {},
+      "resist": {
+        "fire": -250,
+        "ice": -250
+      },
+      "ailment_vuln": {},
+      "bind_vuln": {}
+    }
+  ]
+}

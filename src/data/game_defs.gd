@@ -69,15 +69,14 @@ static func from_parts(floor_def: FloorModel, party: PartyData, db: BattleDb, te
 	return r
 
 
-## HP·TP를 가득 채운 대원 목록. 부를 때마다 새 Member 객체다(정의·다른 상태와 공유하지 않는다).
+## 시작 파티 대원 목록(성장 값·시작 배분·시작 장비, 최대 HP·TP 는 성장 묶음, HP·TP 가득, 07 §8.1).
+## 부를 때마다 새 Member 객체·새 사전·새 배열이다(정의·다른 상태와 공유하지 않는다).
 func members() -> Array[PartyState.Member]:
-	return party.make_members()
+	var out: Array[PartyState.Member] = []
+	for i in party.ids.size():
+		out.append(GrowthRules.start_member(self, i))
+	return out
 
 
 func class_of(member_index: int) -> BattleDb.ClassDef:
 	return battle.classes[party.class_ids[member_index]]
-
-
-## 대원의 능력치 줄 {hp, tp, STR, …}(레벨 표).
-func member_stats(member_index: int) -> Dictionary:
-	return class_of(member_index).levels[party.levels[member_index]]

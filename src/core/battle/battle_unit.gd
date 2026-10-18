@@ -26,9 +26,9 @@ var gear := {"atk": 0, "matk": 0, "def": 0, "mdef": 0}
 var resist := {}
 var ailment_vuln := {}
 var bind_vuln := {}
-## 아는 스킬 ID → 스킬 레벨(아군: 파티 정의, 적: AI 후보 스킬 모두 1)
+## 아는 스킬 ID → 스킬 레벨(아군: 배운 액티브 스킬, 성장 묶음 07 §4.7. 적: AI 후보 스킬 모두 1)
 var skills := {}
-## 아군 일반 공격(직업 정의). 적은 null.
+## 아군 일반 공격(직업 정의의 대원별 사본, 속성은 무기 것, 07 §5.3). 적은 null.
 var attack: BattleDb.SkillDef
 ## 적만: on_bound "switch"/"fail"
 var on_bound := "fail"

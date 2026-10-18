@@ -1,4 +1,5 @@
 ## 전투 정의 데이터(data/ 의 rules·classes·skills·enemies·encounters·items) 읽기·검사 → BattleDb (06 §5).
+## 성장 정의(성장 규칙·레벨 표·스킬 트리·패시브·장비, 07 §7)도 여기서 읽는다.
 ## 오류는 "파일: 필드 경로: 내용". 오류가 하나라도 있으면 이 정의를 쓰지 않는다(06 §5.6).
 ## 값 범위는 BattleLimits 한 곳에서 온다. 모르는 필드는 거부한다(층 정의와 다르다).
 class_name BattleDb
@@ -8,7 +9,8 @@ extends RefCounted
 const ID_PATTERN := "\\A[a-z0-9_.]+\\z"
 const KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items"]
 const RULES_FILE := "rules/battle.json"
-const EFFECTS := ["damage", "ailment", "heal", "cure", "revive", "buff", "debuff", "front_guard", "cover", "charge"]
+const GROWTH_FILE := "rules/growth.json"
+const EFFECTS := ["damage", "ailment", "heal", "cure", "revive", "buff", "debuff", "front_guard", "cover", "charge", "passive"]
 const TARGETS := ["enemy_one", "enemy_row", "enemy_all", "ally_one", "ally_dead", "ally_other", "ally_all", "ally_row", "self"]
 const RANGES_KIND := ["melee", "ranged"]
 const PRIORITIES := ["first", "normal", "last"]
@@ -17,6 +19,11 @@ const ON_BOUND := ["switch", "fail"]
 const AI_TARGETS := ["random", "lowest_hp"]
 const ROWS := ["front", "back"]
 const SKILL_COMMON := ["id", "name_key", "user", "effect", "range", "target", "parts", "priority", "speed", "levels"]
+## 패시브(07 §4.3·§7.4)는 이 다섯 필드만 갖는다. 대상이 없어 EFFECT_TARGETS 에 넣지 않는다.
+const PASSIVE_KEYS := ["id", "name_key", "user", "effect", "levels"]
+const CLASS_KEYS := ["id", "name_key", "levels", "attack", "resist", "ailment_vuln", "bind_vuln", "equip_kinds", "tree"]
+const TREE_KEYS := ["skill", "pos", "requires", "min_level"]
+const EQUIP_KEYS := ["id", "name_key", "kind", "atk", "matk", "def", "mdef", "stats", "resist", "ailment_vuln", "bind_vuln"]
 const SKILL_EXTRA := {
 	"damage": ["stat", "element", "can_crit", "sure_hit"], "ailment": ["sure_hit"], "charge": ["charges"],
 }
@@ -36,7 +43,7 @@ const EFFECT_TARGETS := {
 ## 적 revive(처치 기록을 지워야 한다)·파티 charge(예고 화면이 없다)처럼 수명 주기를 정하지 않은 조합은 읽기에서 막는다.
 ## 적 heal 은 시험의 「아무것도 안 하는 행동」(자기 대상 0 회복)으로 쓴다.
 const USER_EFFECTS := {
-	"party": ["damage", "ailment", "heal", "cure", "revive", "buff", "front_guard", "cover"],
+	"party": ["damage", "ailment", "heal", "cure", "revive", "buff", "front_guard", "cover", "passive"],
 	"enemy": ["damage", "ailment", "debuff", "heal", "charge"],
 }
 const DROP_CONDS := ["killed_by_element", "killed_while_bound", "killed_while_ailment"]
@@ -72,7 +79,33 @@ class Rules:
 	var debuff_slots := 3
 
 
+## 성장 규칙(07 §3.2·§7.2). 모든 직업이 같은 경험치 표를 쓴다.
+class GrowthDef:
+	extends RefCounted
+	var level_cap := 30
+	var initial_sp := 3
+	var sp_per_level := 1
+	## exp_next[L − 1]: 레벨 L 에서 L + 1 로 가는 데 드는 경험치(길이 level_cap − 1).
+	var exp_next: Array[int] = []
+	## _cum[L]: Lv1 에서 L 에 닿기까지의 누적 경험치(_cum[1] = 0). 읽을 때 한 번 만든다.
+	var _cum: Array[int] = []
+
+	## 누적 경험치 cum(L)(07 §3.2). L 은 1~level_cap 으로 자른다.
+	func cum(level: int) -> int:
+		return _cum[clampi(level, 1, level_cap)]
+
+	## 그 레벨까지 얻은 SP(07 §4.1).
+	func sp_total(level: int) -> int:
+		return initial_sp + (level - 1) * sp_per_level
+
+	func build_cum() -> void:
+		_cum = [0, 0]
+		for i in exp_next.size():
+			_cum.append(_cum[-1] + exp_next[i])
+
+
 ## 스킬 하나. levels[레벨 − 1] 은 그 레벨의 줄(tp 와 effect 별 값, 06 §5.4). 없는 값은 키가 없다.
+## 패시브(effect passive)의 줄은 {bonus: {키: 값}} 하나다(07 §4.3).
 class SkillDef:
 	extends RefCounted
 	var id := ""
@@ -100,6 +133,21 @@ class SkillDef:
 	func targets_allies() -> bool:
 		return target.begins_with("ally_") or target == "self"
 
+	func passive() -> bool:
+		return effect == "passive"
+
+	func max_level() -> int:
+		return levels.size()
+
+	## 필드를 모두 복사한 새 정의(배열·줄 사전도 새것). 대원마다 일반 공격 사본을 만들 때 쓴다(07 §5.3).
+	func copy() -> SkillDef:
+		var s := SkillDef.new()
+		for k in ["id", "name_key", "user", "effect", "stat", "element", "range_kind", "target", "priority", "speed", "can_crit", "sure_hit", "charges"]:
+			s.set(k, get(k))
+		s.parts = parts.duplicate()
+		s.levels = levels.duplicate(true)
+		return s
+
 
 class ClassDef:
 	extends RefCounted
@@ -110,9 +158,45 @@ class ClassDef:
 	var resist := {}
 	var ailment_vuln := {}
 	var bind_vuln := {}
+	## 트리의 스킬 ID(트리 순서 = 화면 목록 순서, 07 §4.2).
 	var skills: Array[String] = []
-	## 일반 공격(06 §5.3: 속성·사거리만 직업마다, 나머지는 고정).
+	## 일반 공격(06 §5.3: 속성·사거리만 직업마다, 나머지는 고정). 읽기만 한다: 대원마다 사본을 쓴다(07 §5.3).
 	var attack: SkillDef
+	## 끼는 장비 종류(07 §5.2).
+	var equip_kinds: Array[String] = []
+	## 트리 항목 [{skill, pos: [열, 행], requires: [{skill, level}], min_level}] 트리 순서.
+	var tree: Array[Dictionary] = []
+	## 스킬 ID → tree 의 칸 번호.
+	var tree_index := {}
+
+	func tree_entry(skill_id: String) -> Dictionary:
+		return tree[tree_index[skill_id]] if tree_index.has(skill_id) else {}
+
+
+## 장비 하나(07 §5.5·§7.5). 없는 보정은 키가 없다(0 은 적지 않는다).
+class EquipDef:
+	extends RefCounted
+	var id := ""
+	var name_key := ""
+	var kind := ""
+	## 무기만: 일반 공격 속성.
+	var element := ""
+	## atk·matk·def·mdef
+	var gear := {"atk": 0, "matk": 0, "def": 0, "mdef": 0}
+	## 능력치 보정(−99~99)
+	var stats := {}
+	## 받는 배율 더하기 보정(‰, −3000~3000)
+	var resist := {}
+	var ailment_vuln := {}
+	var bind_vuln := {}
+	## 비어 있지 않으면 종류 규칙 대신 이 직업들만 낀다.
+	var only_classes: Array[String] = []
+
+	func weapon() -> bool:
+		return BattleLimits.WEAPON_KINDS.has(kind)
+
+	func fits(c: ClassDef) -> bool:
+		return only_classes.has(c.id) if not only_classes.is_empty() else c.equip_kinds.has(kind)
 
 
 class EnemyDef:
@@ -149,6 +233,7 @@ class EncounterDef:
 
 
 var rules: Rules
+var growth: GrowthDef
 var classes := {}
 var skills := {}
 var enemies := {}
@@ -156,6 +241,8 @@ var formations := {}
 var encounters := {}
 ## 소재 ID → name_key
 var materials := {}
+## 장비 ID → EquipDef
+var equipment := {}
 ## 읽은 순서의 ID 목록(파일 경로 순 → 파일 안 순서). 순회는 이 배열로 한다.
 var class_ids: Array[String] = []
 var skill_ids: Array[String] = []
@@ -163,6 +250,7 @@ var enemy_ids: Array[String] = []
 var formation_ids: Array[String] = []
 var encounter_ids: Array[String] = []
 var material_ids: Array[String] = []
+var equipment_ids: Array[String] = []
 var errors: Array[String] = []
 var warnings: Array[String] = []
 
@@ -201,8 +289,9 @@ static func parse(files: Dictionary) -> BattleDb:
 	var db := BattleDb.new()
 	var paths: Array = files.keys()
 	paths.sort()
-	if not files.has(RULES_FILE):
-		db.errors.append("%s: 파일이 없다" % RULES_FILE)
+	for rf in [RULES_FILE, GROWTH_FILE]:
+		if not files.has(rf):
+			db.errors.append("%s: 파일이 없다" % rf)
 	for p in paths:
 		var kind: String = str(p).get_slice("/", 0)
 		if not KINDS.has(kind) or str(p).get_slice_count("/") != 2 or not str(p).ends_with(".json"):
@@ -217,8 +306,10 @@ static func parse(files: Dictionary) -> BattleDb:
 			"rules":
 				if p == RULES_FILE:
 					db._read_rules(ck, data)
+				elif p == GROWTH_FILE:
+					db._read_growth(ck, data)
 				else:
-					ck.err("", "규칙 상수 파일은 %s 하나다" % RULES_FILE)
+					ck.err("", "규칙 파일은 %s·%s 둘이다" % [RULES_FILE, GROWTH_FILE])
 			"classes":
 				db._read_class(ck, data)
 			"skills":
@@ -228,7 +319,10 @@ static func parse(files: Dictionary) -> BattleDb:
 			"encounters":
 				db._read_encounter(ck, data)
 			"items":
-				db._read_list(ck, data, "materials", db._read_material)
+				if data.has("equipment"):
+					db._read_list(ck, data, "equipment", db._read_equipment)
+				else:
+					db._read_list(ck, data, "materials", db._read_material)
 	db._check_refs()
 	return db
 
@@ -247,7 +341,11 @@ func table_formations(encounter_id: String) -> Array[String]:
 	return out
 
 
-## 모든 name_key(직업·스킬·적·소재). GameDefs 가 ko.json 에 있는지 본다.
+func equip(id: String) -> EquipDef:
+	return equipment.get(id)
+
+
+## 모든 name_key(직업·스킬·적·소재·장비). GameDefs 가 ko.json 에 있는지 본다.
 func name_keys() -> Array[String]:
 	var out: Array[String] = []
 	for id in class_ids:
@@ -258,6 +356,8 @@ func name_keys() -> Array[String]:
 		out.append(enemies[id].name_key)
 	for id in material_ids:
 		out.append(materials[id])
+	for id in equipment_ids:
+		out.append(equipment[id].name_key)
 	return out
 
 
@@ -286,6 +386,37 @@ func _read_rules(ck: _Ck, d: Dictionary) -> void:
 		var pair: Array[int] = [conv[k][0], conv[k][1]]
 		r.set(k, pair)
 	rules = r
+
+
+## 성장 규칙(07 §7.2): 모든 키 필수, 모르는 키 거부, exp_next 길이 = level_cap − 1.
+func _read_growth(ck: _Ck, d: Dictionary) -> void:
+	if not ck.keys(d, "", ["level_cap", "initial_sp", "sp_per_level", "exp_next"], []):
+		return
+	var cap: Variant = ck.int_of(d, "level_cap", "", "level_cap")
+	var sp0: Variant = ck.int_of(d, "initial_sp", "", "initial_sp")
+	var spl: Variant = ck.int_of(d, "sp_per_level", "", "sp_per_level")
+	var g := GrowthDef.new()
+	var ok := cap != null and sp0 != null and spl != null
+	if typeof(d["exp_next"]) != TYPE_ARRAY:
+		ck.err("exp_next", "배열이어야 한다")
+		return
+	if cap != null and d["exp_next"].size() != cap - 1:
+		ck.err("exp_next", "길이가 level_cap − 1(%d)이어야 한다(지금 %d)" % [cap - 1, d["exp_next"].size()])
+		ok = false
+	for i in d["exp_next"].size():
+		var v: Variant = SaveCodec.to_int(d["exp_next"][i])
+		if v == null or typeof(d["exp_next"][i]) == TYPE_BOOL or not BattleLimits.in_range("exp_next", v):
+			ck.err("exp_next[%d]" % i, "정수 %s 이어야 한다" % BattleLimits.range_text("exp_next"))
+			ok = false
+		else:
+			g.exp_next.append(v)
+	if not ok:
+		return
+	g.level_cap = cap
+	g.initial_sp = sp0
+	g.sp_per_level = spl
+	g.build_cum()
+	growth = g
 
 
 ## 정수로 바꿀 수 없는 값은 문자열 표시로 남겨 범위 검사에서 거부되게 한다.
@@ -320,10 +451,44 @@ func _read_material(ck: _Ck, d: Dictionary, path: String) -> void:
 	material_ids.append(id)
 
 
+## 장비(07 §7.5). 무기 종류만 element(필수), 그 밖은 element 가 있으면 오류. only_classes 만 선택.
+func _read_equipment(ck: _Ck, d: Dictionary, path: String) -> void:
+	var weapon := BattleLimits.WEAPON_KINDS.has(d.get("kind"))
+	if not weapon and d.has("element"):
+		ck.err(path + ".element", "무기 종류(%s)만 element 를 가진다" % ", ".join(BattleLimits.WEAPON_KINDS))
+	if not ck.keys(d, path, EQUIP_KEYS + (["element"] if weapon else []), ["only_classes", "element"]):
+		return
+	var e := EquipDef.new()
+	e.id = ck.id_of(d, "id", path, "equip.")
+	e.name_key = ck.str_of(d, "name_key", path)
+	e.kind = ck.enum_of(d, "kind", path, BattleLimits.WEAPON_KINDS + BattleLimits.ARMOR_KINDS)
+	if weapon:
+		e.element = ck.enum_of(d, "element", path, BattleLimits.ELEMENTS)
+	for g in BattleLimits.GEAR:
+		var v: Variant = ck.int_of(d, g, path, "gear")
+		e.gear[g] = v if v != null else 0
+	e.stats = ck.delta_table(d, "stats", path, BattleLimits.STATS, "equip_stat",
+		"능력치 6종(%s)만 받는다(HP·TP 보정은 없다, 07 §5.3)" % ", ".join(BattleLimits.STATS))
+	e.resist = ck.delta_table(d, "resist", path, BattleLimits.ELEMENTS, "equip_delta", "")
+	e.ailment_vuln = ck.delta_table(d, "ailment_vuln", path, BattleLimits.AILMENTS, "equip_delta", "")
+	e.bind_vuln = ck.delta_table(d, "bind_vuln", path, BattleLimits.PARTS, "equip_delta", "")
+	if d.has("only_classes"):
+		e.only_classes = ck.id_list(d, "only_classes", path, "class.")
+		if typeof(d["only_classes"]) == TYPE_ARRAY and d["only_classes"].is_empty():
+			ck.err(path + ".only_classes", "직업 ID 가 하나 이상인 배열이어야 한다(없으면 필드를 쓰지 않는다)")
+	if e.id.is_empty() or not _claim(ck, e.id, path):
+		return
+	equipment[e.id] = e
+	equipment_ids.append(e.id)
+
+
 func _read_skill(ck: _Ck, d: Dictionary, path: String) -> void:
 	var effect := str(d.get("effect", ""))
 	if not EFFECTS.has(effect):
 		ck.err(path + ".effect", "다음 중 하나여야 한다: %s" % ", ".join(EFFECTS))
+		return
+	if effect == "passive":
+		_read_passive(ck, d, path)
 		return
 	if not ck.keys(d, path, SKILL_COMMON + SKILL_EXTRA.get(effect, []), []):
 		return
@@ -355,9 +520,7 @@ func _read_skill(ck: _Ck, d: Dictionary, path: String) -> void:
 			ck.err(path + ".id", "적 스킬 ID 는 skill.enemy. 로 시작해야 한다")
 		elif s.user == "party" and (s.id.begins_with("skill.enemy.") or s.id.get_slice_count(".") < 3):
 			ck.err(path + ".id", "파티 스킬 ID 는 skill.<직업>.<이름> 꼴이어야 한다")
-	if typeof(d["levels"]) != TYPE_ARRAY or d["levels"].is_empty():
-		ck.err(path + ".levels", "줄이 하나 이상인 배열이어야 한다")
-	else:
+	if _levels_ok(ck, d, path):
 		for i in d["levels"].size():
 			var row := _read_skill_level(ck, d["levels"][i], "%s.levels[%d]" % [path, i], s)
 			# 강화·약화는 모든 줄의 kind 가 같아야 한다: 같은 효과 id 를 다시 걸 때 kind 가 바뀌지 않게(06 §5.4·§3.14).
@@ -369,6 +532,73 @@ func _read_skill(ck: _Ck, d: Dictionary, path: String) -> void:
 		return
 	skills[s.id] = s
 	skill_ids.append(s.id)
+
+
+## 스킬 줄 수(= 최대 레벨) 1~10(07 §7.4, BattleLimits skill_level).
+func _levels_ok(ck: _Ck, d: Dictionary, path: String) -> bool:
+	if typeof(d["levels"]) != TYPE_ARRAY or not BattleLimits.in_range("skill_level", d["levels"].size()):
+		ck.err(path + ".levels", "줄이 하나 이상 %d개 이하인 배열이어야 한다" % BattleLimits.RANGES["skill_level"][1])
+		return false
+	return true
+
+
+## 패시브(07 §4.3·§7.4): 다섯 필드만, 줄은 {bonus} 만. bonus 키는 PASSIVE_KEYS 가운데 하나 이상이고 모든 줄이 같은 키,
+## 값은 레벨이 오를 때 줄지 않는다(줄면 배분 때 최대 HP 가 줄어 HP 자르기가 생긴다).
+func _read_passive(ck: _Ck, d: Dictionary, path: String) -> void:
+	if not ck.keys(d, path, PASSIVE_KEYS, []):
+		return
+	var s := SkillDef.new()
+	s.effect = "passive"
+	s.id = ck.id_of(d, "id", path, "skill.")
+	s.name_key = ck.str_of(d, "name_key", path)
+	s.user = ck.enum_of(d, "user", path, USERS)
+	if s.user == "enemy":
+		ck.err(path + ".effect", "user enemy 에는 effect passive 를 쓸 수 없다(%s 만)" % ", ".join(USER_EFFECTS["enemy"]))
+	elif not s.id.is_empty() and (s.id.begins_with("skill.enemy.") or s.id.get_slice_count(".") < 3):
+		ck.err(path + ".id", "파티 스킬 ID 는 skill.<직업>.<이름> 꼴이어야 한다")
+	if _levels_ok(ck, d, path):
+		var first_keys: Array = []
+		for i in d["levels"].size():
+			var rp := "%s.levels[%d]" % [path, i]
+			var v: Variant = d["levels"][i]
+			var row := {}
+			if typeof(v) != TYPE_DICTIONARY:
+				ck.err(rp, "객체여야 한다")
+			elif ck.keys(v, rp, ["bonus"], []):
+				row = _read_bonus(ck, v["bonus"], rp + ".bonus")
+			if i == 0:
+				first_keys = row.keys()
+				first_keys.sort()
+			elif not row.is_empty():
+				var keys: Array = row.keys()
+				keys.sort()
+				if keys != first_keys:
+					ck.err(rp + ".bonus", "모든 줄의 bonus 키가 같아야 한다(levels[0] 은 %s)" % ", ".join(first_keys))
+				else:
+					var prev: Dictionary = s.levels[i - 1].get("bonus", {})
+					for k in keys:
+						if prev.has(k) and row[k] < prev[k]:
+							ck.err("%s.bonus.%s" % [rp, k], "앞 레벨보다 작다(패시브 보정은 레벨이 오를 때 줄지 않는다)")
+			s.levels.append({"bonus": row})
+	if s.id.is_empty() or not _claim(ck, s.id, path):
+		return
+	skills[s.id] = s
+	skill_ids.append(s.id)
+
+
+func _read_bonus(ck: _Ck, v: Variant, path: String) -> Dictionary:
+	var out := {}
+	if typeof(v) != TYPE_DICTIONARY or v.is_empty():
+		ck.err(path, "키가 하나 이상인 객체여야 한다(%s)" % ", ".join(BattleLimits.PASSIVE_KEYS))
+		return out
+	for k in v:
+		if not BattleLimits.PASSIVE_KEYS.has(k):
+			ck.err("%s.%s" % [path, str(k)], "모르는 필드(%s 중 하나)" % ", ".join(BattleLimits.PASSIVE_KEYS))
+			continue
+		var n: Variant = ck.int_of(v, k, path, "passive_max" if str(k).begins_with("max_") else "passive_stat")
+		if n != null:
+			out[k] = n
+	return out
 
 
 func _read_skill_level(ck: _Ck, v: Variant, path: String, s: SkillDef) -> Dictionary:
@@ -451,7 +681,7 @@ func _read_bind_spec(ck: _Ck, v: Variant, path: String) -> Dictionary:
 
 
 func _read_class(ck: _Ck, d: Dictionary) -> void:
-	if not ck.keys(d, "", ["id", "name_key", "levels", "attack", "resist", "ailment_vuln", "bind_vuln", "skills"], []):
+	if not ck.keys(d, "", CLASS_KEYS, []):
 		return
 	var c := ClassDef.new()
 	c.id = ck.id_of(d, "id", "", "class.")
@@ -463,7 +693,7 @@ func _read_class(ck: _Ck, d: Dictionary) -> void:
 			var path := "levels.%s" % lk
 			var lv := int(str(lk)) if str(lk).is_valid_int() else 0
 			if str(lv) != str(lk) or not BattleLimits.in_range("level", lv):
-				ck.err(path, "레벨 키는 1~99 의 10진 정수여야 한다")
+				ck.err(path, "레벨 키는 \"1\"~\"level_cap\" 의 10진 정수여야 한다")
 				continue
 			var row: Variant = d["levels"][lk]
 			if typeof(row) != TYPE_DICTIONARY:
@@ -493,11 +723,57 @@ func _read_class(ck: _Ck, d: Dictionary) -> void:
 	c.resist = ck.table(d, "resist", "", BattleLimits.ELEMENTS, "resist")
 	c.ailment_vuln = ck.table(d, "ailment_vuln", "", BattleLimits.AILMENTS, "vuln")
 	c.bind_vuln = ck.table(d, "bind_vuln", "", BattleLimits.PARTS, "vuln")
-	c.skills = ck.id_list(d, "skills", "", "skill.")
+	c.equip_kinds = ck.enum_set(d, "equip_kinds", "", BattleLimits.WEAPON_KINDS + BattleLimits.ARMOR_KINDS, false)
+	if not c.equip_kinds.is_empty() and not c.equip_kinds.any(func(k: String) -> bool: return BattleLimits.WEAPON_KINDS.has(k)):
+		ck.err("equip_kinds", "무기 종류(%s)가 하나 이상 있어야 한다" % ", ".join(BattleLimits.WEAPON_KINDS))
+	_read_tree(ck, d, c)
 	if c.id.is_empty() or not _claim(ck, c.id, ""):
 		return
 	classes[c.id] = c
 	class_ids.append(c.id)
+
+
+## 트리(07 §4.2·§7.3): 항목마다 skill·pos·requires·min_level. 참조·순서·레벨 관계는 _check_tree 가 본다.
+func _read_tree(ck: _Ck, d: Dictionary, c: ClassDef) -> void:
+	var v: Variant = d["tree"]
+	if typeof(v) != TYPE_ARRAY or not BattleLimits.in_range("tree_size", v.size()):
+		ck.err("tree", "항목 %s개의 배열이어야 한다" % BattleLimits.range_text("tree_size"))
+		return
+	for i in v.size():
+		var p := "tree[%d]" % i
+		var x: Variant = v[i]
+		if typeof(x) != TYPE_DICTIONARY:
+			ck.err(p, "객체여야 한다")
+			continue
+		if not ck.keys(x, p, TREE_KEYS, []):
+			continue
+		var e := {"skill": ck.id_of(x, "skill", p, "skill."), "pos": [], "requires": [], "min_level": 1}
+		var pos: Variant = x["pos"]
+		var col: Variant = SaveCodec.to_int(pos[0]) if typeof(pos) == TYPE_ARRAY and pos.size() == 2 and typeof(pos[0]) != TYPE_BOOL else null
+		var row: Variant = SaveCodec.to_int(pos[1]) if col != null and typeof(pos[1]) != TYPE_BOOL else null
+		if not BattleLimits.in_range("tree_col", col) or not BattleLimits.in_range("tree_row", row):
+			ck.err(p + ".pos", "[열 %s, 행 %s] 정수 둘이어야 한다" % [BattleLimits.range_text("tree_col"), BattleLimits.range_text("tree_row")])
+		else:
+			e["pos"] = [col, row]
+		if typeof(x["requires"]) != TYPE_ARRAY:
+			ck.err(p + ".requires", "배열이어야 한다")
+		else:
+			for j in x["requires"].size():
+				var rp := "%s.requires[%d]" % [p, j]
+				var r: Variant = x["requires"][j]
+				if typeof(r) != TYPE_DICTIONARY:
+					ck.err(rp, "객체여야 한다")
+					continue
+				if not ck.keys(r, rp, ["skill", "level"], []):
+					continue
+				var lv: Variant = ck.int_of(r, "level", rp, "skill_level")
+				e["requires"].append({"skill": ck.id_of(r, "skill", rp, "skill."), "level": lv if lv != null else 1})
+		var ml: Variant = ck.int_of(x, "min_level", p, "level")
+		e["min_level"] = ml if ml != null else 1
+		if not e["skill"].is_empty() and not c.tree_index.has(e["skill"]):
+			c.tree_index[e["skill"]] = c.tree.size()
+			c.skills.append(e["skill"])
+		c.tree.append(e)
 
 
 func _read_enemy(ck: _Ck, d: Dictionary, path: String) -> void:
@@ -700,16 +976,22 @@ func _claim(ck: _Ck, id: String, path: String) -> bool:
 
 func _check_refs() -> void:
 	var used_skills := {}
+	var tree_owner := {}
 	for cid in class_ids:
 		var c: ClassDef = classes[cid]
 		var ck := _Ck.new(self, _ids[cid])
-		for i in c.skills.size():
-			var s: SkillDef = skills.get(c.skills[i])
-			if s == null:
-				ck.err(cid + ".skills[%d]" % i, "없는 스킬 %s" % c.skills[i])
-			elif s.user != "party":
-				ck.err(cid + ".skills[%d]" % i, "%s 의 user 가 party 가 아니다" % c.skills[i])
-			used_skills[c.skills[i]] = true
+		_check_levels(ck, c)
+		_check_tree(ck, c, tree_owner)
+		for sid in c.skills:
+			used_skills[sid] = true
+	for id in equipment_ids:
+		var e: EquipDef = equipment[id]
+		var ck := _Ck.new(self, _ids[id])
+		for i in e.only_classes.size():
+			if not classes.has(e.only_classes[i]):
+				ck.err("%s.only_classes[%d]" % [id, i], "없는 직업 %s" % e.only_classes[i])
+		if not class_ids.any(func(cid: String) -> bool: return e.fits(classes[cid])):
+			warnings.append("%s: 어느 직업도 낄 수 없는 장비" % id)
 	for eid in enemy_ids:
 		var e: EnemyDef = enemies[eid]
 		var ck := _Ck.new(self, _ids[eid])
@@ -771,6 +1053,73 @@ func _check_refs() -> void:
 	for sid in skill_ids:
 		if not used_skills.has(sid):
 			warnings.append("%s: 어느 직업·적도 쓰지 않는 스킬" % sid)
+
+
+## 직업 레벨 표와 성장 규칙(07 §3.3·§7.8): 키가 1~level_cap 전부, hp·tp 는 레벨이 오를 때 줄지 않는다.
+func _check_levels(ck: _Ck, c: ClassDef) -> void:
+	if growth == null:
+		return
+	for lv in c.levels:
+		if lv > growth.level_cap:
+			ck.err("levels.%d" % lv, "level_cap %d 을 넘는 레벨이다" % growth.level_cap)
+	for lv in range(1, growth.level_cap + 1):
+		if not c.levels.has(lv):
+			ck.err("levels", "레벨 %d 이 없다(1~level_cap %d 전부 있어야 한다)" % [lv, growth.level_cap])
+			return
+	for lv in range(2, growth.level_cap + 1):
+		for k in ["hp", "tp"]:
+			var a: Variant = c.levels[lv - 1][k]
+			var b: Variant = c.levels[lv][k]
+			if typeof(a) == TYPE_INT and typeof(b) == TYPE_INT and b < a:
+				ck.err("levels.%d.%s" % [lv, k], "앞 레벨보다 작다(HP·TP 는 레벨이 오를 때 줄지 않는다)")
+
+
+## 트리 관계(07 §4.2·§7.8): 그 직업 접두사의 파티 스킬, 트리 안 중복·칸 중복 없음, 선행은 앞에 나온 스킬·레벨 1~그 스킬 최대,
+## 같은 스킬을 두 번 요구하지 않음, 관문 1~level_cap, 한 스킬이 두 트리에 없음.
+func _check_tree(ck: _Ck, c: ClassDef, tree_owner: Dictionary) -> void:
+	var prefix := "skill.%s." % c.id.trim_prefix("class.")
+	var seen := {}
+	var cells := {}
+	for i in c.tree.size():
+		var e: Dictionary = c.tree[i]
+		var p := "%s.tree[%d]" % [c.id, i]
+		var sid: String = e["skill"]
+		if sid.is_empty():
+			continue
+		var s: SkillDef = skills.get(sid)
+		if s == null:
+			ck.err(p + ".skill", "없는 스킬 %s" % sid)
+		elif s.user != "party":
+			ck.err(p + ".skill", "%s 의 user 가 party 가 아니다" % sid)
+		elif not sid.begins_with(prefix):
+			ck.err(p + ".skill", "%s 는 이 직업(%s)의 스킬이 아니다" % [sid, prefix])
+		if seen.has(sid):
+			ck.err(p + ".skill", "트리에 %s 가 두 번 있다" % sid)
+		elif tree_owner.has(sid):
+			ck.err(p + ".skill", "%s 가 %s 트리에도 있다" % [sid, tree_owner[sid]])
+		tree_owner[sid] = c.id
+		var pos: Array = e["pos"]
+		if not pos.is_empty():
+			var key := "%d,%d" % [pos[0], pos[1]]
+			if cells.has(key):
+				ck.err(p + ".pos", "칸 [%s] 이 %s 와 겹친다" % [key, cells[key]])
+			cells[key] = sid
+		var asked := {}
+		for j in e["requires"].size():
+			var r: Dictionary = e["requires"][j]
+			var rp := "%s.requires[%d]" % [p, j]
+			if r["skill"].is_empty():
+				continue
+			if not seen.has(r["skill"]):
+				ck.err(rp + ".skill", "선행 %s 는 트리에서 앞에 나온 스킬이어야 한다" % r["skill"])
+			elif skills.has(r["skill"]) and r["level"] > skills[r["skill"]].max_level():
+				ck.err(rp + ".level", "선행 레벨 %d 이 %s 의 최대 레벨 %d 을 넘는다" % [r["level"], r["skill"], skills[r["skill"]].max_level()])
+			if asked.has(r["skill"]):
+				ck.err(rp + ".skill", "같은 선행 스킬 %s 를 두 번 요구한다" % r["skill"])
+			asked[r["skill"]] = true
+		if growth != null and e["min_level"] > growth.level_cap:
+			ck.err(p + ".min_level", "정수 1~level_cap(%d) 이어야 한다" % growth.level_cap)
+		seen[sid] = true
 
 
 static func _p(path: String, key: String) -> String:
@@ -871,6 +1220,26 @@ class _Ck:
 				err("%s[%d]" % [BattleDb._p(path, key), i], "중복 ID %s" % id)
 			else:
 				out.append(id)
+		return out
+
+	## 키 ⊆ names 인 0 이 아닌 정수 표(장비 보정, 07 §7.5). bad_key 가 있으면 모르는 키의 오류 문장.
+	func delta_table(d: Dictionary, key: String, path: String, names: Array, range_name: String, bad_key: String) -> Dictionary:
+		var out := {}
+		var p := BattleDb._p(path, key)
+		if typeof(d.get(key)) != TYPE_DICTIONARY:
+			err(p, "객체여야 한다")
+			return out
+		for k in d[key]:
+			if not names.has(k):
+				err("%s.%s" % [p, str(k)], bad_key if not bad_key.is_empty() else "모르는 필드(%s 중 하나)" % ", ".join(names))
+				continue
+			var v: Variant = int_of(d[key], k, p, range_name)
+			if v == null:
+				continue
+			if v == 0:
+				err("%s.%s" % [p, k], "0 은 적지 않는다(보정이 없으면 키를 뺀다)")
+				continue
+			out[k] = v
 		return out
 
 	## 키가 정확히 names 인 정수 표(능력치·속성 배율·취약도).
