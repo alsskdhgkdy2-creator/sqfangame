@@ -16,6 +16,11 @@ var tp_text := ""
 var sp_text := ""
 
 
+## HP 막대 색(HpColor 한 규칙).
+func hp_bar_color() -> Color:
+	return HpColor.of(hp, max_hp)
+
+
 func _draw() -> void:
 	var r := Rect2(Vector2.ZERO, size)
 	var sb := StyleBoxFlat.new()
@@ -29,7 +34,7 @@ func _draw() -> void:
 	var fg := Color(0.9, 0.97, 1.0)
 	draw_string(font, Vector2(24, 32), member_name, HORIZONTAL_ALIGNMENT_LEFT, size.x - 110, 20, fg)
 	draw_string(font, Vector2(size.x - 96, 32), level_text, HORIZONTAL_ALIGNMENT_RIGHT, 84, 20, Color(1.0, 0.86, 0.45))
-	_bar(58.0, "HP", hp, max_hp, hp_text, Color(0.35, 0.9, 0.45))
+	_bar(58.0, "HP", hp, max_hp, hp_text, hp_bar_color())
 	_bar(84.0, "TP", tp, max_tp, tp_text, Color(0.4, 0.7, 1.0))
 	if not sp_text.is_empty():
 		draw_string(font, Vector2(24, 111), sp_text, HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 16, Color(1.0, 0.86, 0.45))

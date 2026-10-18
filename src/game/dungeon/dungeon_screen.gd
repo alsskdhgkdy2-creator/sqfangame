@@ -24,6 +24,8 @@ const KEY_ACTIONS := {
 ## 누르고 있으면 반복하는 행동(조사는 반복하지 않는다).
 const REPEATABLE := [A.FORWARD, A.BACK, A.STRAFE_LEFT, A.STRAFE_RIGHT, A.TURN_LEFT, A.TURN_RIGHT]
 const PAD_BUTTON := 80.0
+## 메뉴의 저장 칸 단추 높이(세 줄: 슬롯·층과 걸음·시각).
+const SLOT_H := 84.0
 const PAD_GAP := 8.0
 const TOP_BAR := 64.0
 const SIDE_COLLAPSED := 300.0
@@ -622,7 +624,7 @@ func _on_battle_closed(_outcome: String) -> void:
 	_check_windows()
 
 
-## 전투 층이 열린 동안 지도 패널·도구 줄·이동 단추·메뉴·상태 표시를 감춘다(06 §9.1). 3D 시야는 그대로.
+## 전투 층이 열린 동안 지도 패널·도구 줄·이동 단추·메뉴·상태 표시를 감추고 3D 시야를 화면 전체로 넓힌다(06 §9.1, M2.6 U1).
 func _set_battle_view(on: bool) -> void:
 	_battle_view = on
 	_layout()
@@ -679,25 +681,25 @@ func _open_menu() -> void:
 	var load_row: Array[Control] = []
 	for i in SaveStore.MANUAL_SLOTS.size():
 		var slot: String = SaveStore.MANUAL_SLOTS[i]
-		var info := store.slot_info(slot)
-		var when := _local_time(info.saved_at) if info.ok else texts.t("menu.empty_slot")
-		var label := "%s\n%s" % [texts.t("menu.slot", {"n": i + 1}), when]
+		var l := store.load_slot(slot)
+		var label := slot_label(i, l)
 		var sb := ModalLayer.button(label, _save_slot.bind(slot))
 		sb.name = "Save_" + slot
-		sb.custom_minimum_size = Vector2(170, 64)
-		sb.add_theme_font_size_override("font_size", 16)
+		sb.custom_minimum_size = Vector2(170, SLOT_H)
+		sb.add_theme_font_size_override("font_size", 15)
 		save_row.append(sb)
-		var lb := ModalLayer.button(label, _load_slot.bind(slot), info.ok)
+		var lb := ModalLayer.button(label, _load_slot.bind(slot), l.ok())
 		lb.name = "Load_" + slot
-		lb.custom_minimum_size = Vector2(170, 64)
-		lb.add_theme_font_size_override("font_size", 16)
+		lb.custom_minimum_size = Vector2(170, SLOT_H)
+		lb.add_theme_font_size_override("font_size", 15)
 		load_row.append(lb)
 	var auto_row: Array[Control] = []
 	for mode in ExplorationRules.AUTOMAP_MODES:
-		var mark := "● " if settings.automap == mode else ""
-		var ab := ModalLayer.button(mark + texts.t("menu.automap." + mode), _set_automap.bind(mode))
+		var on: bool = settings.automap == mode
+		var ab := ModalLayer.button(("● " if on else "") + texts.t("menu.automap." + mode), _set_automap.bind(mode))
 		ab.name = "Automap_" + mode
 		ab.custom_minimum_size = Vector2(150, 56)
+		ModalLayer.set_checked(ab, on)
 		auto_row.append(ab)
 	var export_b := ModalLayer.button(texts.t("menu.export"), _export)
 	export_b.name = "Export"
@@ -715,6 +717,16 @@ func _open_menu() -> void:
 		ModalLayer.row([new_b, close_b] as Array[Control]),
 	]
 	modal.open("menu", texts.t("menu.title"), rows)
+
+
+## 저장 칸 단추 글: 「슬롯 1」 아래에, 검사를 지난 저장이면 그 저장의 층·걸음과 저장 시각(저장에 이미 있는 값), 아니면 「비어 있음」.
+func slot_label(i: int, l: SaveStore.SlotLoad) -> String:
+	var head := texts.t("menu.slot", {"n": i + 1})
+	if not l.ok():
+		return "%s\n%s" % [head, texts.t("menu.empty_slot")]
+	var st := l.result.state
+	return "%s\n%s\n%s" % [head, texts.t("menu.slot_where", {"floor": texts.t(st.floor_def.name_key), "steps": st.steps}),
+		_local_time(l.result.saved_at)]
 
 
 func _set_automap(mode: String) -> void:
@@ -994,10 +1006,12 @@ func _layout() -> void:
 		s = get_viewport_rect().size
 	var side_w := roundf(s.x * 0.4) if _map_open else SIDE_COLLAPSED
 	var view_w := s.x - side_w
+	# 전투 중에는 3D 시야가 화면 전체(전투 층이 어둡게 덮는 배경, 지도 칸 자리가 빈 판으로 남지 않는다). 끝나면 탐색 배치로.
+	var stage_w := s.x if _battle_view else view_w
 	view_container.position = Vector2.ZERO
-	view_container.size = Vector2(view_w, s.y)
+	view_container.size = Vector2(stage_w, s.y)
 	_flash.position = Vector2.ZERO
-	_flash.size = Vector2(view_w, s.y)
+	_flash.size = Vector2(stage_w, s.y)
 	_floor_label.position = Vector2(18, 12)
 	_steps_label.position = Vector2(18, 42)
 	menu_button.size = Vector2(64, 64)

@@ -282,7 +282,7 @@ async function growthChecks(s) {
   check(s.party_menu.cursor.skill === HIGH_SLASH, '성장 3: 스킬 커서는 트리 첫 항목', { cursor: s.party_menu.cursor });
   await clickButton('SkillPlus');
   s = await waitFor((x) => x.party_menu?.draft?.[HIGH_SLASH] === 1, '초안 +1');
-  check(s.party_menu.sp_line === '남은 SP 2(배분 중 -1)' && s.hash === base.hash, '성장 3: 「+」 → 초안만(남은 SP 줄)', { sp_line: s.party_menu.sp_line });
+  check(s.party_menu.sp_line === '남은 SP 2 → 1' && s.hash === base.hash, '성장 3: 「+」 → 초안만(남은 SP 줄)', { sp_line: s.party_menu.sp_line });
   await clickButton('Close');
   s = await waitFor((x) => x.party_menu?.dialog === 'discard', '버리기 확인 창');
   check(s.party_menu.dialog_pick === 0 && s.buttons.DialogOk && !s.buttons.Tab_status, '성장 3: 버리기 확인 창(처음 고른 쪽 「돌아가기」)');

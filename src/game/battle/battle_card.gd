@@ -196,6 +196,12 @@ func _draw_enemy(u: BattleDisplay.DUnit) -> void:
 		draw_string(font, Vector2(0, ry), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, Color(1.0, 0.7, 0.55))
 
 
+## 대원 칸 HP 막대 색(HpColor 한 규칙, 보이는 HP 기준: 깎이는 연출 중에도 막대 길이와 맞는다).
+func hp_bar_color() -> Color:
+	var u := unit()
+	return HpColor.of(shown_hp if shown_hp >= 0.0 else float(u.hp), u.max_hp)
+
+
 func _draw_member(u: BattleDisplay.DUnit) -> void:
 	var font := get_theme_default_font()
 	var r := Rect2(Vector2.ZERO, size)
@@ -232,8 +238,7 @@ func _draw_member(u: BattleDisplay.DUnit) -> void:
 		draw_string(font, Vector2(x0 + w * 0.5, 35), command_text, HORIZONTAL_ALIGNMENT_RIGHT, w * 0.5, 16, Color(1.0, 0.9, 0.45))
 	draw_string(font, Vector2(x0, 55), "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, fg)
 	draw_string(font, Vector2(x0, 55), "%d/%d" % [roundi(shown_hp), u.max_hp], HORIZONTAL_ALIGNMENT_RIGHT, w, 17, fg)
-	var ratio := shown_hp / maxf(1.0, u.max_hp)
-	_bar(Rect2(x0, 60, w, 9), ratio, Color(0.35, 0.9, 0.5) if ratio > 0.3 else Color(1.0, 0.42, 0.3), down)
+	_bar(Rect2(x0, 60, w, 9), shown_hp / maxf(1.0, u.max_hp), hp_bar_color(), down)
 	draw_string(font, Vector2(x0, 85), "TP", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, fg)
 	draw_string(font, Vector2(x0, 85), "%d/%d" % [roundi(shown_tp), u.max_tp], HORIZONTAL_ALIGNMENT_RIGHT, w, 15, fg)
 	_bar(Rect2(x0, 90, w, 6), shown_tp / maxf(1.0, u.max_tp), Color(0.4, 0.65, 1.0), down)

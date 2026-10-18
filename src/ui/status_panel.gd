@@ -30,6 +30,12 @@ func level_text(i: int) -> String:
 	return texts.t("hud.level", {"level": state.party.members[i].level})
 
 
+## 대원 i 의 HP 막대 색(HpColor 한 규칙).
+func hp_bar_color(i: int) -> Color:
+	var m: PartyState.Member = state.party.members[i]
+	return HpColor.of(m.hp, m.max_hp)
+
+
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.03, 0.05, 0.07, 0.92))
 	if state == null:
@@ -56,5 +62,5 @@ func _draw() -> void:
 		var hb := Rect2(x0 + w * 0.52, y + row_h * i + row_h * 0.25, w * 0.3, row_h * 0.45)
 		draw_rect(hb, Color(0.1, 0.13, 0.16))
 		var ratio := float(m.hp) / maxf(1.0, m.max_hp)
-		draw_rect(Rect2(hb.position, Vector2(hb.size.x * ratio, hb.size.y)), Color(0.3, 0.9, 0.5) if ratio > 0.3 else Color(1.0, 0.4, 0.3))
+		draw_rect(Rect2(hb.position, Vector2(hb.size.x * ratio, hb.size.y)), hp_bar_color(i))
 		draw_string(font, Vector2(x0 + w * 0.84, ty), "%d/%d" % [m.hp, m.max_hp], HORIZONTAL_ALIGNMENT_RIGHT, w * 0.16, 15, col)

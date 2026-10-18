@@ -16,6 +16,9 @@ const STEP_BUTTON := Vector2(96, 64)
 const REVERT_SIZE := Vector2(160, 64)
 const COMMIT_SIZE := Vector2(200, 64)
 ## 퍼밀(‰)로 적힌 줄 필드: 화면은 %로 보인다.
+## 선행 연결선: 굵기, 들어가는 쪽 화살표 길이·너비.
+const LINE_W := 3.0
+const ARROW := Vector2(9, 10)
 const PERMILLE := ["accuracy", "chance", "hp_permille", "value"]
 const PERCENT := ["wis_pct"]
 
@@ -318,7 +321,8 @@ func refresh() -> void:
 	_refresh_desc()
 	var left := GrowthRules.sp_left(defs, m)
 	var used := draft_sp()
-	_sp_label.text = menu.texts.t("party.sp_left_draft", {"sp": left, "used": used}) if used > 0 else menu.texts.t("party.sp_left", {"sp": left})
+	# 초안이 있으면 「남은 SP 2 → 0」(확정하면 남는 SP), 없으면 「남은 SP 2」.
+	_sp_label.text = menu.texts.t("party.sp_left_draft", {"sp": left, "after": left - used}) if used > 0 else menu.texts.t("party.sp_left", {"sp": left})
 	revert_button.dimmed = draft.is_empty()
 	commit_button.dimmed = draft.is_empty()
 
@@ -429,25 +433,81 @@ func _draw_lines() -> void:
 	for k in draft:
 		levels[k] = int(levels.get(k, 0)) + int(draft[k])
 	var c := menu.state.defs.class_of(menu.member)
+	var unmet: Array[PackedVector2Array] = []
+	var met: Array[PackedVector2Array] = []
 	for j in tree.size():
 		for r in tree[j].get("requires", []):
 			var from := int(c.tree_index.get(r["skill"], -1))
 			if from < 0:
 				continue
-			var ok := int(levels.get(r["skill"], 0)) >= int(r["level"])
-			var col := Color(0.4, 0.9, 1.0, 0.9) if ok else Color(0.35, 0.42, 0.48, 0.9)
-			var seg := edge_segment(node_rect(from), node_rect(j))
-			tree_area.content.draw_line(seg[0], seg[1], col, 3.0)
+			var path := connector_path(node_rect(from), node_rect(j), PITCH - NODE)
+			(met if int(levels.get(r["skill"], 0)) >= int(r["level"]) else unmet).append(path)
+	# 갖춘 선을 나중에 그린다: 두 선행이 한 노드로 들어가 겹치는 끝 토막은 갖춘 쪽 색으로 보인다.
+	for path in unmet:
+		_draw_connector(tree_area.content, path, Color(0.35, 0.42, 0.48))
+	for path in met:
+		_draw_connector(tree_area.content, path, Color(0.4, 0.9, 1.0))
 
 
-## 두 노드의 가운데를 잇는 선을 각 노드 테두리에서 끊은 [시작, 끝](선이 노드 면 위를 지나지 않는다).
-static func edge_segment(a: Rect2, b: Rect2) -> Array[Vector2]:
-	var d := b.get_center() - a.get_center()
-	var exit := func(r: Rect2) -> float:
-		var tx := INF if is_zero_approx(d.x) else r.size.x / 2.0 / absf(d.x)
-		var ty := INF if is_zero_approx(d.y) else r.size.y / 2.0 / absf(d.y)
-		return minf(tx, ty)
-	return [a.get_center() + d * float(exit.call(a)), b.get_center() - d * float(exit.call(b))]
+static func _draw_connector(canvas: CanvasItem, path: PackedVector2Array, col: Color) -> void:
+	var tri := arrow_points(path)
+	var stop := tri[1].lerp(tri[2], 0.5)  # 화살표 밑변 가운데에서 선을 멈춘다(끝이 화살표 밖으로 비치지 않는다)
+	for k in path.size() - 1:
+		var a := path[k]
+		var b := stop if k == path.size() - 2 else path[k + 1]
+		# 가로·세로 토막을 굵기만큼 늘린 사각형으로: 꺾이는 곳이 비지 않는다.
+		canvas.draw_rect(Rect2(Vector2(minf(a.x, b.x), minf(a.y, b.y)) - Vector2(LINE_W, LINE_W) / 2.0, (b - a).abs() + Vector2(LINE_W, LINE_W)), col)
+	canvas.draw_colored_polygon(tri, col)
+
+
+## 선행 노드 a 에서 뒤 노드 b 로 가는 직각 꺾은선(원작 트리처럼). 점은 a 테두리에서 시작해 b 테두리에서 끝나고, 토막은 모두
+## 가로·세로이며 노드 사이 틈(gap = 칸 간격 − 노드 크기)으로만 지난다: 어느 노드 면도 가로지르지 않는다.
+## 아래 줄로: a 아래 가운데 → b 바로 위 틈 → b 위 가운데. 한 줄 넘게 내려가면 a 옆 세로 틈으로 내려간다. 위 줄로는 거꾸로.
+## 같은 줄: 바로 옆이면 옆 가장자리끼리, 떨어져 있으면 아래 틈으로 돌아 b 아래로 들어간다.
+static func connector_path(a: Rect2, b: Rect2, gap: Vector2) -> PackedVector2Array:
+	var ac := a.get_center()
+	var bc := b.get_center()
+	var pts := PackedVector2Array()
+	if b.position.y >= a.end.y or b.end.y <= a.position.y:
+		var down := b.position.y >= a.end.y
+		var a_y := a.end.y if down else a.position.y
+		var b_y := b.position.y if down else b.end.y
+		var step := gap.y / 2.0 if down else -gap.y / 2.0
+		var b_mid := b_y - step
+		pts.append(Vector2(ac.x, a_y))
+		if absf(b_y - a_y) > gap.y + 0.5:
+			# 사이에 줄이 있다: a 바로 아래(위) 틈 → a 옆 세로 틈 → b 바로 위(아래) 틈
+			var side_x := a.end.x + gap.x / 2.0 if bc.x >= ac.x else a.position.x - gap.x / 2.0
+			pts.append(Vector2(ac.x, a_y + step))
+			pts.append(Vector2(side_x, a_y + step))
+			pts.append(Vector2(side_x, b_mid))
+			pts.append(Vector2(bc.x, b_mid))
+		elif not is_equal_approx(ac.x, bc.x):
+			pts.append(Vector2(ac.x, b_mid))
+			pts.append(Vector2(bc.x, b_mid))
+		pts.append(Vector2(bc.x, b_y))
+		return pts
+	var right := bc.x >= ac.x
+	var gap_x := b.position.x - a.end.x if right else a.position.x - b.end.x
+	if gap_x <= gap.x + 0.5 and is_equal_approx(ac.y, bc.y):
+		pts.append(Vector2(a.end.x if right else a.position.x, ac.y))
+		pts.append(Vector2(b.position.x if right else b.end.x, bc.y))
+		return pts
+	var under := maxf(a.end.y, b.end.y) + gap.y / 2.0
+	pts.append(Vector2(ac.x, a.end.y))
+	pts.append(Vector2(ac.x, under))
+	pts.append(Vector2(bc.x, under))
+	pts.append(Vector2(bc.x, b.end.y))
+	return pts
+
+
+## 꺾은선 끝(b 테두리)의 화살표 세모 [끝, 밑변 한쪽, 밑변 다른 쪽]: 마지막 토막 방향으로 b 안을 가리킨다.
+static func arrow_points(path: PackedVector2Array) -> PackedVector2Array:
+	var tip := path[path.size() - 1]
+	var dir := (tip - path[path.size() - 2]).normalized()
+	var side := Vector2(-dir.y, dir.x) * ARROW.y / 2.0
+	var base := tip - dir * ARROW.x
+	return PackedVector2Array([tip, base + side, base - side])
 
 
 func _panel(c: Control) -> void:

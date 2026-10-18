@@ -41,6 +41,8 @@ const RESULT_BOTTOM := 20.0
 ## 탐색 화면이 전투 중 알림 줄(저장 실패 등)을 띄우는 자리: 위 막대 바로 아래, 높이 TOAST_H. 결과 창은 이 줄 아래에 둔다.
 const TOAST_Y := TOP_H + 8.0
 const TOAST_H := 36.0
+## 스킬 설명 칸(적 영역 아래 ~ 대원 칸 위, 스킬 목록·그 스킬의 대상 고르기 동안).
+const INFO_GAP := 6.0
 
 # ---- 바깥에서 정하는 값 ----
 ## 0 이면 연출을 바로 끝 상태로 맞춘다(시험).
@@ -81,6 +83,10 @@ var accepted_inputs := 0
 var enemy_area: EnemyArea
 var party_cards: PartyCards
 var panel: CommandPanel
+## 스킬 설명 칸(누르기를 받지 않는다). 머리(이름·Lv·TP)와 설명 한 줄(SkillSummary).
+var skill_info: Control
+var skill_info_title := ""
+var skill_info_text := ""
 var log_button: BattleButton
 var log_view: BattleLogView
 var result_panel: Control
@@ -129,6 +135,12 @@ func build(text_db: TextDb) -> void:
 	add_child(panel)
 	panel.build(texts)
 	panel.pressed.connect(_on_panel)
+	skill_info = Control.new()
+	skill_info.name = "SkillInfo"
+	skill_info.mouse_filter = MOUSE_FILTER_IGNORE
+	skill_info.visible = false
+	skill_info.draw.connect(_draw_skill_info)
+	add_child(skill_info)
 	log_button = BattleButton.new()
 	log_button.name = "LogButton"
 	log_button.setup("", texts.t("battle.ui.log"))
@@ -451,8 +463,11 @@ func _skill_ids() -> Array[String]:
 func _choose_skill(sid: String) -> bool:
 	if sub != "skills" or not _skill_ids().has(sid):
 		return false
+	# 누른 줄로 커서를 옮긴다: 못 쓰는 스킬이어도 설명 칸이 그 스킬을 보이고 이유를 알린다(이어서 Enter 는 같은 줄).
+	cursor = _skill_ids().find(sid)
 	var why := BattleRules.skill_block_reason(state, member, sid)
 	if not why.is_empty():
+		_refresh()
 		_show_notice(_reason_text(why))
 		return true
 	var s := BattleRules.skill_of(state, member, sid)
@@ -878,6 +893,7 @@ func _refresh() -> void:
 		_cancel_pointers()
 	_refresh_cards()
 	_refresh_panel()
+	_refresh_skill_info()
 	queue_redraw()
 
 
@@ -963,6 +979,42 @@ func _refresh_panel() -> void:
 			panel.show_target(title, texts.t("battle.ui.choose_target", {"skill": display.skill_name(target_skill)}))
 
 
+## 스킬 목록에서 커서가 있는 스킬, 또는 목록에서 고른 스킬의 대상 고르기 동안 그 스킬 설명(06 §9.2, M2.6 U2).
+## 숫자는 SkillSummary 가 스킬 정의에서 읽는다. 로그 창이 열리면 감춘다(같은 자리를 덮는다).
+func _refresh_skill_info() -> void:
+	var sid := ""
+	if phase == "command" and not log_view.visible:
+		if sub == "skills":
+			var ids := _skill_ids()
+			if cursor >= 0 and cursor < ids.size():
+				sid = ids[cursor]
+		elif sub == "target" and target_from_skills:
+			sid = target_skill
+	skill_info.visible = not sid.is_empty()
+	if sid.is_empty():
+		skill_info_title = ""
+		skill_info_text = ""
+		return
+	var s := BattleRules.skill_of(state, member, sid)
+	var level := int(state.battle.party[member].skills.get(sid, 1))
+	skill_info_title = SkillSummary.head(texts, s, level)
+	skill_info_text = SkillSummary.line(texts, s, level)
+	skill_info.queue_redraw()
+
+
+func _draw_skill_info() -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.06, 0.09, 0.92)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(0.25, 0.55, 0.62)
+	sb.set_corner_radius_all(10)
+	skill_info.draw_style_box(sb, Rect2(Vector2.ZERO, skill_info.size))
+	var font := get_theme_default_font()
+	var w := skill_info.size.x - 32.0
+	skill_info.draw_string(font, Vector2(16, 30), skill_info_title, HORIZONTAL_ALIGNMENT_LEFT, w, 19, Color(1.0, 0.88, 0.5))
+	skill_info.draw_multiline_string(font, Vector2(16, 58), skill_info_text, HORIZONTAL_ALIGNMENT_LEFT, w, 17, 2, Color(0.88, 0.95, 1.0))
+
+
 func _layout() -> void:
 	if not _built:
 		return
@@ -974,6 +1026,8 @@ func _layout() -> void:
 	enemy_area.size = Vector2(left_w, ENEMY_BOTTOM - TOP_H)
 	panel.position = Vector2(left_w, TOP_H)
 	panel.size = Vector2(PANEL_W, PANEL_BOTTOM - TOP_H)
+	skill_info.position = Vector2(16, ENEMY_BOTTOM + INFO_GAP)
+	skill_info.size = Vector2(left_w - 32, PARTY_TOP - ENEMY_BOTTOM - 2.0 * INFO_GAP)
 	party_cards.position = Vector2(0, PARTY_TOP)
 	party_cards.size = Vector2(s.x, s.y - PARTY_TOP)
 	log_button.position = Vector2(s.x - LOG_BUTTON.x, 0)
@@ -1052,6 +1106,9 @@ func visible_buttons() -> Array[TouchButton]:
 	for n in root_node.find_children("*", "TouchButton", true, false):
 		var b := n as TouchButton
 		if b.is_visible_in_tree() and b.mouse_filter != MOUSE_FILTER_IGNORE and not out.has(b):
+			# 스킬 목록 줄은 목록 안에 다 보일 때만(잘려 안 보이는 줄의 가운데는 다른 것 위다)
+			if b is PartyButton and (b as PartyButton).scroller != null and not (b as PartyButton).scroller.shows(Rect2(b.position, b.size)):
+				continue
 			out.append(b)
 	return out
 
@@ -1072,4 +1129,5 @@ func debug_info(css: Callable) -> Dictionary:
 	return {"open": true, "phase": phase, "sub": sub, "member": member, "turn": display.turn,
 		"targets": target_slots if sub == "target" else [], "target_side": target_side if sub == "target" else "",
 		"enemy_hp": enemy_hp, "charging": charging, "log": log_view.visible, "log_lines": log_view.lines.size(), "outcome": outcome,
-		"result_lines": result_lines if phase == "result" else [], "buttons": buttons}
+		"result_lines": result_lines if phase == "result" else [], "panel": panel.visible,
+		"skill_info": [skill_info_title, skill_info_text] if skill_info.visible else [], "buttons": buttons}

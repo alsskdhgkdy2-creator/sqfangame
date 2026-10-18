@@ -281,7 +281,11 @@ func test_plus_changes_only_the_draft() -> void:
 	check_eq(s.state.party.members[DUELIST_A].skills[HIGH_SLASH], 1, "배운 레벨 그대로")
 	check_eq(st.nodes[0].draft, 1, "노드에 초안 표시")
 	check_eq(st.nodes[0].level_line, "Lv 2/5", "노드 레벨은 초안을 넣은 값")
-	check(st._sp_label.text.contains("-1"), "남은 SP 줄에 배분 중: %s" % st._sp_label.text)
+	check_eq(st._sp_label.text, "남은 SP 2 → 1", "초안이 있으면 「남은 SP 지금 → 확정 뒤」")
+	await kit.tap(kit.center_of(st.plus_button))
+	check_eq(st._sp_label.text, "남은 SP 2 → 0", "초안 둘")
+	await kit.tap(kit.center_of(st.revert_button))
+	check_eq(st._sp_label.text, "남은 SP 2", "초안이 없으면 남은 SP 만")
 
 
 func test_commit_dialog_back_keeps_draft_and_confirm_allocates_once() -> void:

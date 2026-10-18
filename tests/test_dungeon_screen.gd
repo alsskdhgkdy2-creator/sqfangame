@@ -1042,7 +1042,7 @@ func test_snapshot_lists_party_menu_buttons_and_growth_fields() -> void:
 	snap = s.debug_snapshot()
 	var pm: Dictionary = snap["party_menu"]
 	check_eq([pm["tab"], pm["member"], pm["draft"], pm["dialog"], pm["dialog_pick"]], ["skills", 1, {"skill.blade_duelist.high_slash": 1}, "commit", 0], "초안·확인 창·고른 단추")
-	check_eq(pm["sp_line"], "남은 SP 2(배분 중 -1)", "남은 SP 줄")
+	check_eq(pm["sp_line"], "남은 SP 2 → 1", "남은 SP 줄(초안 뒤)")
 	check(snap["buttons"].has("DialogOk") and snap["buttons"].has("DialogBack") and not snap["buttons"].has("Tab_status"), "확인 창이 떠 있으면 그 단추만")
 	await kit.press_key(KEY_ESCAPE)
 	snap = s.debug_snapshot()
