@@ -36,14 +36,15 @@ static func is_scene_dir(path: String) -> bool:
 		and not rest.contains("/") and not rest.contains("\\") and not rest.contains("..")
 
 
-## 화면을 만들어 트리에 넣는다. 시드는 고정, 연출은 즉시, 플랫폼은 PC 로 본다.
-func open(platform: String = "native", seed_value: int = 7) -> DungeonScreen:
+## 화면을 만들어 트리에 넣는다. 시드는 고정, 연출은 즉시, 플랫폼은 PC 로 본다. query 는 주소 인자 글(예 "debug=1").
+func open(platform: String = "native", seed_value: int = 7, query: String = "") -> DungeonScreen:
 	screen = SCREEN.instantiate()
 	screen.save_dir = dir + "/saves"
 	screen.settings_path = dir + "/settings.json"
 	screen.platform = platform
 	screen.seed_override = seed_value
 	screen.anim_speed = 0.0
+	screen.url_query = query
 	tree.root.add_child(screen)
 	await frames(2)
 	return screen

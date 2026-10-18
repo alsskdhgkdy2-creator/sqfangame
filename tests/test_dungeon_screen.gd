@@ -9,10 +9,10 @@ const START := Vector2i(2, 18)
 var kit: Kit
 
 
-func _open(platform: String = "native") -> DungeonScreen:
+func _open(platform: String = "native", query: String = "") -> DungeonScreen:
 	timeout_sec = 20.0
 	kit = Kit.new(tree)
-	return await kit.open(platform)
+	return await kit.open(platform, 7, query)
 
 
 func teardown() -> void:
@@ -38,6 +38,27 @@ func _walk_into_battle(s: DungeonScreen) -> void:
 		if s.state.party.at.y <= 15:
 			break
 		await kit.press_key(KEY_W)
+
+
+## 전투 층에서 기본 정책 명령을 많아야 turns 턴 내고(연출은 즉시), 아직 전투 중이면 디버그 요청 battle_finish(층의 입구 → 규칙의
+## finish → 저장)로 끝낸 뒤 결과 창을 Enter 로 닫는다. 자연 전투가 몇 턴에 어떻게 끝나든(이어짐·승리·전멸) 같은 길이다(D15).
+## 화면은 디버그 주소로 연 것이어야 한다. 돌려주는 값 = 전투 층이 부른 자동 저장 횟수(제출 + battle_finish).
+func _resolve_battle(s: DungeonScreen, turns: int = 2) -> int:
+	var saves := 0
+	for i in turns:
+		if not s.battle_layer.is_open() or s.battle_layer.phase != "command":
+			break
+		check(s.battle_layer.handle("commands", BattlePolicy.choose(s.state, BattlePolicy.DEFAULT)), "정책 명령 제출")
+		saves += 1
+		await kit.frames(2)
+	if s.battle_layer.is_open() and s.battle_layer.phase == "command":
+		var r: Variant = JSON.parse_string(s._on_debug_request(JSON.stringify({"op": "battle_finish"})))
+		check(typeof(r) == TYPE_DICTIONARY and r.get("ok", false), "아직 전투 중이면 battle_finish: %s" % str(r))
+		saves += 1
+		await kit.frames(2)
+	if s.battle_layer.is_open() and s.battle_layer.phase == "result":
+		await kit.press_key(KEY_ENTER)
+	return saves
 
 
 func test_kit_purges_only_stale_scene_dirs() -> void:
@@ -336,7 +357,7 @@ func test_import_replaces_state_and_late_result_is_dropped() -> void:
 # ---- 자동 저장 시점 (05 §8.4) ----
 
 func test_autosave_call_points() -> void:
-	var s := await _open()
+	var s := await _open("native", "debug=1")
 	var n := s.autosave_count
 	await kit.press_key(KEY_A)
 	check_eq(s.autosave_count, n + 1, "규칙 행동(회전)")
@@ -364,29 +385,30 @@ func test_autosave_call_points() -> void:
 	check_eq(s.autosave_count, n + 6, "되돌릴 것이 없으면 저장하지 않는다")
 	await _walk_into_battle(s)
 	check(s.state.encounter.pending, "준비: 전투 대기")
-	check_eq(s.modal.kind, "battle", "전투 창")
+	check(s.battle_layer.is_open(), "전투 층")
 	var before := s.autosave_count
 	_check_auto_matches(s, "전투 대기")
-	# 거부된 행동: 창이 막고, 직접 규칙에 넣어도 거부되어 저장하지 않는다.
+	# 거부된 행동: 전투 층이 막고, 직접 규칙에 넣어도 거부되어 저장하지 않는다.
 	await kit.press_key(KEY_W)
 	s._do_action(A.FORWARD)
 	check_eq(s.autosave_count, before, "거부된 행동은 저장하지 않는다")
-	await kit.click(kit.center_of(kit.modal_button(s.texts.t("battle.win"))))
+	var saves := await _resolve_battle(s)
+	check(saves >= 1, "전투 턴 제출")
 	check(not s.state.encounter.pending, "전투 해결")
-	check_eq(s.modal.kind, "", "전투 창 닫힘")
-	check_eq(s.autosave_count, before + 1, "전투 해결")
+	check(not s.battle_layer.is_open(), "전투 층 닫힘")
+	check_eq(s.autosave_count, before + saves, "전투 턴 제출(·battle_finish)마다 자동 저장, 결과 창을 닫을 때는 저장하지 않음")
 	_check_auto_matches(s, "전투 해결")
 
 
 func test_pending_battle_is_saved_and_reopened() -> void:
 	var s := await _open()
 	await _walk_into_battle(s)
-	check_eq(s.modal.kind, "battle", "전투 창")
+	check(s.battle_layer.is_open(), "전투 층")
 	var h := kit.hash_now()
 	s = await kit.reopen()
 	check_eq(kit.hash_now(), h, "다시 열면 같은 상태")
 	check(s.state.encounter.pending, "전투 대기 그대로")
-	check_eq(s.modal.kind, "battle", "다시 열면 전투 창")
+	check(s.battle_layer.is_open() and s.battle_layer.phase == "command", "다시 열면 전투 층 명령 입력")
 	await kit.press_key(KEY_W)
 	check_eq(kit.hash_now(), h, "전투 창에서 이동하지 않는다")
 

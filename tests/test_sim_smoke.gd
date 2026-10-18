@@ -32,7 +32,8 @@ func test_smoke_run_format_and_hash_repeat() -> void:
 	var r1 := lib.run(plan, func(l): lines.append(l))
 	check_eq([r1["games"], r1["chains_run"], r1["cells"].size()], [20, 2, 2], "계획 수 완료")
 	for c in r1["cells"]:
-		check_eq([c["outcomes"]["stalled"], c["outcomes"]["error"], c["games"]], [0, 0, 10], "교착·오류 없음 %s" % c["formation"])
+		# 교착(제출 상한 도달)은 관측한 끝이라 요구하지 않는다(D15). 명령 거부(오류)는 없어야 한다.
+		check_eq([c["outcomes"]["error"], c["games"], c["ended"] + c["outcomes"]["stalled"] + c["outcomes"]["error"]], [0, 10, 10], "오류 없음·판 수 %s" % c["formation"])
 	check_eq(r1["save_error_count"], 0, "표본 판 매 턴 저장 왕복")
 	check_eq(lines.size(), 22, "원자료 줄: 판 20 + 연전 2")
 	var rb := RegEx.create_from_string(LINE_B)
@@ -226,26 +227,30 @@ func test_exit_codes_and_report_write_failures() -> void:
 	werr = SimLib.write_report(r, ProjectSettings.globalize_path(Fx.SAVE_DIR + "/blocker_file"))
 	check(werr.is_empty(), "쓸 수 있는 경로는 성공(덮어씀): %s" % werr)
 	check_eq(JSON.parse_string(FileAccess.get_file_as_string(Fx.SAVE_DIR + "/blocker_file"))["result_hash"], r["result_hash"], "쓴 보고서를 다시 읽음")
-	# 저장 왕복 실패 → 실행 오류 2(밸런스 1 이 아니다).
+	# 저장 왕복 실패 → 실행 오류 2.
 	var bad := r.duplicate(true)
 	bad["save_error_count"] = 1
 	bad["checks"] = lib.checks(bad, plan)
 	check_eq(SimLib.exit_code(bad), 2, "표본 저장 왕복 실패 → 2")
-	# 교착 probe → 2(probe 는 0·2 만).
-	lib.config["stall_limit"] = 1
+	# 제출 상한 도달(교착)은 관측한 끝: 상한 0 이면 구성으로 모든 판·연전이 제출 없이 상한에 닿는다 → 참고, 종료 코드 0(D15).
+	lib.config["stall_limit"] = 0
 	var probe := lib.plan_of("probe")
 	probe["games_per_cell"] = 3
 	probe["chains_per_party"] = 1
 	var pr := lib.run(probe)
-	check(pr["cells"][0]["outcomes"]["stalled"] == 3, "한 턴 상한이면 모두 교착")
-	check_eq(SimLib.exit_code(pr), 2, "교착 probe → 2")
-	check(pr["checks"].all(func(c): return c["kind"] == "exec"), "probe 에는 밸런스 판정이 없음")
+	check_eq([pr["cells"][0]["outcomes"]["stalled"], pr["cells"][0]["ended"], pr["chains"][0]["codes"]["stalled"]], [3, 0, 1], "상한 0 이면 모두 교착")
+	var obs: Array = pr["checks"].filter(func(c): return c["kind"] == "observed")
+	check(obs.size() == 1 and obs[0]["value"] == 4 and not obs[0]["pass"] and obs[0]["note"] == "참고: 제출 상한 도달", "교착은 관측 판정에 참고로: %s" % str(obs))
+	check(pr["checks"].filter(func(c): return c["kind"] == "exec").all(func(c): return c["pass"]), "교착은 실행 판정을 떨어뜨리지 않음")
+	check_eq(SimLib.exit_code(pr), 0, "교착 probe → 0")
+	check(not pr["checks"].any(func(c): return c["kind"] == "balance"), "probe 에는 밸런스 판정이 없음")
 	lib.config["stall_limit"] = 50
-	# 밸런스 범위만 벗어나면 1, gate 가 아닌 참고 판정은 종료 코드에 쓰지 않음.
-	var fake := {"checks": [SimLib._check("교착 0", 0, "0", true, "exec"), SimLib._check("가중 평균", 9.0, "3~5", false, "balance", true)]}
-	check_eq(SimLib.exit_code(fake), 1, "밸런스 범위 밖 → 1")
-	fake["checks"][1]["gate"] = false
-	check_eq(SimLib.exit_code(fake), 0, "참고 판정은 종료 코드에 쓰지 않음")
+	# 밸런스 범위 밖은 참고로만 적고 종료 코드에 쓰지 않는다(D15).
+	var fake := {"checks": [SimLib._check("교착 0", 0, "0", true, "exec"), SimLib._check("가중 평균", 9.0, "3~5", false, "balance")]}
+	check_eq(SimLib.exit_code(fake), 0, "밸런스 범위 밖이어도 → 0")
+	check_eq(fake["checks"][1].get("note"), "참고: 범위 밖", "범위 밖 밸런스 판정에 「참고: 범위 밖」")
+	check_eq(SimLib._check("가중 평균", 4.0, "3~5", true, "balance").get("note"), "참고", "범위 안 밸런스 판정은 「참고」")
+	check(not fake["checks"][0].has("note"), "실행 판정에는 참고 표시 없음")
 	fake["checks"].append(SimLib._check("판정에 필요한 결과가 모두 있음", "없음: P2/default", "0", false, "exec"))
 	check_eq(SimLib.exit_code(fake), 2, "필요한 결과가 없으면 → 2")
 	Fx.clean_saves()
@@ -262,6 +267,63 @@ func test_missing_results_fail_instead_of_skipping() -> void:
 	check(not cs.filter(func(c): return c["name"] == "모든 판 완료")[0]["pass"], "완료 판정 실패")
 	report["checks"] = cs
 	check_eq(SimLib.exit_code(report), 2, "종료 코드 2")
+
+
+func test_balance_out_of_range_is_only_a_note() -> void:
+	# small 계획의 결과가 모두 있고 실행 판정은 통과, 밸런스 값은 모두 범위 밖인 보고. 범위 밖은 참고로만 적고 종료 코드는 0(D15).
+	var lib := _lib()
+	var plan := lib.plan_of("small")
+	var report := {"cells": [], "chains": [], "weighted": {}, "save_error_count": 0, "chains_run": plan["chain_parties"].size() * plan["chains_per_party"],
+		"games": plan["cells"].size() * plan["games_per_cell"]}
+	for c in plan["cells"]:
+		report["cells"].append({"party": c[0], "formation": c[1], "policy": c[2], "games": plan["games_per_cell"], "avg_turns": 99.0, "wipe_rate": 1.0,
+			"outcomes": {"stalled": 0, "error": 0}})
+		report["weighted"]["%s/%s" % [c[0], c[2]]] = 99.0 if c[2] != "full" else 100.0
+	for pid in plan["chain_parties"]:
+		report["chains"].append({"party": pid, "counted": 1, "median_L": 0, "codes": {"stalled": 0, "error": 0}})
+	var cs := lib.checks(report, plan)
+	var execs := cs.filter(func(c): return c["kind"] == "exec")
+	var balances := cs.filter(func(c): return c["kind"] == "balance")
+	check(not execs.is_empty() and execs.all(func(c): return c["pass"]), "실행 판정은 모두 통과: %s" % str(execs.filter(func(c): return not c["pass"])))
+	check(balances.size() >= 10, "small 밸런스 판정이 빠지지 않음: %d건" % balances.size())
+	check(balances.all(func(c): return not c["pass"] and c["note"] == "참고: 범위 밖"), "모두 범위 밖이고 「참고: 범위 밖」 표시")
+	report["checks"] = cs
+	check_eq(SimLib.exit_code(report), 0, "밸런스 범위 밖뿐이면 종료 코드 0")
+	report["cells"][0]["outcomes"]["error"] = 1
+	report["checks"] = lib.checks(report, plan)
+	check_eq(SimLib.exit_code(report), 2, "실행 오류가 섞이면 종료 코드 2")
+
+
+func test_stalls_make_metrics_uncomputable_not_errors() -> void:
+	# small 결과가 모두 있되 P1 칸은 모든 판이 제출 상한에 닿고(끝난 판 0) P1 연전도 모두 상한 도달(세어진 연전 0)인 보고.
+	# 상한 도달은 관측(참고), 그 때문에 계산할 수 없는 지표는 「참고: 계산 불가」, 종료 코드 0(D15).
+	var lib := _lib()
+	var plan := lib.plan_of("small")
+	var report := {"cells": [], "chains": [], "weighted": {}, "save_error_count": 0, "chains_run": plan["chain_parties"].size() * plan["chains_per_party"],
+		"games": plan["cells"].size() * plan["games_per_cell"]}
+	for c in plan["cells"]:
+		var stuck: bool = c[0] == "P1"
+		report["cells"].append({"party": c[0], "formation": c[1], "policy": c[2], "games": plan["games_per_cell"], "ended": 0 if stuck else plan["games_per_cell"],
+			"avg_turns": 0.0 if stuck else 4.0, "wipe_rate": 0.0, "outcomes": {"stalled": plan["games_per_cell"] if stuck else 0, "error": 0}})
+		report["weighted"]["%s/%s" % [c[0], c[2]]] = 0.0 if stuck else 4.0
+	for pid in plan["chain_parties"]:
+		var stuck: bool = pid == "P1"
+		report["chains"].append({"party": pid, "counted": 0 if stuck else 1, "median_L": -1 if stuck else 5,
+			"codes": {"stalled": plan["chains_per_party"] if stuck else 0, "error": 0}})
+	var cs := lib.checks(report, plan)
+	report["checks"] = cs
+	check_eq(SimLib.exit_code(report), 0, "상한 도달·계산 불가뿐이면 종료 코드 0")
+	check(cs.filter(func(c): return c["kind"] == "exec").all(func(c): return c["pass"]), "실행 판정은 모두 통과")
+	var na: Array = cs.filter(func(c): return c.get("note") == "참고: 계산 불가").map(func(c): return c["name"])
+	for want in ["P1 기본 가중 평균 턴(small 연기)", "P1 기본 가중 평균 턴", "P1 원정 길이 L 중앙값", "P1 전력 ≤ 기본 + %s" % lib.config["acceptance"]["full_minus_default_max"]]:
+		check(na.has(want), "계산 불가(참고): %s — %s" % [want, str(na)])
+	check(na.any(func(n: String) -> bool: return n.begins_with("P1 formation.") and n.ends_with("평균 턴")), "끝난 판 없는 칸의 평균 턴은 계산 불가")
+	check(not na.any(func(n: String) -> bool: return n.begins_with("P2") or n.begins_with("P3")), "끝난 판이 있는 파티는 계산한다")
+	var obs: Array = cs.filter(func(c): return c["kind"] == "observed")
+	check(obs.size() == 1 and obs[0]["note"] == "참고: 제출 상한 도달", "상한 도달 관측: %s" % str(obs))
+	report["chains"].remove_at(0)
+	report["checks"] = lib.checks(report, plan)
+	check_eq(SimLib.exit_code(report), 2, "계획에 있는 연전 결과가 빠지면 여전히 2")
 
 
 # ---- 기대 피해: 무효·약점·내성·강화·약화·방어·전열 방어 ----

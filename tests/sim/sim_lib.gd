@@ -10,6 +10,12 @@ const CHAIN_WIPED := 0
 const CHAIN_CAP := 1
 const CHAIN_STALLED := 3
 const CHAIN_ERROR := 4
+## 참고 판정의 표기(D15: 밸런스·관측은 참고 판정이라 종료 코드에 쓰지 않는다).
+const BALANCE_OUT := "참고: 범위 밖"
+const BALANCE_NA := "참고: 계산 불가"
+const OBSERVED_OUT := "참고: 제출 상한 도달"
+## 끝난 판(승리·전멸·도주)이 없어 계산할 수 없는 지표의 값.
+const UNAVAILABLE := "계산 불가(끝난 판 없음)"
 
 var config: Dictionary = {}
 var db: BattleDb
@@ -350,6 +356,7 @@ static func _data_files(data_dir: String, extra: Array) -> Array[String]:
 # ---- 판 하나 ----
 
 ## 상태에 전투를 연 뒤 끝날 때까지(최대 stall_limit 제출) 정책대로 싸운다. 돌려주는 기록은 모두 정수(skills 제외).
+## 상한에 닿으면 outcome 「stalled」: 오류가 아닌 관측한 끝(표본 길이 상한)이다. 명령 거부만 「error」.
 func fight(s: ExplorationState, policy: String) -> Dictionary:
 	var rec := {"outcome": "", "T": 0, "tp": 0, "damage": 0, "start_hp": 0, "ailment_turns": 0, "bind_turns": 0, "skills": {}, "enemy_hp": [], "save_errors": []}
 	for m in s.party.members:
@@ -608,6 +615,7 @@ func _finish_agg(agg: Dictionary) -> Dictionary:
 	var out := agg.duplicate(true)
 	out.erase("turns")
 	out.erase("turns_victory")
+	out["ended"] = agg["turns"].size()
 	out["avg_turns"] = _mean(agg["turns"])
 	out["avg_turns_victory"] = _mean(agg["turns_victory"])
 	out["median_turns"] = lower_median(agg["turns"])
@@ -650,10 +658,13 @@ func _weighted(cells: Array) -> Dictionary:
 
 
 ## 판정 목록. 판정마다 kind 가 있다:
-##   exec    실행·불변 조건(교착·오류·완료·표본 저장 왕복·필수 결과). 실패하면 종료 코드 2. 늘 종료 코드에 쓴다.
-##   balance 밸런스 범위. gate 가 참일 때만 종료 코드 1 을 정한다: small 은 연기 범위(06 §7.5 끝), large 는 §7.5 표.
-## small 에서도 §7.5 표를 참고(gate 거짓)로 함께 적는다. probe 에는 balance 판정이 없다(종료 코드 0·2, 06 §7.4).
-## small·large 에서 판정에 필요한 결과가 없으면 건너뛰지 않고 exec 실패로 적는다.
+##   exec     실행·불변 조건(명령 거부·시작 실패 오류·계획한 판 수 완료·표본 저장 왕복·계획에 있어야 할 결과). 실패하면 종료 코드 2.
+##   observed 관측: 판마다 제출 상한(stall_limit)에 닿아 끝까지 가지 않은 판(교착) 수. 규칙 실행 실패가 아니라 관측한 끝이라
+##            참고로만 적는다(D15). 닿으면 note 「참고: 제출 상한 도달」.
+##   balance  밸런스 범위: small 은 연기 범위(06 §7.5 끝)와 §7.5 표, large 는 §7.5 표. 참고 판정이라(D15) 범위 밖이어도
+##            종료 코드에 쓰지 않고 note 에 「참고: 범위 밖」을 적는다. 상한 도달 때문에 끝난 판이 없어 계산할 수 없는 지표
+##            (끝난 판 없는 칸의 평균 턴, 그 칸이 든 가중 평균, 세어진 연전이 없는 L)는 「참고: 계산 불가」.
+## probe 에는 balance 판정이 없다(06 §7.4). small·large 에서 계획에 있어야 할 칸·연전 결과가 없으면 건너뛰지 않고 exec 실패로 적는다.
 func checks(report: Dictionary, plan: Dictionary) -> Array:
 	var acc: Dictionary = config["acceptance"]
 	var out := []
@@ -671,7 +682,7 @@ func checks(report: Dictionary, plan: Dictionary) -> Array:
 		errs += ch["codes"]["error"]
 	var planned_games: int = plan["cells"].size() * plan["games_per_cell"]
 	var planned_chains: int = plan["chain_parties"].size() * plan["chains_per_party"]
-	out.append(_check("교착 0", stalled, "0", stalled == 0, "exec"))
+	out.append(_check("제출 상한(%d) 도달(교착)" % config["stall_limit"], stalled, "0", stalled == 0, "observed"))
 	out.append(_check("오류 0", errs, "0", errs == 0, "exec"))
 	out.append(_check("모든 판 완료", "%d/%d 판, %d/%d 연전" % [report["games"], planned_games, report["chains_run"], planned_chains],
 		"계획 수", incomplete == 0 and report["cells"].size() == plan["cells"].size() and report["games"] == planned_games and report["chains_run"] == planned_chains, "exec"))
@@ -679,23 +690,26 @@ func checks(report: Dictionary, plan: Dictionary) -> Array:
 		out.append(_check("표본 판 매 턴 저장 왕복", report.get("save_error_count", 0), "0", report.get("save_error_count", 0) == 0, "exec"))
 	if not size in PRODUCTION_SIZES:
 		return out
-	var large := size == "large"
 	var w: Dictionary = report["weighted"]
 	var missing := []
 	if size == "small":
 		var r: Array = acc["small_p1_weighted_turns"]
-		if w.has("P1/default"):
-			var v: float = w["P1/default"]
-			out.append(_check("P1 기본 가중 평균 턴(small 연기)", snappedf(v, 0.01), "%s~%s" % r, v >= r[0] and v <= r[1], "balance", true))
-		else:
+		if not w.has("P1/default"):
 			missing.append("P1/default")
+		elif _no_end_cell(report["cells"], "P1/default"):
+			out.append(_unavailable("P1 기본 가중 평균 턴(small 연기)", "%s~%s" % r))
+		else:
+			var v: float = w["P1/default"]
+			out.append(_check("P1 기본 가중 평균 턴(small 연기)", snappedf(v, 0.01), "%s~%s" % r, v >= r[0] and v <= r[1], "balance"))
 	var wt: Array = acc["weighted_turns"]
 	for p in SPEC_PARTIES:
 		var key: String = p + "/default"
 		if not w.has(key):
 			missing.append(key)
-			continue
-		out.append(_check("%s 기본 가중 평균 턴" % p, snappedf(w[key], 0.01), "%s~%s" % wt, w[key] >= wt[0] and w[key] <= wt[1], "balance", large))
+		elif _no_end_cell(report["cells"], key):
+			out.append(_unavailable("%s 기본 가중 평균 턴" % p, "%s~%s" % wt))
+		else:
+			out.append(_check("%s 기본 가중 평균 턴" % p, snappedf(w[key], 0.01), "%s~%s" % wt, w[key] >= wt[0] and w[key] <= wt[1], "balance"))
 	var ft: Array = acc["p1_formation_turns"]
 	var wmax: float = acc["wipe_rate_max"]
 	var border: Array = acc["wipe_rate_border"]
@@ -708,10 +722,12 @@ func checks(report: Dictionary, plan: Dictionary) -> Array:
 			if c.is_empty():
 				missing.append("%s/%s/default" % [p, f])
 				continue
-			if p == "P1":
-				out.append(_check("P1 %s 평균 턴" % f, snappedf(c["avg_turns"], 0.01), "%s~%s" % ft, c["avg_turns"] >= ft[0] and c["avg_turns"] <= ft[1], "balance", large))
+			if p == "P1" and c.get("ended", 1) == 0:
+				out.append(_unavailable("P1 %s 평균 턴" % f, "%s~%s" % ft))
+			elif p == "P1":
+				out.append(_check("P1 %s 평균 턴" % f, snappedf(c["avg_turns"], 0.01), "%s~%s" % ft, c["avg_turns"] >= ft[0] and c["avg_turns"] <= ft[1], "balance"))
 			var wr: float = c["wipe_rate"]
-			var chk := _check("%s %s 전멸률" % [p, f], "%.1f%%" % (wr * 100.0), "≤ %.0f%%" % (wmax * 100.0), wr <= wmax, "balance", large)
+			var chk := _check("%s %s 전멸률" % [p, f], "%.1f%%" % (wr * 100.0), "≤ %.0f%%" % (wmax * 100.0), wr <= wmax, "balance")
 			if wr >= border[0] and wr <= border[1]:
 				chk["border"] = true
 			out.append(chk)
@@ -719,39 +735,59 @@ func checks(report: Dictionary, plan: Dictionary) -> Array:
 	for ch in report["chains"]:
 		if ch["party"] == "P1":
 			p1_chain = ch
-	if p1_chain.is_empty() or p1_chain["counted"] == 0:
+	var mr: Array = acc["p1_chain_median"]
+	if p1_chain.is_empty():
 		missing.append("P1 연전 L")
+	elif p1_chain["counted"] == 0:
+		out.append(_unavailable("P1 원정 길이 L 중앙값", "%d~%d" % [mr[0], mr[1]]))  # 연전이 모두 상한 도달(교착)·오류로 끝남
 	else:
-		var mr: Array = acc["p1_chain_median"]
-		out.append(_check("P1 원정 길이 L 중앙값", p1_chain["median_L"], "%d~%d" % [mr[0], mr[1]], p1_chain["median_L"] >= mr[0] and p1_chain["median_L"] <= mr[1], "balance", large))
+		out.append(_check("P1 원정 길이 L 중앙값", p1_chain["median_L"], "%d~%d" % [mr[0], mr[1]], p1_chain["median_L"] >= mr[0] and p1_chain["median_L"] <= mr[1], "balance"))
 	for p in SPEC_PARTIES:
+		var name := "%s 전력 ≤ 기본 + %s" % [p, acc["full_minus_default_max"]]
 		if not (w.has(p + "/full") and w.has(p + "/default")):
 			missing.append(p + "/full")
 			continue
+		if _no_end_cell(report["cells"], p + "/full") or _no_end_cell(report["cells"], p + "/default"):
+			out.append(_unavailable(name, "≤ %s" % acc["full_minus_default_max"]))
+			continue
 		var d: float = w[p + "/full"] - w[p + "/default"]
-		out.append(_check("%s 전력 ≤ 기본 + %s" % [p, acc["full_minus_default_max"]], snappedf(d, 0.01), "≤ %s" % acc["full_minus_default_max"], d <= acc["full_minus_default_max"], "balance", large))
+		out.append(_check(name, snappedf(d, 0.01), "≤ %s" % acc["full_minus_default_max"], d <= acc["full_minus_default_max"], "balance"))
 	out.append(_check("판정에 필요한 결과가 모두 있음", "없음 %d" % missing.size() if missing.is_empty() else "없음: %s" % ", ".join(missing), "0", missing.is_empty(), "exec"))
 	return out
 
 
-## gate: exec 는 늘 참, balance 는 인자로.
-static func _check(name: String, value: Variant, range_text: String, ok: bool, kind: String, gate: bool = true) -> Dictionary:
-	return {"name": name, "value": value, "range": range_text, "pass": ok, "kind": kind, "gate": gate or kind == "exec"}
+## 참고 판정(balance·observed)에는 note(「참고」 또는 「참고: 범위 밖」·「참고: 제출 상한 도달」)를 붙인다.
+static func _check(name: String, value: Variant, range_text: String, ok: bool, kind: String) -> Dictionary:
+	var c := {"name": name, "value": value, "range": range_text, "pass": ok, "kind": kind}
+	if kind != "exec":
+		c["note"] = "참고" if ok else (OBSERVED_OUT if kind == "observed" else BALANCE_OUT)
+	return c
 
 
-## 종료 코드(06 §7.6): 2 = 설정·계획·보고서 쓰기·실행·불변 조건 실패, 1 = gate 인 밸런스 범위 실패, 0 = 통과.
+## 상한 도달 때문에 계산할 수 없는 밸런스 지표: 값 없이 「참고: 계산 불가」로 적는다.
+static func _unavailable(name: String, range_text: String) -> Dictionary:
+	var c := _check(name, UNAVAILABLE, range_text, false, "balance")
+	c["note"] = BALANCE_NA
+	return c
+
+
+## (파티/정책) 의 칸 가운데 끝난 판이 하나도 없는 칸이 있으면 참: 그 칸이 든 가중 평균 턴은 계산할 수 없다.
+static func _no_end_cell(cells: Array, key: String) -> bool:
+	for c in cells:
+		if "%s/%s" % [c["party"], c["policy"]] == key and c.get("ended", 1) == 0:
+			return true
+	return false
+
+
+## 종료 코드(06 §7.6, D15): 2 = 설정·계획·보고서 쓰기·실행(명령 거부·시작 실패)·불변 조건 실패, 0 = 그 밖. 밸런스 범위 밖·계산 불가와
+## 제출 상한 도달(교착)은 참고로만 적고 종료 코드에 쓰지 않는다.
 static func exit_code(report: Dictionary, write_error: String = "") -> int:
 	if not write_error.is_empty() or report.has("plan_errors") or not report.has("checks"):
 		return 2
-	var balance_fail := false
 	for c in report["checks"]:
-		if c["pass"]:
-			continue
-		if c["kind"] == "exec":
+		if c["kind"] == "exec" and not c["pass"]:
 			return 2
-		if c["gate"]:
-			balance_fail = true
-	return 1 if balance_fail else 0
+	return 0
 
 
 ## 보고서를 쓴다. 폴더 만들기·열기·쓰기·다시 읽어 맞춰 보기 중 하나라도 실패하면 이유 문자열, 성공하면 "".

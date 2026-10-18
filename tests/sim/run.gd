@@ -1,6 +1,8 @@
 ## 전투 시뮬레이션 실행기(06 §7.1). 쓰는 법:
 ##   timeout 1800 godot --headless -s tests/sim/run.gd -- --size probe|small|large [--seed N] [--out build/sim/report.json] [--save-check N]
-## 종료 코드(SimLib.exit_code): 0 통과, 1 밸런스 범위 밖, 2 설정·계획·실행·불변 조건·보고서 쓰기 오류(probe 는 0·2).
+## 종료 코드(SimLib.exit_code): 0 통과, 2 설정·계획·실행(명령 거부·시작 실패)·불변 조건·보고서 쓰기 오류. 밸런스 판정과 제출 상한
+## 도달(교착) 관측은 참고라(D15) 범위 밖·계산 불가·상한 도달이어도 0 이고, 판정 표·요약 줄·보고서(참고 판정의 checks[].note)에
+## 「참고: 범위 밖」·「참고: 계산 불가」·「참고: 제출 상한 도달」로 적는다. probe 에는 밸런스 판정이 없다.
 ## 마지막 줄은 「SIM 요약: …」 한 줄.
 extends SceneTree
 
@@ -52,13 +54,27 @@ func _init() -> void:
 		printerr(write_error)
 	_print_tables(report)
 	var code := SimLib.exit_code(report, write_error)
-	var gate_fail := 0
-	var gate_total := 0
+	var exec_fail := 0
+	var exec_total := 0
+	var ref_total := 0
+	var ref_notes := {}
 	for c in report["checks"]:
-		if c["gate"]:
-			gate_total += 1
+		if c["kind"] == "exec":
+			exec_total += 1
 			if not c["pass"]:
-				gate_fail += 1
+				exec_fail += 1
+		else:
+			ref_total += 1
+			if not c["pass"]:
+				ref_notes[c["note"]] = ref_notes.get(c["note"], 0) + 1
+	var balance_note := ""
+	if not ref_notes.is_empty():
+		var keys: Array = ref_notes.keys()
+		keys.sort()
+		for k in keys:
+			balance_note += ", %s %d/%d" % [k, ref_notes[k], ref_total]
+	elif ref_total > 0:
+		balance_note = ", 참고 판정 %d건 모두 범위 안" % ref_total
 	var errs := 0
 	var stalled := 0
 	for c in report["cells"]:
@@ -82,9 +98,9 @@ func _init() -> void:
 			turns.append("%s %.2f" % [p, w[p + "/default"]])
 	print("측정: 전투 %d(단일 %d + 연전 안 %d), 판당 %.2f ms, VmHWM %d KB, 정적 최대 %d B" % [fought, report["games"], report["battles_in_chains"],
 		report["sec_per_battle"] * 1000.0, report["vm_hwm_kb"], report["static_memory_peak"]])
-	var verdict: String = ["통과", "실패(범위 밖)", "실패(실행 오류)"][code]
-	print("SIM 요약: %s %d/%d — 기본 %s턴, 최대 전멸률 %.1f%%, L 중앙값 %s, 교착 %d, 오류 %d, 해시 %s, 설정 %s, 정의 %s, %.1f초%s" % [
-		verdict, gate_total - gate_fail, gate_total, " ".join(turns), max_wipe * 100.0, median, stalled, errs,
+	var verdict := "통과" if code == 0 else "실패(실행 오류)"
+	print("SIM 요약: %s %d/%d%s — 기본 %s턴, 최대 전멸률 %.1f%%, L 중앙값 %s, 교착 %d, 오류 %d, 해시 %s, 설정 %s, 정의 %s, %.1f초%s" % [
+		verdict, exec_total - exec_fail, exec_total, balance_note, " ".join(turns), max_wipe * 100.0, median, stalled, errs,
 		report["result_hash"], report["config_hash"], report["data_hash"], elapsed, ", 보고서 쓰기 실패" if not write_error.is_empty() else ""])
 	quit(code)
 
@@ -164,8 +180,11 @@ func _print_tables(r: Dictionary) -> void:
 	print("| 판정 | 종류 | 값 | 범위 | 통과 | 종료 코드에 씀 |")
 	print("|---|---|---|---|---|---|")
 	for c in r["checks"]:
-		print("| %s | %s | %s | %s | %s%s | %s |" % [c["name"], "실행" if c["kind"] == "exec" else "밸런스", str(c["value"]), c["range"], "예" if c["pass"] else "아니오",
-			" (경계)" if c.get("border", false) else "", ("2" if c["kind"] == "exec" else "1") if c["gate"] else "참고"])
+		var is_exec: bool = c["kind"] == "exec"
+		var passed: String = "예" if c["pass"] else ("아니오" if is_exec else str(c["note"]))
+		var kind: String = {"exec": "실행", "observed": "관측", "balance": "밸런스"}.get(c["kind"], str(c["kind"]))
+		print("| %s | %s | %s | %s | %s%s | %s |" % [c["name"], kind, str(c["value"]), c["range"], passed,
+			" (경계)" if c.get("border", false) else "", "2" if is_exec else "참고"])
 	print("")
 	print("스킬 사용(정책별): %s" % JSON.stringify(r["skill_use"], "", true))
 	if r["save_error_count"] > 0:

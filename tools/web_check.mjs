@@ -1,8 +1,18 @@
 // 웹 빌드 자동 확인(05 §11.3): ?debug=1 의 window.sqfDebug 로 상태를 읽으며 실제 키·마우스·파일 고르기로 조작한다.
-// 1) 고정 공략 행동열로 지름길을 열 때까지 걷는다(전투는 「승리」 단추). 2) 지도 편집(벽·바닥 색·메모 입력 창).
+// 전투 승패(밸런스)에 기대지 않는다(D15): 실제 누르기 한 턴은 어떻게 끝나도 그 끝에 맞는 화면·저장을 보고 공략을 잇는다.
+// 그 밖의 전투는 디버그 요청 battle_finish 로 넘긴다(전투 층이 규칙의 finish 「승리」 → 저장 → 연출 → 결과 창).
+// 1) 고정 공략 행동열로 지름길을 열 때까지 걷는다. 첫 전투(06 §10.4): 전투 시작 저장(IndexedDB)을 따로 둔다 → 새로 고침 → 같은
+//    해시·명령 입력 처음 → 전투 층 캡처 → 한 턴을 실제 누르기로(공격 → 적 칸 → … → 실행 → 누르기로 연출 건너뛰기) → 저장·해시
+//    (이어지면 턴 +1·로그) 확인 → 그 턴의 끝에 따라: 이어짐 → battle_finish → 결과 창 「확인」 / 승리·도주 → 결과 창 「확인」 /
+//    전멸 → M1 전멸 창 확인 → 「새 게임」 → 메뉴 「가져오기」로 전투 시작 저장 → 같은 전투(턴 0) → battle_finish → 결과 창.
+//    그 뒤 전투도 battle_finish, 남은 공략의 행동마다 해시 = 첫 전투 뒤 simulate(전투는 같은 finish 로 넘긴다).
+//    2) 지도 편집(벽·바닥 색·메모 입력 창).
 // 3) IndexedDB 의 자동 저장(세대와 저장 글의 상태 해시)이 화면과 같아질 때까지 기다린다. 4) 새로 고침 → 전체 해시와 다음 행동 결과 비교.
 // 5) 내보내기(내려받기) → 이동 → 가져오기(파일 고르기) → 해시 비교. 늦게 끝난 앞 가져오기(A)는 새 가져오기(B) 결과를
 //    덮지 않는다. 1MB 넘는 파일은 거부.
+// 6) 가져오기로 준비한 저장(전투 중, 넷 쓰러짐, 하나 HP 1 독) → 방어 → 실행 → 전멸 창(규칙 기능 확인).
+// 새 게임 시드는 SEED(디버그 주소 &seed=)로 고정한다: 실행마다 같은 인카운트·같은 첫 턴이 되게 하는 재현용이고, 값에 다른 뜻은 없다
+// (그 시드의 첫 턴이 이어지든 이기든 전멸하든 위 길로 통과해야 한다).
 // 실행: flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/web_check.mjs [너비x높이]
 // 결과: build/check/ 에 캡처·내보낸 파일·report.json.
 import { chromium } from 'playwright-core';
@@ -12,6 +22,10 @@ import path from 'node:path';
 import { idbMatches } from './web_check_lib.mjs';
 
 const [W, H] = (process.argv[2] ?? '1280x720').split('x').map(Number);
+// 새 게임 시드(디버그 주소 &seed=, 재현용).
+const SEED = 41;
+// IndexedDB 반영 기다림 한도(밀리초). 이 기기가 느린 상태(백그라운드 CPU 제한)면 늘려 「느림」과 「반영 안 됨」을 가른다.
+const IDB_WAIT_MS = Number(process.env.WEB_CHECK_IDB_MS ?? 10000);
 const root = path.resolve('build/web');
 const outDir = path.resolve('build/check');
 fs.mkdirSync(outDir, { recursive: true });
@@ -29,9 +43,9 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(p).pipe(res);
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const url = `http://127.0.0.1:${server.address().port}/?debug=1`;
+const url = `http://127.0.0.1:${server.address().port}/?debug=1&seed=${SEED}`;
 
-const report = { size: `${W}x${H}`, steps: [], checks: [], errors: [] };
+const report = { size: `${W}x${H}`, seed: SEED, idbWaitMs: IDB_WAIT_MS, steps: [], checks: [], errors: [] };
 const log = (msg, extra) => { console.log(msg, extra === undefined ? '' : JSON.stringify(extra)); report.steps.push(extra === undefined ? msg : { msg, ...extra }); };
 const check = (ok, name, detail) => { report.checks.push({ ok: !!ok, name, ...(detail ? { detail } : {}) }); console.log(ok ? 'OK  ' : 'FAIL', name, detail ? JSON.stringify(detail) : ''); };
 
@@ -96,26 +110,143 @@ async function waitIdb(want) {
     }
     const info = { ...r, hash: r.hash?.slice(0, 12), want: { generation: want.generation, hash: want.hash?.slice(0, 12) } };
     if (idbMatches(r, want)) return { ...info, waitedMs: Date.now() - t0 };
-    if (Date.now() - t0 > 10000) return { ...info, timeout: true };
+    if (Date.now() - t0 > IDB_WAIT_MS) return { ...info, timeout: true };
     await page.waitForTimeout(50);
   }
 }
 let battles = 0;
-let battleShot = false;
-// 행동 하나: 키를 누르고, 세대가 오르고 연출이 끝날 때까지 기다린다. 전투 창이면 「승리」.
+let battleTurns = 0;
+let reloadChecked = false;
+const tryWait = (pred, what, ms) => waitFor(pred, what, ms).catch(() => null);
+// 행동 하나: 키를 누르고, 세대가 오르고 연출이 끝날 때까지 기다린다. 전투가 열리면 기능을 보고 battle_finish 로 넘긴다.
 async function act(name) {
   const before = await snap();
   await page.keyboard.press(KEYS[name]);
   let s = await waitFor((x) => x.generation > before.generation && !x.busy, `행동 ${name}`);
-  const actionHash = s.hash;  // 전투 해결 전(모의 실행도 행동 직후 해시를 낸다)
-  if (s.modal === 'battle') {
+  const actionHash = s.hash;  // 전투 전(모의 실행도 행동 직후 해시를 낸다)
+  if (s.battle?.open) {
     battles += 1;
-    if (!battleShot) { battleShot = true; await page.screenshot({ path: `${outDir}/05_battle.png` }); }
-    const g = s.generation;
-    await clickButton('BattleWin', s);
-    s = await waitFor((x) => x.modal === '' && !x.pending && x.generation > g, '전투 해결');
+    if (battles === 1) s = await firstBattle(s);
+    s = await finishBattle(s, battles === 1);
+    check(!s.battle?.open && !s.pending && s.modal === '' && !s.wiped, `전투 ${battles}: 끝나고 탐색으로`, { modal: s.modal, wiped: s.wiped, outcome: s.battle?.outcome });
   }
   return { ...s, actionHash };
+}
+// 첫 전투: 전투 시작 저장을 따로 두고(전멸했을 때 돌아올 곳) 새로 고침 확인 → 실제 누르기 한 턴 → 그 턴의 끝에 맞는 길.
+// 돌려주는 상태는 이어지는 전투(명령 입력)이거나 결과 창이다(finishBattle 이 마무리한다).
+async function firstBattle(s) {
+  s = await reloadInBattle(s);
+  const pre = await idbAuto();
+  const prePath = `${outDir}/battle_start.json`;
+  const preOk = typeof pre.text === 'string' && (await request({ op: 'hash_save', text: pre.text })).hash === s.hash;
+  check(preOk, '전투 시작 저장(IndexedDB) = 화면 상태: 전멸했을 때 돌아올 곳', { generation: pre.generation, hash: s.hash.slice(0, 12) });
+  if (preOk) fs.writeFileSync(prePath, pre.text);
+  const startHash = s.hash;
+  s = await firstBattleTurn(s);
+  if (s.wiped || s.modal === 'wipe') {
+    // 정상적인 전멸(능력치·난수에 따라 일어날 수 있다): 전멸 창과 저장을 보고, 전투 시작 저장으로 돌아가 공략을 잇는다.
+    check(s.wiped && s.modal === 'wipe' && !s.battle?.open && !s.pending && s.buttons.WipeNewGame,
+      '첫 턴에 전멸 → 결과 창 없이 M1 전멸 창(전멸 상태가 자동 저장됨)', { wiped: s.wiped, modal: s.modal, hp: s.hp });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: `${outDir}/05e_battle_wiped.png` });
+    if (!preOk) throw new Error('전멸했지만 돌아올 전투 시작 저장이 없다');
+    await clickButton('WipeNewGame');
+    s = await waitFor((x) => !x.wiped && x.modal === '', '전멸 창 → 새 게임');
+    await clickButton('MenuButton');
+    s = await waitFor((x) => x.modal === 'menu', '메뉴');
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import')]);
+    await chooser.setFiles(prePath);
+    s = await waitFor((x) => x.battle?.open && x.battle.phase === 'command' && x.hash === startHash, '전투 시작 저장 가져오기', 10000);
+    check(s.battle.turn === 0 && !s.wiped, '전멸 뒤 전투 시작 저장을 가져와 같은 전투(턴 0)로 돌아옴', { turn: s.battle.turn, generation: s.generation });
+    await page.mouse.click(Math.round(W * 0.3), 30);  // 캔버스에 키 포커스
+  } else if (!(s.battle?.open && s.battle.phase === 'command')) {
+    check(s.battle?.open && s.battle.phase === 'result' && ['victory', 'escaped'].includes(s.battle.outcome),
+      '첫 턴에 전투가 끝남 → 결과 창(승리·도주)', { phase: s.battle?.phase, outcome: s.battle?.outcome });
+  }
+  return s;
+}
+// 06 §10.4 1·2: 전투 층 캡처, 한 턴을 실제 누르기로.
+async function firstBattleTurn(s) {
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${outDir}/05_battle.png` });
+  check(s.battle.phase === 'command' && s.battle.member >= 0 && s.modal === '', '인카운트 → 전투 층(명령 입력)', { phase: s.battle.phase, member: s.battle.member, modal: s.modal });
+  check(!s.buttons.MenuButton && !s.buttons.Pad_forward && !s.buttons.Tool_wall && s.buttons.Cmd_attack && s.buttons.LogButton,
+    '전투 중 지도·이동 단추·메뉴 없음, 명령 단추 있음', { buttons: Object.keys(s.buttons) });
+  const g0 = s.generation;
+  const hash0 = s.hash;
+  const turn0 = s.battle.turn;
+  const log0 = s.battle.log_lines;
+  for (let k = 0; k < 5 && s.battle.sub !== 'confirm'; k++) {
+    const m = s.battle.member;
+    await clickButton('Cmd_attack');
+    const t = await tryWait((x) => x.battle?.sub === 'target', '공격 → 대상', 3000);
+    if (t && t.battle.targets.length) {
+      if (k === 0) await page.screenshot({ path: `${outDir}/05a_battle_target.png` });
+      await clickButton(`Enemy_${t.battle.targets[0]}`);
+    } else {
+      await clickButton('Cmd_guard');
+    }
+    s = await waitFor((x) => x.battle?.member !== m, `대원 ${m} 명령`);
+  }
+  check(s.battle.sub === 'confirm' && s.buttons.Execute && s.generation === g0, '모든 명령이 차면 「실행」(제출 전 저장 없음)', { sub: s.battle.sub });
+  await clickButton('Execute');
+  s = await waitFor((x) => x.generation > g0, '제출 → 자동 저장');
+  if (s.battle?.phase === 'anim') {
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${outDir}/05b_battle_anim.png` });
+    await page.mouse.click(Math.round(W * 0.3), Math.round(H * 0.35));  // 누르기 = 건너뛰기
+  }
+  s = await waitFor((x) => x.battle?.phase !== 'anim', '연출 건너뛰기');
+  battleTurns += 1;
+  // 승패·명중과 무관한 것만 본다: 제출이 저장되고 상태가 바뀌었고, 전투가 이어지면 턴이 하나 넘어가고 로그가 늘었다.
+  // 이 턴에 전투가 끝났으면(승리·도주 → 결과 창, 전멸 → 층 닫힘) 끝난 쪽 길로 넘어간다(finishBattle·act).
+  const goesOn = s.battle?.open && s.battle.phase === 'command';
+  check(s.hash !== hash0 && s.generation > g0 && (!goesOn || (s.battle.turn === turn0 + 1 && s.battle.log_lines > log0)),
+    '한 턴 실제 누르기: 저장·해시 바뀜, 이어지면 턴 +1·로그 늘어남',
+    { turn0, turn: s.battle?.turn, log0, log: s.battle?.log_lines, phase: s.battle?.phase, outcome: s.battle?.outcome, wiped: s.wiped });
+  const idb = await waitIdb(s);
+  check(!idb.timeout, '전투 턴 자동 저장이 IndexedDB 에 반영(세대·상태 해시)', idb);
+  return s;
+}
+// 06 §10.4 3: 전투 중 새로 고침 → 같은 해시, 전투 층이 명령 입력 처음. 첫 전투가 열린 직후(늘 이어지는 전투)에 한다.
+async function reloadInBattle(s) {
+  reloadChecked = true;
+  const idb = await waitIdb(s);
+  check(!idb.timeout, '새로 고침 전 IndexedDB = 화면', idb);
+  const before = s;
+  await page.reload();
+  s = await waitReady();
+  check(s.hash === before.hash && s.generation === before.generation && s.battle?.open && s.battle.phase === 'command'
+    && s.battle.sub === 'menu' && s.battle.turn === before.battle.turn, '전투 중 새로 고침: 같은 해시·같은 턴·명령 입력 처음',
+  { before: before.hash.slice(0, 12), after: s.hash.slice(0, 12), battle: s.battle && { phase: s.battle.phase, sub: s.battle.sub, member: s.battle.member, turn: s.battle.turn } });
+  await page.screenshot({ path: `${outDir}/05c_battle_reloaded.png` });
+  await page.mouse.click(Math.round(W * 0.3), 30);  // 캔버스에 키 포커스(알림 줄은 누르기를 받지 않는다)
+  return s;
+}
+// 디버그 요청 battle_finish 로 넘긴다: 전투 층이 규칙의 finish(승리) → 저장 → 연출(Enter 로 건너뛰기) → 결과 창 → 「확인」.
+// 이미 결과 창이면(첫 턴에 승리·도주로 끝남) 「확인」만 누른다.
+async function finishBattle(s, shotResult) {
+  if (s.battle?.open && s.battle.phase === 'command') {
+    const g = s.generation;
+    let r = null;
+    for (let k = 0; k < 3 && !r?.ok; k++) {
+      if (k) await page.waitForTimeout(100);  // 전투 층은 한 프레임에 입력 하나: 같은 프레임에 받은 입력이 있었으면 다음 프레임에
+      r = await request({ op: 'battle_finish' });
+    }
+    if (!r.ok) throw new Error(`battle_finish 거부: ${JSON.stringify(r)}`);
+    s = await waitFor((x) => x.generation > g, 'battle_finish 저장');
+    if (s.battle?.phase === 'anim') await page.keyboard.press('Enter');
+    s = await waitFor((x) => x.battle?.phase !== 'anim', '연출 끝');
+    check(s.battle?.phase === 'result' && s.battle.outcome === 'victory', `전투 ${battles}: battle_finish → 결과 창(승리)`,
+      { phase: s.battle?.phase, outcome: s.battle?.outcome });
+  }
+  if (s.battle?.open && s.battle.phase === 'result') {
+    if (shotResult) await page.screenshot({ path: `${outDir}/05d_battle_result.png` });
+    check(s.buttons.ResultOk, `전투 ${battles}: 결과 창 「확인」`, { outcome: s.battle.outcome });
+    await clickButton('ResultOk');
+    s = await waitFor((x) => !x.battle?.open, '결과 창 닫힘');
+  }
+  return s;
 }
 
 try {
@@ -125,6 +256,7 @@ try {
   await page.goto(url);
   let s = await waitReady();
   check(s.user_dir === '/userfs/sqfangame', 'user:// 경로', { user_dir: s.user_dir });
+  check(s.seed === SEED, `새 게임 시드 = 주소의 seed ${SEED}`, { seed: s.seed });
   check(s.autosaves === 1 && s.modal === '', '새 게임 자동 저장', { autosaves: s.autosaves, modal: s.modal });
   await page.screenshot({ path: `${outDir}/01_start.png` });
   // 캔버스에 키 포커스를 준다(3D 시야 영역 클릭은 아무 일도 하지 않는다).
@@ -133,8 +265,15 @@ try {
   // ---- 1) 공략 행동열 ----
   const t0 = Date.now();
   let maxGuard = 0;
+  let simRest = null;  // 첫 전투가 끝난 뒤 남은 공략의 simulate 결과
+  const realRest = [];
   for (let i = 0; i < route.actions.length; i++) {
     s = await act(route.actions[i]);
+    if (simRest) realRest.push(s.actionHash);
+    if (!simRest && battles >= 1 && !s.battle?.open) {
+      const rest = route.actions.slice(i + 1);
+      simRest = { actions: rest.length, ...(await request({ op: 'simulate', actions: rest })) };
+    }
     maxGuard = Math.max(maxGuard, Math.abs(s.guard_delta));
     const cp = route.checkpoints.find((c) => c.after === i + 1);
     if (cp && (s.at[0] !== cp.at[0] || s.at[1] !== cp.at[1])) check(false, `체크포인트 ${cp.after}`, { want: cp.at, got: s.at });
@@ -144,8 +283,13 @@ try {
       await page.screenshot({ path: `${outDir}/cp${String(cp.after).padStart(2, '0')}.png` });
     }
   }
-  check(s.shortcuts_open === 1, '공략 끝: 지름길 열림', { at: s.at, shortcuts_open: s.shortcuts_open, passages_found: s.passages_found, battles, ms: Date.now() - t0 });
-  log('공략 끝', { at: s.at, steps: s.steps, generation: s.generation, battles, last_guard_delta: s.guard_delta, guard_radius: s.guard_radius, plan_ms_max: s.plan_ms_max,
+  check(s.shortcuts_open === 1, '공략 끝: 지름길 열림', { at: s.at, shortcuts_open: s.shortcuts_open, passages_found: s.passages_found, battles, battleTurns, ms: Date.now() - t0 });
+  const restOk = simRest && Array.isArray(simRest.hashes) && simRest.hashes.length === simRest.actions && realRest.length === simRest.actions
+    && simRest.hashes.every((h, k) => typeof h === 'string' && h === realRest[k]);
+  check(battles >= 1 && reloadChecked, '공략 중 전투가 있었고 전투 중 새로 고침을 확인했다', { battles, reloadChecked });
+  check(restOk, `첫 전투 뒤 남은 공략 ${simRest?.actions} 행동: battle_finish 로 넘긴 해시 = simulate`, restOk ? { battles } : {
+    battles, error: simRest?.error, sim: simRest?.hashes?.map((h) => String(h).slice(0, 8)), real: realRest.map((h) => String(h).slice(0, 8)) });
+  log('공략 끝', { at: s.at, steps: s.steps, generation: s.generation, battles, battleTurns, hp: s.hp, materials: s.materials, last_guard_delta: s.guard_delta, guard_radius: s.guard_radius, plan_ms_max: s.plan_ms_max,
     plan_count: s.plan_count, plan_ms_total: s.plan_ms_total, plan_ms_total_max: s.plan_ms_total_max, plan_count_max: s.plan_count_max });
   await page.screenshot({ path: `${outDir}/02_route_end.png` });
 
@@ -301,6 +445,37 @@ try {
   await page.waitForTimeout(500);
   s = await snap();
   check(s.hash === keep, '파일 고르기 취소: 상태 그대로', { modal: s.modal });
+
+  // ---- 6) 준비한 저장으로 전멸 (06 §10.4 5) ----
+  const wipeDoc = JSON.parse(fs.readFileSync(exportPath, 'utf8'));
+  const enemyDefs = JSON.parse(fs.readFileSync('data/enemies/stratum1.json', 'utf8')).enemies;
+  const ratHp = enemyDefs.find((e) => e.id === 'enemy.neon_rat').max_hp;
+  const st = wipeDoc.state;
+  st.encounter.danger = st.encounter.threshold;
+  st.encounter.pending = true;
+  st.party.members.forEach((m, i) => { m.hp = i < 4 ? 0 : 1; });
+  const unit = (extra) => ({ ailment: null, binds: {}, buffs: [], debuffs: [], resist: {}, ...extra });
+  st.battle = { formation: 'formation.f1.rats', turn: 0, seq: 1,
+    party: [0, 1, 2, 3, 4].map((i) => unit(i === 4 ? { ailment: { id: 'poison', turns: 3, damage: 5 } } : {})),
+    enemies: [0, 1, 2].map(() => unit({ hp: ratHp, charging: null, kill: null })) };
+  const wipePath = `${outDir}/wipe_setup.json`;
+  fs.writeFileSync(wipePath, JSON.stringify(wipeDoc));
+  await clickButton('MenuButton');
+  s = await waitFor((x) => x.modal === 'menu', '메뉴');
+  [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import', s)]);
+  await chooser.setFiles(wipePath);
+  s = await waitFor((x) => x.battle?.open && x.battle.phase === 'command', '준비한 전투 가져오기', 10000);
+  check(s.battle.member === 4, '가져온 전투: 남은 대원 차례', { member: s.battle.member });
+  const gw = s.generation;
+  await clickButton('Cmd_guard');
+  s = await waitFor((x) => x.battle?.sub === 'confirm', '방어');
+  await clickButton('Execute');
+  s = await waitFor((x) => x.generation > gw, '제출');
+  if (s.battle?.phase === 'anim') await page.keyboard.press('Enter');
+  s = await waitFor((x) => x.modal === 'wipe', '전멸 창', 10000);
+  check(s.wiped && !s.battle?.open && s.buttons.WipeNewGame, '방어 제출 → 그 턴 전멸 → M1 전멸 창', { wiped: s.wiped });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${outDir}/09_wipe.png` });
   log('끝', { maxGuardDuringRoute: maxGuard });
 } catch (e) {
   report.errors.push(String(e?.stack ?? e));

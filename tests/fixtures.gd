@@ -182,6 +182,22 @@ static func defs_from(files: Dictionary, party: Dictionary = {}) -> GameDefs:
 	return r.defs
 
 
+## 결과를 구성으로 정하는 data/ 사본 정의(D15): 적은 모두 아무것도 하지 않는 시험 스킬(MEND)만 써서 파티가 쓰러지지 않는다.
+## 늘 맞는 MEND 규칙(조건 turn_mod [1, 0] = 매 턴)을 AI 맨 앞에 두고 원래 규칙은 뒤에 남긴다(고르지 않지만, 준비 스킬을 AI 표에서
+## 찾는 저장 검사가 실제 상태를 그대로 받게). rules 는 규칙 상수 덮어쓰기(EXACT 면 명중 확정·난수 고정), immune 의 적 ID 는 모든 속성 무효(쓰러지지 않는다).
+## 편성·열·이름·스킬은 실제 데이터 그대로라 저장·읽기 검사도 그대로 통과한다(같은 정의로 읽을 때).
+static func quiet_defs(rules: Dictionary = {}, immune: Array = []) -> GameDefs:
+	var files := battle_files({"skills/test.json": {"skills": [mend_skill()]}}, rules)
+	for path in files:
+		if str(path).begins_with("enemies/"):
+			for e in files[path]["enemies"]:
+				e["ai"] = [{"if": {"turn_mod": [1, 0]}, "use": [{"skill": MEND, "weight": 1, "target": "random"}]}] + e["ai"]
+				if immune.has(e["id"]):
+					for el in e["resist"]:
+						e["resist"][el] = 0
+	return defs_from(files)
+
+
 ## 새 탐색 상태 + 전투 시작. 저장과 맞도록 인카운트처럼 위험도를 한계값까지 채운 뒤 연다(pending ⇔ danger ≥ threshold).
 static func battle(defs: GameDefs, formation: String, seed_value: int = 1) -> ExplorationState:
 	var s := ExplorationRules.new_game(defs, seed_value, "floor")

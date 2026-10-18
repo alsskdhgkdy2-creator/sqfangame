@@ -402,17 +402,15 @@ func test_same_seed_same_commands_same_result_over_24_battles() -> void:
 		for seed_value in [11, 22, 33, 44]:
 			second.append(run_battle(defs2, f, seed_value))
 	check_eq(first.size(), 24, "24 전투")
+	# 결과(승패·끝난 턴 수, 50턴 안에 안 끝남 포함)가 무엇이든 같은 이벤트·끝 상태 해시·정보인지만 본다(D15: 승패에 기대지 않는다).
 	check(first == second, "같은 시드 + 같은 명령열 → 같은 이벤트·해시")
-	var bad := []
-	var outcomes := {}
+	var rejected := []
 	for x in first:
 		var info: Dictionary = x[2]
-		outcomes[info["outcome"]] = outcomes.get(info["outcome"], 0) + 1
-		if not info["outcome"] in ["victory", "wiped", "escaped"] or info["rejected"] != 0 or info["turns"] > 50:
-			bad.append(info)
+		if info["rejected"] != 0:
+			rejected.append(info)
 		check_eq(info["save_errors"], [], "매 턴 상태가 저장 검사를 통과")
-	check_eq(bad, [], "모든 전투가 50턴 안에 승리·전멸·도주로 끝나고 거부 이벤트가 없음 %s" % str(outcomes))
-	check(outcomes.has("victory"), "끝까지 싸워 이긴 전투가 있음")
+	check_eq(rejected, [], "명령열이 거부되지 않는다(규칙을 실제로 거친다)")
 
 
 func test_plan_does_not_draw() -> void:
@@ -423,13 +421,18 @@ func test_plan_does_not_draw() -> void:
 
 
 func test_mid_battle_save_and_continue_gives_same_result() -> void:
-	var defs := Fx.battle_defs()
-	var s := Fx.battle(defs, "formation.f1.beetle_rat", 21)
+	# 끝날 수 없는 구성(D15): 적 둘 다 아무것도 하지 않아 전멸이 없고, 벽은 모든 속성 무효라 쓰러지지 않아 승리도 없다. 규칙 상수는
+	# 실제 값이라 순서 난수와(허수아비가 살아 있는 동안) 명중·크리티컬·피해 난수를 뽑는다 → 저장 왕복 뒤에도 같은 난수 흐름인지 본다.
+	var wall := Fx.enemy("enemy.t_wall", 999, [10, 10, 10, 10, 1, 10], [[{}, [[Fx.MEND, 1]]]])
+	for el in wall["resist"]:
+		wall["resist"][el] = 0
+	var s := Fx.battle(Fx.battle_defs(Fx.test_files(_skills(), _enemies() + [wall], {"m": [[Fx.DUMMY, "front"], ["enemy.t_wall", "front"]]})), "formation.t.m", 21)
 	for t in 2:
 		BattleRules.submit(s, plan(s))
 	check(s.battle != null, "아직 전투 중")
 	var c := Fx.battle_clone(s)
 	check_eq(Fx.battle_hash(c), Fx.battle_hash(s), "왕복 뒤 같은 해시")
+	var rng_at_save := s.rng.get_state()
 	var ta := ""
 	var tb := ""
 	for t in 50:
@@ -439,6 +442,7 @@ func test_mid_battle_save_and_continue_gives_same_result() -> void:
 		tb += Fx.events_text(BattleRules.submit(c, plan(c)))
 	check_eq(tb, ta, "이어서 같은 이벤트")
 	check_eq(Fx.battle_hash(c), Fx.battle_hash(s), "같은 끝 해시")
+	check(s.battle != null and s.rng.get_state() != rng_at_save, "구성대로 끝나지 않고, 이어서 난수를 뽑았다")
 
 
 func test_definition_key_order_does_not_matter() -> void:

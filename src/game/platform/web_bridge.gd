@@ -1,4 +1,5 @@
 ## 웹(브라우저)과의 연결: 메모 입력 창(window.prompt), 저장 내려받기, 파일 가져오기, 디버그 주소(?debug=1)의 window.sqfDebug.
+## 디버그 주소에서만 &seed=N(0 이상의 정수)으로 새 게임 시드를 고정한다(웹 확인 도구의 재현용).
 ## 웹이 아니면 is_web() 이 false 이고 다른 함수는 부르지 않는다(화면이 PC 경로를 쓴다).
 ## JavaScriptBridge 콜백 객체는 멤버로 잡아 둔다(지역 변수면 풀려서 콜백이 오지 않을 수 있다, 05 §8.5).
 class_name WebBridge
@@ -6,6 +7,8 @@ extends RefCounted
 
 ## 가져오기 크기 한도(바이트).
 const IMPORT_LIMIT := 1048576
+## 디버그 주소 &seed=N 으로 받는 가장 큰 시드: 새 게임 시드(fresh_seed 의 randi)와 같은 32비트 부호 없는 정수 범위.
+const SEED_MAX := 4294967295
 
 ## 가져오기 결과: (토큰, 상태 "ok"·"cancel"·"error"·"too_large", 글).
 var on_import: Callable
@@ -16,14 +19,17 @@ var _import_cb: JavaScriptObject
 var _debug_cb: JavaScriptObject
 var _debug: JavaScriptObject
 var _forced := ""
+## 시험용 주소 인자 글("debug=1&seed=5"). 비어 있지 않으면 브라우저 주소 대신 이것을 읽는다.
+var _query := ""
 ## 이 연결의 번호. 전역(window.sqfImportResult·sqfDebug)을 누가 걸었는지 남겨, 정리할 때 남의 것은 지우지 않는다.
 var _owner := ""
 static var _next_owner := 0
 
 
-## force = "web"·"native" 이면 그렇게 본다(시험용). 빈 문자열이면 실제 플랫폼.
-func _init(force: String = "") -> void:
+## force = "web"·"native" 이면 그렇게 본다(시험용). 빈 문자열이면 실제 플랫폼. query 는 시험용 주소 인자 글.
+func _init(force: String = "", query: String = "") -> void:
 	_forced = force
+	_query = query
 	_next_owner += 1
 	_owner = "%d-%d" % [Time.get_ticks_usec(), _next_owner]
 
@@ -34,12 +40,48 @@ func is_web() -> bool:
 	return OS.has_feature("web")
 
 
+## 주소 인자 하나. 없으면 빈 문자열(웹이 아니고 시험용 인자 글도 없으면 늘 빈 문자열).
+func url_param(key: String) -> String:
+	if not _query.is_empty():
+		for part in _query.trim_prefix("?").split("&", false):
+			var kv := part.split("=", true, 1)
+			if kv[0].uri_decode() == key:
+				return kv[1].uri_decode() if kv.size() > 1 else ""
+		return ""
+	if not OS.has_feature("web"):
+		return ""
+	var v: Variant = JavaScriptBridge.eval("new URLSearchParams(window.location.search).get(%s)" % JSON.stringify(key), true)
+	return v if typeof(v) == TYPE_STRING else ""
+
+
 ## 주소에 ?debug=1 이 있는지.
 func debug_requested() -> bool:
-	if not OS.has_feature("web"):
-		return false
-	var v: Variant = JavaScriptBridge.eval("new URLSearchParams(window.location.search).get('debug')", true)
-	return typeof(v) == TYPE_STRING and v == "1"
+	return url_param("debug") == "1"
+
+
+## 디버그 주소의 새 게임 시드(&seed=N). 디버그 주소가 아니거나, 없거나, parse_seed 가 받지 않는 글이면 -1.
+func debug_seed() -> int:
+	if not debug_requested():
+		return -1
+	return parse_seed(url_param("seed"))
+
+
+## 시드 글 → 0..SEED_MAX, 받지 않으면 -1. 십진 숫자만 받는다(부호·공백·소수점 없음, 앞의 0 은 괜찮다).
+## 범위는 바꾸기 전에 글의 길이·글자로 본다: to_int() 는 int64 를 넘는 글에서 오류를 내고 상한값을 돌려준다.
+static func parse_seed(text: String) -> int:
+	if text.is_empty():
+		return -1
+	for i in text.length():
+		var c := text.unicode_at(i)
+		if c < 0x30 or c > 0x39:
+			return -1
+	var digits := text.lstrip("0")
+	if digits.is_empty():
+		return 0
+	var max_text := str(SEED_MAX)
+	if digits.length() > max_text.length() or (digits.length() == max_text.length() and digits > max_text):
+		return -1
+	return digits.to_int()
 
 
 ## 브라우저 입력 창. 확인이면 글(빈 문자열 포함), 취소·막힘이면 null.
@@ -103,6 +145,8 @@ func _on_import_js(args: Array) -> void:
 
 ## window.sqfDebug = {ready, snapshot, result, request(json)} 를 만든다. ?debug=1 일 때만 부른다.
 func setup_debug() -> void:
+	if not OS.has_feature("web"):
+		return  # 시험(웹 아님): 요청은 화면 함수를 바로 부른다
 	JavaScriptBridge.eval("window.sqfDebug = {ready: false, snapshot: '', result: '', request: null, owner: %s};" % JSON.stringify(_owner), true)
 	_debug = JavaScriptBridge.get_interface("sqfDebug")
 	_debug_cb = JavaScriptBridge.create_callback(_on_debug_js)

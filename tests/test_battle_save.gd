@@ -14,8 +14,15 @@ const V1_PENDING := '{"format":"sqfangame-save","generation":3,"rules":"m1","sav
 const V1_WIPED := '{"format":"sqfangame-save","generation":11,"rules":"m1","saved_at":"2026-10-03T00:00:00Z","schema":1,"state":{"annotation":{"auto_edges":[],"edges":{},"floors":{"2:18":0},"icons":{},"memos":{}},"encounter":{"danger":0,"pending":false,"threshold":147},"floor":"f1_test","knowledge":{"edges":{"h:2:18":"open","h:2:19":"open","v:2:18":"open","v:3:18":"open"},"visited":["2:18"]},"party":{"at":[2,18],"facing":"N","members":[{"hp":0,"id":"holo_knight"},{"hp":0,"id":"blade_duelist"},{"hp":0,"id":"rail_ranger"},{"hp":0,"id":"nano_medic"},{"hp":0,"id":"glyph_wizard"}]},"rng":{"state":"35035103500997846"},"steps":40,"wiped":true,"world":{"passages_found":[],"shortcuts_open":[]}}}'
 
 
+var _quiet: GameDefs
+
+
+## 이 파일의 정의: data/ 그대로에 적만 아무것도 하지 않는다(Fx.quiet_defs). 방어만 하는 턴·턴 상한 턴이 승리·전멸로 먼저 끝나지
+## 않게 결과를 구성으로 정한다(D15). 쓰고 읽을 때 같은 정의를 쓴다.
 func _defs() -> GameDefs:
-	return Fx.defs()
+	if _quiet == null:
+		_quiet = Fx.quiet_defs()
+	return _quiet
 
 
 # ---- 2판 왕복 ----
@@ -26,7 +33,7 @@ func _rich() -> ExplorationState:
 	BattleRules.submit(s, Fx.cmds(s))
 	var b := s.battle
 	var ev: Array[Dictionary] = []
-	BattleRules.damage_unit(s, b.enemies[1], 999, b.party[1], "slash", "attack", ev, {})
+	BattleRules.damage_unit(s, b.enemies[1], b.enemies[1].hp, b.party[1], "slash", "attack", ev, {})  # 적 HP 와 상관없이 처치
 	b.enemies[0].charging = "skill.enemy.crush"
 	Fx.apply_effect(s, b.party[1], OVERCLOCK)
 	Fx.apply_effect(s, b.party[1], HOWL)
