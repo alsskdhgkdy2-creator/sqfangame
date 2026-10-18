@@ -7,6 +7,10 @@
 - 엔진: Godot 4.7.2-stable (`godot` 명령, 경로를 바꿀 때는 `${GODOT:-godot}`)
 - 1차 대상: 웹 빌드 (확인 편의). 렌더러는 웹에서 동작하는 Compatibility(WebGL 2)를 쓴다.
 
+## 상태
+
+**일시 중지(WIP, 2026-10-18).** M2(전투)·M2.5(성장)·M2.6(UI 다듬기)까지 구현하고 휴대폰에서 기능을 확인했다. 게임으로서의 UX를 더 다듬기 전에 게임 제작 자료를 학습하는 중이다(`docs/design/00-decisions.md` D22, `docs/design/03-production-plan.md` §2 「현재 상태」).
+
 ## 문서
 
 - `docs/design/00-decisions.md`: 사용자 결정 기록
