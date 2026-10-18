@@ -443,34 +443,37 @@ func test_menu_buttons_have_borders_and_clear_checked_and_selected_states() -> v
 	var disabled_seen := 0
 	for bb in buttons:
 		var b := bb as Button
-		var sb := b.get_theme_stylebox("normal") as StyleBoxFlat
-		var focus := b.get_theme_stylebox("focus") as StyleBoxFlat
-		var dis := b.get_theme_stylebox("disabled") as StyleBoxFlat
-		check(sb != null and sb.border_width_left >= 2 and contrast(sb.border_color, sb.bg_color) >= 1.8, "%s: 보이는 테두리" % b.name)
-		check(dis.border_width_left >= 2 and contrast(dis.border_color, dis.bg_color) >= 1.5, "%s: 못 누름도 칸 테두리" % b.name)
-		# Godot 가 실제로 겹쳐 그리는 짝: 상태 바탕(+ 포커스면 그 위 focus 상자, 채움이 있으면 그 색) 과 그 상태의 글자색
-		var under := dis.bg_color if b.disabled else sb.bg_color
-		var focus_bg := focus.bg_color if focus.draw_center else under
+		var sb := (b.get_theme_stylebox("normal") as UiTheme.Box).look
+		var focus := (b.get_theme_stylebox("focus") as UiTheme.Box).look
+		var dis := (b.get_theme_stylebox("disabled") as UiTheme.Box).look
+		check(sb["inner_w"] >= 1.0 and minf(contrast(sb["inner"], sb["top"]), contrast(sb["inner"], sb["bottom"])) >= 1.8, "%s: 보이는 테두리(안쪽 선)" % b.name)
+		check(dis["inner_w"] >= 1.0 and contrast(dis["inner"], dis["bottom"]) >= 1.5, "%s: 못 누름도 칸 테두리" % b.name)
+		# Godot 가 실제로 겹쳐 그리는 짝: 상태 채움(위·아래 색, + 포커스면 그 위 focus 상자, 채움이 있으면 그 색) 과 그 상태의 글자색
+		var under := dis if b.disabled else sb
+		var focus_fill: Dictionary = focus if focus["fill"] else under
 		var pairs := []
 		if b.disabled:
 			disabled_seen += 1
-			pairs = [[dis.bg_color, b.get_theme_color("font_disabled_color"), "못 누름"], [focus_bg, b.get_theme_color("font_disabled_color"), "못 누름 + 포커스"]]
-			check(focus.border_width_left >= 3 and warm.call(focus.border_color), "%s: 못 누르는 단추도 포커스는 따뜻한 테두리로 보인다" % b.name)
+			pairs = [[dis, b.get_theme_color("font_disabled_color"), "못 누름"], [focus_fill, b.get_theme_color("font_disabled_color"), "못 누름 + 포커스"]]
+			check(not focus["fill"] and focus["outer_w"] >= 3.0 and warm.call(focus["outer"]) and warm.call(focus["marker"]),
+				"%s: 못 누르는 단추도 포커스는 따뜻한 굵은 테두리 + 표시 막대" % b.name)
 		else:
-			pairs = [[sb.bg_color, b.get_theme_color("font_color"), "평소"], [focus_bg, b.get_theme_color("font_focus_color"), "포커스"],
-				[(b.get_theme_stylebox("hover") as StyleBoxFlat).bg_color, b.get_theme_color("font_hover_color"), "포인터 위"],
-				[(b.get_theme_stylebox("pressed") as StyleBoxFlat).bg_color, b.get_theme_color("font_pressed_color"), "누름"]]
-			check(focus.draw_center and warm.call(focus.bg_color), "%s: 고른 것은 따뜻한 채움" % b.name)
+			pairs = [[sb, b.get_theme_color("font_color"), "평소"], [focus_fill, b.get_theme_color("font_focus_color"), "포커스"],
+				[(b.get_theme_stylebox("hover") as UiTheme.Box).look, b.get_theme_color("font_hover_color"), "포인터 위"],
+				[(b.get_theme_stylebox("pressed") as UiTheme.Box).look, b.get_theme_color("font_pressed_color"), "누름"]]
+			check(focus["fill"] and warm.call(focus["bottom"]) and warm.call(focus["top"]), "%s: 고른 것은 따뜻한 채움" % b.name)
+			check(focus["outer_w"] > sb["outer_w"] and (focus["marker"] as Color).a > 0.0, "%s: 고른 것은 색 말고도 굵은 테두리 + 표시 막대" % b.name)
 		for p in pairs:
-			check(contrast(p[0], p[1]) >= 4.5, "%s %s: 글자 대비 %.1f" % [b.name, p[2], contrast(p[0], p[1])])
+			var c := minf(contrast(p[0]["top"], p[1]), contrast(p[0]["bottom"], p[1]))
+			check(c >= 4.5, "%s %s: 글자 대비 %.1f" % [b.name, p[2], c])
 	check(disabled_seen >= 2, "못 누르는 단추(빈 불러오기 칸)도 보았다(%d)" % disabled_seen)
 	var mode: String = s.settings.automap
 	for m in ExplorationRules.AUTOMAP_MODES:
 		var ab: Button = s.modal.find_child("Automap_" + m, true, false)
 		check_eq(ModalLayer.is_checked(ab), m == mode, "자동 지도 %s 켜짐 = 지금 설정" % m)
-		var nb := ab.get_theme_stylebox("normal") as StyleBoxFlat
+		var nb := (ab.get_theme_stylebox("normal") as UiTheme.Box).look
 		if m == mode:
-			check(nb.bg_color == ModalLayer.BTN_CHECKED and contrast(nb.bg_color, ab.get_theme_color("font_color")) >= 4.5, "켜진 단추: 밝은 채움 + 어두운 글자")
+			check(nb["bottom"] == UiTheme.BTN_CHECKED and contrast(nb["bottom"], ab.get_theme_color("font_color")) >= 4.5, "켜진 단추: 밝은 채움 + 어두운 글자")
 	var load1: Button = s.modal.find_child("Load_slot1", true, false)
 	load1.grab_focus()
 	await kit.frames(1)

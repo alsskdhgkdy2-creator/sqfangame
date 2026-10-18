@@ -419,6 +419,8 @@
   "party.count": "{n}개",
   "party.delta": "{name} {value}",
   "party.no_change": "바뀌는 값 없음",
+  "party.totals.title": "합계",
+  "party.totals.compare": "지금 → 바꾸면",
   "party.items.gear": "장비",
   "party.items.materials": "소재",
   "party.items.none": "없음",

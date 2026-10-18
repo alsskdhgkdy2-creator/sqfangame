@@ -124,10 +124,7 @@ func _draw() -> void:
 	else:
 		_draw_member(u)
 	if flash > 0.0:
-		var fsb := StyleBoxFlat.new()
-		fsb.bg_color = Color(1, 1, 1, 0.45 * flash)
-		fsb.set_corner_radius_all(14)
-		draw_style_box(fsb, Rect2(Vector2.ZERO, size))
+		UiTheme.fill_round(self, Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.45 * flash), 14)
 	_draw_popups()
 
 
@@ -182,10 +179,7 @@ func _draw_enemy(u: BattleDisplay.DUnit) -> void:
 	if not u.charging.is_empty():
 		# 준비 중: 「!」와 다음 행동 이름
 		var badge := Rect2(size.x - 42, 6, 36, 36)
-		var bsb := StyleBoxFlat.new()
-		bsb.bg_color = Color(1.0, 0.8, 0.15)
-		bsb.set_corner_radius_all(18)
-		draw_style_box(bsb, badge)
+		UiTheme.fill_round(self, badge, Color(1.0, 0.8, 0.15), 18)
 		draw_string(font, Vector2(badge.position.x, badge.position.y + 28), "!", HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 26, Color(0.15, 0.08, 0.0))
 		var next := display.skill_name(u.charging)
 		draw_string_outline(font, Vector2(0, 62), next, HORIZONTAL_ALIGNMENT_CENTER, size.x, 16, 5, Color(0, 0, 0, 0.85))
@@ -208,26 +202,21 @@ func _draw_member(u: BattleDisplay.DUnit) -> void:
 	var cc: Color = CLASS_COLORS.get(class_id, Color(0.7, 0.7, 0.7))
 	var down := not u.alive()
 	var dim := target_mark == "invalid"
-	var body := Color(0.06, 0.09, 0.12, 0.95)
+	# 바탕은 공용 창 모양, 그 위에 누르는 중(밝은 안쪽 선)·지금 대원(직업색)·대상 표시(노랑) 테두리를 덧그린다.
+	UiTheme.draw_window(self, r)
 	if held:
-		body = Color(0.12, 0.2, 0.26, 0.97)
-	var border := Color(0.3, 0.42, 0.5)
-	var bw := 1
+		UiTheme.draw_outline(self, r.grow(-4), UiTheme.BTN_HELD_BORDER, 2, UiTheme.WIN_CHAMFER)
+	var bw := 3
 	if current:
-		border = cc
 		bw = 4
+		UiTheme.draw_outline(self, r, cc, bw, UiTheme.WIN_CHAMFER)
 	if target_mark == "valid" or target_mark == "lit":
-		border = Color(1.0, 0.95, 0.55)
 		bw = 4 if target_mark == "lit" or cursor else 3
-	_box(r, body, border, bw)
+		UiTheme.draw_outline(self, r, Color(1.0, 0.95, 0.55), bw, UiTheme.WIN_CHAMFER)
 	# 직업색 띠
-	var band := StyleBoxFlat.new()
-	band.bg_color = cc if not down else cc.darkened(0.6)
-	band.corner_radius_top_left = 10
-	band.corner_radius_top_right = 10
-	draw_style_box(band, Rect2(bw, bw, size.x - 2 * bw, 10))
+	UiTheme.fill_top_round(self, Rect2(bw + 4, bw, size.x - 2 * bw - 8, 10), cc if not down else cc.darkened(0.6), 6)
 	if cursor and target_mark != "invalid":
-		_box(r.grow(-7), Color(0, 0, 0, 0), Color(1, 1, 1, 0.9), 2)
+		UiTheme.draw_outline(self, r.grow(-7), Color(1, 1, 1, 0.9), 2)
 	var fg := Color(0.92, 0.97, 1.0)
 	if down or dim:
 		fg = Color(0.55, 0.55, 0.58)
@@ -241,7 +230,7 @@ func _draw_member(u: BattleDisplay.DUnit) -> void:
 	_bar(Rect2(x0, 60, w, 9), shown_hp / maxf(1.0, u.max_hp), hp_bar_color(), down)
 	draw_string(font, Vector2(x0, 85), "TP", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, fg)
 	draw_string(font, Vector2(x0, 85), "%d/%d" % [roundi(shown_tp), u.max_tp], HORIZONTAL_ALIGNMENT_RIGHT, w, 15, fg)
-	_bar(Rect2(x0, 90, w, 6), shown_tp / maxf(1.0, u.max_tp), Color(0.4, 0.65, 1.0), down)
+	_bar(Rect2(x0, 90, w, 6), shown_tp / maxf(1.0, u.max_tp), UiTheme.TP_BAR, down)
 	if down:
 		draw_string(font, Vector2(x0, MEMBER_CHIP_TOP + 18), display.texts.t("battle.ui.down"), HORIZONTAL_ALIGNMENT_LEFT, w, 16, Color(1.0, 0.45, 0.4))
 	else:
@@ -251,13 +240,9 @@ func _draw_member(u: BattleDisplay.DUnit) -> void:
 		draw_string(font, Vector2(0, size.y * 0.5 + 6), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, Color(1.0, 0.7, 0.55))
 
 
+## 적 자리 상자(색 상자 그대로).
 func _box(r: Rect2, bg: Color, border: Color, bw: int) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = bg
-	sb.set_corner_radius_all(14)
-	sb.set_border_width_all(bw)
-	sb.border_color = border
-	draw_style_box(sb, r)
+	UiTheme.fill_round(self, r, bg, 14, border, bw)
 
 
 func _bar(r: Rect2, ratio: float, color: Color, dim: bool) -> void:
@@ -340,10 +325,7 @@ func _draw_chips(chips: Array[Dictionary]) -> void:
 				col = Color(0.5, 0.2, 0.2)
 			"more":
 				col = Color(0.3, 0.33, 0.38)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = col
-		sb.set_corner_radius_all(5)
-		draw_style_box(sb, r)
+		UiTheme.fill_round(self, r, col, 5)
 		var tx := r.position.x + CHIP_PAD
 		if c["kind"] == "buff" or c["kind"] == "debuff":
 			var cx := r.position.x + CHIP_PAD + 4.0

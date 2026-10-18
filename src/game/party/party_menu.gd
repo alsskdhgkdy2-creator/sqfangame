@@ -491,7 +491,7 @@ func _refresh() -> void:
 		_context = ctx
 		_cancel_pointers()
 	for i in tab_buttons.size():
-		tab_buttons[i].selected = i == tab
+		tab_buttons[i].checked = i == tab
 	_refresh_cells()
 	for i in tabs.size():
 		(tabs[i] as Control).visible = i == tab
@@ -574,18 +574,13 @@ func _layout() -> void:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.025, 0.04, 0.055))
-	draw_rect(Rect2(0, 0, size.x, HEADER_H), Color(0.04, 0.07, 0.09))
-	draw_line(Vector2(0, HEADER_H + 3), Vector2(size.x, HEADER_H + 3), Color(0.25, 0.55, 0.62), 1.0)
+	# 머리 띠: 공용 창 모양의 위·옆 테두리를 화면 밖으로 밀어 아래 선만 보인다.
+	UiTheme.draw_window(self, Rect2(-8, -8, size.x + 16, HEADER_H + 12))
 
 
 func _draw_dialog() -> void:
 	dialog_layer.draw_rect(Rect2(Vector2.ZERO, dialog_layer.size), Color(0, 0, 0, 0.6))
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.07, 0.1, 0.99)
-	sb.set_border_width_all(2)
-	sb.border_color = Color(0.3, 0.8, 0.9)
-	sb.set_corner_radius_all(12)
-	dialog_layer.draw_style_box(sb, dialog_rect())
+	UiTheme.draw_window(dialog_layer, dialog_rect())
 
 
 # ---- 시험·디버그 읽기 ----

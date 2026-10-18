@@ -17,6 +17,18 @@ const TOOLS := ["wall", "door", "color", "icon", "memo", "eraser", "pan"]
 const FLOOR_COLORS := [Color(0.12, 0.3, 0.33), Color(0.2, 0.42, 0.9), Color(0.22, 0.68, 0.32), Color(0.88, 0.74, 0.18), Color(0.86, 0.28, 0.36)]
 const BG := Color(0.025, 0.04, 0.055)
 const GRID := Color(0.2, 0.3, 0.36, 0.35)
+## 청사진 모눈(M2.6 U7): 층 칸 안 바탕, 층 밖 흐린 선, GRID_MAJOR 칸마다 조금 밝은 선.
+const FLOOR_BG := Color(0.035, 0.075, 0.105)
+const GRID_OUT := Color(0.2, 0.3, 0.36, 0.14)
+const GRID_MAJOR := 5
+const GRID_MAJOR_IN := Color(0.3, 0.48, 0.56, 0.55)
+const GRID_MAJOR_OUT := Color(0.25, 0.38, 0.45, 0.24)
+## 좌표 머리: 위 띠 높이·왼쪽 띠 폭·글자 크기·색.
+const HEAD_H := 18.0
+const HEAD_W := 24.0
+const HEAD_FS := 12
+const HEAD_BG := Color(0.015, 0.03, 0.045, 0.78)
+const HEAD_TEXT := Color(0.62, 0.8, 0.88)
 const WALL_COLOR := Color(0.9, 0.95, 1.0)
 const AUTO_WALL_COLOR := Color(0.6, 0.72, 0.8)
 const DOOR_COLOR := Color(1.0, 0.65, 0.2)
@@ -65,6 +77,8 @@ var _stroke_open := false
 var _edge_mode := ""
 var _last_edge := GridKey.BAD_EDGE
 var _last_cell := GridKey.BAD_CELL
+## 층 폭 → 가장 넓은 열 머리 폭(header_need).
+var _col_need := {}
 
 
 func _init() -> void:
@@ -401,20 +415,135 @@ func _place_icon(c: Vector2i) -> void:
 
 # ---- 그리기 ----
 
+## 그리는 차례(M2.6 U7). 좌표 머리는 모눈 위, 지도 표시(바닥 색·벽·문·아이콘·메모)와 파티 표시 아래: 머리가 표시를 덮지 않는다.
+const LAYERS := ["blueprint", "grid", "headers", "floors", "edges", "icons", "memos", "party"]
+
+
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), BG)
 	if state == null:
 		return
+	for layer in LAYERS:
+		call("_draw_" + layer)
+
+
+## 층 칸 영역(화면 좌표).
+func floor_rect() -> Rect2:
+	return Rect2(geo.to_screen(Vector2.ZERO), Vector2(geo.width, geo.height) * geo.cell_px)
+
+
+## 청사진 바탕: 층 칸 안을 조금 밝게(밖은 BG 그대로).
+func _draw_blueprint() -> void:
+	draw_rect(floor_rect().intersection(Rect2(Vector2.ZERO, size)), FLOOR_BG)
+
+
+## 패널 전체 모눈(층 칸에 맞춘다). 층 밖은 흐리게, GRID_MAJOR 칸마다 조금 굵은 선.
+func _draw_grid() -> void:
+	var a := geo.to_map(Vector2.ZERO)
+	var b := geo.to_map(size)
+	var fr := floor_rect()
+	for x in range(floori(a.x), ceili(b.x) + 1):
+		var sx := geo.to_screen(Vector2(x, 0)).x
+		var major := posmod(x, GRID_MAJOR) == 0
+		draw_line(Vector2(sx, 0), Vector2(sx, size.y), GRID_MAJOR_OUT if major else GRID_OUT, 1.0)
+		if x >= 0 and x <= geo.width:
+			draw_line(Vector2(sx, fr.position.y), Vector2(sx, fr.end.y), GRID_MAJOR_IN if major else GRID, 1.0)
+	for y in range(floori(a.y), ceili(b.y) + 1):
+		var sy := geo.to_screen(Vector2(0, y)).y
+		var major := posmod(y, GRID_MAJOR) == 0
+		draw_line(Vector2(0, sy), Vector2(size.x, sy), GRID_MAJOR_OUT if major else GRID_OUT, 1.0)
+		if y >= 0 and y <= geo.height:
+			draw_line(Vector2(fr.position.x, sy), Vector2(fr.end.x, sy), GRID_MAJOR_IN if major else GRID, 1.0)
+
+
+## 열 이름: 0 → A, 25 → Z, 26 → AA(층 칸 번호와 1:1).
+static func column_name(i: int) -> String:
+	var out := ""
+	var n := i
+	while true:
+		out = char(65 + n % 26) + out
+		n = n / 26 - 1
+		if n < 0:
+			break
+	return out
+
+
+## 행 이름: 0 → 「1」.
+static func row_name(i: int) -> String:
+	return str(i + 1)
+
+
+## 머리 글자 하나가 차지하는 폭(열: 이 층의 모든 열 이름 가운데 가장 넓은 것 + 좌우 2px) 또는 높이(행).
+## 열 이름 폭은 글자마다 달라(「AI」보다 「AG」「AW」가 넓다) 마지막 열만 재면 이웃과 겹칠 수 있다. 층 폭마다 한 번 잰다.
+func header_need(vertical: bool) -> float:
+	var font := get_theme_default_font()
+	if vertical:
+		return font.get_height(HEAD_FS) * 0.8 + 2.0
+	if not _col_need.has(geo.width):
+		var widest := 0.0
+		for i in geo.width:
+			widest = maxf(widest, font.get_string_size(column_name(i), HORIZONTAL_ALIGNMENT_LEFT, -1, HEAD_FS).x)
+		_col_need[geo.width] = widest + 4.0
+	return _col_need[geo.width]
+
+
+## 머리 글자 몇 칸마다 하나를 보일지(1 = 모두). 글자가 칸보다 넓으면 2·5·10 칸마다로 솎는다(0 = 숨김).
+func header_step(vertical: bool) -> int:
+	var need := header_need(vertical)
+	for k in [1, 2, 5, 10]:
+		if k * geo.cell_px >= need:
+			return k
+	return 0
+
+
+## 보이는 열 머리: [{index, text, rect}]. rect 는 글자 상자(그 열 가운데, 위 띠 HEAD_H 안). 왼쪽 띠 위(모서리)는 비운다.
+func column_labels() -> Array[Dictionary]:
+	return _labels(false)
+
+
+## 보이는 행 머리: [{index, text, rect}]. rect 는 글자 상자(그 행 가운데, 왼쪽 띠 HEAD_W 안).
+func row_labels() -> Array[Dictionary]:
+	return _labels(true)
+
+
+func _labels(vertical: bool) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var k := header_step(vertical)
+	if k == 0:
+		return out
+	var font := get_theme_default_font()
+	var band := Rect2(0, HEAD_H, HEAD_W, size.y - HEAD_H) if vertical else Rect2(HEAD_W, 0, size.x - HEAD_W, HEAD_H)
+	var fh := font.get_height(HEAD_FS) * 0.8
+	for i in range(0, geo.height if vertical else geo.width, k):
+		var t := row_name(i) if vertical else column_name(i)
+		var tw := font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, HEAD_FS).x + 4.0
+		var c := Vector2(HEAD_W / 2.0, geo.to_screen(Vector2(0, i + 0.5)).y) if vertical else Vector2(geo.to_screen(Vector2(i + 0.5, 0)).x, HEAD_H / 2.0)
+		var r := Rect2(c - Vector2(tw, fh) / 2.0, Vector2(tw, fh))
+		if band.grow(0.01).encloses(r):
+			out.append({"index": i, "text": t, "rect": r})
+	return out
+
+
+## 좌표 머리: 위·왼쪽 반투명 띠와 글자(지도 표시 아래에 그린다: LAYERS).
+func _draw_headers() -> void:
+	var font := get_theme_default_font()
+	draw_rect(Rect2(0, 0, size.x, HEAD_H), HEAD_BG)
+	draw_rect(Rect2(0, HEAD_H, HEAD_W, size.y - HEAD_H), HEAD_BG)
+	# 글자 상자 가운데에 숫자·영문 대문자 높이(약 0.72em)의 가운데를 맞춘다.
+	for l in column_labels() + row_labels():
+		var r: Rect2 = l["rect"]
+		draw_string(font, Vector2(r.position.x, r.get_center().y + HEAD_FS * 0.36), l["text"], HORIZONTAL_ALIGNMENT_CENTER, r.size.x, HEAD_FS, HEAD_TEXT)
+
+
+func _draw_floors() -> void:
 	var ann := state.annotation
-	var px := geo.cell_px
-	var w := state.floor_def.width
-	var h := state.floor_def.height
 	for c in ann.floors:
 		draw_rect(geo.cell_rect(c).grow(-0.5), FLOOR_COLORS[clampi(ann.floors[c], 0, 4)])
-	for y in h + 1:
-		draw_line(geo.to_screen(Vector2(0, y)), geo.to_screen(Vector2(w, y)), GRID, 1.0)
-	for x in w + 1:
-		draw_line(geo.to_screen(Vector2(x, 0)), geo.to_screen(Vector2(x, h)), GRID, 1.0)
+
+
+func _draw_edges() -> void:
+	var ann := state.annotation
+	var px := geo.cell_px
 	var lw := maxf(2.0, px * 0.12)
 	for e in ann.edges:
 		var seg := geo.edge_segment(e)
@@ -429,13 +558,25 @@ func _draw() -> void:
 			draw_rect(Rect2(mid - half, half * 2.0), DOOR_COLOR, false, maxf(1.5, lw * 0.6))
 		else:
 			draw_line(seg[0], seg[1], col, lw)
+
+
+func _draw_icons() -> void:
+	var ann := state.annotation
 	for c in ann.icons:
 		var ic: Dictionary = ann.icons[c]
-		VectorIcons.draw(self, ic["type"], geo.cell_rect(c).grow(-px * 0.12), Color(1, 1, 1, 0.92), maxi(0, int(ic["dir"])))
+		VectorIcons.draw(self, ic["type"], geo.cell_rect(c).grow(-geo.cell_px * 0.12), Color(1, 1, 1, 0.92), maxi(0, int(ic["dir"])))
+
+
+func _draw_memos() -> void:
+	var ann := state.annotation
 	for c in ann.memos:
 		var r := geo.cell_rect(c)
-		var t := px * 0.32
+		var t := geo.cell_px * 0.32
 		draw_colored_polygon(PackedVector2Array([r.position + Vector2(r.size.x - t, 0), r.position + Vector2(r.size.x, 0), r.position + Vector2(r.size.x, t)]), Color(1.0, 0.9, 0.3))
+
+
+func _draw_party() -> void:
+	var px := geo.cell_px
 	var pr := geo.cell_rect(state.party.at)
 	var center := pr.get_center()
 	var rot := state.party.facing * PI / 2.0

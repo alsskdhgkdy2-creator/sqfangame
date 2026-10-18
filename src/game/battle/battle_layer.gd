@@ -34,6 +34,9 @@ const AUTO_TARGETS := ["self", "enemy_all", "ally_all"]
 const REASON_KEYS := ["no_tp", "bound_head", "bound_arm", "bound_leg", "no_target", "no_escape", "unknown_skill"]
 ## 결과 창: 폭, 가장 작은 높이, 본문 시작(제목 아래), 본문과 「확인」 사이, 「확인」 아래 여백.
 const RESULT_W := 560.0
+## 결과 본문 글자 크기와 묶음 머리 글자 크기.
+const RESULT_FS := 20
+const RESULT_HEAD_FS := 24
 const RESULT_MIN_H := 340.0
 const RESULT_TOP := 84.0
 const RESULT_GAP := 12.0
@@ -93,11 +96,14 @@ var result_panel: Control
 var result_ok: BattleButton
 var skip_catcher: Control
 var _result_title := Label.new()
-var _result_body := Label.new()
+var _result_body := RichTextLabel.new()
 ## 결과 본문(넘치면 끌어 내린다, 07 §9.6).
 var result_scroll: PartyScroll
 ## 결과 창 본문 줄(드롭·경험치·레벨업). 디버그 상태 요약도 이것을 낸다(07 §8.6).
 var result_lines: Array[String] = []
+## result_lines 와 같은 차례의 줄 종류(M2.6 U6): "head"(묶음 머리 드롭·경험치·레벨 업, 더 크고 따뜻한 색) ·
+## "item"(머리 아래 줄) · "line"(머리 없는 한 줄: 「경험치 +7」·「드롭 없음」 등).
+var result_kinds: Array[String] = []
 var _built := false
 var _input_frame := -1
 var _notice := ""
@@ -168,13 +174,7 @@ func _build_result() -> void:
 	result_panel.name = "ResultPanel"
 	result_panel.mouse_filter = MOUSE_FILTER_STOP
 	result_panel.visible = false
-	result_panel.draw.connect(func() -> void:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.04, 0.07, 0.1, 0.97)
-		sb.set_border_width_all(2)
-		sb.border_color = Color(0.3, 0.8, 0.9)
-		sb.set_corner_radius_all(12)
-		result_panel.draw_style_box(sb, Rect2(Vector2.ZERO, result_panel.size)))
+	result_panel.draw.connect(func() -> void: UiTheme.draw_window(result_panel, Rect2(Vector2.ZERO, result_panel.size)))
 	add_child(result_panel)
 	_result_title.add_theme_font_size_override("font_size", 30)
 	_result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -182,8 +182,12 @@ func _build_result() -> void:
 	result_scroll = PartyScroll.new()
 	result_scroll.name = "ResultBody"
 	result_panel.add_child(result_scroll)
-	_result_body.add_theme_font_size_override("font_size", 20)
-	_result_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_result_body.bbcode_enabled = true
+	_result_body.fit_content = true
+	_result_body.scroll_active = false
+	_result_body.selection_enabled = false
+	_result_body.add_theme_font_size_override("normal_font_size", RESULT_FS)
+	_result_body.add_theme_color_override("default_color", UiTheme.TEXT)
 	_result_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_result_body.mouse_filter = MOUSE_FILTER_IGNORE
 	result_scroll.content.add_child(_result_body)
@@ -226,6 +230,7 @@ func open(s: ExplorationState) -> void:
 	end_event = {}
 	last_events.clear()
 	result_lines.clear()
+	result_kinds.clear()
 	_steps.clear()
 	_notice = ""
 	_announce = ""
@@ -771,13 +776,16 @@ func _end_anim() -> void:
 
 func _show_result() -> void:
 	var lines: Array[String] = []
+	var kinds: Array[String] = []
 	if outcome == "victory":
 		_result_title.text = texts.t("battle.result.victory")
 		var drops: Array = end_event.get("drops", [])
 		if drops.is_empty():
 			lines.append(texts.t("battle.result.no_drops"))
+			kinds.append("line")
 		else:
 			lines.append(texts.t("battle.result.drops"))
+			kinds.append("head")
 			# 같은 소재는 한 줄로 모은다(드롭은 한 번에 1개씩, 06 §3.17).
 			var order: Array[String] = []
 			var sums := {}
@@ -795,15 +803,21 @@ func _show_result() -> void:
 				if capped.has(item):
 					line = texts.t("battle.result.drop_capped", {"item": texts.t(item)}) if line.is_empty() else line + " " + texts.t("battle.result.capped")
 				lines.append(line)
-		lines.append_array(growth_lines(end_event))
+				kinds.append("item")
+		for r in growth_rows(end_event):
+			lines.append(r["text"])
+			kinds.append(r["kind"])
 	elif end_event.get("reason", "") == "turn_cap":
 		_result_title.text = texts.t("battle.result.ended")
 		lines.append(texts.t("battle.result.turn_cap"))
+		kinds.append("line")
 	else:
 		_result_title.text = texts.t("battle.result.escaped")
 		lines.append(texts.t("battle.event.escaped"))
+		kinds.append("line")
 	result_lines = lines
-	_result_body.text = "\n".join(lines)
+	result_kinds = kinds
+	_result_body.text = result_bbcode(lines, kinds)
 	result_scroll.scroll_to(0.0)
 	result_panel.visible = true
 	panel.show_none()
@@ -817,6 +831,14 @@ func _show_result() -> void:
 ## 레벨이 오른 대원이 있으면 머리 「레벨 업」 아래 그 대원마다 「Lv 1 → 2  SP +1」.
 func growth_lines(end_ev: Dictionary) -> Array[String]:
 	var out: Array[String] = []
+	for r in growth_rows(end_ev):
+		out.append(r["text"])
+	return out
+
+
+## growth_lines 의 줄과 그 종류([{text, kind}], kind 는 result_kinds 와 같다).
+func growth_rows(end_ev: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
 	var rows: Array = end_ev.get("members", [])
 	if int(end_ev.get("exp_total", 0)) <= 0 or rows.is_empty():
 		return out
@@ -825,28 +847,42 @@ func growth_lines(end_ev: Dictionary) -> Array[String]:
 		if r["status"] != "received" or r["capped"] or int(r["gained"]) != int(rows[0]["gained"]):
 			same = false
 	if same:
-		out.append(texts.t("battle.result.exp", {"n": rows[0]["gained"]}))
+		out.append({"text": texts.t("battle.result.exp", {"n": rows[0]["gained"]}), "kind": "line"})
 	else:
-		out.append(texts.t("battle.result.exp_head"))
+		out.append({"text": texts.t("battle.result.exp_head"), "kind": "head"})
 		for r in rows:
 			var who := _member_name(int(r["member"]))
+			var t := ""
 			match str(r["status"]):
 				"down":
-					out.append(texts.t("battle.result.exp_down", {"member": who}))
+					t = texts.t("battle.result.exp_down", {"member": who})
 				"at_cap":
-					out.append(texts.t("battle.result.exp_at_cap", {"member": who}))
+					t = texts.t("battle.result.exp_at_cap", {"member": who})
 				_:
 					var key := "battle.result.exp_member_capped" if r["capped"] else "battle.result.exp_member"
-					out.append(texts.t(key, {"member": who, "n": r["gained"]}))
+					t = texts.t(key, {"member": who, "n": r["gained"]})
+			out.append({"text": t, "kind": "item"})
 	var head := true
 	for r in rows:
 		if int(r["to"]) > int(r["from"]):
 			if head:
-				out.append(texts.t("battle.result.level_up_head"))
+				out.append({"text": texts.t("battle.result.level_up_head"), "kind": "head"})
 				head = false
 			var args := {"member": _member_name(int(r["member"])), "from": r["from"], "to": r["to"], "sp": r["sp_gained"]}
-			out.append(texts.t("battle.result.level_up_sp" if int(r["sp_gained"]) > 0 else "battle.result.level_up", args))
+			out.append({"text": texts.t("battle.result.level_up_sp" if int(r["sp_gained"]) > 0 else "battle.result.level_up", args), "kind": "item"})
 	return out
+
+
+## 결과 본문 BBCode: 머리 줄은 더 크고(RESULT_HEAD_FS) 따뜻한 색(UiTheme.HEAD_TEXT), 그 밖은 본문 크기·색. 가운데 정렬.
+static func result_bbcode(lines: Array[String], kinds: Array[String]) -> String:
+	var out: Array[String] = []
+	for i in lines.size():
+		var t := lines[i].replace("[", "[lb]")
+		if i < kinds.size() and kinds[i] == "head":
+			out.append("[font_size=%d][color=#%s]%s[/color][/font_size]" % [RESULT_HEAD_FS, UiTheme.HEAD_TEXT.to_html(false), t])
+		else:
+			out.append(t)
+	return "[center]%s[/center]" % "\n".join(out)
 
 
 func _member_name(i: int) -> String:
@@ -1003,16 +1039,11 @@ func _refresh_skill_info() -> void:
 
 
 func _draw_skill_info() -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.03, 0.06, 0.09, 0.92)
-	sb.set_border_width_all(1)
-	sb.border_color = Color(0.25, 0.55, 0.62)
-	sb.set_corner_radius_all(10)
-	skill_info.draw_style_box(sb, Rect2(Vector2.ZERO, skill_info.size))
+	UiTheme.draw_window(skill_info, Rect2(Vector2.ZERO, skill_info.size))
 	var font := get_theme_default_font()
 	var w := skill_info.size.x - 32.0
-	skill_info.draw_string(font, Vector2(16, 30), skill_info_title, HORIZONTAL_ALIGNMENT_LEFT, w, 19, Color(1.0, 0.88, 0.5))
-	skill_info.draw_multiline_string(font, Vector2(16, 58), skill_info_text, HORIZONTAL_ALIGNMENT_LEFT, w, 17, 2, Color(0.88, 0.95, 1.0))
+	skill_info.draw_string(font, Vector2(16, 30), skill_info_title, HORIZONTAL_ALIGNMENT_LEFT, w, 19, UiTheme.HEAD_TEXT)
+	skill_info.draw_multiline_string(font, Vector2(16, 58), skill_info_text, HORIZONTAL_ALIGNMENT_LEFT, w, 17, 2, UiTheme.TEXT)
 
 
 func _layout() -> void:
@@ -1036,8 +1067,8 @@ func _layout() -> void:
 	# 결과 창: 본문 줄이 많으면 높이를 늘리되 알림 줄 아래부터 화면 아래 8 안에 둔다(알림 줄과 위 막대를 가리지 않는다).
 	# 그래도 넘치면 본문을 끌어 내린다(07 §9.6).
 	var body_w := RESULT_W - 40.0
-	_result_body.size = Vector2(body_w, _result_body.size.y)
-	var body_h := maxf(1.0, _result_body.get_line_count()) * (_result_body.get_line_height() + _result_body.get_theme_constant("line_spacing"))
+	_result_body.size = Vector2(body_w, 0)
+	var body_h := maxf(1.0, float(_result_body.get_content_height()))
 	var chrome := RESULT_TOP + RESULT_GAP + result_ok.size.y + RESULT_BOTTOM
 	var clear_top := TOAST_Y + TOAST_H + 4.0
 	var rp := Vector2(RESULT_W, clampf(chrome + body_h, RESULT_MIN_H, maxf(RESULT_MIN_H, s.y - 8.0 - clear_top)))
@@ -1060,8 +1091,8 @@ func _layout() -> void:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.75))
-	draw_rect(Rect2(0, 0, size.x, TOP_H), Color(0.02, 0.04, 0.06, 0.92))
-	draw_line(Vector2(0, TOP_H), Vector2(size.x, TOP_H), Color(0.25, 0.55, 0.62), 1.0)
+	# 위 막대: 공용 창 모양의 위·옆 테두리를 화면 밖으로 밀어 아래 선만 보인다.
+	UiTheme.draw_window(self, Rect2(-8, -8, size.x + 16, TOP_H + 8))
 	if display == null:
 		return
 	var font := get_theme_default_font()

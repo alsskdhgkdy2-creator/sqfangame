@@ -6,21 +6,8 @@ extends Control
 signal opened(kind: String)
 signal closed(kind: String)
 
-## 창 단추 색(원작 옵션 창처럼): 평소는 어두운 바탕 + 보이는 테두리, 고른 것(키보드 포커스·포인터 위)은 따뜻한 채움 + 어두운 글자,
-## 켜진 것(지금 고른 설정)은 밝은 청록 채움 + 어두운 글자. 못 누르는 단추도 키보드 포커스는 받는다(이동이 건너뛰지 않는다):
-## Godot 는 그 위에 focus 상자를 덮고 글자는 font_disabled_color 로 그리므로, 못 누르는 단추의 focus 는 채움 없이 따뜻한 테두리만이다.
-## 글자 대비는 Godot 가 실제로 겹쳐 그리는 짝마다 4.5:1 이상(시험이 본다).
-const BTN_BG := Color(0.07, 0.12, 0.16)
-const BTN_BORDER := Color(0.36, 0.62, 0.7)
-const BTN_TEXT := Color(0.9, 0.96, 1.0)
-const BTN_PICK := Color(1.0, 0.8, 0.34)
-const BTN_PICK_PRESSED := Color(1.0, 0.9, 0.55)
-const BTN_PICK_TEXT := Color(0.1, 0.07, 0.02)
-const BTN_CHECKED := Color(0.55, 0.88, 0.95)
-const BTN_CHECKED_BORDER := Color(0.18, 0.42, 0.5)
-const BTN_DISABLED_BG := Color(0.06, 0.08, 0.1)
-const BTN_DISABLED_BORDER := Color(0.22, 0.3, 0.34)
-const BTN_DISABLED_TEXT := Color(0.52, 0.57, 0.62)
+## 창과 창 단추 모양은 공용 UiTheme(원작 옵션 창처럼): 고른 것(키보드 포커스·포인터 위)은 따뜻한 채움 + 어두운 글자,
+## 켜진 것(지금 고른 설정)은 밝은 청록 채움 + 어두운 글자. 못 누르는 단추도 키보드 포커스는 받는다(이동이 건너뛰지 않는다).
 
 ## 지금 열린 창 종류("" 이면 없음).
 var kind := ""
@@ -43,13 +30,7 @@ func _init() -> void:
 	center.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	center.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(center)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.08, 0.11, 0.97)
-	sb.set_border_width_all(2)
-	sb.border_color = Color(0.3, 0.8, 0.9)
-	sb.set_corner_radius_all(12)
-	sb.set_content_margin_all(22)
-	_panel.add_theme_stylebox_override("panel", sb)
+	_panel.add_theme_stylebox_override("panel", UiTheme.window_box(22))
 	center.add_child(_panel)
 	_box.add_theme_constant_override("separation", 10)
 	_panel.add_child(_box)
@@ -69,6 +50,7 @@ func open(new_kind: String, title: String, rows: Array[Control]) -> void:
 	var head := Label.new()
 	head.text = title
 	head.add_theme_font_size_override("font_size", 26)
+	head.add_theme_color_override("font_color", UiTheme.HEAD_TEXT)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_box.add_child(head)
 	for r in rows:
@@ -97,48 +79,19 @@ static func button(text: String, on_press: Callable, enabled: bool = true) -> Bu
 	b.custom_minimum_size = Vector2(240, 60)
 	b.disabled = not enabled
 	b.add_theme_font_size_override("font_size", 20)
-	_style(b, false)
+	UiTheme.style_button(b, false)
 	b.pressed.connect(on_press)
 	return b
 
 
 ## 켜진 단추(지금 고른 설정)로 표시한다. 고른 것(포커스) 표시는 그 위에 그대로 덮인다.
 static func set_checked(b: Button, on: bool) -> void:
-	_style(b, on)
+	UiTheme.style_button(b, on)
 	b.set_meta("checked", on)
 
 
 static func is_checked(b: Button) -> bool:
 	return bool(b.get_meta("checked", false))
-
-
-static func _button_box(bg: Color, border: Color, width: int) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = bg
-	sb.set_border_width_all(width)
-	sb.border_color = border
-	sb.set_corner_radius_all(10)
-	sb.set_content_margin_all(8)
-	return sb
-
-
-static func _style(b: Button, checked: bool) -> void:
-	var base := BTN_CHECKED if checked else BTN_BG
-	var text := BTN_PICK_TEXT if checked else BTN_TEXT
-	b.add_theme_stylebox_override("normal", _button_box(base, BTN_CHECKED_BORDER if checked else BTN_BORDER, 2))
-	b.add_theme_stylebox_override("hover", _button_box(BTN_PICK, BTN_PICK.lightened(0.4), 2))
-	b.add_theme_stylebox_override("pressed", _button_box(BTN_PICK_PRESSED, BTN_PICK.lightened(0.4), 2))
-	b.add_theme_stylebox_override("hover_pressed", _button_box(BTN_PICK_PRESSED, BTN_PICK.lightened(0.4), 2))
-	var focus := _button_box(BTN_PICK, BTN_PICK.lightened(0.4), 3)
-	if b.disabled:
-		focus.draw_center = false  # 못 누르는 단추: 바탕은 disabled 그대로, 글자는 font_disabled_color(채우면 대비가 무너진다)
-		focus.border_color = BTN_PICK
-	b.add_theme_stylebox_override("focus", focus)
-	b.add_theme_stylebox_override("disabled", _button_box(BTN_DISABLED_BG, BTN_DISABLED_BORDER, 2))
-	b.add_theme_color_override("font_color", text)
-	for k in ["font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
-		b.add_theme_color_override(k, BTN_PICK_TEXT)
-	b.add_theme_color_override("font_disabled_color", BTN_DISABLED_TEXT)
 
 
 static func label(text: String, font_size: int = 18) -> Label:

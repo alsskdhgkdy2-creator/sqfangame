@@ -511,9 +511,4 @@ static func arrow_points(path: PackedVector2Array) -> PackedVector2Array:
 
 
 func _panel(c: Control) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.08, 0.11)
-	sb.set_border_width_all(1)
-	sb.border_color = Color(0.3, 0.45, 0.52)
-	sb.set_corner_radius_all(10)
-	c.draw_style_box(sb, Rect2(Vector2.ZERO, c.size))
+	UiTheme.draw_window(c, Rect2(Vector2.ZERO, c.size))

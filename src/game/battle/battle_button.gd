@@ -28,23 +28,16 @@ func set_text(t: String) -> void:
 	queue_redraw()
 
 
+## 못 고름(dimmed)도 못 누름과 같은 흐린 모양(누르기는 받는다).
+func theme_state() -> String:
+	return UiTheme.state_of(held, selected, checked, disabled or dimmed)
+
+
 func _draw() -> void:
 	var r := Rect2(Vector2.ZERO, size)
-	var bg := Color(0.07, 0.11, 0.15, 0.92)
-	if held:
-		bg = Color(0.16, 0.32, 0.4, 0.97)
-	elif selected:
-		bg = Color(0.12, 0.27, 0.33, 0.97)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = bg
-	sb.set_corner_radius_all(10)
-	sb.set_border_width_all(3 if selected else 1)
-	sb.border_color = Color(0.45, 0.95, 1.0) if selected else Color(0.3, 0.45, 0.52)
-	draw_style_box(sb, r)
+	var lk := UiTheme.draw_button(self, r, theme_state())
 	var font := get_theme_default_font()
-	var fg := Color(0.88, 0.96, 1.0)
-	if dimmed or disabled:
-		fg = Color(0.45, 0.5, 0.55)
+	var fg: Color = lk["text"]
 	var pad := 16.0
 	var main_y := size.y / 2.0 + font_size * 0.36
 	if not note.is_empty():
@@ -61,4 +54,4 @@ func _draw() -> void:
 		var nx := pad if align_left else 0.0
 		var nw := size.x - 2.0 * pad if align_left else size.x
 		var al := HORIZONTAL_ALIGNMENT_LEFT if align_left else HORIZONTAL_ALIGNMENT_CENTER
-		draw_string(font, Vector2(nx, size.y - 9.0), note, al, nw, 14, Color(1.0, 0.62, 0.45))
+		draw_string(font, Vector2(nx, size.y - 9.0), note, al, nw, 14, lk["reason"])

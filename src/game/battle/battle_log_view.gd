@@ -103,9 +103,4 @@ func _notification(what: int) -> void:
 
 
 func _draw() -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.03, 0.05, 0.07, 1.0)
-	sb.set_border_width_all(2)
-	sb.border_color = Color(0.3, 0.8, 0.9)
-	sb.set_corner_radius_all(12)
-	draw_style_box(sb, Rect2(Vector2.ZERO, size))
+	UiTheme.draw_window(self, Rect2(Vector2.ZERO, size))

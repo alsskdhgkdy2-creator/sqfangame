@@ -28,6 +28,11 @@ var disabled := false:
 		if v:
 			cancel()
 		queue_redraw()
+## 켜짐(지금 고른 설정·탭·목록이 열린 칸). 커서(selected)와 따로 보인다(UiTheme).
+var checked := false:
+	set(v):
+		checked = v
+		queue_redraw()
 ## 색 견본(바닥 색 도구). 알파 0 이면 그리지 않는다.
 var swatch := Color(0, 0, 0, 0)
 ## 지금 눌려 있는지(누르고 있으면 반복용).
@@ -102,20 +107,15 @@ func _up(inside: bool) -> void:
 		released.emit()
 
 
+## 지금 상태 모양 이름(UiTheme). 색 견본 단추는 고르면 채움 대신 테두리(견본 색이 그대로 보인다).
+func theme_state() -> String:
+	return UiTheme.state_of(held, selected, checked, disabled, swatch.a > 0.0)
+
+
 func _draw() -> void:
 	var r := Rect2(Vector2.ZERO, size)
-	var bg := Color(0.08, 0.12, 0.16, 0.82)
-	if held:
-		bg = Color(0.16, 0.32, 0.4, 0.95)
-	elif selected:
-		bg = Color(0.12, 0.26, 0.32, 0.95)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = bg
-	sb.set_corner_radius_all(10)
-	sb.set_border_width_all(3 if selected else 1)
-	sb.border_color = Color(0.4, 0.95, 1.0) if selected else Color(0.3, 0.45, 0.52)
-	draw_style_box(sb, r)
-	var fg := Color(0.85, 0.95, 1.0) if not disabled else Color(0.4, 0.45, 0.5)
+	var lk := UiTheme.draw_button(self, r, theme_state())
+	var fg: Color = lk["text"]
 	var font := get_theme_default_font()
 	var fs := 16
 	var icon_rect := r.grow(-size.x * 0.18)

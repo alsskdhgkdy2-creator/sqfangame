@@ -201,7 +201,7 @@ func refresh() -> void:
 	if menu.debug:
 		supply_button.position = Vector2(0, y)
 		supply_button.text = menu.texts.t("party.supply")
-		supply_button.selected = supply_open
+		supply_button.checked = supply_open
 		y += SUPPLY_SIZE.y + ROW_GAP * 3
 	var ids := defs.battle.equipment_ids
 	while plus_buttons.size() < ids.size():

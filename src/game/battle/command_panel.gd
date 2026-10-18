@@ -180,15 +180,10 @@ func _notification(what: int) -> void:
 
 
 func _draw() -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.03, 0.06, 0.09, 0.9)
-	sb.set_border_width_all(1)
-	sb.border_color = Color(0.25, 0.55, 0.62)
-	sb.set_corner_radius_all(10)
-	draw_style_box(sb, Rect2(Vector2.ZERO, size))
+	UiTheme.draw_window(self, Rect2(Vector2.ZERO, size))
 	if title.is_empty():
 		return
 	var font := get_theme_default_font()
-	draw_string(font, Vector2(16, 30), title, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 21, Color(0.95, 0.98, 1.0))
+	draw_string(font, Vector2(16, 30), title, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 21, UiTheme.TEXT)
 	if not subtitle.is_empty():
-		draw_string(font, Vector2(16, 52), subtitle, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 16, Color(0.7, 0.85, 0.9))
+		draw_string(font, Vector2(16, 52), subtitle, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 16, UiTheme.SUB_TEXT)

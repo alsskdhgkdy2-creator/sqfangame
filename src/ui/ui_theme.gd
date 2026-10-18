@@ -1,0 +1,269 @@
+## 공용 창·단추 모양 한 곳(M2.6 U6, 원작의 홀로 창처럼): 색과 그리기 규칙은 여기서만 정한다(StyleBoxFlat 도 여기서만 만든다).
+## 창: 어두운 바깥 테두리 + 안쪽으로 들인 밝은 선(옅은 빛 번짐), 위 짙은 청록 → 아래 남색 세로 그라데이션, 모서리는 비스듬히 깎는다.
+## 단추·줄: 같은 계열의 상태 모양(look). 평소는 어두운 채움 + 밝은 안쪽 선, 고른 것(커서)은 따뜻한 채움 + 어두운 글자에
+## 더 굵은 바깥 테두리와 왼쪽 표시 막대(색 말고도 보이는 표시), 누름은 더 밝게, 켜진 것(지금 고른 설정·탭)은 청록 채움 + 어두운 글자,
+## 못 누름은 흐린 채움 + 흐린 글자(커서가 오면 채움은 그대로 두고 따뜻한 테두리·표시 막대만).
+## 색 견본·직업색 띠·HP 막대처럼 안의 색이 뜻을 가진 단추는 채움을 바꾸지 않는 테두리 모양(marked·checked_marked)을 쓴다.
+## 글자 대비는 각 모양의 채움 위·아래 색과 그 모양의 글자색 짝마다 4.5:1 이상(시험이 이 상수로 본다). 채움은 모두 불투명이라
+## 뒤에 무엇이 있어도 그 대비 그대로다.
+## Godot Button·PanelContainer 는 Box(StyleBox)로, 직접 그리는 단추·창은 draw_button·draw_window 로 같은 paint 를 쓴다.
+class_name UiTheme
+extends RefCounted
+
+## TP 막대 색(전투 대원 칸·탐색 상태 칸·파티 메뉴 대원 칸).
+const TP_BAR := Color(0.4, 0.65, 1.0)
+
+# ---- 창 ----
+const WIN_TOP := Color(0.05, 0.15, 0.18)
+const WIN_BOTTOM := Color(0.025, 0.05, 0.1)
+const WIN_OUTER := Color(0.0, 0.015, 0.03)
+const WIN_INNER := Color(0.38, 0.85, 0.95)
+const WIN_GLOW := Color(0.38, 0.85, 0.95, 0.16)
+const WIN_CHAMFER := 12.0
+## 창 위에 쓰는 글자: 머리(제목·묶음 머리), 본문, 흐린 본문.
+const HEAD_TEXT := Color(1.0, 0.88, 0.5)
+const TEXT := Color(0.9, 0.96, 1.0)
+const SUB_TEXT := Color(0.7, 0.85, 0.9)
+
+# ---- 단추 ----
+const BTN_TOP := Color(0.1, 0.18, 0.22)
+const BTN_BG := Color(0.06, 0.11, 0.15)
+const BTN_OUTER := Color(0.0, 0.02, 0.04)
+const BTN_BORDER := Color(0.36, 0.62, 0.7)
+const BTN_TEXT := Color(0.9, 0.96, 1.0)
+const BTN_SUB := Color(0.62, 0.82, 0.9)
+const BTN_HELD_TOP := Color(0.18, 0.34, 0.42)
+const BTN_HELD := Color(0.12, 0.25, 0.31)
+const BTN_HELD_BORDER := Color(0.5, 0.9, 1.0)
+const BTN_PICK_TOP := Color(1.0, 0.87, 0.47)
+const BTN_PICK := Color(1.0, 0.8, 0.34)
+const BTN_PICK_PRESSED_TOP := Color(1.0, 0.94, 0.68)
+const BTN_PICK_PRESSED := Color(1.0, 0.9, 0.55)
+const BTN_PICK_EDGE := Color(0.42, 0.26, 0.04)
+const BTN_PICK_LINE := Color(1.0, 0.96, 0.82)
+const BTN_PICK_TEXT := Color(0.1, 0.07, 0.02)
+const BTN_PICK_SUB := Color(0.3, 0.19, 0.04)
+const BTN_CHECKED_TOP := Color(0.64, 0.93, 0.98)
+const BTN_CHECKED := Color(0.55, 0.88, 0.95)
+const BTN_CHECKED_PRESSED_TOP := Color(0.78, 0.97, 1.0)
+const BTN_CHECKED_PRESSED := Color(0.68, 0.94, 0.99)
+const BTN_CHECKED_BORDER := Color(0.18, 0.42, 0.5)
+const BTN_CHECKED_SUB := Color(0.07, 0.2, 0.25)
+const BTN_DISABLED_BG := Color(0.06, 0.08, 0.1)
+const BTN_DISABLED_BORDER := Color(0.22, 0.3, 0.34)
+const BTN_DISABLED_TEXT := Color(0.52, 0.57, 0.62)
+## 못 고르는 줄의 이유 글자(누름 채움 위에서는 더 밝게).
+const BTN_REASON := Color(1.0, 0.62, 0.45)
+const BTN_REASON_LIGHT := Color(1.0, 0.78, 0.62)
+## 강조 글자(레벨·최대·초안 +n)와 좋음 글자(배울 수 있음 등). 어두운 채움 위 색이고, 밝은 채움 위에서는 그 모양의 어두운 글자.
+const ACCENT_TEXT := Color(1.0, 0.86, 0.45)
+const GOOD_TEXT := Color(0.55, 1.0, 0.7)
+## 흐린 안내 글자(SP 모자람 등, 평소 채움 위).
+const MUTED_TEXT := Color(0.62, 0.67, 0.72)
+const BTN_CHAMFER := 8.0
+const BTN_OUTER_W := 2.0
+## 고른 것의 굵은 바깥 테두리.
+const BTN_PICK_W := 3.0
+## 왼쪽 표시 막대 폭.
+const MARK_W := 5.0
+## 바깥 테두리와 안쪽 선 사이.
+const INNER_GAP := 2.0
+
+## 단추 상태 이름. 직접 그리는 단추는 state_of 로 고르고, Godot Button 은 style_button 이 상태 상자로 나눠 둔다.
+const STATES := ["normal", "pressed", "selected", "selected_pressed", "checked", "checked_pressed", "disabled", "disabled_selected",
+	"marked", "marked_pressed", "checked_marked", "checked_marked_pressed"]
+
+static var _looks := {}
+
+
+## 상태 모양: fill(채우는지) · top/bottom(세로 그라데이션) · outer/outer_w(바깥 테두리) · inner/inner_w(안쪽 선) · glow(번짐)
+## · marker(왼쪽 표시 막대, 알파 0 이면 없음) · chamfer · text(본 글자) · sub(작은 글자: 바뀌는 값·칸 이름) · reason(이유 글자).
+static func look(state: String) -> Dictionary:
+	if _looks.is_empty():
+		_looks = _build_looks()
+	if not _looks.has(state):
+		push_error("UiTheme: 모르는 단추 상태 %s" % state)
+		return _looks["normal"]
+	return _looks[state]
+
+
+## 글자 몫(text·sub·reason·accent·good·muted)은 모두 이 모양의 채움 위·아래 색과 4.5:1 이상이어야 한다(시험).
+const TEXT_ROLES := ["text", "sub", "reason", "accent", "good", "muted"]
+
+
+static func _btn(top: Color, bottom: Color, outer: Color, outer_w: float, inner: Color, inner_w: float, marker: Color,
+		text: Color, sub: Color, reason: Color) -> Dictionary:
+	var dark := text.get_luminance() < 0.5
+	return {"fill": true, "top": top, "bottom": bottom, "outer": outer, "outer_w": outer_w, "inner": inner, "inner_w": inner_w,
+		"glow": Color(0, 0, 0, 0), "marker": marker, "chamfer": BTN_CHAMFER, "text": text, "sub": sub, "reason": reason,
+		"accent": text if dark else ACCENT_TEXT, "good": sub if dark else GOOD_TEXT, "muted": sub if dark else MUTED_TEXT}
+
+
+static func _build_looks() -> Dictionary:
+	var none := Color(0, 0, 0, 0)
+	var d := {}
+	d["normal"] = _btn(BTN_TOP, BTN_BG, BTN_OUTER, BTN_OUTER_W, BTN_BORDER, 1.0, none, BTN_TEXT, BTN_SUB, BTN_REASON)
+	d["pressed"] = _btn(BTN_HELD_TOP, BTN_HELD, BTN_OUTER, BTN_OUTER_W, BTN_HELD_BORDER, 1.0, none, BTN_TEXT, BTN_SUB, BTN_REASON_LIGHT)
+	d["selected"] = _btn(BTN_PICK_TOP, BTN_PICK, BTN_PICK_EDGE, BTN_PICK_W, BTN_PICK_LINE, 1.0, BTN_PICK_TEXT, BTN_PICK_TEXT, BTN_PICK_SUB, BTN_PICK_SUB)
+	d["selected_pressed"] = _btn(BTN_PICK_PRESSED_TOP, BTN_PICK_PRESSED, BTN_PICK_EDGE, BTN_PICK_W, BTN_PICK_LINE, 1.0, BTN_PICK_TEXT,
+		BTN_PICK_TEXT, BTN_PICK_SUB, BTN_PICK_SUB)
+	d["checked"] = _btn(BTN_CHECKED_TOP, BTN_CHECKED, BTN_OUTER, BTN_OUTER_W, BTN_CHECKED_BORDER, 2.0, none, BTN_PICK_TEXT, BTN_CHECKED_SUB, BTN_CHECKED_SUB)
+	d["checked_pressed"] = _btn(BTN_CHECKED_PRESSED_TOP, BTN_CHECKED_PRESSED, BTN_OUTER, BTN_OUTER_W, BTN_CHECKED_BORDER, 2.0, none,
+		BTN_PICK_TEXT, BTN_CHECKED_SUB, BTN_CHECKED_SUB)
+	d["disabled"] = _btn(BTN_DISABLED_BG, BTN_DISABLED_BG, BTN_OUTER, BTN_OUTER_W, BTN_DISABLED_BORDER, 1.0, none, BTN_DISABLED_TEXT,
+		BTN_DISABLED_TEXT, BTN_REASON)
+	d["disabled_selected"] = _btn(BTN_DISABLED_BG, BTN_DISABLED_BG, BTN_PICK, BTN_PICK_W, BTN_DISABLED_BORDER, 1.0, BTN_PICK,
+		BTN_DISABLED_TEXT, BTN_DISABLED_TEXT, BTN_REASON)
+	for k in ["disabled", "disabled_selected"]:
+		for role in ["accent", "good", "muted"]:
+			d[k][role] = BTN_DISABLED_TEXT
+	d["marked"] = _btn(BTN_TOP, BTN_BG, BTN_PICK, BTN_PICK_W, BTN_PICK_LINE, 1.0, BTN_PICK, BTN_TEXT, BTN_SUB, BTN_REASON)
+	d["marked_pressed"] = _btn(BTN_HELD_TOP, BTN_HELD, BTN_PICK, BTN_PICK_W, BTN_PICK_LINE, 1.0, BTN_PICK, BTN_TEXT, BTN_SUB, BTN_REASON_LIGHT)
+	d["checked_marked"] = _btn(BTN_TOP, BTN_BG, BTN_CHECKED, BTN_PICK_W, BTN_CHECKED, 1.0, BTN_CHECKED, BTN_TEXT, BTN_SUB, BTN_REASON)
+	d["checked_marked_pressed"] = _btn(BTN_HELD_TOP, BTN_HELD, BTN_CHECKED, BTN_PICK_W, BTN_CHECKED, 1.0, BTN_CHECKED, BTN_TEXT, BTN_SUB,
+		BTN_REASON_LIGHT)
+	# 누름 채움(더 밝다) 위의 흐린 글자는 BTN_SUB 로.
+	for k in ["pressed", "marked_pressed", "checked_marked_pressed"]:
+		d[k]["muted"] = BTN_SUB
+	# Godot 가 못 누르는 단추 위에 덮는 focus 상자: 채움·안쪽 선 없이 따뜻한 테두리와 표시 막대만(글자는 font_disabled_color 그대로).
+	var df := (d["disabled_selected"] as Dictionary).duplicate()
+	df["fill"] = false
+	df["inner_w"] = 0.0
+	d["disabled_focus"] = df
+	var win := _btn(WIN_TOP, WIN_BOTTOM, WIN_OUTER, 3.0, WIN_INNER, 1.5, none, TEXT, SUB_TEXT, BTN_REASON)
+	win["glow"] = WIN_GLOW
+	win["chamfer"] = WIN_CHAMFER
+	d["window"] = win
+	return d
+
+
+## 직접 그리는 단추의 상태. color_content: 안의 색이 뜻을 가진 단추(견본·직업색) → 채움을 바꾸지 않는 테두리 모양.
+static func state_of(held: bool, selected: bool, checked: bool = false, disabled: bool = false, color_content: bool = false) -> String:
+	if disabled:
+		return "disabled_selected" if selected else "disabled"
+	var base := "normal"
+	if checked:
+		base = "checked_marked" if color_content else "checked"
+	if selected:
+		base = "marked" if color_content else "selected"
+	if held:
+		return "pressed" if base == "normal" else base + "_pressed"
+	return base
+
+
+static func draw_window(ci: CanvasItem, r: Rect2) -> void:
+	paint(ci.get_canvas_item(), r, look("window"))
+
+
+## 상태 모양으로 칸을 그리고 그 모양을 돌려준다(글자색은 그 모양의 몫에서 고른다).
+static func draw_button(ci: CanvasItem, r: Rect2, state: String) -> Dictionary:
+	var lk := look(state)
+	paint(ci.get_canvas_item(), r, lk)
+	return lk
+
+
+## 채움 없는 비스듬한 테두리 하나(지금 행동하는 대원·대상 표시·초안처럼 모양 위에 덧그리는 표시).
+static func draw_outline(ci: CanvasItem, r: Rect2, col: Color, w: float, chamfer: float = BTN_CHAMFER) -> void:
+	var c := minf(chamfer, minf(r.size.x, r.size.y) * 0.3)
+	_outline(ci.get_canvas_item(), r.grow(-w * 0.5), c, col, w)
+
+
+## 비스듬히 깎은 모서리의 팔각형(시계 방향).
+static func chamfer_points(r: Rect2, c: float) -> PackedVector2Array:
+	var x0 := r.position.x
+	var y0 := r.position.y
+	var x1 := r.end.x
+	var y1 := r.end.y
+	return PackedVector2Array([Vector2(x0 + c, y0), Vector2(x1 - c, y0), Vector2(x1, y0 + c), Vector2(x1, y1 - c),
+		Vector2(x1 - c, y1), Vector2(x0 + c, y1), Vector2(x0, y1 - c), Vector2(x0, y0 + c)])
+
+
+## 모양 하나를 칸 r 에 그린다(직접 그리기와 Box 가 같이 쓴다).
+static func paint(ci: RID, r: Rect2, lk: Dictionary) -> void:
+	if r.size.x < 2.0 or r.size.y < 2.0:
+		return
+	var c := minf(float(lk["chamfer"]), minf(r.size.x, r.size.y) * 0.3)
+	if lk["fill"]:
+		var pts := chamfer_points(r, c)
+		var cols := PackedColorArray()
+		for p in pts:
+			cols.append((lk["top"] as Color).lerp(lk["bottom"], (p.y - r.position.y) / r.size.y))
+		RenderingServer.canvas_item_add_polygon(ci, pts, cols)
+	var ow: float = lk["outer_w"]
+	if ow > 0.0:
+		_outline(ci, r.grow(-ow * 0.5), c, lk["outer"], ow)
+	var iw: float = lk["inner_w"]
+	var inset := ow + INNER_GAP + iw * 0.5
+	if (lk["glow"] as Color).a > 0.0:
+		_outline(ci, r.grow(-inset), maxf(0.0, c - inset * 0.4), lk["glow"], iw + 4.0)
+	if iw > 0.0:
+		_outline(ci, r.grow(-inset), maxf(0.0, c - inset * 0.4), lk["inner"], iw)
+	if (lk["marker"] as Color).a > 0.0:
+		RenderingServer.canvas_item_add_rect(ci, marker_rect(r, ow), lk["marker"])
+
+
+## 왼쪽 표시 막대 자리(바깥 테두리 안쪽).
+static func marker_rect(r: Rect2, outer_w: float = BTN_PICK_W) -> Rect2:
+	return Rect2(r.position.x + outer_w + 2.0, r.position.y + r.size.y * 0.22, MARK_W, r.size.y * 0.56)
+
+
+static func _outline(ci: RID, r: Rect2, c: float, col: Color, w: float) -> void:
+	var pts := chamfer_points(r, c)
+	pts.append(pts[0])
+	RenderingServer.canvas_item_add_polyline(ci, pts, PackedColorArray([col]), w, true)
+
+
+## 둥근 채움 하나(상태 칩·준비 표시·번쩍임·직업색 띠·적 자리 상자처럼 창·단추가 아닌 작은 면).
+static func fill_round(ci: CanvasItem, r: Rect2, col: Color, radius: int, border: Color = Color(0, 0, 0, 0), border_w: int = 0) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = col
+	sb.set_corner_radius_all(radius)
+	if border_w > 0:
+		sb.set_border_width_all(border_w)
+		sb.border_color = border
+	ci.draw_style_box(sb, r)
+
+
+## 위 두 모서리만 둥근 띠(전투 대원 칸의 직업색 띠).
+static func fill_top_round(ci: CanvasItem, r: Rect2, col: Color, radius: int) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = col
+	sb.corner_radius_top_left = radius
+	sb.corner_radius_top_right = radius
+	ci.draw_style_box(sb, r)
+
+
+## Godot Button·PanelContainer 용 상자: 같은 paint 로 그린다.
+class Box:
+	extends StyleBox
+	var look: Dictionary
+
+	func _draw(to_canvas_item: RID, rect: Rect2) -> void:
+		UiTheme.paint(to_canvas_item, rect, look)
+
+
+static func box(state: String, margin: float = 8.0) -> Box:
+	var b := Box.new()
+	b.look = look(state)
+	b.set_content_margin_all(margin)
+	return b
+
+
+static func window_box(margin: float = 22.0) -> Box:
+	return box("window", margin)
+
+
+## Godot Button 에 상태 상자와 글자색을 둔다. Godot 는 상태 상자(normal·hover·pressed·disabled) 위에 포커스면 focus 상자를
+## 덮고, 못 누르면 글자를 font_disabled_color 로 그린다: 못 누르는 단추의 focus 는 채움 없는 테두리만(disabled_focus).
+## checked: 켜진 단추(지금 고른 설정). 고른 것(포커스·포인터 위) 표시는 그 위에 그대로 덮인다.
+static func style_button(b: Button, checked: bool) -> void:
+	b.add_theme_stylebox_override("normal", box("checked" if checked else "normal"))
+	b.add_theme_stylebox_override("hover", box("selected"))
+	b.add_theme_stylebox_override("pressed", box("selected_pressed"))
+	b.add_theme_stylebox_override("hover_pressed", box("selected_pressed"))
+	b.add_theme_stylebox_override("focus", box("disabled_focus" if b.disabled else "selected"))
+	b.add_theme_stylebox_override("disabled", box("disabled"))
+	b.add_theme_color_override("font_color", look("checked" if checked else "normal")["text"])
+	for k in ["font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(k, BTN_PICK_TEXT)
+	b.add_theme_color_override("font_disabled_color", BTN_DISABLED_TEXT)

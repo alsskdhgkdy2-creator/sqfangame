@@ -2,6 +2,7 @@
 ## 목록: 맨 위 「빼기」, 낄 수 있는 가방 장비(이름·개수·바뀌는 값), 아래에 낄 수 없는 가방 장비를 흐리게 이유와 함께.
 ## 줄을 누르면 바로 GrowthRules.equip(초안 없음) → 자동 저장, 목록을 닫고 커서는 그 칸. 칸 0 에 무기 아닌 것·칸 1~3 에 무기처럼
 ## 칸 종류가 다른 장비는 목록에 넣지 않는다. 판정은 GrowthRules.equip_block, 바뀌는 값은 바꾼 뒤의 GrowthRules.profile 과의 차이.
+## 칸 줄 아래 합계 표(M2.6 U8): 목록이 닫혀 있으면 지금 합계, 열려 있으면 커서 줄로 바꿨을 때의 「지금 → 바꾸면」.
 class_name PartyEquipTab
 extends Control
 
@@ -24,6 +25,7 @@ var rows: Array[PartyButton] = []
 var row_items: Array[String] = []
 ## 목록 줄 → 막는 이유(growth.reason 코드, "" = 낄 수 있음)
 var row_block: Array[String] = []
+var totals: EquipTotals
 
 
 func setup(m: PartyMenu) -> void:
@@ -41,6 +43,9 @@ func setup(m: PartyMenu) -> void:
 	list.name = "EquipList"
 	list.visible = false
 	add_child(list)
+	totals = EquipTotals.new()
+	totals.name = "EquipTotals"
+	add_child(totals)
 
 
 func reset() -> void:
@@ -59,6 +64,9 @@ func context() -> String:
 func place(s: Vector2) -> void:
 	for slot in slot_rows.size():
 		slot_rows[slot].position = Vector2(PartyMenu.TAB_X, PartyMenu.TOP + slot * (SLOT_SIZE.y + SLOT_GAP))
+	var totals_y := PartyMenu.TOP + slot_rows.size() * (SLOT_SIZE.y + SLOT_GAP)
+	totals.position = Vector2(PartyMenu.TAB_X, totals_y)
+	totals.size = Vector2(SLOT_SIZE.x, minf(EquipTotals.needed_height(), s.y - totals_y - 8))
 	list.position = Vector2(LIST_X, PartyMenu.TOP)
 	list.size = Vector2(maxf(504.0, s.x - 8 - LIST_X), s.y - PartyMenu.TOP - 8)
 	for r in rows:
@@ -177,12 +185,18 @@ func refresh() -> void:
 			b.show_row(menu.texts.t("party.slot.empty"), "", "", true)
 		else:
 			b.show_row(menu.item_name(id), "", item_summary(defs.battle.equip(id)))
-		b.selected = slot == cursor
+		# 목록이 열린 칸은 「지금 이 칸」(켜짐), 닫혀 있으면 커서.
+		b.checked = list_open and slot == cursor
+		b.selected = slot == cursor and not list_open
 	list.visible = list_open
+	var base := GrowthRules.profile(defs, menu.member, m)
 	if not list_open:
+		totals.show_totals(menu.texts, base, null)
 		return
 	_build_rows()
-	var base := GrowthRules.profile(defs, menu.member, m)
+	# 낄 수 없는 줄이면 견주지 않는다(지금 값만).
+	var blocked := not row_block[list_cursor].is_empty()
+	totals.show_totals(menu.texts, base, null if blocked else profile_if(row_items[list_cursor]))
 	while rows.size() < row_items.size():
 		var r := PartyButton.new()
 		var j := rows.size()
@@ -228,9 +242,9 @@ func item_summary(e: BattleDb.EquipDef) -> String:
 	return " · ".join(parts)
 
 
-## 이 칸을 item_id 로 바꿨을 때(""= 빼기) 공격·방어 넷과 능력치가 바뀌는 값(「공격 +8」「방어 -2」).
-## 값은 바꾼 사본으로 GrowthRules.profile 을 다시 읽어 지금 묶음과 비교한다(화면이 규칙 계산을 따로 하지 않는다).
-func change_text(base: Dictionary, item_id: String) -> String:
+## 지금 대원의 커서 칸을 item_id 로 바꾼(""= 빼기) 사본의 GrowthRules.profile(대원은 그대로). 목록 줄의 바뀌는 값과
+## 합계 표의 「바꾸면」이 같이 쓴다(화면이 규칙 계산을 따로 하지 않는다).
+func profile_if(item_id: String) -> Dictionary:
 	var m := menu.current_member()
 	var copy := PartyState.Member.new(m.id, m.max_hp, m.hp, m.max_tp, m.tp)
 	copy.level = m.level
@@ -238,7 +252,12 @@ func change_text(base: Dictionary, item_id: String) -> String:
 	copy.skills = m.skills.duplicate()
 	copy.equip = m.equip.duplicate()
 	copy.equip[cursor] = item_id
-	var after := GrowthRules.profile(menu.state.defs, menu.member, copy)
+	return GrowthRules.profile(menu.state.defs, menu.member, copy)
+
+
+## 이 칸을 item_id 로 바꿨을 때(""= 빼기) 공격·방어 넷과 능력치가 바뀌는 값(「공격 +8」「방어 -2」): profile_if 와 지금 묶음의 차이.
+func change_text(base: Dictionary, item_id: String) -> String:
+	var after := profile_if(item_id)
 	var parts: Array[String] = []
 	for g in BattleLimits.GEAR:
 		var d: int = after["gear"][g] - base["gear"][g]
