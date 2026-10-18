@@ -7,6 +7,7 @@
 | `01-exploration-town-progression.md` | 1인칭 그리드 탐색, 지형 기믹, 지도 작성, 인카운트, FOE, 채집, 계층·귀환, 마을 시설, 퀘스트, 휴양·은퇴, 난이도, 저장, 공개 이용 지침 |
 | `02-battle-classes-formulas.md` | 턴 흐름, 행동 순서, 대열, 능력치, 피해 공식, 상태이상·봉인, 강화 슬롯, 작품별 특수 전투 자원, 직업, 스킬 트리, 장비, 적 설계, 초반 수치 |
 | `03-ui-reference-gap.md` | 원작 공식 스크린샷과 지금 임시 UI 캡처의 비교, 화면별 개선 목록과 단계(2026-10-18, Antigravity Gemini 분석 + 조정자 대조) |
+| `04-godot-layered-ui.md` | Godot 그리기·입력 순서(트리 순서·`CanvasLayer`·`z_index`·`mouse_filter`, 엔진 소스 확인)와 원작의 겹침 구성, UI 지시서에 넣을 겹침 배치 원칙(2026-10-18) |
 
 ## 작성 경위
 
