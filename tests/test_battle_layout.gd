@@ -111,6 +111,10 @@ func test_parts_follow_anchors_after_resize() -> void:
 		var c4 := _rect(layer.party_cards.cards[4])
 		check(absf((c3.position.x + c4.end.x) / 2.0 - s.x / 2.0) <= 1.0, tag + ": 아랫줄 가운데")
 		check_eq(_rect(layer.panel), Rect2(BattleLayer.LIST_X, BattleLayer.LIST_TOP, BattleLayer.LIST_W, BattleLayer.LIST_H), tag + ": 명령 목록은 왼쪽 그대로")
+		check_eq(_rect(layer.log_button).end, Vector2(s.x - BattleLayer.LOG_RIGHT, 82), tag + ": 로그 단추는 띠 안 오른쪽 끝")
+		check_eq(_rect(layer.dir_pad).position, Vector2(BattleLayer.PAD_LEFT, s.y - BattleLayer.PAD_BOTTOM - VirtualPad.dirs_size().y), tag + ": 방향키는 왼쪽 아래")
+		check_eq(_rect(layer.key_pad).end, Vector2(s.x - BattleLayer.MINIMAP_RIGHT, _rect(layer.minimap).position.y - BattleLayer.KEYS_GAP),
+			tag + ": 선택·취소는 미니맵 바로 위 오른쪽")
 		# 적 칸은 적 영역 안 가운데.
 		var er := _rect(layer.enemy_area)
 		var front: Array[Rect2] = []

@@ -1069,7 +1069,8 @@ func test_snapshot_lists_party_menu_buttons_and_growth_fields() -> void:
 	check_eq(snap["party_menu"]["banner"], [s.texts.t("camp.desc.status"), ""], "설명 띠")
 	await kit.press_key(KEY_1)
 	snap = s.debug_snapshot()
-	check(snap["buttons"].has("Member_0") and snap["buttons"].has("Camp_close") and not snap["buttons"].has("Camp_status"), "고르기: 카드와 「뒤로」 줄만")
+	check(snap["buttons"].has("Member_0") and snap["buttons"].has("Camp_close") and snap["buttons"].has("Camp_equip") and snap["buttons"].has("Camp_records"),
+		"고르기: 카드와 명령 줄 모두(고르기 중에도 다른 명령으로 바꿀 수 있다)")
 	check_eq([snap["party_menu"]["page"], snap["party_menu"]["pick"], snap["party_menu"]["banner"][0]], ["pick", "status", s.texts.t("camp.pick.status")], "고르기 필드")
 	await kit.press_key(KEY_ENTER)
 	snap = s.debug_snapshot()

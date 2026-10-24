@@ -14,6 +14,8 @@ const CROSS_SWEEP := "skill.blade_duelist.cross_sweep"
 const OVERCLOCK := "skill.blade_duelist.overclock"
 const HEAT := "skill.glyph_wizard.heat_glyph"
 const REPAIR := "skill.nano_medic.nano_repair"
+const FRONT_GUARD := "skill.holo_knight.front_guard"
+const DEFENSE_PROTOCOL := "skill.holo_knight.defense_protocol"
 
 var kit: Kit
 var host: Control
@@ -247,7 +249,9 @@ func test_blocked_skill_and_escape_cannot_be_chosen() -> void:
 	check_eq(layer.sub, "skills", "못 쓰는 스킬은 고르지 않는다")
 	check_eq(layer._notice, texts.t("battle.reason.bound_arm"), "알림 줄 이유")
 	await _tap(_skill_row(OVERCLOCK))
-	check_eq(layer.commands[1], {"kind": "skill", "skill": OVERCLOCK}, "자기 대상 스킬은 확인 없이 확정")
+	check_eq([layer.sub, layer.target_fixed], ["target", true], "자기 대상 스킬은 확인 단계로")
+	await _tap(_member(1))
+	check_eq(layer.commands[1], {"kind": "skill", "skill": OVERCLOCK}, "밝힌 자기 칸 누르기로 확정")
 	await _tap_btn("Cmd_guard")
 	await _tap_btn("Cmd_guard")
 	await _tap_btn("Cmd_skill")
@@ -285,6 +289,236 @@ func test_row_target_lights_row() -> void:
 	check_eq(_enemy(2).target_mark, "valid", "후열 나방: 닿지만 다른 줄이라 강조하지 않는다")
 	await _tap(_enemy(1))
 	check_eq(layer.commands[1], {"kind": "skill", "skill": CROSS_SWEEP, "target": 1}, "그 줄의 아무 적")
+
+
+# ---- 대상이 정해진 스킬의 확인 단계(휴대폰 확인 2026-10-25) ----
+
+## 확인 단계의 공통 확인: 정해진 대상(want)만 밝히고 커서는 없다, 띠 = 「대상: {범위} · {스킬}」 + SkillSummary 줄, 스킬 판은 닫히고
+## 「스킬」 줄이 고른 모양, ←→ 는 아무 일 없음.
+func _check_fixed_phase(sid: String, side: String, want: Array[int], tag: String) -> void:
+	var sk := BattleRules.skill_of(layer.state, layer.member, sid)
+	check_eq([layer.sub, layer.target_fixed, layer.target_skill, layer.target_side], ["target", true, sid, side], tag + ": 확인 단계")
+	check_eq(layer.target_slots, want, tag + ": 정해진 대상 = 규칙이 고를 대상")
+	var lit: Array[int] = []
+	for c in (layer.enemy_area.cards if side == BattleUnit.ENEMY else layer.party_cards.cards):
+		check(not c.cursor, "%s: %s 커서 없음(대상 하나를 가리키지 않는다)" % [tag, c.name])
+		if c.target_mark == "lit":
+			lit.append(c.unit_ref["slot"])
+	check_eq(lit, want, tag + ": 밝힌 칸")
+	check(layer.enemy_area.tagged() == null, tag + ": 적 HP 표 없음(커서 한 대상의 표)")
+	var level := int(layer.state.battle.party[layer.member].skills.get(sid, 1))
+	var head := texts.t("battle.ui.fixed_target", {"scope": texts.t("battle.scope." + sk.target), "skill": texts.t(sk.name_key)})
+	check_eq(layer.banner_lines().slice(0, 2), [head, SkillSummary.line(texts, sk, level)], tag + ": 띠 = 대상 범위·스킬 + 스킬 설명 줄")
+	check(not layer.panel.skill_panel.is_visible_in_tree(), tag + ": 스킬 판은 닫힌다")
+	check(_btn("Cmd_skill").get("chosen"), tag + ": 「스킬」 줄이 고른 모양")
+	var n := layer.accepted_inputs
+	await kit.press_key(KEY_RIGHT)
+	await kit.press_key(KEY_LEFT)
+	check_eq([layer.accepted_inputs, layer.cursor], [n, 0], tag + ": ←→ 는 아무 일 없음")
+
+
+## 자신(오버클록, 듀얼 A): 줄 누르기 → 확인 단계 → 다른 아군·적 누르기는 확정하지 않음 → Esc 는 그 스킬 줄로 → Enter 두 번 확정.
+## 고르는 동안 규칙 상태는 그대로이고, 확인 단계에서 저장을 읽어 다시 열면 그 턴 처음이다.
+func test_fixed_target_self_confirm_step() -> void:
+	var s := _state()
+	var h0 := Fx.battle_hash(s)
+	await _open(s)
+	await _tap_btn("Cmd_guard")
+	await _tap_btn("Cmd_skill")
+	await _tap(_skill_row(OVERCLOCK))
+	await _check_fixed_phase(OVERCLOCK, BattleUnit.PARTY, [1] as Array[int], "자신")
+	check(layer.commands[1] == null, "줄 누르기만으로는 확정하지 않는다")
+	await _tap(_member(0))
+	check_eq([layer.commands[1], layer.sub, layer._notice], [null, "target", texts.t("battle.reason.not_target")], "밝히지 않은 아군 → 이유만")
+	await _tap(_enemy(0))
+	check_eq([layer.commands[1], layer.sub], [null, "target"], "적 칸 → 아무 일 없음")
+	check_eq(Fx.battle_hash(s), h0, "고르는 동안 규칙 상태 그대로")
+	await kit.press_key(KEY_ESCAPE)
+	check_eq([layer.sub, layer.cursor], ["skills", layer._skill_ids().find(OVERCLOCK)], "Esc → 스킬 목록(커서 그 스킬)")
+	await kit.press_key(KEY_ENTER)
+	check_eq([layer.sub, layer.target_fixed], ["target", true], "Enter 도 같은 확인 단계")
+	await kit.press_key(KEY_ENTER)
+	check_eq(layer.commands[1], {"kind": "skill", "skill": OVERCLOCK}, "Enter 확정 = 바로 확정하던 때와 같은 명령(대상 없음)")
+	check_eq(layer.member, 2, "다음 대원")
+	await _tap_btn("Back")
+	check_eq([layer.member, layer.commands[1]], [1, null], "뒤로 → 듀얼 A(명령 지움)")
+	await _tap_btn("Cmd_skill")
+	await _tap(_skill_row(OVERCLOCK))
+	await _tap(_member(1))
+	check_eq(layer.commands[1], {"kind": "skill", "skill": OVERCLOCK}, "밝힌 칸 누르기 확정 = 같은 명령")
+	# 확인 단계 중 저장을 읽어 다시 연다(고르던 명령은 저장하지 않는다, 06 §8.7).
+	await _tap_btn("Back")
+	await _tap_btn("Cmd_skill")
+	await _tap(_skill_row(OVERCLOCK))
+	check_eq([layer.member, layer.sub, layer.target_fixed], [1, "target", true], "준비: 듀얼 A 확인 단계")
+	check_eq(Fx.battle_hash(s), h0, "확인 단계까지 규칙 상태 그대로")
+	var r := SaveCodec.decode(SaveCodec.encode(s), s.defs)
+	check(r.ok(), "저장 읽기")
+	await _open(r.state)
+	check_eq([layer.member, layer.sub, layer.commands], [0, "menu", [null, null, null, null, null]], "다시 열면 그 턴 명령 입력 처음")
+
+
+## 아군 전체(디펜스 프로토콜, 나이트): 살아 있는 아군 넷을 밝힌다(쓰러진 듀얼 B 는 흐리게 이유). 밝힌 다른 대원 누르기로 확정하고,
+## 실행 결과는 바로 확정하던 명령을 규칙에 낸 것과 같다.
+func test_fixed_target_ally_all_confirm_step() -> void:
+	var s := _calm_state()
+	s.battle.party[2].hp = 0
+	var ref := Fx.battle_clone(s)
+	await _open(s)
+	await _tap_btn("Cmd_skill")
+	await _tap(_skill_row(DEFENSE_PROTOCOL))
+	await _check_fixed_phase(DEFENSE_PROTOCOL, BattleUnit.PARTY, [0, 1, 3, 4] as Array[int], "아군 전체")
+	check_eq(_member(2).target_mark, "invalid", "쓰러진 대원은 흐리게")
+	await _tap(_member(2))
+	check_eq([layer.commands[0], layer._notice], [null, texts.t("battle.reason.not_target")], "쓰러진 대원 → 이유만")
+	await _tap(_member(3))
+	check_eq(layer.commands[0], {"kind": "skill", "skill": DEFENSE_PROTOCOL}, "밝힌 아무 칸 → 확정(대상 없음)")
+	for i in 3:
+		await _tap_btn("Cmd_guard")
+	check_eq(layer.sub, "confirm", "모두 정해짐")
+	var want: Array = [{"kind": "skill", "skill": DEFENSE_PROTOCOL}, {"kind": "guard"}, null, {"kind": "guard"}, {"kind": "guard"}]
+	check_eq(layer.commands, want, "명령 열")
+	BattleRules.submit(ref, want.duplicate(true))
+	await _tap_btn("Execute")
+	check_eq(Fx.battle_hash(s), Fx.battle_hash(ref), "실행 결과 = 같은 명령을 규칙에 바로 낸 결과")
+
+
+## 적 전체: 아군에 적 전체 스킬이 없어 시험 정의로 열 글리프를 적 전체로 바꾼다(원거리라 살아 있는 적 모두). 쓰러진 적은 밝히지 않고,
+## 파티 칸은 누르지 않으며, 적 HP 표는 붙지 않는다.
+func test_fixed_target_enemy_all_confirm_step() -> void:
+	var files := Fx.battle_files()
+	for sk in files["skills/glyph_wizard.json"]["skills"]:
+		if sk["id"] == HEAT:
+			sk["target"] = "enemy_all"
+	var s := Fx.battle(Fx.defs_from(files), RATS_MOTH, 5)
+	s.battle.enemies[1].hp = 0
+	await _open(s)
+	for i in 4:
+		await _tap_btn("Cmd_guard")
+	await _tap_btn("Cmd_skill")
+	await _tap(_skill_row(HEAT))
+	await _check_fixed_phase(HEAT, BattleUnit.ENEMY, [0, 2] as Array[int], "적 전체")
+	check_eq(_enemy(1).target_mark, "", "쓰러진 적은 밝히지 않는다")
+	await _tap(_member(0))
+	check_eq([layer.commands[4], layer.sub], [null, "target"], "파티 칸 → 아무 일 없음")
+	await _tap(_enemy(2))
+	check_eq(layer.commands[4], {"kind": "skill", "skill": HEAT}, "밝힌 적 누르기 → 확정(대상 없음)")
+	check_eq(layer.sub, "confirm", "실행 단계")
+	await _tap_btn("Back")
+	check_eq([layer.member, layer.sub], [4, "menu"], "뒤로 → 위저드 메뉴")
+	await kit.press_key(KEY_2)
+	while layer._skill_ids()[layer.cursor] != HEAT:
+		await kit.press_key(KEY_DOWN)
+	await kit.press_key(KEY_SPACE)
+	check_eq([layer.sub, layer.target_fixed], ["target", true], "Space 도 확인 단계")
+	await kit.press_key(KEY_SPACE)
+	check_eq(layer.commands[4], {"kind": "skill", "skill": HEAT}, "Space 확정 = 같은 명령")
+	await _tap_btn("Execute")
+	check_eq(hook_log.size(), 1, "규칙이 받아 제출·자동 저장")
+
+
+# ---- 가상 키패드(사용자 제안 2026-10-25): 방향키·선택·취소 = 같은 키 ----
+
+## 비교할 층 모습: 단계·명령 단계·대원·커서·명령·대상·로그(열림·내린 자리)·결과 창·닫힘·규칙 상태.
+func _pad_sig() -> Array:
+	return [layer.phase, layer.sub, layer.member, layer.cursor, layer.commands.duplicate(true), layer.target_skill, layer.target_fixed,
+		layer.log_view.visible, layer.log_view.scroll_offset(), layer.result_panel.visible, closed_with.size(),
+		Fx.battle_hash(layer.state) if layer.state.battle != null else "", layer.accepted_inputs]
+
+
+## 같은 상태·같은 준비(handle 열)에서 한 번은 가상 키패드 단추를 누르고, 한 번은 맞는 키를 눌러 층 모습이 같은지 본다.
+## want_change 면 누르기 전과 달라야 하고, 아니면(흐린 단추) 그대로이고 받아들인 입력 수도 그대로여야 한다.
+func _parity(make: Callable, prep: Array, pad: String, key: int, want_change: bool, tag: String) -> void:
+	var sigs := []
+	for way in ["pad", "key"]:
+		closed_with.clear()
+		await _open(make.call())
+		layer.debug = true
+		for st in prep:
+			layer.handle(st[0], st[1] if st.size() > 1 else null)
+			await kit.frames(1)
+		var before := _pad_sig()
+		if way == "pad":
+			var vp: VirtualPad = layer.dir_pad if layer.dir_pad.buttons.has(pad) else layer.key_pad
+			var b := vp.button(pad)
+			check_eq(b.disabled, not want_change, "%s: %s 단추 %s" % [tag, pad, "켜짐" if want_change else "흐림"])
+			await _tap(b)
+		else:
+			await kit.press_key(key)
+		await kit.frames(1)
+		var after := _pad_sig()
+		if want_change:
+			check(after != before, "%s: %s 로 바뀐다" % [tag, way])
+		else:
+			check_eq(after, before, "%s: %s 는 아무 일 없음" % [tag, way])
+		sigs.append(after)
+	check_eq(sigs[0], sigs[1], "%s: 키패드 %s = 키" % [tag, pad])
+
+
+func test_virtual_pad_matches_keys_in_every_phase() -> void:
+	var calm := func() -> ExplorationState: return _calm_state()
+	var guards := [["command", 2], ["command", 2], ["command", 2], ["command", 2], ["command", 2]]
+	var cases := [
+		# 명령 메뉴: ↑↓ 커서, ←→ 흐림, 선택 = 공격 대상, 취소는 첫 대원이라 흐림 → 둘째 대원에서 앞 대원으로.
+		[[], "up", KEY_UP, true, "메뉴 ↑"], [[], "down", KEY_DOWN, true, "메뉴 ↓"], [[], "left", KEY_LEFT, false, "메뉴 ←"],
+		[[], "right", KEY_RIGHT, false, "메뉴 →"], [[], "ok", KEY_ENTER, true, "메뉴 선택"], [[], "back", KEY_ESCAPE, false, "첫 대원 취소"],
+		[[["command", 2]], "back", KEY_ESCAPE, true, "둘째 대원 취소"],
+		# 스킬 판: ↑↓ 줄, 선택 = 그 스킬, 취소 = 메뉴.
+		[[["command", 1]], "down", KEY_DOWN, true, "스킬 ↓"], [[["command", 1]], "up", KEY_UP, true, "스킬 ↑"],
+		[[["command", 1]], "right", KEY_RIGHT, false, "스킬 →"], [[["command", 1]], "ok", KEY_ENTER, true, "스킬 선택"],
+		[[["command", 1]], "back", KEY_ESCAPE, true, "스킬 취소"],
+		# 대상(공격): ←→ 대상, ↑↓ 흐림, 선택 = 확정, 취소 = 메뉴.
+		[[["command", 0]], "right", KEY_RIGHT, true, "대상 →"], [[["command", 0]], "left", KEY_LEFT, true, "대상 ←"],
+		[[["command", 0]], "up", KEY_UP, false, "대상 ↑"], [[["command", 0]], "ok", KEY_ENTER, true, "대상 선택"],
+		[[["command", 0]], "back", KEY_ESCAPE, true, "대상 취소"],
+		# P1 확인 단계(디펜스 프로토콜, 아군 전체): ←→ 흐림, 선택 = 확정, 취소 = 스킬 목록.
+		[[["command", 1], ["skill", DEFENSE_PROTOCOL]], "right", KEY_RIGHT, false, "확인 단계 →"],
+		[[["command", 1], ["skill", DEFENSE_PROTOCOL]], "ok", KEY_ENTER, true, "확인 단계 선택"],
+		[[["command", 1], ["skill", DEFENSE_PROTOCOL]], "back", KEY_ESCAPE, true, "확인 단계 취소"],
+		# 모두 정해짐: 선택 = 실행(제출·연출 즉시 → 다음 턴), 취소 = 마지막 대원, 방향 흐림.
+		[guards, "ok", KEY_ENTER, true, "실행 단계 선택"], [guards, "back", KEY_ESCAPE, true, "실행 단계 취소"],
+		[guards, "down", KEY_DOWN, false, "실행 단계 ↓"],
+		# 로그 창: ↑↓ 내리기, 취소 = 닫기, 선택·←→ 흐림.
+		[[["log"]], "back", KEY_ESCAPE, true, "로그 취소"], [[["log"]], "ok", KEY_ENTER, false, "로그 선택"],
+		[[["log"]], "left", KEY_LEFT, false, "로그 ←"],
+		# 결과 창: 선택 = 확인(닫힘), 취소·방향 흐림.
+		[[["finish", "victory"]], "ok", KEY_ENTER, true, "결과 선택"], [[["finish", "victory"]], "back", KEY_ESCAPE, false, "결과 취소"],
+		[[["finish", "victory"]], "up", KEY_UP, false, "결과 ↑"],
+	]
+	for c in cases:
+		await _parity(calm, c[0], c[1], c[2], c[3], c[4])
+	# 로그 ↓: 한 턴 뒤 로그를 열고 내린다(받아들인 입력이 늘고, 내린 자리는 키와 같다).
+	await _parity(calm, guards + [["confirm"], ["log"]], "down", KEY_DOWN, true, "로그 ↓")
+
+
+## 연출 중에는 키패드를 모두 흐리게 하고, 그 자리 누르기는 넘기기 받개가 받는다(화면 아무 곳 = 넘기기).
+## 문맥이 바뀌면 눌려 있던 키패드 단추도 취소된다(선택은 뗄 때 일한다: 메뉴에서 누른 채 키 2 로 스킬 판을 열고 떼면 아무 일 없음).
+func test_virtual_pad_dims_in_playback_and_cancels_on_context_change() -> void:
+	var s := _calm_state()
+	await _open(s, 0.1)
+	var ok := layer.key_pad.button("ok")
+	var p := kit.center_of(ok)
+	kit.touch(1, p, true)
+	await kit.frames(2)
+	check(ok.held, "선택 누르는 중")
+	await kit.press_key(KEY_2)
+	check_eq(layer.sub, "skills", "누른 채 키 2 → 스킬 판")
+	check(not ok.held, "문맥이 바뀌면 선택 누르기 취소")
+	kit.touch(1, p, false)
+	await kit.frames(3)
+	check_eq([layer.sub, layer.commands[0]], ["skills", null], "취소된 선택은 뗄 때 스킬을 고르지 않는다")
+	await kit.press_key(KEY_ESCAPE)
+	for i in 5:
+		await kit.press_key(KEY_3)
+	await kit.press_key(KEY_ENTER)
+	check_eq(layer.phase, "anim", "연출 중")
+	for vp in [layer.dir_pad, layer.key_pad]:
+		for k in vp.buttons:
+			check(vp.buttons[k].disabled, "연출 중 %s 흐림" % k)
+	check(layer.visible_buttons().is_empty(), "연출 중 누를 수 있는 단추 없음")
+	await _tap(layer.dir_pad.button("up"))
+	await kit.frames(2)
+	check_eq(layer.phase, "command", "키패드 자리 누르기 = 넘기기(받개가 위)")
 
 
 func test_animation_accepts_only_skip() -> void:

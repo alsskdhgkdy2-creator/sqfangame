@@ -279,7 +279,8 @@ func _setup_cards() -> void:
 # ---- 입력 입구 ----
 
 ## 모든 입력이 여기로 온다. 받아들였으면 true. 한 프레임에 하나만. 캠프 위에 바깥 창이 떠 있으면(blocked_hook) 아무것도 받지 않는다.
-## 캠프 뿌리: camp(명령 0~5)·camp_cursor(±1)·confirm·back·close. 대원 고르기: member(칸)·pick_move(Vector2i)·confirm·camp(5 = 뒤로)·back·close.
+## 캠프 뿌리: camp(명령 0~5)·camp_cursor(±1)·confirm·back·close. 대원 고르기: member(칸)·pick_move(Vector2i)·confirm·
+##       camp(0~2 고르기 바꾸기, 3·4 바로 열기, 5 = 뒤로)·back·close.
 ## 하위 화면: tab(0~3)·member(칸)·member_step(±1)·back(한 단계 뒤로)·to_root(캠프 뿌리로)·close(캠프 닫기)·
 ##       dialog_move(±1)·dialog_pick(0·1)·dialog_ok·dialog_back·
 ##       스킬 탭 node(트리 칸)·node_dir(Vector2i)·plus·minus·revert·commit·
@@ -409,12 +410,24 @@ func _dispatch_pick(kind: String, arg: Variant) -> bool:
 			pick_cursor = to
 			return true
 		"camp":
-			if int(arg) != CAMP_KEYS.size() - 1:
+			# 고르기 중에도 명령 줄은 모두 일한다: 마지막 줄 「뒤로」는 고르기 취소, 상태·스킬·장비는 그 명령으로 고르기를
+			# 바꾸고(커서 대원 그대로, 지금 명령이면 아무 일 없음), 소지품·기록은 바로 연다.
+			var i := int(arg) if arg != null else -1
+			if i < 0 or i >= CAMP_KEYS.size() or i == pick_cmd:
 				return false
-			page = "root"
-			return true
+			camp_cursor = i
+			if i == CAMP_KEYS.size() - 1:
+				page = "root"
+				camp_cursor = pick_cmd
+				return true
+			if i < 3:
+				pick_cmd = i
+				_clear_notice()
+				return true
+			return _run_camp(i)
 		"back":
 			page = "root"
+			camp_cursor = pick_cmd
 			return true
 		"close":
 			close_menu()
@@ -563,6 +576,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			handle("confirm")
 		return
 	if page == "pick":
+		if code >= KEY_1 and code <= KEY_6:
+			handle("camp", code - KEY_1)  # 뿌리와 같은 줄: 1~3 고르기 바꾸기, 4·5 바로 열기, 6 「뒤로」
+			return
+		if code >= KEY_KP_1 and code <= KEY_KP_6:
+			handle("camp", code - KEY_KP_1)
+			return
 		match code:
 			KEY_UP:
 				handle("pick_move", Vector2i(0, -1))
@@ -730,7 +749,7 @@ func _refresh_camp() -> void:
 	var live := []
 	for i in CAMP_KEYS.size():
 		camp_list.set_row_text(i, camp_label(i))
-		live.append(not pick or i == CAMP_KEYS.size() - 1)
+		live.append(true)  # 고르기 중에도 모든 줄을 누를 수 있다(고른 줄은 눌러도 아무 일 없음)
 	camp_list.show_rows(-1 if pick else camp_cursor, pick_cmd if pick else -1, live)
 	display.sync_party(state)
 	# 고르기: 전투 아군 대상 고르기 표시(누를 수 있는 카드 모두 노랑 테두리, 커서 카드는 흰 안쪽 선).

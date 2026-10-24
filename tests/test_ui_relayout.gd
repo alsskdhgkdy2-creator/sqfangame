@@ -134,23 +134,53 @@ func test_battle_layers_follow_the_table_at_both_sizes() -> void:
 		var tag := "%s(논리 %s)" % [str(px), str(s)]
 		# 트리 순서 = 그리는 순서 = 누르는 순서.
 		var order := [layer.enemy_area, layer.party_cards, layer.minimap, layer.portrait, layer.panel, layer.log_button, layer.log_view,
-			layer.result_panel, layer.skip_catcher]
+			layer.result_panel, layer.dir_pad, layer.key_pad, layer.skip_catcher]
 		for i in order.size() - 1:
 			check((order[i] as Node).get_index() < (order[i + 1] as Node).get_index(), "%s: %s 는 %s 아래" % [tag, order[i].name, order[i + 1].name])
-		for c in [layer.enemy_area, layer.enemy_area.hp_tag, layer.party_cards, layer.minimap, layer.portrait, layer._result_title]:
+		for c in [layer.enemy_area, layer.enemy_area.hp_tag, layer.party_cards, layer.minimap, layer.portrait, layer._result_title, layer.dir_pad, layer.key_pad]:
 			check((c as Control).mouse_filter == Control.MOUSE_FILTER_IGNORE, "%s: 장식 %s 은 누르기를 받지 않는다" % [tag, c.name])
-		# 위: 턴 문패(왼쪽 위) · 메시지 띠(x 193 → 오른쪽 끝, y 0~100) · 안내 줄 로그 단추(띠 바로 아래, 원작 INFO 자리).
+		# 위: 턴 문패(왼쪽 위) · 메시지 띠(x 193 → 오른쪽 끝, y 0~100) · 로그 단추(띠 안 오른쪽 끝, 사용자 결정 2026-10-25).
 		var plate := layer.turn_plate_rect()
 		check(plate.position.x > 0.0 and plate.position.y > 0.0 and plate.end.x <= BattleLayer.BANNER_X and plate.end.y <= BattleLayer.BANNER_H,
 			"%s: 턴 문패 %s 는 띠 왼쪽" % [tag, str(plate)])
 		check_eq(layer.banner_rect(), Rect2(193, 0, s.x - 193, 100), tag + ": 메시지 띠")
-		check_eq(_rect(layer.log_button), Rect2(193, 104, 120, 64), tag + ": 로그 단추")
-		# 왼쪽: 초상(x 0~180) + 아래 TP 게이지(x 0~267), 초상 오른쪽 명령 목록(x 170~493).
-		check_eq(_rect(layer.portrait), Rect2(0, 172, 267, 397), tag + ": 초상 + TP 게이지")
-		check_eq(_rect(layer.panel), Rect2(170, 172, 323, 356), tag + ": 명령 목록")
-		# 적 영역: 명령 목록 오른쪽 ~ 미니맵 열 왼쪽, 파티 카드 위.
+		var lb := _rect(layer.log_button)
+		check_eq(lb, Rect2(s.x - 128, 18, 120, 64), tag + ": 로그 단추(띠 안 오른쪽 끝, 띠 높이 가운데)")
+		check(layer.banner_rect().encloses(lb) and not lb.intersects(plate), tag + ": 로그 단추는 띠 안")
+		# 왼쪽: 띠 바로 아래 초상(x 0~180) + 아래 TP 게이지(x 0~267), 초상 오른쪽 명령 목록(x 170~493).
+		check_eq(_rect(layer.portrait), Rect2(0, 108, 267, 397), tag + ": 초상 + TP 게이지")
+		check_eq(_rect(layer.panel), Rect2(170, 108, 323, 356), tag + ": 명령 목록")
+		# 적 영역: 명령 목록 오른쪽 ~ 미니맵 열 왼쪽, 띠(100)와 파티 카드 위(548) 사이 가운데.
 		var er := _rect(layer.enemy_area)
-		check_eq(er, Rect2(500, 172, s.x - 500 - 255, EnemyArea.FRONT_TOP + EnemyArea.FRONT_SIZE), tag + ": 적 영역")
+		check_eq(er, Rect2(500, 150, s.x - 500 - 255, EnemyArea.FRONT_TOP + EnemyArea.FRONT_SIZE), tag + ": 적 영역")
+		check_eq(er.position.y - 100.0, s.y - 172.0 - er.end.y, tag + ": 적 영역은 띠와 카드 사이 가운데")
+		# 가상 방향키(왼쪽 아래, TP 게이지 아래)·선택/취소(미니맵 위, 미니맵과 같은 x).
+		check_eq(_rect(layer.dir_pad), Rect2(8, s.y - 209, 200, 200), tag + ": 방향키 묶음")
+		var want_dirs := {"up": Rect2(76, s.y - 209, 64, 64), "left": Rect2(8, s.y - 141, 64, 64), "right": Rect2(144, s.y - 141, 64, 64),
+			"down": Rect2(76, s.y - 73, 64, 64)}
+		for k in want_dirs:
+			check_eq(_rect(layer.dir_pad.button(k)), want_dirs[k], "%s: 방향 %s" % [tag, k])
+		check_eq(_rect(layer.key_pad), Rect2(s.x - 247, s.y - 293, 227, 72), tag + ": 선택·취소 묶음")
+		check_eq(_rect(layer.key_pad.button("back")), Rect2(s.x - 247, s.y - 293, 110, 72), tag + ": 취소(왼쪽)")
+		check_eq(_rect(layer.key_pad.button("ok")), Rect2(s.x - 130, s.y - 293, 110, 72), tag + ": 선택(오른쪽)")
+		var tp_gauge := _rect(layer.portrait)
+		var pads: Array[Rect2] = []
+		for vp in [layer.dir_pad, layer.key_pad]:
+			for k in vp.buttons:
+				var r := _rect(vp.buttons[k])
+				pads.append(r)
+				check(r.size.x >= 64.0 and r.size.y >= 64.0, "%s: %s 64×64 이상" % [tag, vp.buttons[k].name])
+				check(Rect2(Vector2.ZERO, s).encloses(r), "%s: %s 화면 안" % [tag, vp.buttons[k].name])
+				for other in [["TP 게이지", tp_gauge], ["명령 목록", _rect(layer.panel)], ["적 영역", er], ["미니맵", _rect(layer.minimap)],
+						["로그 창", _rect(layer.log_view)], ["메시지 띠", layer.banner_rect()]]:
+					check(not r.intersects(other[1]), "%s: %s 는 %s 와 겹치지 않는다" % [tag, vp.buttons[k].name, other[0]])
+				for c in layer.party_cards.cards:
+					check(not r.intersects(_rect(c)), "%s: %s 는 카드 %s 와 겹치지 않는다" % [tag, vp.buttons[k].name, c.name])
+		var toast := Rect2(BattleLayer.TOAST_LEFT, BattleLayer.TOAST_Y, s.x - BattleLayer.TOAST_RIGHT - BattleLayer.TOAST_LEFT, BattleLayer.TOAST_H)
+		for other in [["적 영역", er], ["명령 목록", _rect(layer.panel)], ["로그 단추", lb], ["메시지 띠", layer.banner_rect()]]:
+			check(not toast.intersects(other[1]), "%s: 전투 알림 줄 %s 은 %s 와 겹치지 않는다" % [tag, str(toast), other[0]])
+		for p in pads:
+			check(not toast.intersects(p), "%s: 전투 알림 줄은 키패드와 겹치지 않는다" % tag)
 		# 오른쪽 아래 미니맵(원작 x 1033~1260, y 507~667).
 		check_eq(_rect(layer.minimap), Rect2(s.x - 247, s.y - 213, 227, 160), tag + ": 미니맵")
 		check(layer.minimap.is_visible_in_tree() and layer.minimap.is_mini, tag + ": 전투 중 미니맵이 보인다")
@@ -203,6 +233,31 @@ func _six_skills(px: Vector2) -> void:
 	await _step("target", {"side": BattleUnit.ENEMY, "slot": 0})
 	await _step("command", 1)
 	check_eq([layer.sub, layer._skill_ids().size()], ["skills", 6], "준비: 스킬 여섯")
+
+
+## 가상 키패드(사용자 제안 2026-10-25): 보이는 단추가 받고, 묶음의 빈 곳(십자 가운데·선택/취소 사이)은 바탕이 받는다.
+## 연출 중에는 넘기기 받개가 위라 키패드 자리도 받개가 받는다.
+func test_virtual_pad_taps_reach_the_visible_button() -> void:
+	for px in WINDOWS:
+		var tag := str(px)
+		await _layer(px, null, 1.0)
+		for vp in [layer.dir_pad, layer.key_pad]:
+			for k in vp.buttons:
+				var b: TouchButton = vp.buttons[k]
+				var got := await _receiver_at(_rect(b).get_center())
+				check(got == b, "%s: %s 자리 → 그 단추, 실제 %s" % [tag, b.name, _name_of(got)])
+		var hub := await _receiver_at(_rect(layer.dir_pad).get_center())
+		check(hub == layer, "%s: 십자 가운데 → 바탕, 실제 %s" % [tag, _name_of(hub)])
+		var kr := _rect(layer.key_pad)
+		var gap := await _receiver_at(Vector2(kr.position.x + VirtualPad.KEY.x + VirtualPad.KEY_GAP / 2.0, kr.get_center().y))
+		check(gap == layer, "%s: 선택·취소 사이 → 바탕, 실제 %s" % [tag, _name_of(gap)])
+		var cmds := []
+		for i in 5:
+			cmds.append({"kind": "guard"})
+		await _step("commands", cmds)
+		check_eq(layer.phase, "anim", tag + ": 연출")
+		var on_pad := await _receiver_at(_rect(layer.key_pad.button("ok")).get_center())
+		check(on_pad == layer.skip_catcher, "%s: 연출 중 선택 자리 → 넘기기 받개, 실제 %s" % [tag, _name_of(on_pad)])
 
 
 func test_overlapping_taps_reach_the_visible_top_element_in_battle() -> void:

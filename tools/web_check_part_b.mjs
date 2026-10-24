@@ -62,6 +62,15 @@ async function growthChecks(s) {
     '성장 1: 「캠프」 단추 → 캠프 뿌리(명령 줄), 덮인 탐색 단추는 요약에 없다', { page: s.party_menu.page });
   await clickButton('Camp_status');
   s = await waitFor((x) => x.party_menu?.page === 'pick', '대원 고르기');
+  // 고르기 중에도 명령 줄이 일한다(휴대폰 확인 2026-10-25): 「장비」 줄 → 장비 고르기, 「상태」 줄 → 다시 상태 고르기.
+  check(s.buttons.Camp_equip && s.buttons.Camp_items && s.buttons.Camp_close, '성장 1: 고르기 중에도 명령 줄을 누를 수 있다', { buttons: Object.keys(s.buttons) });
+  await clickButton('Camp_equip');
+  s = await waitFor((x) => x.party_menu?.pick === 'equip', '장비 고르기로 바꿈');
+  const equipBanner = s.party_menu.banner[0];
+  await clickButton('Camp_status');
+  s = await waitFor((x) => x.party_menu?.pick === 'status', '상태 고르기로 돌아옴');
+  check(s.party_menu.page === 'pick' && equipBanner !== s.party_menu.banner[0], '성장 1: 고르기 중 「장비」·「상태」 줄 → 고르기와 물음이 바뀐다',
+    { pick: s.party_menu.pick, banner: [equipBanner, s.party_menu.banner[0]] });
   await clickButton('Member_0');
   s = await waitFor((x) => x.party_menu?.page === 'sub', '상태 화면');
   check(s.party_menu.tab === 'status' && s.party_menu.member === 0 && s.buttons.StatusNext && s.buttons.StatusBack,

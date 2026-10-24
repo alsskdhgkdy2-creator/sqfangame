@@ -927,6 +927,7 @@ func _build_ui() -> void:
 	windows_root.add_child(battle_layer)
 	battle_layer.build(texts)
 	battle_layer.save_hook = _on_battle_save
+	battle_layer.blocked_hook = func() -> bool: return modal.is_open()
 	battle_layer.closed.connect(_on_battle_closed)
 	battle_layer.opened.connect(func() -> void:
 		_clear_input()
@@ -961,11 +962,13 @@ func _build_ui() -> void:
 	modal.opened.connect(func(_k: String) -> void:
 		_clear_input()
 		party_menu.cancel_pointers()  # 캠프에서 누르고 있던 단추는 창이 덮은 뒤 떼도 일하지 않는다
+		battle_layer.cancel_pointers()  # 전투도 같다(명령 줄·카드·키패드 등)
 		_debug_dirty = true
 		_debug_settle = 2)
 	modal.closed.connect(func(_k: String) -> void:
 		_clear_input()  # 창 안에서 누른 키·단추는 닫힌 뒤에도 승인되지 않는다
 		party_menu.cancel_pointers()  # 창이 뜨기 전부터 캠프에서 누르고 있던 손가락도(다른 손가락으로 창을 닫은 뒤 떼기)
+		battle_layer.cancel_pointers()
 		_debug_dirty = true
 		_debug_settle = 2)
 	modal_cl.add_child(modal)
@@ -1132,11 +1135,11 @@ func _layout() -> void:
 		if not _map_open:
 			b.cancel()
 	if _battle_view:
-		# 전투 중: 전투 층 메시지 띠 아래, 로그 단추 오른쪽(BattleLayer.TOAST_Y·TOAST_LEFT) ~ 오른쪽 끝.
+		# 전투 중: 전투 층 메시지 띠 아래 · 적 영역 위, 명령 목록 오른쪽(BattleLayer.TOAST_Y·TOAST_LEFT) ~ 오른쪽 − TOAST_RIGHT.
 		toast_area.offset_right = 0.0
 		_toast.set_anchors_preset(PRESET_TOP_WIDE)
 		_toast.offset_left = BattleLayer.TOAST_LEFT
-		_toast.offset_right = -8.0
+		_toast.offset_right = -BattleLayer.TOAST_RIGHT
 		_toast.offset_top = BattleLayer.TOAST_Y
 		_toast.offset_bottom = BattleLayer.TOAST_Y + BattleLayer.TOAST_H
 	else:

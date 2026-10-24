@@ -5,6 +5,7 @@
 extends TestCase
 
 const Kit := preload("res://tests/scene_kit.gd")
+const Fixtures := preload("res://tests/fixtures.gd")
 const WINDOWS := [Vector2(1280, 720), Vector2(2400, 1000)]
 const FINGER := 3
 
@@ -208,8 +209,8 @@ func test_member_pick_and_every_camp_command() -> void:
 	check_eq(pm.banner.head, s.texts.t("camp.pick.status"), "물음 「누구의 상태를 볼까?」")
 	check_eq(pm.camp_list.rows[0].theme_state(), "fac:chosen", "고른 명령 = 밝은 시안")
 	check_eq(pm.camp_list.rows[5].text, s.texts.t("camp.back"), "마지막 줄 = 「뒤로」")
-	for i in 5:
-		check_eq(pm.camp_list.rows[i].mouse_filter, Control.MOUSE_FILTER_IGNORE, "고르기 중 명령 줄 %d 는 누르지 않는다" % i)
+	for i in 6:
+		check_eq(pm.camp_list.rows[i].mouse_filter, Control.MOUSE_FILTER_STOP, "고르기 중에도 명령 줄 %d 를 누를 수 있다" % i)
 	# 전투의 아군 대상 고르기 표시: 고를 수 있는 카드 모두 노랑, 커서 카드에 흰 안쪽 선.
 	for c in pm.cards.cards:
 		check_eq([c.target_mark, c.cursor, c.current], ["valid", c == pm.cards.cards[0], false], "카드 %s: 대상 표시" % c.name)
@@ -262,6 +263,86 @@ func test_member_pick_and_every_camp_command() -> void:
 	await kit.press_key(KEY_6)
 	check(not pm.is_open(), "6 닫기 → 탐색")
 	check(s.camp_button.is_visible_in_tree(), "탐색 HUD 가 돌아온다")
+
+
+## 휴대폰 확인(2026-10-25): 고르기 중에도 명령 줄이 모두 일한다. 상태·스킬·장비는 고르기를 그 명령으로 바꾸고(물음·고른 모양이 따라감,
+## 커서 대원 그대로, 지금 명령은 아무 일 없음), 소지품·기록은 바로 열고, 마지막 줄 「뒤로」는 고르기 취소. 키 1~6 도 같은 줄.
+func test_member_pick_keeps_every_command_row_working() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	await kit.press_key(KEY_P)
+	await kit.tap(kit.center_of(pm.camp_list.rows[1]))
+	check_eq([pm.page, pm.pick_cmd], ["pick", 1], "준비: 스킬 대원 고르기")
+	await kit.press_key(KEY_RIGHT)
+	var n := pm.accepted_inputs
+	await kit.tap(kit.center_of(pm.camp_list.rows[1]))
+	check_eq([pm.page, pm.pick_cmd, pm.accepted_inputs], ["pick", 1, n], "지금 명령 줄을 다시 누르면 아무 일 없음")
+	await kit.tap(kit.center_of(pm.camp_list.rows[2]))
+	check_eq([pm.page, pm.pick_cmd, pm.pick_cursor], ["pick", 2, 1], "고르기 중 「장비」 줄 → 장비 고르기(커서 대원 그대로)")
+	check_eq(pm.banner.head, s.texts.t("camp.pick.equip"), "물음이 장비로")
+	check_eq([pm.camp_list.rows[2].theme_state(), pm.camp_list.rows[1].theme_state()], ["fac:chosen", "fac:normal"], "고른 모양이 장비 줄로")
+	check_eq(pm.camp_list.rows[5].text, s.texts.t("camp.back"), "마지막 줄은 여전히 「뒤로」")
+	await kit.tap(kit.center_of(pm.cards.cards[3]))
+	check_eq([pm.page, pm.tab, pm.member], ["sub", 2, 3], "카드 → 그 대원 장비")
+	await kit.press_key(KEY_ESCAPE)
+	check_eq([pm.page, pm.camp_cursor], ["root", 2], "Esc → 뿌리(커서 장비)")
+	await kit.press_key(KEY_1)
+	await kit.tap(kit.center_of(pm.camp_list.rows[3]))
+	check_eq([pm.page, pm.tab], ["sub", 3], "고르기 중 「소지품」 줄 → 바로 소지품")
+	await kit.press_key(KEY_ESCAPE)
+	check_eq([pm.page, pm.camp_cursor], ["root", 3], "소지품에서 Esc → 뿌리(커서 소지품)")
+	await kit.press_key(KEY_1)
+	await kit.tap(kit.center_of(pm.camp_list.rows[4]))
+	check_eq([pm.page, pm.tab, s.modal.kind], ["sub", 4, ""], "고르기 중 「기록」 줄 → 바로 기록")
+	await kit.press_key(KEY_ESCAPE)
+	await kit.press_key(KEY_2)
+	await kit.tap(kit.center_of(pm.camp_list.rows[5]))
+	check_eq([pm.page, pm.camp_cursor], ["root", 1], "「뒤로」 줄 → 고르기 취소, 뿌리(커서 스킬)")
+	# 키보드: 고르기 중 1~3 은 고르기 바꾸기, 4·5 는 바로 열기, 6 은 「뒤로」 줄과 같다. ←→ 와 Enter 는 그대로.
+	await kit.press_key(KEY_1)
+	await kit.press_key(KEY_3)
+	check_eq([pm.page, pm.pick_cmd, pm.banner.head], ["pick", 2, s.texts.t("camp.pick.equip")], "고르기 중 3 → 장비 고르기")
+	await kit.press_key(KEY_2)
+	check_eq([pm.page, pm.pick_cmd], ["pick", 1], "고르기 중 2 → 스킬 고르기")
+	n = pm.accepted_inputs
+	await kit.press_key(KEY_2)
+	check_eq([pm.pick_cmd, pm.accepted_inputs], [1, n], "지금 명령 키는 아무 일 없음")
+	var next := pm.pick_target(pm.pick_cursor, Vector2i(1, 0))
+	await kit.press_key(KEY_RIGHT)
+	await kit.press_key(KEY_ENTER)
+	check_eq([pm.page, pm.tab, pm.member], ["sub", 1, next], "→·Enter 는 그대로: 다음 카드 대원의 스킬 화면")
+	await kit.press_key(KEY_ESCAPE)
+	await kit.press_key(KEY_1)
+	await kit.press_key(KEY_4)
+	check_eq([pm.page, pm.tab], ["sub", 3], "고르기 중 4 → 소지품")
+	await kit.press_key(KEY_ESCAPE)
+	await kit.press_key(KEY_1)
+	await kit.press_key(KEY_5)
+	check_eq([pm.page, pm.tab], ["sub", 4], "고르기 중 5 → 기록")
+	await kit.press_key(KEY_ESCAPE)
+	await kit.press_key(KEY_3)
+	await kit.press_key(KEY_6)
+	check_eq([pm.page, pm.camp_cursor, pm.is_open()], ["root", 2, true], "고르기 중 6 → 「뒤로」(캠프는 열린 채)")
+	# 명령이 바뀌면 문맥이 바뀐다: 눌려 있던 카드는 취소되어 뗄 때 아무 일도 하지 않는다.
+	await kit.press_key(KEY_1)
+	var p := kit.center_of(pm.cards.cards[2])
+	kit.touch(FINGER, p, true)
+	await kit.frames(2)
+	check(pm.cards.cards[2].held, "카드 2 누르는 중")
+	await kit.press_key(KEY_2)
+	check_eq(pm.pick_cmd, 1, "누른 채 2 → 스킬 고르기")
+	check(not pm.cards.cards[2].held, "명령이 바뀌면 누르기 취소")
+	kit.touch(FINGER, p, false)
+	await kit.frames(3)
+	check_eq([pm.page, pm.pick_cmd], ["pick", 1], "취소된 카드 누르기는 뗄 때 대원을 고르지 않는다")
+	# 줄로 바꿀 때도 같다(다른 손가락이 카드를 누르는 동안 「상태」 줄).
+	kit.touch(FINGER, p, true)
+	await kit.frames(2)
+	await kit.tap(kit.center_of(pm.camp_list.rows[0]))
+	check_eq(pm.pick_cmd, 0, "누른 채 「상태」 줄 → 상태 고르기")
+	kit.touch(FINGER, p, false)
+	await kit.frames(3)
+	check_eq([pm.page, pm.pick_cmd], ["pick", 0], "줄로 바꾼 뒤에도 앞 누르기는 고르지 않는다")
 
 
 # ---- 상태 화면 ----
@@ -725,6 +806,161 @@ func test_held_records_button_does_nothing_after_an_external_alert() -> void:
 		check(pm.is_open() and pm.page == "sub" and pm.tab == 4, tag + ": 기록 화면 그대로")
 		if s.modal.is_open():
 			await _dismiss_alert(s)
+
+
+## 전투도 캠프와 같다(독립 검토 P1·P2 Medium): 전투 층 위에 바깥 창(층 3 알림)이 뜨면 전투 입구는 어떤 입력도 받지 않고,
+## 창이 열리고 닫힐 때 눌려 있던 전투 포인터를 모두 버린다. 명령 줄(메뉴)·적 칸(대상)·키패드 「선택」(정해진 대상 확인)을 누른 채
+## 알림이 뜬다 → 알림이 덮은 채 떼도, 다른 손가락으로 알림을 닫은 뒤 떼도 명령·상태 그대로. 알림 아래에서 L·숫자·방향·Enter·Esc 도.
+func _battle_sig(s: DungeonScreen) -> Array:
+	var l := s.battle_layer
+	return [l.phase, l.sub, l.member, l.cursor, l.commands.duplicate(true), l.target_skill, l.target_fixed, l.log_view.visible,
+		l.log_view.scroll_offset(), Fixtures.battle_hash(s.state), l.accepted_inputs]
+
+
+func test_held_battle_input_does_nothing_after_an_external_alert() -> void:
+	var s := await _open()
+	s.state = Fixtures.battle(Fixtures.defs(), "formation.f1.rats_moth", 5)
+	s._open_battle()
+	await kit.frames(3)
+	var l := s.battle_layer
+	check_eq([l.phase, l.sub, l.member], ["command", "menu", 0], "준비: 전투 명령 입력")
+	var cases := [
+		["명령 줄 「방어」", [], func() -> TouchButton: return l.find_child("Cmd_guard", true, false) as TouchButton, "menu"],
+		["적 칸(공격 대상)", [["command", 0]], func() -> TouchButton: return l.enemy_area.card(0), "target"],
+		["키패드 「선택」(정해진 대상 확인)", [["back"], ["command", 1], ["skill", "skill.holo_knight.defense_protocol"]],
+			func() -> TouchButton: return l.key_pad.button("ok"), "target"],
+	]
+	for c in cases:
+		for st in c[1]:
+			l.handle(st[0], st[1] if st.size() > 1 else null)
+			await kit.frames(1)
+		check_eq(l.sub, c[3], "%s: 준비 단계" % c[0])
+		for under in [true, false]:
+			var b: TouchButton = (c[2] as Callable).call()
+			var tag := "%s 누른 채 알림 → %s" % [c[0], "알림이 덮은 채 뗌" if under else "다른 손가락으로 알림을 닫고 뗌"]
+			var sig := _battle_sig(s)
+			var p := kit.center_of(b)
+			kit.touch(4, p, true)
+			await kit.frames(2)
+			check(b.held, tag + ": 준비: 눌림")
+			await _import_error(s)
+			check(s.modal.kind == "alert" and not b.held, tag + ": 알림이 뜨면 전투 눌림을 버린다")
+			check(not l.handle("confirm") and not l.handle("log") and not l.handle("command", 2), tag + ": 알림이 떠 있으면 전투 입구가 받지 않는다")
+			if not under:
+				await _dismiss_alert(s)
+				check_eq(s.modal.kind, "", tag + ": 준비: 다른 손가락으로 알림 닫음")
+			kit.touch(4, p, false)
+			await kit.frames(3)
+			check_eq(_battle_sig(s), sig, tag + ": 명령·단계·커서·규칙 상태·받은 입력 그대로")
+			if s.modal.is_open():
+				await _dismiss_alert(s)
+	# 알림 아래의 키: 전투 키는 아무 일도 하지 않는다(알림을 닫는 키는 알림이 받는다 → 다시 띄우고 이어서).
+	var sig := _battle_sig(s)
+	await _import_error(s)
+	for k in [KEY_L, KEY_1, KEY_2, KEY_3, KEY_4, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_SPACE, KEY_ENTER, KEY_ESCAPE, KEY_BACKSPACE]:
+		if not s.modal.is_open():
+			await _import_error(s)
+		await kit.press_key(k)
+		check_eq(_battle_sig(s), sig, "알림 아래 %s: 전투 그대로(로그 열리지 않음)" % OS.get_keycode_string(k))
+	if s.modal.is_open():
+		await _dismiss_alert(s)
+	await kit.press_key(KEY_L)
+	check(l.log_view.visible, "알림이 닫히면 L 은 다시 로그를 연다")
+
+
+## 전투 로그 끌기도 같은 취소 규칙(독립 검토 2차 Medium): 로그를 손가락·마우스로 끄는 중에 바깥 알림이 뜨면 그 끌기는 끊긴다.
+## 알림 아래에서 더 끌어도, 다른 손가락으로 알림을 닫은 뒤 더 끌어도 로그 위치가 그대로다. 보통 끌기·휠·↑↓ 는 그대로 내린다.
+func _log_mouse_move(p: Vector2, rel: Vector2) -> void:
+	var e := InputEventMouseMotion.new()
+	e.position = p
+	e.global_position = p
+	e.relative = rel
+	e.button_mask = MOUSE_BUTTON_MASK_LEFT
+	Input.parse_input_event(e)
+	Input.flush_buffered_events()
+
+
+func test_battle_log_drag_is_cut_by_an_external_alert() -> void:
+	var s := await _open()
+	await _window(WINDOWS[0])  # 실제 창 1280×720: 끄는 거리(창 좌표) = 논리 좌표
+	s.state = Fixtures.battle(Fixtures.defs(), "formation.f1.rats_moth", 5)
+	s._open_battle()
+	await kit.frames(3)
+	var l := s.battle_layer
+	var lv := l.log_view
+	for i in 100:
+		lv.add_line("시험 로그 줄 %d — 넘치도록 충분히 긴 글" % i)
+	await kit.press_key(KEY_L)
+	await kit.frames(2)
+	check(lv.visible and lv.max_scroll() > 400.0, "준비: 로그가 넘친다(최대 %d)" % int(lv.max_scroll()))
+	check_eq(lv.scroll_offset(), lv.max_scroll(), "열면 맨 아래(가장 최근 줄)")
+	check(lv.scroll_bar_rect().has_area(), "위치 막대가 보인다")
+	var bar0 := lv.scroll_bar_rect()
+	# 보통 끌기·휠·↑↓ 는 내린다.
+	var mid := kit.center_of(lv._scroll)
+	kit.touch(4, mid, true)
+	kit.drag(4, mid, mid + Vector2(0, 120))
+	kit.touch(4, mid + Vector2(0, 120), false)
+	await kit.frames(2)
+	check_eq(lv.scroll_offset(), lv.max_scroll() - 120.0, "손가락으로 아래로 끌면 위(앞 줄)로 120")
+	check(lv.scroll_bar_rect().position.y < bar0.position.y, "위치 막대가 따라 올라간다")
+	var at := lv.scroll_offset()
+	kit.mouse(mid, true, MOUSE_BUTTON_WHEEL_UP)
+	kit.mouse(mid, false, MOUSE_BUTTON_WHEEL_UP)
+	await kit.frames(2)
+	check_eq(lv.scroll_offset(), at - PartyScroll.WHEEL_STEP, "휠 위 → 한 칸 위로")
+	at = lv.scroll_offset()
+	await kit.press_key(KEY_UP)
+	check_eq(lv.scroll_offset(), at - BattleLogView.STEP, "↑ → 60 위로(키패드 ↑ 와 같은 길)")
+	kit.mouse(mid, true)
+	_log_mouse_move(mid + Vector2(0, -30), Vector2(0, -30))
+	kit.mouse(mid + Vector2(0, -30), false)
+	await kit.frames(2)
+	check_eq(lv.scroll_offset(), at - BattleLogView.STEP + 30.0, "마우스로 위로 끌면 아래로 30")
+	# 끄는 중에 알림: 손가락(알림 아래에서 계속 끎 / 다른 손가락으로 닫고 계속 끎), 마우스(같은 둘).
+	for way in ["touch", "mouse"]:
+		for under in [true, false]:
+			var tag := "%s 끌기 중 알림 → %s" % [way, "알림 아래에서 계속 끎" if under else "다른 손가락으로 닫고 계속 끎"]
+			lv.scroll_by(-100)
+			await kit.frames(1)
+			var pre := lv.scroll_offset()
+			var p := mid
+			if way == "touch":
+				kit.touch(4, p, true)
+				kit.drag(4, p, p + Vector2(0, -40), 2)
+			else:
+				kit.mouse(p, true)
+				_log_mouse_move(p + Vector2(0, -40), Vector2(0, -40))
+			await kit.frames(2)
+			var moved := lv.scroll_offset()
+			check(absf(moved - pre - 40.0) < 0.01, "%s: 준비: 알림 전 끌기가 내렸다(%.1f → %.1f)" % [tag, pre, moved])
+			var sig := _battle_sig(s)
+			await _import_error(s)
+			check_eq(s.modal.kind, "alert", tag + ": 준비: 알림")
+			if not under:
+				await _dismiss_alert(s)
+				check_eq(s.modal.kind, "", tag + ": 준비: 다른 손가락으로 알림 닫음")
+			if way == "touch":
+				kit.drag(4, p + Vector2(0, -40), p + Vector2(0, -160), 4)
+			else:
+				_log_mouse_move(p + Vector2(0, -160), Vector2(0, -120))
+			await kit.frames(2)
+			check_eq(lv.scroll_offset(), moved, tag + ": 로그 위치 그대로")
+			check_eq(_battle_sig(s), sig, tag + ": 전투 모습(로그 위치 포함) 그대로")
+			if way == "touch":
+				kit.touch(4, p + Vector2(0, -160), false)
+			else:
+				kit.mouse(p + Vector2(0, -160), false)
+			await kit.frames(2)
+			if s.modal.is_open():
+				await _dismiss_alert(s)
+	# 알림이 닫힌 뒤 새 끌기는 다시 내린다.
+	at = lv.scroll_offset()
+	kit.touch(4, mid, true)
+	kit.drag(4, mid, mid + Vector2(0, -50))
+	kit.touch(4, mid + Vector2(0, -50), false)
+	await kit.frames(2)
+	check(absf(lv.scroll_offset() - minf(lv.max_scroll(), at + 50.0)) < 0.01, "새 끌기는 그대로 내린다(%.1f → %.1f)" % [at, lv.scroll_offset()])
 
 
 ## 다른 캠프 쪽에서도: 누르고 있던 단추는 바깥 창이 열리고 닫힌 뒤 떼도 일하지 않는다.

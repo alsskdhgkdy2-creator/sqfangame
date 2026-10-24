@@ -1,14 +1,16 @@
 ## 전투 층(06 §9): 미궁 화면 위에 덮는 전체 화면 Control. 바탕은 화면 전체 3D 시야(U1)를 UiTheme.BATTLE_DIM 으로 어둡게 한 것.
 ## 배치(M2.7 R3, 원작 HD 1868180_0e36b17e 를 1280×720 으로 옮김, 앵커로 붙인다. 논리 높이는 늘 720):
-##   왼쪽 위 턴 문패 · 위 메시지 띠(x 193 → 오른쪽 끝, y 0~100: 명령 단계 물음·스킬 설명·대상 안내·연출 글·안내) ·
-##   그 아래 안내 줄(로그 단추, 원작 INFO 자리) · 왼쪽 초상(지금 대원) + 그 아래 TP 게이지 · 초상 오른쪽 명령 목록(오른쪽이 굽은 줄) ·
+##   왼쪽 위 턴 문패 · 위 메시지 띠(x 193 → 오른쪽 끝, y 0~100: 명령 단계 물음·스킬 설명·대상 안내·연출 글·안내, 오른쪽 끝에 로그 단추) ·
+##   띠 바로 아래 왼쪽 초상(지금 대원) + 그 아래 TP 게이지 · 초상 오른쪽 명령 목록(오른쪽이 굽은 줄) ·
 ##   명령 목록 오른쪽 영역 가운데 적 칸 · 아래 가운데 파티 카드 두 줄(윗줄 전열) · 오른쪽 아래 미니맵.
+##   사용자 결정(2026-10-25, 원작과 다름): 로그 단추를 띠 안으로 옮겨 왼쪽을 한 줄 올리고, 빈 왼쪽 아래에 가상 방향키,
+##   미니맵 위에 선택·취소(VirtualPad, 캠프도 같은 부품을 쓴다).
 ## 층 겹침(research 04): 트리 순서 = 그리는 순서 = 누르는 순서(z_index 를 쓰지 않는다).
 ##   바탕(어둡게 + 메시지 띠 + 턴 문패, _draw) · 적 칸(enemy_area, 그 위 HP 표) · 파티 카드 · 미니맵 · 초상 · 명령 목록 · 로그 단추 ·
-##   로그 창 · 결과 창 · 건너뛰기 받개. 띠·문패·초상·미니맵·HP 표는 누르기를 받지 않는다.
+##   로그 창 · 결과 창 · 방향키 · 선택·취소 · 건너뛰기 받개. 띠·문패·초상·미니맵·HP 표·키패드 묶음은 누르기를 받지 않는다(키패드 단추는 받는다).
 ## 상태는 규칙 함수(BattleRules)로만 바꾸고, 그리는 값은 BattleDisplay 에서 읽는다(06 §8.1).
 ##
-## 입력 입구 하나(06 §9.5, 05 §9.3): 명령 단추·스킬 목록·대상 누르기·키보드·「실행」·「뒤로」·건너뛰기·로그·결과 확인이
+## 입력 입구 하나(06 §9.5, 05 §9.3): 명령 단추·스킬 목록·대상 누르기·키보드·가상 키패드·「실행」·「뒤로」·건너뛰기·로그·결과 확인이
 ## 모두 handle() 로 온다. 조건(연출 중·로그 창·결과 창·전투 단계 아님)에 맞지 않으면 버리고, 한 프레임에 입력 하나만 받는다.
 ## 연출 중에는 건너뛰기만 받는다(미리 받지 않는다). 전투 명령은 누르고 있기 반복이 없다.
 ##
@@ -33,11 +35,12 @@ const BANNER_PAD := 34.0
 const TURN_PLATE := Rect2(16, 10, 164, 84)
 const TURN_FS := 40
 const TURN_LABEL_FS := 18
-## 안내 줄(원작 INFO / MAP / AUTO 알약 자리): 띠 바로 아래, 로그 단추.
-const HINT_Y := BANNER_H + 4.0
+## 로그 단추: 메시지 띠 안 오른쪽 끝(사용자 결정 2026-10-25: 원작은 띠 아래 안내 줄이지만 그 줄이 왼쪽 목록을 한 줄 내려
+## 자리를 많이 차지했다). 띠 높이 가운데, 오른쪽 여백 LOG_RIGHT. 띠 글은 그 왼쪽에서 끝난다.
 const LOG_BUTTON := Vector2(120, 64)
-## 초상(왼쪽, MemberPortrait)·명령 목록(초상 오른쪽, 초상 오른쪽 끝을 조금 덮는다): 위 y, 목록 x·폭·높이.
-const LIST_TOP := HINT_Y + 64.0 + 4.0
+const LOG_RIGHT := 8.0
+## 초상(왼쪽, MemberPortrait)·명령 목록(초상 오른쪽, 초상 오른쪽 끝을 조금 덮는다): 위 y(띠 바로 아래), 목록 x·폭·높이.
+const LIST_TOP := BANNER_H + 8.0
 const LIST_X := 170.0
 const LIST_W := 323.0
 const LIST_H := 356.0
@@ -48,9 +51,16 @@ const MINIMAP_BOTTOM := 53.0
 ## 스킬 판(원작 III HD gs2_653224): 명령 목록 원호 오른쪽, 위는 「스킬」 줄 위, 아래는 파티 카드 위 − 8. x·폭.
 const SKILL_X := 470.0
 const SKILL_W := 410.0
-## 적 영역: 명령 목록 오른쪽 ~ 미니맵 열 왼쪽(적 칸이 미니맵과 겹치지 않는다), 위는 목록 위와 같다.
+## 적 영역: 명령 목록 오른쪽 ~ 미니맵 열 왼쪽(적 칸이 미니맵·선택/취소 열과 겹치지 않는다).
+## 위는 띠 아래 ~ 파티 카드 위(논리 높이는 늘 720) 사이의 가운데: 100 + (448 − 348) / 2 = 150.
 const ENEMY_LEFT := LIST_X + LIST_W + 7.0
 const ENEMY_RIGHT := MINIMAP_RIGHT + MINIMAP.x + 8.0
+const ENEMY_TOP := BANNER_H + (720.0 - PartyCards.HEIGHT - BANNER_H - (EnemyArea.FRONT_TOP + EnemyArea.FRONT_SIZE)) / 2.0
+## 가상 방향키(VirtualPad 십자, 왼쪽 아래: TP 게이지 아래 ~ 화면 아래, 파티 카드 왼쪽)·선택/취소(미니맵 바로 위, 미니맵과 같은 x).
+## 원작에 없는 것(사용자 제안 2026-10-25). 왼쪽·아래 여백, 선택/취소와 미니맵 사이.
+const PAD_LEFT := 8.0
+const PAD_BOTTOM := 9.0
+const KEYS_GAP := 8.0
 ## 연출 알림 글자 · 안내(못 고르는 이유 등) 글자(메시지 띠 위).
 const ANNOUNCE_TEXT := UiTheme.BATTLE_BANNER_TEXT
 const NOTICE_TEXT := UiTheme.BATTLE_BANNER_NOTICE
@@ -63,7 +73,7 @@ const HEADS := ["action", "failed", "idle", "guarding", "poison_tick", "turn_end
 const ACTOR_HEADS := ["action", "failed", "idle", "guarding"]
 ## 상세 이벤트를 단계 안 어느 시점에 보이는지(단계 길이의 비율).
 const DETAIL_AT := 0.35
-## 대상을 묻지 않고 바로 확정하는 대상 규칙(06 §9.2).
+## 대상이 정해진 대상 규칙(06 §9.2): 고르지 않고, 정해진 대상을 모두 밝힌 확인 단계에서 확정한다(원작의 전체 스킬 확인).
 const AUTO_TARGETS := ["self", "enemy_all", "ally_all"]
 const REASON_KEYS := ["no_tp", "bound_head", "bound_arm", "bound_leg", "no_target", "no_escape", "unknown_skill"]
 ## 결과 창: 폭, 가장 작은 높이, 본문 시작(제목 아래), 본문과 「확인」 사이, 「확인」 아래 여백.
@@ -77,9 +87,11 @@ const RESULT_TITLE_FS := 26
 const RESULT_TOP := 40.0
 const RESULT_GAP := 12.0
 const RESULT_BOTTOM := 20.0
-## 탐색 화면이 전투 중 알림 줄(저장 실패 등)을 띄우는 자리: 메시지 띠 아래, 로그 단추 오른쪽, 높이 TOAST_H. 결과 창은 이 줄 아래에 둔다.
-const TOAST_Y := HINT_Y
-const TOAST_LEFT := BANNER_X + LOG_BUTTON.x + 16.0
+## 탐색 화면이 전투 중 알림 줄(저장 실패 등)을 띄우는 자리: 메시지 띠 아래 · 적 영역 위(적 영역 위 150 보다 위),
+## 명령 목록 오른쪽(x ENEMY_LEFT) ~ 오른쪽 − TOAST_RIGHT, 높이 TOAST_H. 결과 창은 이 줄 아래에 둔다.
+const TOAST_Y := BANNER_H + 6.0
+const TOAST_LEFT := ENEMY_LEFT
+const TOAST_RIGHT := 8.0
 const TOAST_H := 36.0
 
 # ---- 바깥에서 정하는 값 ----
@@ -89,6 +101,9 @@ var anim_speed := 1.0
 var debug := false
 ## 제출 결과가 정해진 직후, 연출 전에 부른다(자동 저장).
 var save_hook: Callable
+## 전투 층 위에 다른 창(층 3: 알림·파일 고르기·메모·전멸)이 떠 있으면 true: 그동안 키·단추·카드·키패드 어느 입력도 받지 않는다
+## (캠프 PartyMenu.blocked_hook 과 같은 규칙, 07 §9.7 「바깥 창과 누르기」).
+var blocked_hook: Callable
 
 # ---- 상태 ----
 var state: ExplorationState
@@ -108,6 +123,8 @@ var cursor := 0
 var target_skill := ""
 var target_side := ""
 var target_slots: Array[int] = []
+## 대상이 정해진 스킬(AUTO_TARGETS)의 확인 단계인지: target_slots 전부를 밝히고, 그중 아무 칸·Enter 로 확정한다.
+var target_fixed := false
 ## 스킬 목록에서 대상 고르기로 왔는지(뒤로 갈 곳).
 var target_from_skills := false
 var outcome := ""
@@ -129,6 +146,9 @@ var minimap: MapOverview
 var skill_info_title := ""
 var skill_info_text := ""
 var log_button: BattleButton
+## 가상 방향키(왼쪽 아래)와 선택·취소(미니맵 위). 키와 같은 입구(handle)로 간다.
+var dir_pad: VirtualPad
+var key_pad: VirtualPad
 var log_view: BattleLogView
 var result_panel: Control
 var result_ok: BattleButton
@@ -174,7 +194,7 @@ func build(text_db: TextDb) -> void:
 	enemy_area = EnemyArea.new()
 	enemy_area.name = "EnemyArea"
 	add_child(enemy_area)
-	_place(enemy_area, Vector2(0, 0), Vector2(1, 0), Vector4(ENEMY_LEFT, LIST_TOP, -ENEMY_RIGHT, LIST_TOP + EnemyArea.FRONT_TOP + EnemyArea.FRONT_SIZE))
+	_place(enemy_area, Vector2(0, 0), Vector2(1, 0), Vector4(ENEMY_LEFT, ENEMY_TOP, -ENEMY_RIGHT, ENEMY_TOP + EnemyArea.FRONT_TOP + EnemyArea.FRONT_SIZE))
 	party_cards = PartyCards.new()
 	party_cards.name = "PartyCards"
 	add_child(party_cards)
@@ -199,7 +219,8 @@ func build(text_db: TextDb) -> void:
 	log_button.skin = "hint"
 	log_button.font_size = 20
 	add_child(log_button)
-	_place(log_button, Vector2.ZERO, Vector2.ZERO, Vector4(BANNER_X, HINT_Y, BANNER_X + LOG_BUTTON.x, HINT_Y + LOG_BUTTON.y))
+	var log_y := roundf((BANNER_H - LOG_BUTTON.y) / 2.0)
+	_place(log_button, Vector2(1, 0), Vector2(1, 0), Vector4(-LOG_RIGHT - LOG_BUTTON.x, log_y, -LOG_RIGHT, log_y + LOG_BUTTON.y))
 	log_button.activated.connect(func() -> void: handle("log"))
 	log_view = BattleLogView.new()
 	log_view.name = "BattleLog"
@@ -207,6 +228,20 @@ func build(text_db: TextDb) -> void:
 	log_view.build(texts)
 	log_view.close_requested.connect(func() -> void: handle("log_close"))
 	_build_result()
+	# 가상 키패드: 결과 창 위(겹치지 않지만 차례를 정해 둔다), 넘기기 받개 아래(연출 중 누르기는 넘기기).
+	dir_pad = VirtualPad.new().setup_dirs()
+	dir_pad.name = "DirPad"
+	add_child(dir_pad)
+	var ds := VirtualPad.dirs_size()
+	_place(dir_pad, Vector2(0, 1), Vector2(0, 1), Vector4(PAD_LEFT, -PAD_BOTTOM - ds.y, PAD_LEFT + ds.x, -PAD_BOTTOM))
+	dir_pad.pressed.connect(_on_vpad)
+	key_pad = VirtualPad.new().setup_keys(texts.t("battle.ui.pad_ok"), texts.t("battle.ui.pad_back"))
+	key_pad.name = "KeyPad"
+	add_child(key_pad)
+	var ks := VirtualPad.keys_size()
+	var kb := MINIMAP_BOTTOM + MINIMAP.y + KEYS_GAP
+	_place(key_pad, Vector2(1, 1), Vector2(1, 1), Vector4(-MINIMAP_RIGHT - ks.x, -kb - ks.y, -MINIMAP_RIGHT, -kb))
+	key_pad.pressed.connect(_on_vpad)
 	skip_catcher = Control.new()
 	skip_catcher.name = "SkipCatcher"
 	skip_catcher.mouse_filter = MOUSE_FILTER_STOP
@@ -321,11 +356,19 @@ func close_layer(notify: bool = true) -> void:
 		closed.emit(outcome)
 
 
+## 눌려 있던 포인터·끌기를 모두 버린다(취소된 누르기는 뗄 때 아무 일도 하지 않는다): 명령 줄·스킬 줄·카드·적·키패드·로그·결과·
+## 넘기기 단추와 스킬 목록·결과 본문 끌기. 안의 문맥이 바뀔 때와, 바깥 창(층 3)이 열리고 닫힐 때 탐색 화면이 부른다.
+func cancel_pointers() -> void:
+	_cancel_pointers()
+
+
 func _cancel_pointers() -> void:
 	if not _built:
 		return
 	for b in find_children("*", "TouchButton", true, false):
 		(b as TouchButton).cancel()
+	for sc in find_children("*", "PartyScroll", true, false):
+		(sc as PartyScroll).cancel()
 
 
 # ---- 입력 입구 ----
@@ -336,6 +379,8 @@ func _cancel_pointers() -> void:
 func handle(kind: String, arg: Variant = null) -> bool:
 	if phase == "closed":
 		return false
+	if blocked_hook.is_valid() and blocked_hook.call():
+		return false  # 전투 층 위에 바깥 창이 떠 있다
 	var frame := Engine.get_process_frames()
 	if frame == _input_frame:
 		return false
@@ -408,6 +453,52 @@ func _on_panel(kind: String, arg: Variant) -> void:
 	handle(kind, arg)
 
 
+## 가상 키패드 = 키(_unhandled_input 과 같은 입구): ↑↓ cursor, ←→ target_cursor, 선택 = Enter(confirm), 취소 = Esc(back).
+func _on_vpad(kind: String, arg: Variant) -> void:
+	match kind:
+		"move":
+			var d := arg as Vector2i
+			if d.y != 0:
+				handle("cursor", d.y)
+			elif d.x != 0:
+				handle("target_cursor", d.x)
+		"ok":
+			handle("confirm")
+		"back":
+			handle("back")
+
+
+## 가상 키패드의 켤 단추(이름 → 참). 그 단추에 맞는 키가 지금 무언가를 할 때만 켠다(꺼진 단추 = 흐림, 눌러도 아무 일 없음).
+## 연출 중에는 모두 끈다(화면 아무 곳 누르기가 넘기기다: 넘기기 받개가 키패드 위에 있다).
+func pad_state() -> Dictionary:
+	var on := {}
+	match phase:
+		"result":
+			on["ok"] = true
+		"command":
+			if log_view.visible:
+				on = {"up": true, "down": true, "back": true}
+			else:
+				match sub:
+					"menu":
+						on = {"up": true, "down": true, "ok": true, "back": _prev_commandable(member) >= 0}
+					"skills":
+						var any := not _skill_ids().is_empty()
+						on = {"up": any, "down": any, "ok": any, "back": true}
+					"target":
+						var lr := not target_slots.is_empty() and not target_fixed
+						on = {"left": lr, "right": lr, "ok": not target_slots.is_empty(), "back": true}
+					"confirm":
+						on = {"ok": true, "back": _prev_commandable(state.battle.party.size()) >= 0}
+	return on
+
+
+func _refresh_pad() -> void:
+	var on := pad_state()
+	dir_pad.set_enabled(on)
+	key_pad.set_enabled(on)
+
+
 func _on_card(r: Dictionary) -> void:
 	handle("target", r)
 
@@ -430,6 +521,8 @@ func _on_catcher_input(ev: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if phase == "closed" or not event is InputEventKey:
 		return
+	if blocked_hook.is_valid() and blocked_hook.call():
+		return  # 바깥 창과 탐색 화면이 받는다(L 로그 등 전투 키가 창 아래에서 일하지 않는다)
 	var k := event as InputEventKey
 	if not k.pressed:
 		return
@@ -475,6 +568,7 @@ func _begin_turn() -> void:
 	sub = "menu" if member >= 0 else "confirm"
 	cursor = 0
 	target_skill = ""
+	target_fixed = false
 	_refresh()
 
 
@@ -538,12 +632,9 @@ func _choose_skill(sid: String) -> bool:
 		_refresh()
 		_show_notice(_reason_text(why))
 		return true
-	var s := BattleRules.skill_of(state, member, sid)
-	if AUTO_TARGETS.has(s.target):
-		commands[member] = {"kind": "skill", "skill": sid}
-		_advance()
-	else:
-		_enter_target(sid, true)
+	# 정해진 대상(자신·아군 전체·적 전체)도 대상 단계로 간다: 그 대상을 모두 밝히고 띠에 스킬 설명을 둔 채 확인을 받는다
+	# (터치는 줄을 누르면 바로 정해져 설명을 읽을 수 없었다. 키보드도 같은 단계를 지난다).
+	_enter_target(sid, true)
 	return true
 
 
@@ -554,6 +645,7 @@ func _enter_target(sid: String, from_skills: bool) -> void:
 	target_from_skills = from_skills
 	target_side = BattleRules.target_side(u, s)
 	target_slots = BattleRules.valid_targets(state, member, sid)
+	target_fixed = AUTO_TARGETS.has(s.target)
 	sub = "target"
 	cursor = 0
 	_refresh()
@@ -573,6 +665,8 @@ func _choose_target(r: Variant) -> bool:
 		return false
 	if target_skill == "attack":
 		commands[member] = {"kind": "attack", "target": slot}
+	elif target_fixed:
+		commands[member] = {"kind": "skill", "skill": target_skill}  # 규칙이 대상을 정한다(제출 형식은 바로 확정하던 때와 같다)
 	else:
 		commands[member] = {"kind": "skill", "skill": target_skill, "target": slot}
 	_advance()
@@ -584,6 +678,7 @@ func _advance() -> void:
 	sub = "menu" if member >= 0 else "confirm"
 	cursor = 0
 	target_skill = ""
+	target_fixed = false
 	_refresh()
 
 
@@ -593,6 +688,7 @@ func _back() -> bool:
 			sub = "skills" if target_from_skills else "menu"
 			cursor = maxi(0, _skill_ids().find(target_skill)) if target_from_skills else 0
 			target_skill = ""
+			target_fixed = false
 		"skills":
 			sub = "menu"
 			cursor = 1
@@ -641,7 +737,7 @@ func _move_cursor(d: int) -> bool:
 
 
 func _move_target_cursor(d: int) -> bool:
-	if sub != "target" or target_slots.is_empty():
+	if sub != "target" or target_slots.is_empty() or target_fixed:
 		return false
 	cursor = wrapi(cursor + d, 0, target_slots.size())
 	_refresh()
@@ -1001,6 +1097,7 @@ func _refresh() -> void:
 	_refresh_panel()
 	_refresh_skill_info()
 	_refresh_portrait()
+	_refresh_pad()
 	_redraw_hud()
 
 
@@ -1010,7 +1107,7 @@ func _refresh_cards() -> void:
 	if sub == "target" and phase == "command" and not target_slots.is_empty():
 		var s := BattleRules.skill_of(state, member, target_skill)
 		row_target = s != null and s.target.ends_with("_row")
-		if row_target:
+		if row_target and not target_fixed:
 			lit_row = display.effective_row(display.unit({"side": target_side, "slot": target_slots[cursor]}))
 	for c in _all_cards():
 		var u := c.unit()
@@ -1020,9 +1117,10 @@ func _refresh_cards() -> void:
 		if sub == "target" and phase == "command" and c.unit_ref["side"] == target_side:
 			if target_slots.has(c.unit_ref["slot"]):
 				mark = "valid"
-				if row_target and display.effective_row(u) == lit_row:
+				if target_fixed or (row_target and display.effective_row(u) == lit_row):
 					mark = "lit"
-				c.cursor = target_slots[cursor] == c.unit_ref["slot"]
+				# 정해진 대상은 하나를 가리키지 않는다(커서 없음 → 적 HP 표도 없음: HP 표는 커서 한 대상의 것이다).
+				c.cursor = not target_fixed and target_slots[cursor] == c.unit_ref["slot"]
 			elif u.alive() or target_side == BattleUnit.PARTY:
 				mark = "invalid"
 				c.reason = texts.t("battle.reason.unreachable" if target_side == BattleUnit.ENEMY else "battle.reason.not_target")
@@ -1131,9 +1229,10 @@ func _layout() -> void:
 	# 스킬 판: 「스킬」 줄 위 ~ 파티 카드 위 − 8(화면 높이를 따른다).
 	var skill_top := CommandPanel.row_y(1)
 	panel.set_skill_area(Rect2(SKILL_X - LIST_X, skill_top, SKILL_W, s.y - PartyCards.HEIGHT - 8.0 - LIST_TOP - skill_top))
-	# 로그 창: 안내 줄 아래 ~ 파티 카드 위, 화면 폭(원작에 없는 창: 지금 창 그대로).
+	# 로그 창: 띠 아래 ~ 방향키 위, 왼쪽 16 ~ 선택·취소 열 왼쪽(키패드는 로그 창이 열린 동안에도 누른다: ↑↓ 내리기, 취소 닫기).
+	var log_bottom := minf(s.y - PartyCards.HEIGHT, s.y - PAD_BOTTOM - VirtualPad.dirs_size().y) - 8.0
 	log_view.position = Vector2(16, LIST_TOP)
-	log_view.size = Vector2(s.x - 32, s.y - PartyCards.HEIGHT - 8.0 - LIST_TOP)
+	log_view.size = Vector2(s.x - ENEMY_RIGHT - 16.0, log_bottom - LIST_TOP)
 	# 결과 창: 본문 줄이 많으면 높이를 늘리되 알림 줄 아래부터 화면 아래 8 안에 둔다(메시지 띠·알림 줄을 가리지 않는다).
 	# 그래도 넘치면 본문을 끌어 내린다(07 §9.6).
 	var body_w := RESULT_W - 40.0
@@ -1189,7 +1288,11 @@ func banner_lines() -> Array:
 					"menu", "skills":
 						head = texts.t("battle.ui.prompt", {"member": display.party[member].name})
 					"target":
-						head = texts.t("battle.ui.choose_target", {"skill": display.skill_name(target_skill)})
+						if target_fixed:
+							var scope := texts.t("battle.scope." + BattleRules.skill_of(state, member, target_skill).target)
+							head = texts.t("battle.ui.fixed_target", {"scope": scope, "skill": display.skill_name(target_skill)})
+						else:
+							head = texts.t("battle.ui.choose_target", {"skill": display.skill_name(target_skill)})
 						body = skill_info_text
 					"confirm":
 						head = texts.t("battle.ui.ready")
@@ -1223,7 +1326,7 @@ func _draw() -> void:
 	draw_polygon(pts, cols)
 	draw_line(Vector2(b.position.x, b.end.y - 1.5), Vector2(b.end.x, b.end.y - 1.5), UiTheme.CMD_PLATE_EDGE, 3.0)
 	var lines := banner_lines()
-	var tw := b.size.x - 2.0 * BANNER_PAD
+	var tw := b.size.x - 2.0 * BANNER_PAD - LOG_BUTTON.x - LOG_RIGHT  # 글은 로그 단추 왼쪽에서 끝난다
 	var head_y := 44.0 if not str(lines[1]).is_empty() else b.get_center().y + BANNER_FS * 0.36
 	draw_string(font, Vector2(b.position.x + BANNER_PAD, head_y), lines[0], HORIZONTAL_ALIGNMENT_LEFT, tw, BANNER_FS, ANNOUNCE_TEXT)
 	if not str(lines[1]).is_empty():
@@ -1258,11 +1361,16 @@ func status_text() -> String:
 
 # ---- 시험·디버그 읽기 ----
 
-## 지금 누를 수 있는 전투 층 단추 전부(로그 창·결과 창이 덮은 단추는 빼고, 연출 중이면 없음).
+## 지금 누를 수 있는 전투 층 단추 전부(로그 창·결과 창이 덮은 단추는 빼고, 연출 중이면 없음). 가상 키패드는 켜진 단추만.
 func visible_buttons() -> Array[TouchButton]:
 	var out: Array[TouchButton] = []
 	if phase == "anim" or phase == "closed":
 		return out
+	for vp in [dir_pad, key_pad]:
+		for k in (vp as VirtualPad).buttons:
+			var pb: TouchButton = vp.buttons[k]
+			if pb.is_visible_in_tree() and not pb.disabled:
+				out.append(pb)
 	var root_node: Node = self
 	if result_panel.visible:
 		root_node = result_panel
@@ -1271,7 +1379,7 @@ func visible_buttons() -> Array[TouchButton]:
 		out.append(log_button)
 	for n in root_node.find_children("*", "TouchButton", true, false):
 		var b := n as TouchButton
-		if b.is_visible_in_tree() and b.mouse_filter != MOUSE_FILTER_IGNORE and not out.has(b):
+		if b.is_visible_in_tree() and b.mouse_filter != MOUSE_FILTER_IGNORE and not out.has(b) and not (b.get_parent() is VirtualPad):
 			# 스킬 판이 덮은 칸(적)은 누를 수 없다(판이 받는다).
 			if b is BattleCard and panel.skill_panel.is_visible_in_tree() and panel.skill_panel.get_global_rect().intersects(b.get_global_rect()):
 				continue
@@ -1297,6 +1405,7 @@ func debug_info(css: Callable) -> Dictionary:
 			charging.append(u.charging)
 	return {"open": true, "phase": phase, "sub": sub, "member": member, "turn": display.turn,
 		"targets": target_slots if sub == "target" else [], "target_side": target_side if sub == "target" else "",
+		"target_fixed": target_fixed if sub == "target" else false,
 		"enemy_hp": enemy_hp, "charging": charging, "log": log_view.visible, "log_lines": log_view.lines.size(), "outcome": outcome,
 		"result_lines": result_lines if phase == "result" else [], "panel": panel.visible,
 		"skill_info": [skill_info_title, skill_info_text] if skill_info_shown() else [], "banner": banner_lines().slice(0, 2), "buttons": buttons}
