@@ -269,6 +269,8 @@
   "battle.cmd.guard": "방어",
   "battle.cmd.escape": "도주",
   "battle.ui.turn": "턴 {n}",
+  "battle.ui.turn_word": "턴",
+  "battle.ui.prompt": "{member}, 어떻게 할까?",
   "battle.ui.log": "로그",
   "battle.ui.back": "뒤로",
   "battle.ui.execute": "실행",

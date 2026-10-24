@@ -94,7 +94,69 @@ const STATES := ["normal", "pressed", "selected", "selected_pressed", "checked",
 
 ## 부품별 모양(「부품:상태」). 없는 상태는 공용 모양을 쓴다(고른 도구는 공용 따뜻한 커서 그대로).
 ## 지도 판 도구 열(원작 HD nin_02 의 파란 도구 칸)·「돌아가기」 밝은 알약.
-const SKIN_LOOKS := ["tool:normal", "tool:pressed", "pill:normal", "pill:pressed"]
+const SKIN_LOOKS := ["tool:normal", "tool:pressed", "pill:normal", "pill:pressed",
+	"cmd:normal", "cmd:pressed", "cmd:selected", "cmd:selected_pressed", "cmd:disabled", "cmd:disabled_selected",
+	"hint:normal", "hint:pressed", "cmd:chosen",
+	"skill:normal", "skill:pressed", "skill:selected", "skill:selected_pressed", "skill:disabled", "skill:disabled_selected"]
+## 전투 명령 목록(원작 HD 1868180_0e36b17e): 줄은 청록, 커서 줄은 노랑 + 어두운 글자, 못 고르는 줄은 어두운 초록 + 회색 글자.
+const CMD_TOP := Color("00644c")
+const CMD_BOTTOM := Color("00573f")
+const CMD_PRESSED_TOP := Color("00785c")
+const CMD_PRESSED := Color("006a51")
+const CMD_TEXT := Color("e6fff6")
+const CMD_PICK_TOP := Color("fcff50")
+const CMD_PICK := Color("eef03c")
+const CMD_PICK_PRESSED := Color("fdff8a")
+const CMD_PICK_TEXT := Color("1a1a00")
+const CMD_OFF := Color("1a3121")
+const CMD_OFF_TEXT := Color("a8b4ac")
+const CMD_EDGE := Color("06132e")
+## 고른 명령(스킬 고르기·대상 고르기 동안, 원작 III HD gs2_653224 의 SKILL 줄): 밝은 시안 + 어두운 파랑 글자. 노랑은 「커서가 여기」.
+const CMD_CHOSEN := Color("52d4e5")
+const CMD_CHOSEN_TEXT := Color("0a1f5c")
+## 스킬 목록 판(gs2_653224: 명령 목록 오른쪽의 남색 판, 가는 밝은 테두리). 줄은 청록(원작 #0c859f → #5eb1c1 는 흰 글자 대비가 4.5 아래라
+## 어둡게 맞췄다), 커서 줄은 옅은 노랑 + 어두운 글자, TP 는 오른쪽 남색 상자에 흰 숫자.
+const SKILL_PANEL := Color("03132d")
+const SKILL_PANEL_EDGE := Color("8fb8d8")
+const SKILL_TOP := Color("0c7d95")
+const SKILL_BOTTOM := Color("0a6b80")
+const SKILL_PRESSED_TOP := Color("08596b")
+const SKILL_PRESSED := Color("0a6b80")
+const SKILL_PICK_TOP := Color("ffff8d")
+const SKILL_PICK := Color("eef182")
+const SKILL_PICK_PRESSED := Color("fdffb8")
+const SKILL_TP_BOX := Color("02142c")
+## 명령 목록 뒤판(오른쪽이 굽은 남색 판)과 초상 틀.
+const CMD_PLATE := Color("0b1a3a")
+const CMD_PLATE_EDGE := Color("2a4f9a")
+## 위 메시지 띠(전체 폭 오른쪽 끝까지): 파랑 그라데이션, 밝은 큰 글자. 안내 줄 알약(어두운 남색).
+const BATTLE_BANNER_TOP := Color("183a9c")
+const BATTLE_BANNER_BOTTOM := Color("03184d")
+const BATTLE_BANNER_TEXT := Color("eef4ff")
+const BATTLE_BANNER_NOTICE := Color("ffd9a0")
+const HINT_PILL := Color("000128")
+const HINT_PILL_PRESSED := Color("0d1c5c")
+const HINT_EDGE := Color("2a4f9a")
+## 턴 문패.
+const TURN_FILL := Color("10307e")
+## 전투 대원 카드(1810820_1f51fd75·jp_guide5_img4): 청록 판·어두운 틀·밝은 이름 띠, 쓰러지면 카드 전체가 어두운 회색.
+const CARD_TOP := Color("144f57")
+const CARD_BOTTOM := Color("0e4353")
+const CARD_HEAD := Color("1f6873")
+const CARD_FRAME := Color("06232b")
+const CARD_SQUARE := Color("0b3a44")
+const CARD_TEXT := Color("eaffff")
+const CARD_LABEL := Color("7fe6ff")
+const CARD_ACTIVE := Color("8ff4ff")
+const CARD_DOWN_TOP := Color("2c3133")
+const CARD_DOWN_BOTTOM := Color("23282a")
+const CARD_DOWN_HEAD := Color("3a4043")
+const CARD_DOWN_TEXT := Color("b4bcbf")
+## HP 막대(노랑 → 주황 그라데이션, 모든 비율에서 같은 색), TP 막대(시안), 막대 빈 곳.
+const CARD_HP_FROM := Color("fff043")
+const CARD_HP_TO := Color("ffa62b")
+const CARD_TP := Color("4dffff")
+const CARD_BAR_BG := Color("0a2a30")
 const TOOL_TOP := Color("0f7aab")
 const TOOL_BOTTOM := Color("0b6593")
 const TOOL_PRESSED_TOP := Color("0a5a82")
@@ -184,6 +246,25 @@ static func _build_looks() -> Dictionary:
 	d["glass"] = glass
 	d["tool:normal"] = _plain(_btn(TOOL_TOP, TOOL_BOTTOM, TOOL_EDGE, BTN_OUTER_W, TOOL_LINE, 1.0, none, TOOL_TEXT, TOOL_TEXT, TOOL_TEXT))
 	d["tool:pressed"] = _plain(_btn(TOOL_PRESSED_TOP, TOOL_PRESSED, TOOL_EDGE, BTN_OUTER_W, TOOL_LINE, 1.0, none, TOOL_TEXT, TOOL_TEXT, TOOL_TEXT))
+	d["cmd:normal"] = _plain(_btn(CMD_TOP, CMD_BOTTOM, CMD_EDGE, BTN_OUTER_W, CMD_PRESSED_TOP, 1.0, none, CMD_TEXT, CMD_TEXT, CMD_TEXT))
+	d["cmd:pressed"] = _plain(_btn(CMD_PRESSED_TOP, CMD_PRESSED, CMD_EDGE, BTN_OUTER_W, CMD_TEXT, 1.0, none, CMD_TEXT, CMD_TEXT, CMD_TEXT))
+	d["cmd:selected"] = _plain(_btn(CMD_PICK_TOP, CMD_PICK, CMD_EDGE, BTN_OUTER_W, CMD_PICK_PRESSED, 1.0, none, CMD_PICK_TEXT, CMD_PICK_TEXT, CMD_PICK_TEXT))
+	d["cmd:selected_pressed"] = _plain(_btn(CMD_PICK_PRESSED, CMD_PICK_TOP, CMD_EDGE, BTN_OUTER_W, CMD_PICK, 1.0, none, CMD_PICK_TEXT, CMD_PICK_TEXT,
+		CMD_PICK_TEXT))
+	d["cmd:disabled"] = _plain(_btn(CMD_OFF, CMD_OFF, CMD_EDGE, BTN_OUTER_W, CMD_OFF, 1.0, none, CMD_OFF_TEXT, CMD_OFF_TEXT, CMD_OFF_TEXT))
+	d["cmd:disabled_selected"] = _plain(_btn(CMD_OFF, CMD_OFF, CMD_PICK_TOP, BTN_PICK_W, CMD_OFF, 1.0, none, CMD_OFF_TEXT, CMD_OFF_TEXT, CMD_OFF_TEXT))
+	d["cmd:chosen"] = _plain(_btn(CMD_CHOSEN, CMD_CHOSEN, CMD_EDGE, BTN_OUTER_W, CMD_CHOSEN, 1.0, none, CMD_CHOSEN_TEXT, CMD_CHOSEN_TEXT, CMD_CHOSEN_TEXT))
+	d["skill:normal"] = _plain(_btn(SKILL_TOP, SKILL_BOTTOM, CMD_EDGE, BTN_OUTER_W, SKILL_TOP, 1.0, none, CMD_TEXT, CMD_TEXT, CMD_TEXT))
+	d["skill:pressed"] = _plain(_btn(SKILL_PRESSED_TOP, SKILL_PRESSED, CMD_EDGE, BTN_OUTER_W, CMD_TEXT, 1.0, none, CMD_TEXT, CMD_TEXT, CMD_TEXT))
+	d["skill:selected"] = _plain(_btn(SKILL_PICK_TOP, SKILL_PICK, CMD_EDGE, BTN_OUTER_W, SKILL_PICK_TOP, 1.0, none, CMD_PICK_TEXT, CMD_PICK_TEXT, CMD_PICK_TEXT))
+	d["skill:selected_pressed"] = _plain(_btn(SKILL_PICK_PRESSED, SKILL_PICK_TOP, CMD_EDGE, BTN_OUTER_W, SKILL_PICK, 1.0, none, CMD_PICK_TEXT, CMD_PICK_TEXT,
+		CMD_PICK_TEXT))
+	d["skill:disabled"] = d["cmd:disabled"]
+	d["skill:disabled_selected"] = d["cmd:disabled_selected"]
+	d["hint:normal"] = _plain(_btn(HINT_PILL, HINT_PILL, HINT_EDGE, BTN_OUTER_W, HINT_PILL, 1.0, none, BATTLE_BANNER_TEXT, BATTLE_BANNER_TEXT,
+		BATTLE_BANNER_TEXT))
+	d["hint:pressed"] = _plain(_btn(HINT_PILL_PRESSED, HINT_PILL_PRESSED, HINT_EDGE, BTN_OUTER_W, BATTLE_BANNER_TEXT, 1.0, none, BATTLE_BANNER_TEXT,
+		BATTLE_BANNER_TEXT, BATTLE_BANNER_TEXT))
 	for k in ["pill:normal", "pill:pressed"]:
 		var top := PILL_TOP if k == "pill:normal" else PILL_PRESSED_TOP
 		var bottom := PILL_BOTTOM if k == "pill:normal" else PILL_PRESSED
@@ -320,6 +401,17 @@ static func _outline(ci: RID, r: Rect2, c: float, col: Color, w: float) -> void:
 	var pts := chamfer_points(r, c)
 	pts.append(pts[0])
 	RenderingServer.canvas_item_add_polyline(ci, pts, PackedColorArray([col]), w, true)
+
+
+## 가로 막대(전투 대원 카드·TP 게이지·적 HP 표): 빈 곳 bg, 채운 곳은 왼쪽 from → 오른쪽 끝 to 그라데이션(막대 전체 폭 기준).
+static func draw_gauge(ci: CanvasItem, r: Rect2, ratio: float, from: Color, to: Color, bg: Color = CARD_BAR_BG) -> void:
+	ci.draw_rect(r, bg)
+	var w := r.size.x * clampf(ratio, 0.0, 1.0)
+	if w <= 0.0:
+		return
+	var mid := from.lerp(to, w / maxf(1.0, r.size.x))
+	var pts := PackedVector2Array([r.position, r.position + Vector2(w, 0), r.position + Vector2(w, r.size.y), r.position + Vector2(0, r.size.y)])
+	ci.draw_polygon(pts, PackedColorArray([from, mid, mid, from]))
 
 
 ## 둥근 채움 하나(상태 칩·준비 표시·번쩍임·직업색 띠·적 자리 상자처럼 창·단추가 아닌 작은 면).

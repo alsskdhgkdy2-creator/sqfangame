@@ -143,9 +143,11 @@ func test_status_rows_show_hp_and_thinner_tp_without_overlap() -> void:
 						check(not compact, tag + ": 넓은 폭이면 넓은 꼴")
 				st.member_names.assign(party_names)
 	check(compact_seen >= 2, "좁은 꼴(값 쌓기)도 보았다(%d)" % compact_seen)
-	check_eq(UiTheme.TP_BAR, Color(0.4, 0.65, 1.0), "TP 색 = 전투 대원 칸 TP 색")
-	for sc in [BattleCard, MemberCell, StatusPanel]:
+	check_eq(UiTheme.TP_BAR, Color(0.4, 0.65, 1.0), "TP 색(파티 메뉴·상태 칸)")
+	for sc in [MemberCell, StatusPanel]:
 		check(_source(sc).contains("UiTheme.TP_BAR"), "%s: 같은 TP 색 상수를 쓴다" % (sc as Script).resource_path)
+	# M2.7 R3: 전투 카드는 원작 색(시안 TP 막대 UiTheme.CARD_TP). 파티 메뉴는 R2 에서 맞춘다.
+	check(_source(BattleCard).contains("UiTheme.CARD_TP") and not _source(BattleCard).contains("UiTheme.TP_BAR"), "전투 카드 TP 막대 = CARD_TP")
 
 
 # ---- U8 장비 합계 표 ----
@@ -455,8 +457,8 @@ func test_widgets_use_theme_states() -> void:
 	check(s.battle_layer.is_open(), "준비: 전투")
 	await kit.frames(3)
 	var cp := s.battle_layer.panel
-	check_eq(cp.command_buttons[0].theme_state(), "selected", "명령 커서")
-	check_eq(cp.command_buttons[1].theme_state(), "normal", "다른 명령")
+	check_eq(cp.command_buttons[0].theme_state(), "cmd:selected", "명령 커서(원작 명령 목록 모양)")
+	check_eq(cp.command_buttons[1].theme_state(), "cmd:normal", "다른 명령")
 
 
 func test_no_stylebox_flat_outside_theme() -> void:

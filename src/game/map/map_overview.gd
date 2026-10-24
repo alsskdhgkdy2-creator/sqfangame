@@ -27,6 +27,7 @@ var source: MapPanel
 
 
 func _init() -> void:
+	super()  # MapPanel._init: clip_contents(모눈·칸이 틀 밖으로 그려지지 않는다). GDScript 는 부모 _init 을 저절로 부르지 않는다.
 	mouse_filter = MOUSE_FILTER_IGNORE
 
 

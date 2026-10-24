@@ -558,15 +558,22 @@ func test_log_lines_and_debug_detail() -> void:
 	check_eq(layer.log_view.lines.size(), BattleLogView.MAX_LINES, "지난 100줄")
 
 
-func test_party_band_follows_effective_row() -> void:
+## M2.7 R3: 카드 자리는 편성 열(윗줄 전열 3, 아랫줄 후열 2)이고, 전열이 모두 쓰러져도 바뀌지 않는다(원작처럼 문패 없음).
+func test_party_rows_follow_formation() -> void:
 	var s := _state()
 	await _open(s)
-	check_eq(layer.party_cards.band_of(3), texts.t("battle.ui.back_row"), "후열 띠")
+	var pc := layer.party_cards
+	check_eq([pc.top_row(0), pc.top_row(1), pc.top_row(2), pc.top_row(3), pc.top_row(4)], [true, true, true, false, false], "윗줄 = 편성 전열")
+	var before: Array[Vector2] = []
+	for c in pc.cards:
+		before.append(c.position)
 	for i in 3:
 		s.battle.party[i].hp = 0
 	var s2 := Fx.battle_clone(s)
 	await _open(s2)
-	check_eq(layer.party_cards.band_of(3), texts.t("battle.ui.front"), "전열이 모두 쓰러지면 뒤 둘의 띠가 「전열」")
+	pc = layer.party_cards
+	for i in pc.cards.size():
+		check_eq(pc.cards[i].position, before[i], "전열이 모두 쓰러져도 카드 %d 자리 그대로" % i)
 	check_eq(layer.member, 3, "명령은 살아 있는 대원부터")
 
 
@@ -801,7 +808,9 @@ func test_save_failure_notice_shows_over_battle() -> void:
 	await kit.frames(2)
 	check(s.last_autosave_error != "", "저장 실패")
 	check(s._toast.text.begins_with(texts.t("msg.save_failed", {"reason": ""})), "저장 실패 알림")
-	check(s._toast.is_visible_in_tree() and s._toast.get_global_rect().position.y >= BattleLayer.TOP_H, "알림 줄은 전투 층 위·알림 줄 아래에 보인다")
+	var tr := s._toast.get_global_rect()
+	check(s._toast.is_visible_in_tree() and tr.position.y >= BattleLayer.BANNER_H and tr.position.x >= BattleLayer.TOAST_LEFT,
+		"알림 줄은 전투 층 위, 메시지 띠 아래·로그 단추 오른쪽에 보인다: %s" % str(tr))
 
 
 func test_reload_during_battle_animation_restores_layer() -> void:
@@ -1052,9 +1061,20 @@ func _check_chips_drawn(c: BattleCard, label: String) -> void:
 	var u := c.unit()
 	var want := layer.display.chips(u)
 	var drawn := c.drawn_chips()
-	check_eq(drawn.size(), want.size(), label + ": 그려지는 딱지 수 = 상태 수")
 	var area := c.chip_area()
 	var card := Rect2(Vector2.ZERO, c.size)
+	if not c.is_enemy():
+		# M2.7 R3: 아군 카드는 머리 줄 네모에 첫 상태(첫 글자)와 「+N」(나머지)만. 전체는 로그 창 상태 목록.
+		check_eq(drawn.size(), 1 if want.size() <= 1 else 2, label + ": 네모에 첫 상태 + 「+N」")
+		check_eq(drawn[0]["text"], want[0]["text"], label + ": 첫 상태")
+		check_eq(drawn[0]["glyph"], str(want[0]["text"]).left(1), label + ": 네모 글자 = 첫 글자")
+		if want.size() > 1:
+			check_eq([drawn[1]["kind"], drawn[1]["hidden"], drawn[1]["text"]], ["more", want.size() - 1, "+%d" % (want.size() - 1)], label + ": +N")
+			check(not (drawn[0]["rect"] as Rect2).intersects(drawn[1]["rect"]), label + ": 첫 상태와 +N 은 겹치지 않는다")
+		for d in drawn:
+			check(area.encloses(d["rect"]) and card.encloses(d["rect"]), "%s: %s 가 네모 안 %s" % [label, d["text"], str(d["rect"])])
+		return
+	check_eq(drawn.size(), want.size(), label + ": 그려지는 딱지 수 = 상태 수")
 	for i in drawn.size():
 		var d: Dictionary = drawn[i]
 		check(d["kind"] != "more", label + ": 넘침 없음")
@@ -1074,9 +1094,9 @@ func test_max_status_chips_all_drawn() -> void:
 		check_eq(layer.display.chips(layer.display.party[2]).size(), 10, tag + ": 아군 최대 10")
 		_check_chips_drawn(_member(2), tag + " 듀얼 B")
 		_check_chips_drawn(_member(4), tag + " 위저드")
-		_check_chips_drawn(_enemy(0), tag + " 전열 적(200)")
+		_check_chips_drawn(_enemy(0), tag + " 전열 적(160)")
 		_check_chips_drawn(_enemy(2), tag + " 후열 적(150)")
-		check(_member(2).chip_area().position.y >= 97.0, tag + ": 딱지는 TP 막대 아래")
+		check(_member(2).chip_area().end.y <= _member(2).stat_rect(0).position.y, tag + ": 네모는 HP·TP 줄 위(머리 줄)")
 		var st := layer.status_text()
 		for t in layer.display.chip_texts(layer.display.party[2]):
 			check(st.contains(t.replace("▲", "↑").replace("▼", "↓")), tag + ": 로그 창 상태 목록에 " + t)

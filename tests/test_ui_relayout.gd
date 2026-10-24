@@ -126,53 +126,50 @@ static func contrast(a: Color, b: Color) -> float:
 
 # ---- 층 표 ----
 
+## M2.7 R3: 원작 HD 1868180_0e36b17e 배치(1280×720 기준 값, 앵커로 붙어 1728×720 에서도 같은 규칙).
 func test_battle_layers_follow_the_table_at_both_sizes() -> void:
 	for px in WINDOWS:
 		await _layer(px, null, 1.0)
 		var s := layer.size
 		var tag := "%s(논리 %s)" % [str(px), str(s)]
-		# 트리 순서 = 그리는 순서 = 누르는 순서: L1 적 → L2 HUD → L3 창 → L4 결과 → 건너뛰기 받개 → L5 알림 띠.
-		var order := [layer.enemy_area, layer.party_cards, layer.log_button, layer.panel, layer.skill_info, layer.log_view,
-			layer.result_panel, layer.skip_catcher, layer.hud_toast]
+		# 트리 순서 = 그리는 순서 = 누르는 순서.
+		var order := [layer.enemy_area, layer.party_cards, layer.minimap, layer.portrait, layer.panel, layer.log_button, layer.log_view,
+			layer.result_panel, layer.skip_catcher]
 		for i in order.size() - 1:
 			check((order[i] as Node).get_index() < (order[i + 1] as Node).get_index(), "%s: %s 는 %s 아래" % [tag, order[i].name, order[i + 1].name])
-		for c in [layer.skill_info, layer.hud_toast, layer.party_cards, layer._result_title] + layer.party_cards.plates:
+		for c in [layer.enemy_area, layer.enemy_area.hp_tag, layer.party_cards, layer.minimap, layer.portrait, layer._result_title]:
 			check((c as Control).mouse_filter == Control.MOUSE_FILTER_IGNORE, "%s: 장식 %s 은 누르기를 받지 않는다" % [tag, c.name])
-		# L2: 턴 문패는 왼쪽 위의 작은 판(화면 폭 띠가 아니다), 로그 단추는 오른쪽 위에 뜬다.
+		# 위: 턴 문패(왼쪽 위) · 메시지 띠(x 193 → 오른쪽 끝, y 0~100) · 안내 줄 로그 단추(띠 바로 아래, 원작 INFO 자리).
 		var plate := layer.turn_plate_rect()
-		check(plate.position.x > 0.0 and plate.position.y > 0.0 and plate.size.x < s.x * 0.2, "%s: 턴 문패 %s" % [tag, str(plate)])
-		var lb := _rect(layer.log_button)
-		check(is_equal_approx(lb.end.x, s.x - BattleLayer.PANEL_MARGIN) and lb.position.y == BattleLayer.PANEL_MARGIN, "%s: 로그 단추 %s" % [tag, str(lb)])
-		# L3: 명령 창은 오른쪽에 뜨고 높이는 내용만큼, 이름 문패가 위 가장자리에 걸친다.
-		var pr := _rect(layer.panel)
-		check(is_equal_approx(pr.end.x, s.x - BattleLayer.PANEL_MARGIN) and pr.position.y == BattleLayer.PANEL_TOP, "%s: 명령 창 %s" % [tag, str(pr)])
-		check_eq(layer.panel.size.y, layer.panel.content_height(0), tag + ": 명령 창 높이 = 내용(명령 넷 + 뒤로)")
-		var np := layer.panel.plate_rect()
-		check(np.position.y < 0.0 and np.end.y > 0.0, "%s: 이름 문패는 창 위 가장자리에 걸친다 %s" % [tag, str(np)])
-		# L2 대원 카드: 아래쪽에 간격을 두고 뜨고, 전열은 올라 있고, 묶음마다 문패가 카드 위 가장자리에 걸친다.
+		check(plate.position.x > 0.0 and plate.position.y > 0.0 and plate.end.x <= BattleLayer.BANNER_X and plate.end.y <= BattleLayer.BANNER_H,
+			"%s: 턴 문패 %s 는 띠 왼쪽" % [tag, str(plate)])
+		check_eq(layer.banner_rect(), Rect2(193, 0, s.x - 193, 100), tag + ": 메시지 띠")
+		check_eq(_rect(layer.log_button), Rect2(193, 104, 120, 64), tag + ": 로그 단추")
+		# 왼쪽: 초상(x 0~180) + 아래 TP 게이지(x 0~267), 초상 오른쪽 명령 목록(x 170~493).
+		check_eq(_rect(layer.portrait), Rect2(0, 172, 267, 397), tag + ": 초상 + TP 게이지")
+		check_eq(_rect(layer.panel), Rect2(170, 172, 323, 356), tag + ": 명령 목록")
+		# 적 영역: 명령 목록 오른쪽 ~ 미니맵 열 왼쪽, 파티 카드 위.
+		var er := _rect(layer.enemy_area)
+		check_eq(er, Rect2(500, 172, s.x - 500 - 255, EnemyArea.FRONT_TOP + EnemyArea.FRONT_SIZE), tag + ": 적 영역")
+		# 오른쪽 아래 미니맵(원작 x 1033~1260, y 507~667).
+		check_eq(_rect(layer.minimap), Rect2(s.x - 247, s.y - 213, 227, 160), tag + ": 미니맵")
+		check(layer.minimap.is_visible_in_tree() and layer.minimap.is_mini, tag + ": 전투 중 미니맵이 보인다")
+		# 아래 가운데 파티 카드 두 줄: 윗줄 = 편성 전열 셋, 아랫줄 = 후열 둘, 줄마다 가운데, 겹치지 않는다.
 		var pc := layer.party_cards
 		var cards: Array[Rect2] = []
 		for c in pc.cards:
 			cards.append(_rect(c))
-		check(cards[0].position.x >= 8.0 and cards[-1].end.x <= s.x - 8.0, "%s: 카드 양옆에 바탕이 보인다" % tag)
-		for i in cards.size() - 1:
-			check(cards[i + 1].position.x - cards[i].end.x >= 8.0, "%s: 카드 %d·%d 사이 간격" % [tag, i, i + 1])
-		var back_y := cards[4].position.y
+		var top_y := s.y - 8.0 - 80.0 - 4.0 - 80.0
 		for i in cards.size():
-			var want := back_y - (PartyCards.STAGGER if pc.raised(i) else 0.0)
-			check_eq(cards[i].position.y, want, "%s: 카드 %d 높이(전열 %s)" % [tag, i, str(pc.raised(i))])
-			check(cards[i].end.y <= s.y and cards[i].size.y <= PartyCards.CARD_MAX_H, "%s: 카드 %d 는 화면 아래 안" % [tag, i])
-		check_eq([pc.raised(0), pc.raised(1), pc.raised(2), pc.raised(3), pc.raised(4)], [true, true, true, false, false], tag + ": 앞 셋이 전열")
-		var shown := []
-		for i in pc.plates.size():
-			var p := pc.plates[i]
-			if p.visible:
-				var r := _rect(p)
-				shown.append([i, p.text])
-				check(r.position.y < cards[i].position.y and r.end.y > cards[i].position.y, "%s: 문패 %d 는 카드 위 가장자리에 걸친다" % [tag, i])
-		check_eq(shown, [[0, texts.t("battle.ui.front")], [3, texts.t("battle.ui.back_row")]], tag + ": 「전열」「후열」 문패")
-		check(UiTheme.look("glass")["top"].a < 1.0, tag + ": 대원 카드 채움은 반투명")
-		# 적 자리는 명령·대상·연출 사이에 그대로다.
+			check_eq(cards[i].size, Vector2(233, 80), "%s: 카드 %d 크기" % [tag, i])
+			check_eq(cards[i].position.y, top_y if i < 3 else s.y - 88.0, "%s: 카드 %d 줄(전열 = 윗줄)" % [tag, i])
+			for j in i:
+				check(not cards[i].intersects(cards[j]), "%s: 카드 %d·%d 겹치지 않는다" % [tag, j, i])
+		check(absf((cards[0].position.x + cards[2].end.x) / 2.0 - s.x / 2.0) <= 1.0, tag + ": 윗줄 가운데")
+		check(absf((cards[3].position.x + cards[4].end.x) / 2.0 - s.x / 2.0) <= 1.0, tag + ": 아랫줄 가운데(엇갈림)")
+		check(er.end.y <= cards[0].position.y, tag + ": 적 영역은 카드 위")
+		check(_rect(layer.panel).end.y <= cards[0].position.y and _rect(layer.portrait).end.x <= cards[0].position.x, tag + ": 목록·초상은 카드와 겹치지 않는다")
+		# 적 자리는 명령·대상·연출 사이에 그대로다(결과 창까지는 test_battle_layout).
 		var at_command := _enemy_rects()
 		await _step("command", 0)
 		check_eq(layer.sub, "target", tag + ": 대상 고르기")
@@ -184,9 +181,7 @@ func test_battle_layers_follow_the_table_at_both_sizes() -> void:
 		await _step("commands", cmds)
 		check_eq(layer.phase, "anim", tag + ": 연출")
 		check_eq(_enemy_rects(), at_command, tag + ": 연출 중 적 자리 그대로")
-		var band := layer.banner_rect()
-		check(band.position.x > 0.0 and band.end.x < s.x and band.end.y <= layer.enemy_area.position.y, "%s: 연출 띠 %s 는 화면 폭 띠가 아니고 적 영역 위" % [tag, str(band)])
-		check(not layer.banner_text().is_empty(), tag + ": 연출 중 띠 글")
+		check(not layer.banner_text().is_empty() and layer.banner_lines()[0] == layer.banner_text(), tag + ": 연출 중 띠 글")
 
 
 func _enemy_rects() -> Array:
@@ -198,7 +193,7 @@ func _enemy_rects() -> Array:
 
 # ---- 겹친 곳 누르기 ----
 
-## 듀얼리스트 A 스킬 여섯: 명령 창이 가장 크게 자라 아래 카드 위 가장자리에 테두리가 걸친다.
+## 듀얼리스트 A 스킬 여섯(목록이 넘쳐 끌어 내리는 상태).
 func _six_skills(px: Vector2) -> void:
 	await _layer(px)
 	var u := layer.state.battle.party[1]
@@ -213,38 +208,31 @@ func _six_skills(px: Vector2) -> void:
 func test_overlapping_taps_reach_the_visible_top_element_in_battle() -> void:
 	for px in WINDOWS:
 		var tag := str(px)
-		# ① 명령 창 테두리 ∩ 대원 카드: 창(위)이 받는다.
+		# ① 명령 목록 ∩ 초상(목록이 초상 오른쪽 끝을 덮는다): 목록(위)이 받는다.
 		await _six_skills(px)
-		var pr := _rect(layer.panel)
-		var hit := 0
-		for c in layer.party_cards.cards:
-			var o := pr.intersection(_rect(c))
-			if o.has_area():
-				hit += 1
-				var got := await _receiver_at(o.get_center())
-				check(_under(layer.panel, got), "%s: 명령 창 테두리와 %s 이 겹친 곳 → 명령 창, 실제 %s" % [tag, c.name, _name_of(got)])
-		check(hit > 0, "%s: 명령 창 테두리가 카드 위 가장자리에 걸친다(겹침 %d)" % [tag, hit])
+		var ov := _rect(layer.panel).intersection(_rect(layer.portrait))
+		check(ov.has_area(), "%s: 명령 목록이 초상 오른쪽 끝을 덮는다 %s" % [tag, str(ov)])
+		var on_list := await _receiver_at(ov.get_center())
+		check(_under(layer.panel, on_list), "%s: 목록과 초상이 겹친 곳 → 명령 목록, 실제 %s" % [tag, _name_of(on_list)])
 		for b in layer.visible_buttons():
 			for c in layer.party_cards.cards:
 				if b != c and not layer.party_cards.is_ancestor_of(b):
 					check(not _rect(b).intersects(_rect(c)), "%s: 단추 %s 는 카드 %s 와 겹치지 않는다" % [tag, b.name, c.name])
-		# ② 명령 창 이름 문패: 창 안쪽 절반은 창이, 바깥 절반은 바탕(층)이 받는다(문패는 장식).
-		var np := layer.panel.plate_rect()
-		np.position += layer.panel.global_position
-		var inside := await _receiver_at(np.get_center() + Vector2(0, 7))
-		check(_under(layer.panel, inside), "%s: 이름 문패 아래 절반 → 명령 창, 실제 %s" % [tag, _name_of(inside)])
-		var outside := await _receiver_at(np.get_center() - Vector2(0, 7))
-		check(outside == layer, "%s: 이름 문패 위 절반 → 바탕(뒤에 누를 것 없음), 실제 %s" % [tag, _name_of(outside)])
-		# ③ 열 문패 ∩ 카드: 문패 아래의 카드가 받는다.
-		for i in layer.party_cards.plates.size():
-			var p := layer.party_cards.plates[i]
-			if not p.visible:
-				continue
-			var card := layer.party_cards.card(i)
-			var o := _rect(p).intersection(_rect(card))
-			check(o.has_area(), "%s: 문패 %d 가 카드에 걸친다" % [tag, i])
-			var got := await _receiver_at(o.get_center())
-			check(got == card, "%s: 문패 %d 를 누르면 카드 %s, 실제 %s" % [tag, i, card.name, _name_of(got)])
+		# ② 장식(메시지 띠·턴 문패·초상·미니맵)은 누르기를 받지 않는다: 뒤에 누를 것이 없으면 바탕(층)이 받는다.
+		var spots := {"메시지 띠": layer.banner_rect().get_center(), "턴 문패": layer.turn_plate_rect().get_center(),
+			"초상": _rect(layer.portrait).position + Vector2(60, 120), "미니맵": _rect(layer.minimap).get_center()}
+		for k in spots:
+			var at := await _receiver_at(spots[k])
+			check(at == layer, "%s: %s → 바탕, 실제 %s" % [tag, k, _name_of(at)])
+		# ③ 대상 고르기: 적 위 HP 표(장식)와 그 아래 칸 — 표 자리를 눌러도 뒤의 적 칸·바탕이 받는다(표가 가로채지 않는다).
+		await _step("back")
+		await _step("back")
+		await _step("command", 0)
+		var tr := layer.enemy_area.tag_rect()
+		check(tr.has_area(), tag + ": 대상 고르기 중 HP 표")
+		tr.position += layer.enemy_area.global_position
+		var on_tag := await _receiver_at(tr.get_center())
+		check(on_tag == layer or on_tag is BattleCard, "%s: HP 표 자리 → 바탕·적 칸, 실제 %s" % [tag, _name_of(on_tag)])
 		# ④ 결과 창 ∩ 대원 카드: 결과 창이 받는다.
 		var s := Fx.battle(Fx.quiet_defs(Fx.EXACT), "formation.f1.rats", 4)
 		for u in s.battle.enemies:
@@ -384,13 +372,14 @@ func test_text_on_translucent_fills_meets_contrast() -> void:
 	var fills := [glass["top"], glass["bottom"]]
 	check(fills.all(func(c: Color) -> bool: return is_equal_approx(c.a, UiTheme.GLASS_ALPHA) and c.a < 1.0), "반투명 카드 채움 알파 %.2f" % UiTheme.GLASS_ALPHA)
 	check(not UiTheme.STATES.has("glass"), "반투명 카드는 단추 상태가 아니다(불투명 채움 시험 밖)")
-	var on_glass := {"대원 글자": BattleCard.MEMBER_TEXT, "고른 명령": BattleCard.COMMAND_TEXT, "못 고르는 이유": BattleCard.REASON_TEXT,
-		"흐린 글자": UiTheme.GLASS_DIM_TEXT, "전투 불능": UiTheme.GLASS_DOWN_TEXT, "스킬 설명 제목": UiTheme.HEAD_TEXT, "스킬 설명 본문": UiTheme.TEXT}
+	# M2.7 R3: 전투 대원 카드는 불투명 청록 판이 되었다(대비는 test_battle_layout). 반투명 카드는 파티 메뉴 등에 남는다.
+	var on_glass := {"흐린 글자": UiTheme.GLASS_DIM_TEXT, "전투 불능": UiTheme.GLASS_DOWN_TEXT, "머리 글자": UiTheme.HEAD_TEXT, "본문": UiTheme.TEXT}
 	for role in UiTheme.TEXT_ROLES:
 		on_glass["모양 " + role] = glass[role]
 	_check_on("반투명 카드", fills, on_glass)
-	_check_on("알림 띠", [UiTheme.BANNER_FILL], {"연출 알림": BattleLayer.ANNOUNCE_TEXT, "전투 안내": BattleLayer.NOTICE_TEXT,
-		"파티 메뉴 안내": PartyMenu.NOTICE_TEXT})
+	_check_on("알림 띠", [UiTheme.BANNER_FILL], {"파티 메뉴 안내": PartyMenu.NOTICE_TEXT})
+	_check_on("전투 메시지 띠", [UiTheme.BATTLE_BANNER_TOP, UiTheme.BATTLE_BANNER_BOTTOM], {"연출·물음 글": BattleLayer.ANNOUNCE_TEXT,
+		"전투 안내": BattleLayer.NOTICE_TEXT})
 	# 문패 채움은 불투명: 그 위 글자색(머리·본문).
 	check(UiTheme.PLATE_TOP.a == 1.0 and UiTheme.PLATE_BOTTOM.a == 1.0, "문패 채움은 불투명")
 	_check_on("문패", [UiTheme.PLATE_TOP, UiTheme.PLATE_BOTTOM], {"머리 글자": UiTheme.HEAD_TEXT, "본문 글자": UiTheme.TEXT})
@@ -441,24 +430,27 @@ func test_touch_targets_stay_at_least_64() -> void:
 
 # ---- 대상 고르기 중 적 칸 ----
 
-## 보이는 창(명령 창과 그 이름 문패, 스킬 설명, 로그 창, 결과 창, 위쪽 띠·문패·로그 단추, 대원 카드)이 적 칸을 가리지 않는다.
+## 보이는 것(명령 목록, 초상, 로그 창, 결과 창, 메시지 띠·턴 문패·로그 단추, 대원 카드, 미니맵, 다른 적 위의 HP 표)이 고를 수 있는 적 칸을 가리지 않는다.
 func _check_enemies_clear(tag: String) -> void:
 	var windows := {}
-	windows["명령 창"] = _rect(layer.panel)
-	var np := layer.panel.plate_rect()
-	np.position += layer.panel.global_position
-	windows["이름 문패"] = np
-	if layer.skill_info.visible:
-		windows["스킬 설명"] = _rect(layer.skill_info)
+	windows["명령 목록"] = _rect(layer.panel)
+	if layer.portrait.visible:
+		windows["초상"] = _rect(layer.portrait)
 	if layer.log_view.visible:
 		windows["로그 창"] = _rect(layer.log_view)
 	if layer.result_panel.visible:
 		windows["결과 창"] = _rect(layer.result_panel)
 	windows["턴 문패"] = layer.turn_plate_rect()
-	windows["알림 띠"] = layer.banner_rect()
+	windows["메시지 띠"] = layer.banner_rect()
 	windows["로그 단추"] = _rect(layer.log_button)
+	windows["미니맵"] = _rect(layer.minimap)
 	for c in layer.party_cards.cards:
 		windows[str(c.name)] = _rect(c)
+	var tr := layer.enemy_area.tag_rect()
+	var tagged := layer.enemy_area.tagged()
+	if tr.has_area():
+		tr.position += layer.enemy_area.global_position
+		tr.size.y += EnemyArea.TAG_TRI + 2.0
 	var n := 0
 	for i in layer.display.enemies.size():
 		var e := layer.enemy_area.card(i)
@@ -469,6 +461,8 @@ func _check_enemies_clear(tag: String) -> void:
 		check(Rect2(Vector2.ZERO, layer.size).encloses(er), "%s: 적 %d 화면 안" % [tag, i])
 		for k in windows:
 			check(not er.intersects(windows[k]), "%s: 적 %d %s 를 %s %s 가 가린다" % [tag, i, str(er), k, str(windows[k])])
+		if tr.has_area():
+			check(not er.intersects(tr), "%s: 적 %d %s 를 HP 표 %s 가 가린다(표는 %s 위)" % [tag, i, str(er), str(tr), tagged.name])
 	check(n > 0, "%s: 고를 수 있는 적이 있다(%d)" % [tag, n])
 
 
@@ -482,7 +476,7 @@ func test_enemy_cards_stay_uncovered_while_targetable() -> void:
 		await _step("target", {"side": BattleUnit.ENEMY, "slot": 0})
 		await _step("command", 1)
 		await _step("skill", HIGH_SLASH)
-		check(layer.sub == "target" and layer.skill_info.visible, tag + ": 스킬 대상(설명 띠가 보인다)")
+		check(layer.sub == "target" and layer.skill_info_shown(), tag + ": 스킬 대상(설명 띠가 보인다)")
 		_check_enemies_clear(tag + " 스킬 대상")
 
 
@@ -675,7 +669,7 @@ func test_resize_keeps_the_selected_skill_row_visible() -> void:
 	_cursor_row_shown("1280×1000")
 	host.size = Vector2(1280, 720)
 	await kit.frames(2)
-	check(list.size.y < tall, "줄이면 목록이 낮아진다 %d → %d" % [tall, list.size.y])
+	check(list.size.y < tall, "줄이면 목록이 낮아진다(스킬 판 아래 = 카드 위) %d → %d" % [tall, list.size.y])
 	_cursor_row_shown("1000 → 720")
 	check_eq([layer.sub, layer.cursor], ["skills", 5], "줄여도 스킬 고르기·커서 그대로")
 	host.size = Vector2(1280, 1000)

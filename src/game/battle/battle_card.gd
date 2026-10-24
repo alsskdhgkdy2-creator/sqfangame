@@ -1,6 +1,8 @@
 ## 적 칸·파티 칸 하나(06 §9.1). 누르기는 TouchButton 그대로(대상 고르기), 그림은 보이는 값(BattleDisplay.DUnit)에서.
-## 적: 단색 둥근 사각형 + 이름 + HP 막대(숫자 없음, D13) + 상태 딱지, 준비 중이면 「!」와 다음 행동 이름.
-## 아군: 직업색 띠, 이름, HP 막대·「HP 50/60」, TP 막대·수치, 상태 딱지, 고른 명령, 지금 고르는 대원 강조.
+## 적: 단색 둥근 사각형 + 이름 + 상태 딱지, 준비 중이면 「!」와 다음 행동 이름. HP 막대(숫자 없음, D13)는 대상 고르기 중
+## 커서가 있는 적 위에만 뜬다(EnemyArea, 원작 jp_guide5_img1).
+## 아군(원작 HD 카드 233×80): 어두운 틀의 청록 판, 머리 줄(상태 네모 + 이름 띠 + 고른 명령), 「HP n」「TP n」과 노랑 → 주황 HP 막대·시안 TP 막대.
+## 지금 행동하는 대원은 밝은 시안 틀, 쓰러지면 카드 전체가 어두운 회색(이름 회색, HP 0, TP 막대는 시안 그대로, jp_guide5_img4).
 class_name BattleCard
 extends TouchButton
 
@@ -27,13 +29,23 @@ const CHIP_H := 21.0
 const CHIP_GAP := 3.0
 const CHIP_PAD := 4.0
 const CHIP_TRI := 10.0
-const MEMBER_CHIP_TOP := 100.0
-## 대원 카드(반투명) 위 글자: 본문·고른 명령. 흐린 글자·「전투 불능」은 UiTheme.GLASS_DIM_TEXT·GLASS_DOWN_TEXT.
-const MEMBER_TEXT := Color(0.92, 0.97, 1.0)
+## 대원 카드(원작 HD 1868180_0e36b17e·1810820_1f51fd75, 233×80): 틀 두께, 머리 줄 높이(네모 = 같은 크기), 「HP」「TP」 칸 사이, 막대 높이,
+## 글자 크기(이름·고른 명령·이름표·수치), 네모 안 상태 글자와 「+N」 줄.
+const FRAME_W := 3.0
+const HEAD_H := 34.0
+const STAT_GAP := 8.0
+const BAR_H := 6.0
+const NAME_FS := 19
+const COMMAND_FS := 14
+const LABEL_FS := 15
+const VALUE_FS := 20
+const GLYPH_FS := 16
+const MORE_H := 13.0
+const MORE_FS := 11
+## 고른 명령 글자(이름 띠 위, 오른쪽).
 const COMMAND_TEXT := Color(1.0, 0.9, 0.45)
 ## 못 고르는 대상의 이유 글자(검은 외곽선을 두른다).
 const REASON_TEXT := Color(1.0, 0.7, 0.55)
-const ENEMY_BAR_FROM_BOTTOM := 64.0
 
 var display: BattleDisplay
 var unit_ref := {}
@@ -59,8 +71,9 @@ var command_text := "":
 	set(v):
 		command_text = v
 		queue_redraw()
-## 아군: 띠 아래 열 표시는 PartyCards 가 그린다.
 
+## 마지막으로 그린 대원 카드 값(시험·디버그): {fill, head, name_color, frame, hp, tp, hp_bar, tp_bar}.
+var drawn := {}
 var flash := 0.0
 var popups: Array[Dictionary] = []
 ## 막대가 보이는 비율(연출 중 줄어든다).
@@ -141,8 +154,8 @@ func _draw_popups() -> void:
 		var t: float = p["age"] / POPUP_SEC
 		var col: Color = p["color"]
 		col.a = clampf(1.6 - t * 1.6, 0.0, 1.0)
-		# 적: HP 막대 바로 위(이름 아래 빈 곳), 아군: 칸 위쪽 바깥.
-		var base := size.y - ENEMY_BAR_FROM_BOTTOM - 6.0 if is_enemy() else -8.0
+		# 적: 칸 가운데 아래(이름·딱지 사이 빈 곳), 아군: 칸 위쪽 바깥.
+		var base := size.y * 0.62 if is_enemy() else -8.0
 		var y := base - 12.0 * t - float(p["row"]) * 34.0
 		var outline := Color(0, 0, 0, col.a)
 		draw_string_outline(font, Vector2(0, y), p["text"], HORIZONTAL_ALIGNMENT_CENTER, size.x, POPUP_SIZE, 12, outline)
@@ -174,12 +187,10 @@ func _draw_enemy(u: BattleDisplay.DUnit) -> void:
 	if cursor and target_mark != "invalid":
 		_box(r.grow(-7), Color(0, 0, 0, 0), Color(1, 1, 1, 0.9), 2)
 	var fg := Color(0.96, 0.96, 0.96) if not dim else Color(0.6, 0.6, 0.6)
-	var fs := 20 if size.x >= 180.0 else 17
+	var fs := 20 if size.x >= 160.0 else 17
 	draw_string_outline(font, Vector2(0, 34), u.name, HORIZONTAL_ALIGNMENT_CENTER, size.x, fs, 5, Color(0, 0, 0, 0.8))
 	draw_string(font, Vector2(0, 34), u.name, HORIZONTAL_ALIGNMENT_CENTER, size.x, fs, fg)
-	# HP 막대(숫자 없음, D13)
-	var bar := Rect2(14, size.y - ENEMY_BAR_FROM_BOTTOM, size.x - 28, 12)
-	_bar(bar, shown_hp / maxf(1.0, u.max_hp), Color(0.95, 0.35, 0.3), dim)
+	# HP 막대는 칸 안에 없다: 대상 고르기 중 커서가 있는 적 위에 뜬다(EnemyArea 의 HP 표, 원작 jp_guide5_img1).
 	_draw_chips(drawn_chips())
 	if not u.charging.is_empty():
 		# 준비 중: 「!」와 다음 행동 이름
@@ -190,59 +201,108 @@ func _draw_enemy(u: BattleDisplay.DUnit) -> void:
 		draw_string_outline(font, Vector2(0, 62), next, HORIZONTAL_ALIGNMENT_CENTER, size.x, 16, 5, Color(0, 0, 0, 0.85))
 		draw_string(font, Vector2(0, 62), next, HORIZONTAL_ALIGNMENT_CENTER, size.x, 16, Color(1.0, 0.85, 0.3))
 	if dim and not reason.is_empty():
-		var ry := size.y - ENEMY_BAR_FROM_BOTTOM - 10.0
+		var ry := size.y * 0.5 + 8.0
 		draw_string_outline(font, Vector2(0, ry), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, 5, Color(0, 0, 0, 0.9))
-		draw_string(font, Vector2(0, ry), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, Color(1.0, 0.7, 0.55))
+		draw_string(font, Vector2(0, ry), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, REASON_TEXT)
 
 
-## 대원 칸 HP 막대 색(HpColor 한 규칙, 보이는 HP 기준: 깎이는 연출 중에도 막대 길이와 맞는다).
-func hp_bar_color() -> Color:
+## 대원 카드 막대 색(원작 1810820_1f51fd75: HP 는 비율과 상관없이 노랑 → 주황, TP 는 시안). [왼쪽 끝, 오른쪽 끝].
+func hp_bar_colors() -> Array[Color]:
+	return [UiTheme.CARD_HP_FROM, UiTheme.CARD_HP_TO]
+
+
+## 대원 카드 칸 나눔(카드 기준): 머리 줄의 네모(상태 표시)와 이름 띠, 아래 「HP」「TP」 두 칸.
+func square_rect() -> Rect2:
+	var i := FRAME_W + 2.0
+	return Rect2(i, i, HEAD_H, HEAD_H)
+
+
+func name_band() -> Rect2:
+	var sq := square_rect()
+	var x := sq.end.x + 3.0
+	return Rect2(x, sq.position.y, size.x - FRAME_W - 2.0 - x, HEAD_H)
+
+
+## 「HP」(0)·「TP」(1) 칸: 글자 줄과 그 아래 막대.
+func stat_rect(i: int) -> Rect2:
+	var x0 := FRAME_W + 4.0
+	var w := (size.x - 2.0 * x0 - STAT_GAP) / 2.0
+	var top := square_rect().end.y + 2.0
+	return Rect2(x0 + i * (w + STAT_GAP), top, w, size.y - FRAME_W - 2.0 - top)
+
+
+func bar_rect(i: int) -> Rect2:
+	var s := stat_rect(i)
+	return Rect2(s.position.x, s.end.y - BAR_H, s.size.x, BAR_H)
+
+
+## 카드 바탕색 [위, 아래, 이름 띠, 네모, 글자](쓰러지면 카드 전체가 어두운 회색, jp_guide5_img4).
+func card_colors() -> Array[Color]:
 	var u := unit()
-	return HpColor.of(shown_hp if shown_hp >= 0.0 else float(u.hp), u.max_hp)
+	if u != null and not u.alive():
+		return [UiTheme.CARD_DOWN_TOP, UiTheme.CARD_DOWN_BOTTOM, UiTheme.CARD_DOWN_HEAD, UiTheme.CARD_DOWN_BOTTOM, UiTheme.CARD_DOWN_TEXT]
+	return [UiTheme.CARD_TOP, UiTheme.CARD_BOTTOM, UiTheme.CARD_HEAD, UiTheme.CARD_SQUARE, UiTheme.CARD_TEXT]
+
+
+## 지금 그린 테두리 색(지금 행동하는 대원 = 밝은 시안, 원작의 ゾディアック 카드). 시험용.
+func frame_color() -> Color:
+	return UiTheme.CARD_ACTIVE if current else UiTheme.CARD_FRAME
 
 
 func _draw_member(u: BattleDisplay.DUnit) -> void:
 	var font := get_theme_default_font()
 	var r := Rect2(Vector2.ZERO, size)
-	var cc: Color = CLASS_COLORS.get(class_id, Color(0.7, 0.7, 0.7))
 	var down := not u.alive()
 	var dim := target_mark == "invalid"
-	# 바탕은 반투명 카드(전투 바탕이 비친다), 그 위에 누르는 중(밝은 안쪽 선)·지금 대원(직업색)·대상 표시(노랑) 테두리를 덧그린다.
-	UiTheme.draw_glass(self, r)
-	if held:
-		UiTheme.draw_outline(self, r.grow(-4), UiTheme.BTN_HELD_BORDER, 2, UiTheme.WIN_CHAMFER)
-	var bw := 3
+	var cols := card_colors()
+	# 어두운 틀 + 청록 판(위 → 아래), 머리 줄: 왼쪽 네모 + 밝은 이름 띠.
+	draw_rect(r, UiTheme.CARD_FRAME)
+	var inner := r.grow(-FRAME_W)
+	draw_polygon(PackedVector2Array([inner.position, Vector2(inner.end.x, inner.position.y), inner.end, Vector2(inner.position.x, inner.end.y)]),
+		PackedColorArray([cols[0], cols[0], cols[1], cols[1]]))
+	draw_rect(square_rect(), cols[3])
+	var band := name_band()
+	draw_rect(band, cols[2])
+	var fg: Color = cols[4]
+	var cmd_w := 0.0
+	if not command_text.is_empty() and not down:
+		cmd_w = minf(band.size.x * 0.45, font.get_string_size(command_text, HORIZONTAL_ALIGNMENT_LEFT, -1, COMMAND_FS).x)
+		draw_string(font, Vector2(band.end.x - 6.0 - cmd_w, band.get_center().y + COMMAND_FS * 0.36), command_text, HORIZONTAL_ALIGNMENT_LEFT,
+			cmd_w, COMMAND_FS, COMMAND_TEXT)
+	draw_string(font, Vector2(band.position.x + 8.0, band.get_center().y + NAME_FS * 0.36), u.name, HORIZONTAL_ALIGNMENT_LEFT,
+		maxf(8.0, band.size.x - 16.0 - cmd_w), NAME_FS, fg)
+	# 「HP 63」「TP 50」: 이름표는 왼쪽, 수치는 오른쪽, 그 아래 막대.
+	var vals := [roundi(shown_hp) if not down else 0, roundi(shown_tp)]
+	var maxes := [u.max_hp, u.max_tp]
+	var shown := [shown_hp if not down else 0.0, shown_tp]
+	for i in 2:
+		var s := stat_rect(i)
+		var base := s.end.y - BAR_H - 4.0
+		draw_string(font, Vector2(s.position.x + 2.0, base), "HP" if i == 0 else "TP", HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FS, fg if down else UiTheme.CARD_LABEL)
+		draw_string(font, Vector2(s.position.x, base), str(vals[i]), HORIZONTAL_ALIGNMENT_RIGHT, s.size.x - 2.0, VALUE_FS, fg)
+		var ratio: float = float(shown[i]) / maxf(1.0, float(maxes[i]))
+		if i == 0:
+			UiTheme.draw_gauge(self, bar_rect(i), ratio, UiTheme.CARD_HP_FROM, UiTheme.CARD_HP_TO)
+		else:
+			UiTheme.draw_gauge(self, bar_rect(i), ratio, UiTheme.CARD_TP, UiTheme.CARD_TP)
+	_draw_chips(drawn_chips())
+	drawn = {"fill": cols[0], "head": cols[2], "name_color": fg, "frame": frame_color(), "hp": vals[0], "tp": vals[1],
+		"hp_bar": [UiTheme.CARD_HP_FROM, UiTheme.CARD_HP_TO], "tp_bar": UiTheme.CARD_TP}
+	# 테두리 표시: 누르는 중(밝은 안쪽 선) · 지금 행동하는 대원(밝은 시안 틀) · 대상(노랑) · 키보드 커서(흰 안쪽 선).
 	if current:
-		bw = 4
-		UiTheme.draw_outline(self, r, cc, bw, UiTheme.WIN_CHAMFER)
+		draw_rect(r.grow(-1.5), UiTheme.CARD_ACTIVE, false, 3.0)
+	if held:
+		draw_rect(r.grow(-5.0), UiTheme.BTN_HELD_BORDER, false, 2.0)
 	if target_mark == "valid" or target_mark == "lit":
-		bw = 4 if target_mark == "lit" or cursor else 3
-		UiTheme.draw_outline(self, r, Color(1.0, 0.95, 0.55), bw, UiTheme.WIN_CHAMFER)
-	# 직업색 띠
-	UiTheme.fill_top_round(self, Rect2(bw + 4, bw, size.x - 2 * bw - 8, 10), cc if not down else cc.darkened(0.6), 6)
+		var tw := 4.0 if target_mark == "lit" or cursor else 3.0
+		draw_rect(r.grow(-tw * 0.5), Color(1.0, 0.95, 0.55), false, tw)
 	if cursor and target_mark != "invalid":
-		UiTheme.draw_outline(self, r.grow(-7), Color(1, 1, 1, 0.9), 2)
-	var fg := MEMBER_TEXT
-	if down or dim:
-		fg = UiTheme.GLASS_DIM_TEXT
-	var x0 := 14.0
-	var w := size.x - 28.0
-	draw_string(font, Vector2(x0, 35), u.name, HORIZONTAL_ALIGNMENT_LEFT, w * 0.62, 19, fg)
-	if not command_text.is_empty():
-		draw_string(font, Vector2(x0 + w * 0.5, 35), command_text, HORIZONTAL_ALIGNMENT_RIGHT, w * 0.5, 16, COMMAND_TEXT)
-	draw_string(font, Vector2(x0, 55), "HP", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, fg)
-	draw_string(font, Vector2(x0, 55), "%d/%d" % [roundi(shown_hp), u.max_hp], HORIZONTAL_ALIGNMENT_RIGHT, w, 17, fg)
-	_bar(Rect2(x0, 60, w, 9), shown_hp / maxf(1.0, u.max_hp), hp_bar_color(), down)
-	draw_string(font, Vector2(x0, 85), "TP", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, fg)
-	draw_string(font, Vector2(x0, 85), "%d/%d" % [roundi(shown_tp), u.max_tp], HORIZONTAL_ALIGNMENT_RIGHT, w, 15, fg)
-	_bar(Rect2(x0, 90, w, 6), shown_tp / maxf(1.0, u.max_tp), UiTheme.TP_BAR, down)
-	if down:
-		draw_string(font, Vector2(x0, MEMBER_CHIP_TOP + 18), display.texts.t("battle.ui.down"), HORIZONTAL_ALIGNMENT_LEFT, w, 16, UiTheme.GLASS_DOWN_TEXT)
-	else:
-		_draw_chips(drawn_chips())
-	if dim and not reason.is_empty():
-		draw_string_outline(font, Vector2(0, size.y * 0.5 + 6), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, 5, Color(0, 0, 0, 0.9))
-		draw_string(font, Vector2(0, size.y * 0.5 + 6), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, REASON_TEXT)
+		draw_rect(r.grow(-6.0), Color(1, 1, 1, 0.9), false, 2.0)
+	if dim:
+		draw_rect(r, Color(0, 0, 0, 0.45))
+		if not reason.is_empty():
+			draw_string_outline(font, Vector2(0, size.y * 0.5 + 6), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, 5, Color(0, 0, 0, 0.9))
+			draw_string(font, Vector2(0, size.y * 0.5 + 6), reason, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, REASON_TEXT)
 
 
 ## 적 자리 상자(색 상자 그대로).
@@ -257,20 +317,36 @@ func _bar(r: Rect2, ratio: float, color: Color, dim: bool) -> void:
 	draw_rect(r, Color(0.45, 0.52, 0.56), false, 1.0)
 
 
-## 딱지를 놓을 자리(칸 안 좌표).
+## 딱지를 놓을 자리(칸 안 좌표). 적: 칸 아래쪽 두 줄. 아군: 머리 줄 왼쪽 네모(원작 카드의 네모 자리).
 func chip_area() -> Rect2:
 	if is_enemy():
-		return Rect2(8, size.y - ENEMY_BAR_FROM_BOTTOM + 16.0, size.x - 16, CHIP_H * 2.0 + CHIP_GAP)
-	return Rect2(10, MEMBER_CHIP_TOP, size.x - 20, size.y - MEMBER_CHIP_TOP - 4.0)
+		var h := CHIP_H * 2.0 + CHIP_GAP
+		return Rect2(8, size.y - 8.0 - h, size.x - 16, h)
+	return square_rect()
 
 
 ## 실제로 그리는 딱지: [{text, kind, rect}]. 다 못 놓으면 마지막이 {kind: "more", text: "+N", hidden: N}.
+## 아군 카드는 네모 하나에 첫 상태(글자 첫 자, 종류 색)와 그 아래 「+N」(나머지 수)만 둔다. 전체는 로그 창 위 상태 목록에서 본다.
 ## 쓰러진 대원은 딱지가 없다(상태가 지워진다).
 func drawn_chips() -> Array[Dictionary]:
 	var u := unit()
 	if u == null or not u.alive():
 		return []
-	return layout_chips(display.chips(u), chip_area(), get_theme_default_font())
+	var chips := display.chips(u)
+	if is_enemy():
+		return layout_chips(chips, chip_area(), get_theme_default_font())
+	var out: Array[Dictionary] = []
+	if chips.is_empty():
+		return out
+	var sq := square_rect()
+	var more := chips.size() - 1
+	var first := chips[0].duplicate()
+	first["rect"] = Rect2(sq.position, Vector2(sq.size.x, sq.size.y - (MORE_H if more > 0 else 0.0)))
+	first["glyph"] = str(first["text"]).left(1)
+	out.append(first)
+	if more > 0:
+		out.append({"text": "+%d" % more, "kind": "more", "hidden": more, "rect": Rect2(sq.position.x, sq.end.y - MORE_H, sq.size.x, MORE_H)})
+	return out
 
 
 static func chip_width(font: Font, c: Dictionary) -> float:
@@ -330,6 +406,14 @@ func _draw_chips(chips: Array[Dictionary]) -> void:
 				col = Color(0.5, 0.2, 0.2)
 			"more":
 				col = Color(0.3, 0.33, 0.38)
+		if c.has("glyph"):
+			draw_rect(r, col)
+			draw_string(font, Vector2(r.position.x, r.get_center().y + GLYPH_FS * 0.36), str(c["glyph"]), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, GLYPH_FS, Color(1, 1, 1))
+			continue
+		if c["kind"] == "more" and not is_enemy():
+			draw_rect(r, col)
+			draw_string(font, Vector2(r.position.x, r.end.y - 3.0), str(c["text"]), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, MORE_FS, Color(1, 1, 1))
+			continue
 		UiTheme.fill_round(self, r, col, 5)
 		var tx := r.position.x + CHIP_PAD
 		if c["kind"] == "buff" or c["kind"] == "debuff":

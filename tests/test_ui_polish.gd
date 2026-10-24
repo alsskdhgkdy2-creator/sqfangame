@@ -73,14 +73,16 @@ func test_battle_parts_stay_inside_and_apart_at_both_sizes() -> void:
 		var screen := Rect2(Vector2.ZERO, sz)
 		var enemy := _rect(layer.enemy_area)
 		var panel := _rect(layer.panel)
-		var info := _rect(layer.skill_info)
+		var banner := layer.banner_rect()
 		var cards := _rect(layer.party_cards)
-		for pair in [["적 영역", enemy], ["명령 칸", panel], ["설명 칸", info], ["대원 칸", cards], ["로그 단추", _rect(layer.log_button)], ["로그 창", _rect(layer.log_view)]]:
+		for pair in [["적 영역", enemy], ["명령 목록", panel], ["메시지 띠", banner], ["대원 칸", cards], ["로그 단추", _rect(layer.log_button)],
+				["로그 창", _rect(layer.log_view)], ["초상", _rect(layer.portrait)], ["미니맵", _rect(layer.minimap)]]:
 			check(screen.encloses(pair[1]), "%s: %s %s 이 화면 안" % [str(sz), pair[0], str(pair[1])])
-		check(not enemy.intersects(panel) and not info.intersects(panel), "%s: 적 영역·설명 칸은 명령 칸과 겹치지 않는다" % str(sz))
-		check(not info.intersects(enemy) and not info.intersects(cards), "%s: 설명 칸은 적 영역과 대원 칸 사이" % str(sz))
-		var toast := Rect2(0, BattleLayer.TOAST_Y, sz.x, BattleLayer.TOAST_H)
-		check(screen.encloses(toast) and toast.end.y <= info.position.y, "%s: 알림 줄은 화면 안, 설명 칸 위" % str(sz))
+		check(not enemy.intersects(panel) and not banner.intersects(panel), "%s: 적 영역·메시지 띠는 명령 목록과 겹치지 않는다" % str(sz))
+		check(not banner.intersects(enemy) and enemy.end.y <= layer.party_cards.cards[0].get_global_rect().position.y, "%s: 적 영역은 띠 아래·카드 위" % str(sz))
+		var toast := Rect2(BattleLayer.TOAST_LEFT, BattleLayer.TOAST_Y, sz.x - 8.0 - BattleLayer.TOAST_LEFT, BattleLayer.TOAST_H)
+		check(screen.encloses(toast) and toast.position.y >= banner.end.y and not toast.intersects(_rect(layer.log_button)),
+			"%s: 알림 줄은 화면 안, 메시지 띠 아래, 로그 단추 옆" % str(sz))
 		for c in layer.enemy_area.get_children():
 			if c is BattleCard:
 				check(enemy.encloses(_rect(c)), "%s: 적 칸 %s 은 적 영역 안" % [str(sz), c.name])
@@ -211,10 +213,11 @@ func test_highlighted_skill_shows_description_and_target_keeps_it() -> void:
 	await _step("command", 0)
 	await _step("target", {"side": BattleUnit.ENEMY, "slot": 0})
 	check_eq([l.member, l.sub], [1, "menu"], "준비: 듀얼리스트 A 명령")
-	check(not l.skill_info.visible, "명령 고르기에는 설명 칸이 없다")
+	check(not l.skill_info_shown(), "명령 고르기에는 설명이 없다(띠는 물음)")
 	await _step("command", 1)
 	check_eq(l.sub, "skills", "스킬 목록")
-	check(l.skill_info.visible, "스킬 목록 → 설명 칸")
+	check(l.skill_info_shown(), "스킬 목록 → 설명")
+	check_eq(l.banner_lines().slice(0, 2), [l.skill_info_title, l.skill_info_text], "설명은 메시지 띠에")
 	var s := l.state.defs.battle.skill(HIGH_SLASH)
 	check_eq(l.skill_info_title, "하이 슬래시  Lv 1  TP %d" % int(s.level_row(1)["tp"]), "머리: 이름·레벨·TP")
 	check_eq(l.skill_info_text, SkillSummary.line(texts, s, 1), "설명은 SkillSummary 한 곳에서")
@@ -226,21 +229,22 @@ func test_highlighted_skill_shows_description_and_target_keeps_it() -> void:
 	check(l.skill_info_text.contains("이동부 잠금 45%"), "레벨 2 봉인 확률이 정의에서")
 	await _step("confirm")
 	check_eq(l.sub, "target", "대상 고르기")
-	check(l.skill_info.visible and l.skill_info_title.begins_with("레그 커터"), "목록에서 고른 스킬의 대상 고르기 동안 설명 그대로")
+	check(l.skill_info_shown() and l.skill_info_title.begins_with("레그 커터"), "목록에서 고른 스킬의 대상 고르기 동안 설명 그대로")
+	check_eq(l.banner_lines()[1], l.skill_info_text, "대상 고르기 띠 둘째 줄 = 그 스킬 설명")
 	await _step("log")
-	check(not l.skill_info.visible, "로그 창이 열리면 감춘다")
+	check(not l.skill_info_shown(), "로그 창이 열리면 감춘다")
 	await _step("log_close")
 	await _step("back")
 	await _step("back")
 	check_eq(l.sub, "menu", "명령으로 돌아옴")
 	await _step("command", 0)
-	check(l.sub == "target" and not l.skill_info.visible, "일반 공격의 대상 고르기에는 설명 칸이 없다")
+	check(l.sub == "target" and not l.skill_info_shown(), "일반 공격의 대상 고르기에는 설명이 없다")
 	var dbg: Dictionary = l.debug_info(func(_p, _c): return [0, 0])
 	check_eq(dbg["skill_info"], [], "디버그 정보도 비어 있음")
 
 
 ## 스킬이 여섯이어도 목록은 「뒤로」 위 영역 안: 넘치는 줄은 커서·끌기로 내려 본다(전에는 「뒤로」와 패널 밖으로 넘쳤다).
-func test_long_skill_list_scrolls_above_back_button() -> void:
+func test_long_skill_list_scrolls_in_its_panel() -> void:
 	var l := await _layer(Vector2(1280, 720))
 	var u := l.state.battle.party[1]
 	for sid in [LEG_CUTTER, "skill.blade_duelist.quick_draw", "skill.glyph_wizard.heat_glyph"]:
@@ -252,8 +256,10 @@ func test_long_skill_list_scrolls_above_back_button() -> void:
 	var n := l._skill_ids().size()
 	check_eq(n, 6, "준비: 스킬 여섯")
 	var list := _rect(p.skill_list)
-	check(list.end.y <= _rect(p.back_button).position.y, "목록은 「뒤로」 위에서 끝난다")
-	check(_rect(p).encloses(list), "목록은 패널 안")
+	# M2.7 R3 fix1(gs2_653224): 스킬 목록은 명령 목록 오른쪽의 따로 된 판 안, 판 아래는 파티 카드 위.
+	check(_rect(p.skill_panel).encloses(list), "목록은 스킬 판 안")
+	check(list.end.y <= _rect(l.party_cards.cards[0]).position.y, "목록은 파티 카드 위에서 끝난다")
+	check(not list.intersects(_rect(p.back_button)), "목록은 「뒤로」와 겹치지 않는다")
 	check(p.skill_list.max_scroll() > 0.0, "넘치면 내릴 수 있다")
 	for i in n - 1:
 		await _step("cursor", 1)
@@ -343,13 +349,13 @@ func test_tapping_blocked_row_moves_cursor_and_description() -> void:
 func test_playback_hides_command_panel_and_description() -> void:
 	var l := await _layer(Vector2(1280, 720), 1.0)
 	await _step("command", 1)
-	check(l.panel.visible and l.skill_info.visible, "준비: 스킬 목록·설명")
+	check(l.panel.visible and l.skill_info_shown(), "준비: 스킬 목록·설명")
 	await _step("back")
 	l.handle("commands", BattlePolicy.choose(l.state, BattlePolicy.DEFAULT))
 	await kit.frames(2)
 	check_eq(l.phase, "anim", "연출 중")
 	check(not l.panel.visible, "연출 중에는 명령 칸이 없다")
-	check(not l.skill_info.visible, "설명 칸도 없다")
+	check(not l.skill_info_shown() and not l.portrait.visible, "설명·초상도 없다")
 	check(l.enemy_area.visible and l.party_cards.visible, "무대(적)·대원 칸은 보인다")
 	check(l.visible_buttons().is_empty(), "누를 단추 없음(건너뛰기는 화면 누르기)")
 	check_eq(l.debug_info(func(_p, _c): return [0, 0])["panel"], false, "디버그 정보: panel false")
@@ -530,11 +536,9 @@ func test_every_member_hp_bar_uses_the_rule() -> void:
 		await kit.press_key(KEY_W)
 	check(s.battle_layer.is_open(), "준비: 전투")
 	await kit.frames(3)
+	# M2.7 R3: 전투 카드 HP 막대는 원작처럼 비율과 상관없이 노랑 → 주황(HpColor 는 파티 메뉴·상태 칸만, R2 까지).
 	for c in s.battle_layer.party_cards.cards:
-		var u := c.unit()
-		check_eq(c.hp_bar_color(), HpColor.of(u.hp, u.max_hp), "전투 대원 칸 %s (%d/%d)" % [u.name, u.hp, u.max_hp])
-	check_eq(s.battle_layer.party_cards.cards[2].hp_bar_color(), HpColor.ORANGE, "16/52 = 30.8% → 주황")
-	check_eq(s.battle_layer.party_cards.cards[3].hp_bar_color(), HpColor.RED, "12/42 = 28.6% → 빨강")
+		check_eq(c.hp_bar_colors(), [UiTheme.CARD_HP_FROM, UiTheme.CARD_HP_TO], "전투 대원 칸 %s: 노랑 → 주황" % c.unit().name)
 
 
 # ---- 글꼴: 화면 문구의 모든 글자가 넣어 둔 글꼴에 있다 ----

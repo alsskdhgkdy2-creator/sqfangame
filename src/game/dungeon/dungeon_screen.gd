@@ -1178,11 +1178,11 @@ func _layout() -> void:
 		if not _map_open:
 			b.cancel()
 	if _battle_view:
-		# 전투 중: 전투 층 위 막대 바로 아래(BattleLayer.TOAST_Y), 화면 전체 폭.
+		# 전투 중: 전투 층 메시지 띠 아래, 로그 단추 오른쪽(BattleLayer.TOAST_Y·TOAST_LEFT) ~ 오른쪽 끝.
 		toast_area.offset_right = 0.0
 		_toast.set_anchors_preset(PRESET_TOP_WIDE)
-		_toast.offset_left = 0.0
-		_toast.offset_right = 0.0
+		_toast.offset_left = BattleLayer.TOAST_LEFT
+		_toast.offset_right = -8.0
 		_toast.offset_top = BattleLayer.TOAST_Y
 		_toast.offset_bottom = BattleLayer.TOAST_Y + BattleLayer.TOAST_H
 	else:

@@ -1,7 +1,11 @@
 ## 전투 층(06 §9): 미궁 화면 위에 덮는 전체 화면 Control. 바탕은 화면 전체 3D 시야(U1)를 UiTheme.BATTLE_DIM 으로 어둡게 한 것.
-## 층 겹침(M2.6 2.5단계, research 04): 트리 순서 = 그리는 순서 = 누르는 순서(z_index 를 쓰지 않는다).
-##   L0 바탕(어둡게, _draw) · L1 적 칸(enemy_area) · L2 HUD(턴 문패 _draw, 파티 카드 party_cards, 로그 단추) ·
-##   L3 창(명령 창 panel·스킬 설명 띠 skill_info·로그 창) · L4 결과 창 · 건너뛰기 받개 · L5 알림·연출 띠(hud_toast, 누르기 없음).
+## 배치(M2.7 R3, 원작 HD 1868180_0e36b17e 를 1280×720 으로 옮김, 앵커로 붙인다. 논리 높이는 늘 720):
+##   왼쪽 위 턴 문패 · 위 메시지 띠(x 193 → 오른쪽 끝, y 0~100: 명령 단계 물음·스킬 설명·대상 안내·연출 글·안내) ·
+##   그 아래 안내 줄(로그 단추, 원작 INFO 자리) · 왼쪽 초상(지금 대원) + 그 아래 TP 게이지 · 초상 오른쪽 명령 목록(오른쪽이 굽은 줄) ·
+##   명령 목록 오른쪽 영역 가운데 적 칸 · 아래 가운데 파티 카드 두 줄(윗줄 전열) · 오른쪽 아래 미니맵.
+## 층 겹침(research 04): 트리 순서 = 그리는 순서 = 누르는 순서(z_index 를 쓰지 않는다).
+##   바탕(어둡게 + 메시지 띠 + 턴 문패, _draw) · 적 칸(enemy_area, 그 위 HP 표) · 파티 카드 · 미니맵 · 초상 · 명령 목록 · 로그 단추 ·
+##   로그 창 · 결과 창 · 건너뛰기 받개. 띠·문패·초상·미니맵·HP 표는 누르기를 받지 않는다.
 ## 상태는 규칙 함수(BattleRules)로만 바꾸고, 그리는 값은 BattleDisplay 에서 읽는다(06 §8.1).
 ##
 ## 입력 입구 하나(06 §9.5, 05 §9.3): 명령 단추·스킬 목록·대상 누르기·키보드·「실행」·「뒤로」·건너뛰기·로그·결과 확인이
@@ -19,35 +23,44 @@ signal closed(outcome: String)
 ## 제출이 받아들여졌다(저장 갈고리 뒤, 연출 전). 시험·디버그용.
 signal submitted(events: Array)
 
-## 적 영역 위(턴 문패 줄 아래).
-const TOP_H := 64.0
-const PANEL_W := 340.0
-## 명령 창: 오른쪽 여백, 위 가장자리(이름 문패가 걸친다), 아래쪽 대원 카드 위로 겹쳐도 되는 폭(창 테두리만 겹친다: 단추는 겹치지 않는다).
-const PANEL_MARGIN := 8.0
-const PANEL_TOP := 96.0
-const PANEL_OVERLAP := 12.0
-## 로그 창 아래(예전 명령 칸 아래 끝).
-const PANEL_BOTTOM := 516.0
-const ENEMY_BOTTOM := 420.0
-## 파티 카드 영역 위(카드는 그 안 아래쪽에 붙는다, PartyCards).
-const PARTY_TOP := 516.0
-const LOG_BUTTON := Vector2(80, 64)
-## 턴 문패(왼쪽 위)와 위쪽 알림·연출 띠.
-const TURN_PLATE := Rect2(12, 12, 150, 44)
-const TURN_FS := 24
-const BANNER_Y := 14.0
-const BANNER_H := 40.0
-const BANNER_FS := 22
-## 연출 알림 글자 · 안내(못 고르는 이유 등) 글자(BANNER_FILL 위).
-const ANNOUNCE_TEXT := Color(1.0, 0.95, 0.7)
-const NOTICE_TEXT := Color(1.0, 0.7, 0.5)
-## 명령 창 가장 작은 높이에 더하는 것(「뒤로」 하나 + 여백).
-const BACK_MIN_H := 96.0
+## 위 메시지 띠: 왼쪽 끝 x(그 왼쪽은 턴 문패), 높이, 글자 크기(첫 줄·둘째 줄), 글자 왼쪽 여백.
+const BANNER_X := 193.0
+const BANNER_H := 100.0
+const BANNER_FS := 30
+const BANNER_SUB_FS := 20
+const BANNER_PAD := 34.0
+## 턴 문패(원작은 시계 다이얼 아래, 다이얼이 없어 그 자리까지 올렸다): 큰 숫자 + 「턴」.
+const TURN_PLATE := Rect2(16, 10, 164, 84)
+const TURN_FS := 40
+const TURN_LABEL_FS := 18
+## 안내 줄(원작 INFO / MAP / AUTO 알약 자리): 띠 바로 아래, 로그 단추.
+const HINT_Y := BANNER_H + 4.0
+const LOG_BUTTON := Vector2(120, 64)
+## 초상(왼쪽, MemberPortrait)·명령 목록(초상 오른쪽, 초상 오른쪽 끝을 조금 덮는다): 위 y, 목록 x·폭·높이.
+const LIST_TOP := HINT_Y + 64.0 + 4.0
+const LIST_X := 170.0
+const LIST_W := 323.0
+const LIST_H := 356.0
+## 미니맵(오른쪽 아래, 원작 x 1033~1260 · y 507~667): 크기, 오른쪽·아래 여백.
+const MINIMAP := Vector2(227, 160)
+const MINIMAP_RIGHT := 20.0
+const MINIMAP_BOTTOM := 53.0
+## 스킬 판(원작 III HD gs2_653224): 명령 목록 원호 오른쪽, 위는 「스킬」 줄 위, 아래는 파티 카드 위 − 8. x·폭.
+const SKILL_X := 470.0
+const SKILL_W := 410.0
+## 적 영역: 명령 목록 오른쪽 ~ 미니맵 열 왼쪽(적 칸이 미니맵과 겹치지 않는다), 위는 목록 위와 같다.
+const ENEMY_LEFT := LIST_X + LIST_W + 7.0
+const ENEMY_RIGHT := MINIMAP_RIGHT + MINIMAP.x + 8.0
+## 연출 알림 글자 · 안내(못 고르는 이유 등) 글자(메시지 띠 위).
+const ANNOUNCE_TEXT := UiTheme.BATTLE_BANNER_TEXT
+const NOTICE_TEXT := UiTheme.BATTLE_BANNER_NOTICE
 const NOTICE_SEC := 2.0
 ## 연출 한 단계의 길이(초, anim_speed 1). 행동 하나 약 0.6초, 독 한 번 약 0.3초(06 §9.3).
 const STEP_SEC := {"action": 0.6, "failed": 0.5, "idle": 0.4, "guarding": 0.35, "poison_tick": 0.3, "turn_end": 0.15, "": 0.3}
 ## 새 연출 단계를 여는 이벤트. 나머지는 앞 단계에 붙는다.
 const HEADS := ["action", "failed", "idle", "guarding", "poison_tick", "turn_end"]
+## 행동하는 쪽이 있는 단계(그 대원 카드에 시안 틀). 독·턴 끝은 행동이 아니다.
+const ACTOR_HEADS := ["action", "failed", "idle", "guarding"]
 ## 상세 이벤트를 단계 안 어느 시점에 보이는지(단계 길이의 비율).
 const DETAIL_AT := 0.35
 ## 대상을 묻지 않고 바로 확정하는 대상 규칙(06 §9.2).
@@ -64,11 +77,10 @@ const RESULT_TITLE_FS := 26
 const RESULT_TOP := 40.0
 const RESULT_GAP := 12.0
 const RESULT_BOTTOM := 20.0
-## 탐색 화면이 전투 중 알림 줄(저장 실패 등)을 띄우는 자리: 위 막대 바로 아래, 높이 TOAST_H. 결과 창은 이 줄 아래에 둔다.
-const TOAST_Y := TOP_H + 8.0
+## 탐색 화면이 전투 중 알림 줄(저장 실패 등)을 띄우는 자리: 메시지 띠 아래, 로그 단추 오른쪽, 높이 TOAST_H. 결과 창은 이 줄 아래에 둔다.
+const TOAST_Y := HINT_Y
+const TOAST_LEFT := BANNER_X + LOG_BUTTON.x + 16.0
 const TOAST_H := 36.0
-## 스킬 설명 칸(적 영역 아래 ~ 대원 칸 위, 스킬 목록·그 스킬의 대상 고르기 동안).
-const INFO_GAP := 6.0
 
 # ---- 바깥에서 정하는 값 ----
 ## 0 이면 연출을 바로 끝 상태로 맞춘다(시험).
@@ -109,8 +121,11 @@ var accepted_inputs := 0
 var enemy_area: EnemyArea
 var party_cards: PartyCards
 var panel: CommandPanel
-## 스킬 설명 칸(누르기를 받지 않는다). 머리(이름·Lv·TP)와 설명 한 줄(SkillSummary).
-var skill_info: Control
+## 지금 대원의 초상 + TP 게이지(누르기 없음).
+var portrait: MemberPortrait
+## 오른쪽 아래 미니맵(탐색 화면과 같은 부품·같은 지도, 누르기 없음).
+var minimap: MapOverview
+## 스킬 설명(메시지 띠에 보인다): 머리(이름·Lv·TP)와 설명 한 줄(SkillSummary). 비어 있으면 설명 없음.
 var skill_info_title := ""
 var skill_info_text := ""
 var log_button: BattleButton
@@ -120,8 +135,6 @@ var result_ok: BattleButton
 var skip_catcher: Control
 ## 결과 창 제목 문패(창 위 가장자리에 걸친다).
 var _result_title := UiPlate.new()
-## L5 알림·연출 띠(맨 위, 누르기를 받지 않는다).
-var hud_toast: Control
 var _result_body := RichTextLabel.new()
 ## 결과 본문(넘치면 끌어 내린다, 07 §9.6).
 var result_scroll: PartyScroll
@@ -135,6 +148,8 @@ var _input_frame := -1
 var _notice := ""
 var _notice_left := 0.0
 var _announce := ""
+## 연출 중 지금 행동하는 대원 칸(-1 = 없음·적 차례). 그 카드에 지금 대원과 같은 시안 틀(원작 1810820_1f51fd75).
+var _actor := -1
 ## 입력 문맥(단계·명령 단계·대원·대상 스킬·로그·결과 창). 바뀌면 눌려 있던 포인터를 모두 버린다.
 var _context := ""
 
@@ -159,28 +174,33 @@ func build(text_db: TextDb) -> void:
 	enemy_area = EnemyArea.new()
 	enemy_area.name = "EnemyArea"
 	add_child(enemy_area)
+	_place(enemy_area, Vector2(0, 0), Vector2(1, 0), Vector4(ENEMY_LEFT, LIST_TOP, -ENEMY_RIGHT, LIST_TOP + EnemyArea.FRONT_TOP + EnemyArea.FRONT_SIZE))
 	party_cards = PartyCards.new()
 	party_cards.name = "PartyCards"
 	add_child(party_cards)
-	# L2 HUD 의 로그 단추는 L3 창보다 앞(아래)에 둔다.
-	log_button = BattleButton.new()
-	log_button.name = "LogButton"
-	log_button.setup("", texts.t("battle.ui.log"))
-	log_button.font_size = 18
-	log_button.size = LOG_BUTTON
-	add_child(log_button)
-	log_button.activated.connect(func() -> void: handle("log"))
+	_place(party_cards, Vector2(0, 1), Vector2(1, 1), Vector4(0, -PartyCards.HEIGHT, 0, 0))
+	minimap = MapOverview.new().setup(true)
+	minimap.name = "MiniMap"
+	add_child(minimap)
+	_place(minimap, Vector2(1, 1), Vector2(1, 1), Vector4(-MINIMAP_RIGHT - MINIMAP.x, -MINIMAP_BOTTOM - MINIMAP.y, -MINIMAP_RIGHT, -MINIMAP_BOTTOM))
+	portrait = MemberPortrait.new()
+	portrait.name = "Portrait"
+	add_child(portrait)
+	_place(portrait, Vector2.ZERO, Vector2.ZERO, Vector4(0, LIST_TOP, MemberPortrait.SIZE.x, LIST_TOP + MemberPortrait.SIZE.y))
 	panel = CommandPanel.new()
 	panel.name = "CommandPanel"
 	add_child(panel)
+	_place(panel, Vector2.ZERO, Vector2.ZERO, Vector4(LIST_X, LIST_TOP, LIST_X + LIST_W, LIST_TOP + LIST_H))
 	panel.build(texts)
 	panel.pressed.connect(_on_panel)
-	skill_info = Control.new()
-	skill_info.name = "SkillInfo"
-	skill_info.mouse_filter = MOUSE_FILTER_IGNORE
-	skill_info.visible = false
-	skill_info.draw.connect(_draw_skill_info)
-	add_child(skill_info)
+	log_button = BattleButton.new()
+	log_button.name = "LogButton"
+	log_button.setup("", texts.t("battle.ui.log"))
+	log_button.skin = "hint"
+	log_button.font_size = 20
+	add_child(log_button)
+	_place(log_button, Vector2.ZERO, Vector2.ZERO, Vector4(BANNER_X, HINT_Y, BANNER_X + LOG_BUTTON.x, HINT_Y + LOG_BUTTON.y))
+	log_button.activated.connect(func() -> void: handle("log"))
 	log_view = BattleLogView.new()
 	log_view.name = "BattleLog"
 	add_child(log_view)
@@ -193,12 +213,20 @@ func build(text_db: TextDb) -> void:
 	skip_catcher.visible = false
 	skip_catcher.gui_input.connect(_on_catcher_input)
 	add_child(skip_catcher)
-	hud_toast = Control.new()
-	hud_toast.name = "HudToast"
-	hud_toast.mouse_filter = MOUSE_FILTER_IGNORE
-	hud_toast.draw.connect(_draw_toast)
-	add_child(hud_toast)
+	skip_catcher.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	_layout()
+
+
+## 앵커(왼쪽 위·오른쪽 아래 비율)와 여백(left, top, right, bottom).
+static func _place(c: Control, a0: Vector2, a1: Vector2, off: Vector4) -> void:
+	c.anchor_left = a0.x
+	c.anchor_top = a0.y
+	c.anchor_right = a1.x
+	c.anchor_bottom = a1.y
+	c.offset_left = off.x
+	c.offset_top = off.y
+	c.offset_right = off.z
+	c.offset_bottom = off.w
 
 
 func _build_result() -> void:
@@ -252,6 +280,8 @@ func open(s: ExplorationState) -> void:
 	display = BattleDisplay.from_state(s, texts)
 	enemy_area.setup(display)
 	party_cards.setup(display, s.defs.party.class_ids)
+	minimap.set_state(s)
+	minimap.refresh()
 	for c in _all_cards():
 		c.activated.connect(_on_card.bind(c.unit_ref))
 		c.snap()
@@ -633,8 +663,8 @@ func _show_notice(t: String) -> void:
 func _submit() -> void:
 	var events := BattleRules.submit(state, commands.duplicate(true))
 	if events.size() == 1 and events[0]["type"] == "rejected":
-		_show_notice(texts.t("battle.ui.rejected", {"reason": str(events[0].get("reason", ""))}))
 		_begin_turn()
+		_show_notice(texts.t("battle.ui.rejected", {"reason": str(events[0].get("reason", ""))}))
 		return
 	_commit(events)
 
@@ -671,6 +701,7 @@ func _start_anim(events: Array[Dictionary]) -> void:
 	_step_t = 0.0
 	_announce = ""
 	_notice = ""
+	_actor = -1
 	skip_catcher.visible = true
 	_refresh()
 	if anim_speed <= 0.0:
@@ -726,6 +757,8 @@ func _begin_step(st: Dictionary, animate: bool) -> void:
 	var line := display.describe(head)
 	if not line.is_empty() and head["type"] != "turn_end":
 		_announce = line
+	var actor: Variant = head.get("unit")
+	_actor = int(actor["slot"]) if ACTOR_HEADS.has(head["type"]) and typeof(actor) == TYPE_DICTIONARY and actor.get("side") == BattleUnit.PARTY else -1
 	if animate:
 		var who: Variant = head.get("unit", head.get("target"))
 		var c := _card_of(who)
@@ -786,6 +819,7 @@ func _skip() -> void:
 func _end_anim() -> void:
 	skip_catcher.visible = false
 	_announce = ""
+	_actor = -1
 	end_event = {}
 	for ev in last_events:
 		if ev["type"] == "battle_end":
@@ -960,9 +994,13 @@ func _refresh() -> void:
 	if ctx != _context:
 		_context = ctx
 		_cancel_pointers()
+		# 앞 문맥의 안내(「적이 나타났다」·못 고르는 이유)는 메시지 띠에서 지운다: 띠는 새 문맥의 물음·설명을 보인다.
+		_notice = ""
+		_notice_left = 0.0
 	_refresh_cards()
 	_refresh_panel()
 	_refresh_skill_info()
+	_refresh_portrait()
 	_redraw_hud()
 
 
@@ -994,11 +1032,11 @@ func _refresh_cards() -> void:
 		c.disabled = not (phase == "command" and sub == "target" and not log_view.visible and c.unit_ref["side"] == target_side)
 		if not c.is_enemy():
 			var i: int = c.unit_ref["slot"]
-			c.current = phase == "command" and i == member
+			c.current = (phase == "command" and i == member) or (phase == "anim" and i == _actor)
 			c.command_text = _command_label(commands[i]) if phase == "command" and i < commands.size() else ""
 		c.queue_redraw()
 	party_cards.refresh()
-	_fit_panel()
+	enemy_area.refresh_tag()
 
 
 func _command_label(c: Variant) -> String:
@@ -1022,11 +1060,9 @@ func _refresh_panel() -> void:
 		panel.show_none()
 		return
 	if sub == "confirm":
-		panel.show_confirm(texts.t("battle.ui.ready"))
+		panel.show_confirm()
 		return
-	var u := display.party[member]
-	var title := u.name
-	var tp_text := "TP %d/%d" % [u.tp, u.max_tp]
+	var title := display.party[member].name
 	match sub:
 		"menu":
 			var blocked := {}
@@ -1036,7 +1072,7 @@ func _refresh_panel() -> void:
 			why = BattleRules.escape_block_reason(state, member)
 			if not why.is_empty():
 				blocked[3] = _reason_text(why)
-			panel.show_menu(title, tp_text, cursor, _prev_commandable(member) >= 0, blocked)
+			panel.show_menu(title, cursor, _prev_commandable(member) >= 0, blocked)
 		"skills":
 			var rows := []
 			for sid in _skill_ids():
@@ -1044,13 +1080,23 @@ func _refresh_panel() -> void:
 				var why := BattleRules.skill_block_reason(state, member, sid)
 				rows.append({"id": sid, "name": texts.t(s.name_key), "tp": BattleRules.tp_cost(state.battle.party[member], s),
 					"reason": _reason_text(why) if not why.is_empty() else ""})
-			panel.show_skills(title, tp_text, rows, cursor)
+			panel.show_skills(title, rows, cursor)
 		"target":
-			panel.show_target(title, texts.t("battle.ui.choose_target", {"skill": display.skill_name(target_skill)}))
+			panel.show_target(title, 1 if target_from_skills else 0)
+
+
+## 초상·TP 게이지: 명령을 고르는 대원이 있을 때만(연출·결과·모두 고른 뒤에는 감춘다, 원작 1810820_1f51fd75).
+func _refresh_portrait() -> void:
+	var on := phase == "command" and member >= 0 and not log_view.visible
+	portrait.visible = on
+	if on:
+		var u := display.party[member]
+		var cid: String = party_cards.cards[member].class_id
+		portrait.show_member(u.name, BattleCard.CLASS_COLORS.get(cid, Color(0.7, 0.7, 0.7)), u.tp, u.max_tp)
 
 
 ## 스킬 목록에서 커서가 있는 스킬, 또는 목록에서 고른 스킬의 대상 고르기 동안 그 스킬 설명(06 §9.2, M2.6 U2).
-## 숫자는 SkillSummary 가 스킬 정의에서 읽는다. 로그 창이 열리면 감춘다(같은 자리를 덮는다).
+## 숫자는 SkillSummary 가 스킬 정의에서 읽는다. 메시지 띠에 보인다(원작에 스킬 목록 화면이 없어 가장 가까운 메시지 자리). 로그 창이 열리면 감춘다.
 func _refresh_skill_info() -> void:
 	var sid := ""
 	if phase == "command" and not log_view.visible:
@@ -1060,7 +1106,6 @@ func _refresh_skill_info() -> void:
 				sid = ids[cursor]
 		elif sub == "target" and target_from_skills:
 			sid = target_skill
-	skill_info.visible = not sid.is_empty()
 	if sid.is_empty():
 		skill_info_title = ""
 		skill_info_text = ""
@@ -1069,38 +1114,27 @@ func _refresh_skill_info() -> void:
 	var level := int(state.battle.party[member].skills.get(sid, 1))
 	skill_info_title = SkillSummary.head(texts, s, level)
 	skill_info_text = SkillSummary.line(texts, s, level)
-	skill_info.queue_redraw()
 
 
-func _draw_skill_info() -> void:
-	UiTheme.draw_glass(skill_info, Rect2(Vector2.ZERO, skill_info.size))
-	var font := get_theme_default_font()
-	var w := skill_info.size.x - 32.0
-	skill_info.draw_string(font, Vector2(16, 30), skill_info_title, HORIZONTAL_ALIGNMENT_LEFT, w, 19, UiTheme.HEAD_TEXT)
-	skill_info.draw_multiline_string(font, Vector2(16, 58), skill_info_text, HORIZONTAL_ALIGNMENT_LEFT, w, 17, 2, UiTheme.TEXT)
+## 스킬 설명이 보이는지(메시지 띠).
+func skill_info_shown() -> bool:
+	return not skill_info_title.is_empty()
 
 
+## 앵커가 못 하는 것만: 로그 창·결과 창 크기와 자리(결과 본문 높이에 맞춘다).
 func _layout() -> void:
 	if not _built:
 		return
 	var s := size
 	if s.x <= 0.0:
 		s = get_viewport_rect().size
-	var left_w := s.x - PANEL_W - PANEL_MARGIN
-	enemy_area.position = Vector2(0, TOP_H)
-	enemy_area.size = Vector2(left_w, ENEMY_BOTTOM - TOP_H)
-	skill_info.position = Vector2(16, ENEMY_BOTTOM + INFO_GAP)
-	skill_info.size = Vector2(left_w - 32, PARTY_TOP - ENEMY_BOTTOM - 2.0 * INFO_GAP)
-	party_cards.position = Vector2(0, PARTY_TOP)
-	party_cards.size = Vector2(s.x, s.y - PARTY_TOP)
-	panel.position = Vector2(s.x - PANEL_W - PANEL_MARGIN, PANEL_TOP)
-	_fit_panel()
-	log_button.position = Vector2(s.x - LOG_BUTTON.x - PANEL_MARGIN, PANEL_MARGIN)
-	hud_toast.position = Vector2.ZERO
-	hud_toast.size = s
-	log_view.position = Vector2(16, TOP_H + 8)
-	log_view.size = Vector2(s.x - 32, PANEL_BOTTOM - TOP_H - 8)
-	# 결과 창: 본문 줄이 많으면 높이를 늘리되 알림 줄 아래부터 화면 아래 8 안에 둔다(알림 줄과 위 막대를 가리지 않는다).
+	# 스킬 판: 「스킬」 줄 위 ~ 파티 카드 위 − 8(화면 높이를 따른다).
+	var skill_top := CommandPanel.row_y(1)
+	panel.set_skill_area(Rect2(SKILL_X - LIST_X, skill_top, SKILL_W, s.y - PartyCards.HEIGHT - 8.0 - LIST_TOP - skill_top))
+	# 로그 창: 안내 줄 아래 ~ 파티 카드 위, 화면 폭(원작에 없는 창: 지금 창 그대로).
+	log_view.position = Vector2(16, LIST_TOP)
+	log_view.size = Vector2(s.x - 32, s.y - PartyCards.HEIGHT - 8.0 - LIST_TOP)
+	# 결과 창: 본문 줄이 많으면 높이를 늘리되 알림 줄 아래부터 화면 아래 8 안에 둔다(메시지 띠·알림 줄을 가리지 않는다).
 	# 그래도 넘치면 본문을 끌어 내린다(07 §9.6).
 	var body_w := RESULT_W - 40.0
 	_result_body.size = Vector2(body_w, 0)
@@ -1110,7 +1144,8 @@ func _layout() -> void:
 	var clear_top := TOAST_Y + TOAST_H + 4.0 + _result_title.size.y / 2.0
 	var rp := Vector2(RESULT_W, clampf(chrome + body_h, RESULT_MIN_H, maxf(RESULT_MIN_H, s.y - 8.0 - clear_top)))
 	result_panel.size = rp
-	var py := roundf((PARTY_TOP - rp.y) / 2.0 + TOP_H / 2.0)
+	var party_top := s.y - PartyCards.HEIGHT
+	var py := roundf((party_top - LIST_TOP - rp.y) / 2.0 + LIST_TOP)
 	var low := maxf(8.0, s.y - 8.0 - rp.y)
 	result_panel.position = Vector2(roundf((s.x - rp.x) / 2.0), clampf(py, minf(clear_top, low), low))
 	_result_title.position = Vector2(roundf((rp.x - _result_title.size.x) / 2.0), -_result_title.size.y / 2.0)
@@ -1120,29 +1155,7 @@ func _layout() -> void:
 	_result_body.size = Vector2(body_w, body_h)
 	result_scroll.set_content_height(body_h)
 	result_ok.position = Vector2((rp.x - result_ok.size.x) / 2.0, rp.y - result_ok.size.y - RESULT_BOTTOM)
-	skip_catcher.position = Vector2.ZERO
-	skip_catcher.size = s
 	_redraw_hud()
-
-
-## 명령 창 높이: 내용에 맞추되 그 아래 대원 카드의 위 가장자리(+ PANEL_OVERLAP, 창 테두리만 겹친다)까지.
-## 창 아래에 보이는 열 문패가 있으면 그 문패 위까지(문패를 가리지 않는다).
-func _fit_panel() -> void:
-	var px := Rect2(panel.position.x, 0, PANEL_W, size.y)
-	var bottom := size.y - 8.0
-	if party_cards != null:
-		for i in party_cards.cards.size():
-			var c := party_cards.cards[i]
-			var r := Rect2(party_cards.position + c.position, c.size)
-			if r.position.x < px.end.x and r.end.x > px.position.x:
-				bottom = minf(bottom, r.position.y + PANEL_OVERLAP)
-			var p := party_cards.plates[i]
-			var pr := Rect2(party_cards.position + p.position, p.size)
-			if p.visible and pr.position.x < px.end.x and pr.end.x > px.position.x:
-				bottom = minf(bottom, pr.position.y - 2.0)
-	panel.size.x = PANEL_W
-	panel.max_height = maxf(UiTheme.PLATE_H + BACK_MIN_H, bottom - panel.position.y)
-	panel.fit_height(panel.skill_rows.filter(func(b: PartyButton) -> bool: return b.visible).size())
 
 
 ## 턴 문패 자리.
@@ -1150,10 +1163,39 @@ func turn_plate_rect() -> Rect2:
 	return TURN_PLATE
 
 
-## 위쪽 알림·연출 띠 자리(턴 문패와 로그 단추 사이).
+## 위 메시지 띠 자리(턴 문패 오른쪽 ~ 화면 오른쪽 끝).
 func banner_rect() -> Rect2:
-	var x0 := TURN_PLATE.end.x + 12.0
-	return Rect2(x0, BANNER_Y, maxf(0.0, log_button.position.x - 12.0 - x0), BANNER_H)
+	return Rect2(BANNER_X, 0, maxf(0.0, size.x - BANNER_X), BANNER_H)
+
+
+## 메시지 띠의 두 줄 [첫 줄, 둘째 줄, 둘째 줄이 안내인지]. 연출 중 = 행동 글, 명령 단계 = 물음·스킬 설명·대상 안내·준비 끝,
+## 결과 창 = 결과 제목. 안내(못 고르는 이유·제출 거부 등)가 있으면 둘째 줄을 안내로 바꾼다(첫 줄은 그대로).
+func banner_lines() -> Array:
+	var head := ""
+	var body := ""
+	match phase:
+		"anim":
+			head = _announce
+		"result":
+			head = _result_title.text
+		"command":
+			if log_view.visible:
+				head = texts.t("battle.ui.log")
+			elif skill_info_shown() and sub == "skills":
+				head = skill_info_title
+				body = skill_info_text
+			else:
+				match sub:
+					"menu", "skills":
+						head = texts.t("battle.ui.prompt", {"member": display.party[member].name})
+					"target":
+						head = texts.t("battle.ui.choose_target", {"skill": display.skill_name(target_skill)})
+						body = skill_info_text
+					"confirm":
+						head = texts.t("battle.ui.ready")
+	if phase != "anim" and not _notice.is_empty():
+		return [head, _notice, true]
+	return [head, body, false]
 
 
 ## 지금 띠에 보일 글(연출 중 알림, 아니면 안내).
@@ -1163,27 +1205,37 @@ func banner_text() -> String:
 
 func _redraw_hud() -> void:
 	queue_redraw()
-	if hud_toast != null:
-		hud_toast.queue_redraw()
 
 
+## 바탕: 어둡게 한 3D 시야, 위 메시지 띠(파랑 그라데이션, 왼쪽 아래 모서리를 깎는다), 턴 문패.
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), UiTheme.BATTLE_DIM)
 	if display == null:
 		return
-	UiTheme.draw_plate(self, TURN_PLATE, texts.t("battle.ui.turn", {"n": display.turn + 1}), TURN_FS, UiTheme.TEXT)
-
-
-## L5: 알림·연출 띠(창과 결과 창 위, 누르기를 받지 않는다).
-func _draw_toast() -> void:
-	var line := banner_text()
-	if line.is_empty() or phase == "closed":
-		return
-	var r := banner_rect()
-	UiTheme.draw_banner(hud_toast, r)
-	var col := ANNOUNCE_TEXT if phase == "anim" else NOTICE_TEXT
-	hud_toast.draw_string(get_theme_default_font(), Vector2(r.position.x, r.get_center().y + BANNER_FS * 0.36), line,
-		HORIZONTAL_ALIGNMENT_CENTER, r.size.x, BANNER_FS, col)
+	var font := get_theme_default_font()
+	var b := banner_rect()
+	var cut := 28.0
+	var pts := PackedVector2Array([b.position, Vector2(b.end.x, b.position.y), b.end, Vector2(b.position.x + cut, b.end.y),
+		Vector2(b.position.x, b.end.y - cut)])
+	var cols := PackedColorArray()
+	for p in pts:
+		cols.append(UiTheme.BATTLE_BANNER_TOP.lerp(UiTheme.BATTLE_BANNER_BOTTOM, p.y / BANNER_H))
+	draw_polygon(pts, cols)
+	draw_line(Vector2(b.position.x, b.end.y - 1.5), Vector2(b.end.x, b.end.y - 1.5), UiTheme.CMD_PLATE_EDGE, 3.0)
+	var lines := banner_lines()
+	var tw := b.size.x - 2.0 * BANNER_PAD
+	var head_y := 44.0 if not str(lines[1]).is_empty() else b.get_center().y + BANNER_FS * 0.36
+	draw_string(font, Vector2(b.position.x + BANNER_PAD, head_y), lines[0], HORIZONTAL_ALIGNMENT_LEFT, tw, BANNER_FS, ANNOUNCE_TEXT)
+	if not str(lines[1]).is_empty():
+		draw_string(font, Vector2(b.position.x + BANNER_PAD, 80.0), lines[1], HORIZONTAL_ALIGNMENT_LEFT, tw, BANNER_SUB_FS,
+			NOTICE_TEXT if lines[2] else ANNOUNCE_TEXT)
+	# 턴 문패: 둥근 남색 판, 큰 숫자, 아래 「턴」.
+	var t := TURN_PLATE
+	UiTheme.fill_round(self, t, UiTheme.TURN_FILL, 18, UiTheme.CMD_PLATE_EDGE, 2)
+	draw_string(font, Vector2(t.position.x, t.position.y + 44.0), str(display.turn + 1), HORIZONTAL_ALIGNMENT_CENTER, t.size.x, TURN_FS,
+		UiTheme.BATTLE_BANNER_TEXT)
+	draw_string(font, Vector2(t.position.x, t.end.y - 12.0), texts.t("battle.ui.turn_word"), HORIZONTAL_ALIGNMENT_CENTER, t.size.x,
+		TURN_LABEL_FS, UiTheme.BATTLE_BANNER_TEXT)
 
 
 ## 로그 창 위에 보이는 지금 상태 전부(06 §9.1 상태 표의 전체 보기). 적 HP 숫자는 쓰지 않는다(D13).
@@ -1220,6 +1272,9 @@ func visible_buttons() -> Array[TouchButton]:
 	for n in root_node.find_children("*", "TouchButton", true, false):
 		var b := n as TouchButton
 		if b.is_visible_in_tree() and b.mouse_filter != MOUSE_FILTER_IGNORE and not out.has(b):
+			# 스킬 판이 덮은 칸(적)은 누를 수 없다(판이 받는다).
+			if b is BattleCard and panel.skill_panel.is_visible_in_tree() and panel.skill_panel.get_global_rect().intersects(b.get_global_rect()):
+				continue
 			# 스킬 목록 줄은 목록 안에 다 보일 때만(잘려 안 보이는 줄의 가운데는 다른 것 위다)
 			if b is PartyButton and (b as PartyButton).scroller != null and not (b as PartyButton).scroller.shows(Rect2(b.position, b.size)):
 				continue
@@ -1244,4 +1299,4 @@ func debug_info(css: Callable) -> Dictionary:
 		"targets": target_slots if sub == "target" else [], "target_side": target_side if sub == "target" else "",
 		"enemy_hp": enemy_hp, "charging": charging, "log": log_view.visible, "log_lines": log_view.lines.size(), "outcome": outcome,
 		"result_lines": result_lines if phase == "result" else [], "panel": panel.visible,
-		"skill_info": [skill_info_title, skill_info_text] if skill_info.visible else [], "buttons": buttons}
+		"skill_info": [skill_info_title, skill_info_text] if skill_info_shown() else [], "banner": banner_lines().slice(0, 2), "buttons": buttons}
