@@ -11,6 +11,8 @@ export async function partA() {
   check(s.user_dir === '/userfs/sqfangame', 'user:// 경로', { user_dir: s.user_dir });
   check(s.seed === SEED, `새 게임 시드 = 주소의 seed ${SEED}`, { seed: s.seed });
   check(s.autosaves === 1 && s.modal === '', '새 게임 자동 저장', { autosaves: s.autosaves, modal: s.modal });
+  // M2.7 R1: 기본은 지도 닫힘(시야 전체 + HUD), 지도 도구는 보이지 않는다.
+  check(s.map_open === false && s.lens_cover === 0 && !s.buttons.Tool_wall && !!s.buttons.MapButton, '시작: 지도 닫힘·렌즈 가운데', { map_open: s.map_open, lens_cover: s.lens_cover });
   await page.screenshot({ path: `${outDir}/01_start.png` });
   // 캔버스에 키 포커스를 준다(3D 시야 영역 클릭은 아무 일도 하지 않는다).
   await page.mouse.click(Math.round(W * 0.3), Math.round(H * 0.3));
@@ -49,6 +51,9 @@ export async function partA() {
   // ---- 2) 지도 편집 ----
   const cellPt = (s2, x, y) => [s2.map.origin[0] + s2.map.cell[0] * x, s2.map.origin[1] + s2.map.cell[1] * y];
   const [px, py] = s.at;
+  await clickButton('MapButton', s);
+  s = await waitFor((x) => x.map_open && Array.isArray(x.map.origin) && !!x.buttons.Tool_wall, '지도 판 열림');
+  check(s.lens_cover > 0 && s.lens_cover < 0.5 && !!s.buttons.MapBack && !!s.buttons.Tool_undo, '지도 판: 렌즈 이동·「돌아가기」·안내 줄 실행 취소', { lens_cover: s.lens_cover });
   await clickButton('Tool_wall', s);
   s = await waitFor((x) => x.tool === 'wall', '벽 도구');
   let g = s.generation;
@@ -57,8 +62,9 @@ export async function partA() {
   await page.mouse.click(pt[0], pt[1]);
   s = await waitFor((x) => x.generation > g, '벽 편집 저장');
   check(s.edges === e0 + 1 || s.edges === e0 - 1, '벽 한 번 클릭 = 경계 하나 바뀜', { before: e0, after: s.edges });
+  await clickButton('Tool_color', s);
+  s = await waitFor((x) => x.tool === 'color' && !!x.buttons.Tool_color2, '색 도구·견본 줄');
   await clickButton('Tool_color2', s);
-  s = await waitFor((x) => x.tool === 'color', '색 도구');
   g = s.generation;
   pt = cellPt(s, px + 0.5, py + 0.5);
   await page.mouse.click(pt[0], pt[1]);
@@ -83,6 +89,8 @@ export async function partA() {
   await page.keyboard.press('Control+KeyZ');
   s = await waitFor((x) => x.generation > g, 'Ctrl+Z 저장');
   check(s.memos === m0 && s.memo_texts?.[memoKey] === undefined, 'Ctrl+Z 로 메모 되돌림', { memos: s.memos, got: s.memo_texts?.[memoKey] });
+  await clickButton('MapBack', s);
+  s = await waitFor((x) => !x.map_open && x.lens_cover === 0 && !x.buttons.Tool_wall, '「돌아가기」로 지도 판 닫힘');
 
   // ---- 3) IndexedDB 반영 ----
   let idb = await waitIdb(s);

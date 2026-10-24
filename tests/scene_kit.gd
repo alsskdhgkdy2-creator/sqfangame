@@ -50,6 +50,15 @@ func open(platform: String = "native", seed_value: int = 7, query: String = "") 
 	return screen
 
 
+## 지도 판을 연다(탐색 기본은 닫힘, M2.7 R1): 실제 입력 경로로 M 키를 누른다(단추 누르기는 test_overlay_ui 가 본다).
+func open_map() -> void:
+	if screen._map_open:
+		return
+	await press_key(KEY_M)
+	if not screen._map_open:
+		push_error("M 키로 지도 판이 열리지 않았다")
+
+
 ## 같은 저장 폴더로 화면을 다시 연다(앞 화면은 지운다).
 func reopen() -> DungeonScreen:
 	close_screen()

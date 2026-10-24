@@ -54,7 +54,6 @@ func _prep_duelist(s: DungeonScreen, bag: Dictionary = {}) -> void:
 	check(m.level == 3 and GrowthRules.sp_left(defs, m) == 2, "준비: 듀얼리스트 A Lv3·남은 SP 2 (Lv %d, SP %d)" % [m.level, GrowthRules.sp_left(defs, m)])
 	for id in bag:
 		GrowthRules.supply(s.state, id, bag[id])
-	s.status.refresh()
 
 
 func _skill_tab_on_duelist(s: DungeonScreen) -> PartyMenu:
@@ -147,9 +146,8 @@ func _step(pm: PartyMenu, kind: String, arg: Variant = null) -> bool:
 func test_opens_by_button_and_key_on_status_tab_member_0() -> void:
 	var s := await _open()
 	var pm := s.party_menu
-	var vw := s.view_container.size.x
 	check(s.party_button.is_visible_in_tree(), "탐색 중 「파티」 단추가 보인다")
-	check_eq(s.party_button.position, Vector2(vw - 3 * 64 - 28, 10), "자리: 지도 단추 왼쪽")
+	check(s.party_button.get_parent() == s.hint_row and s.party_button.get_index() < s.map_button.get_index(), "자리: 왼쪽 아래 안내 줄, 지도 단추 왼쪽")
 	check_eq(s.party_button.size, Vector2(64, 64), "64×64")
 	check(not s.party_button.get_global_rect().intersects(s.map_button.get_global_rect()), "지도 단추와 겹치지 않는다")
 	await kit.tap(kit.center_of(s.party_button))
@@ -223,6 +221,7 @@ func test_not_opened_with_window_moving_battle_or_wipe() -> void:
 func test_open_menu_blocks_moves_pad_and_map_edits() -> void:
 	var s := await _open()
 	var pm := s.party_menu
+	await kit.open_map()
 	s.map.tool = "color"
 	s.map.paint_color = 3
 	var cell_pos := kit.map_cell(Vector2i(1, 18))
@@ -850,6 +849,7 @@ func test_keyboard_only_full_path() -> void:
 func test_keys_do_not_leak_behind_menu() -> void:
 	var s := await _open()
 	var pm := s.party_menu
+	await kit.open_map()
 	s.map.tool = "color"
 	s.map.paint_color = 3
 	await kit.tap(kit.map_cell(Vector2i(1, 18)))

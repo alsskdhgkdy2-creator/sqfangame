@@ -16,6 +16,8 @@ var edges := {}  # Vector3i → "wall"·"door"
 var auto_edges := {}  # Vector3i → true (자동 기록이 쓴 경계 표시)
 var icons := {}  # Vector2i → {"type": String, "dir": int(arrow만, 아니면 -1)}
 var memos := {}  # Vector2i → String
+## 표시가 바뀔 때마다 오른다(편집·되돌리기·획 취소·자동 기록). 저장하지 않는다. 화면이 지도 보기를 다시 그릴지 본다.
+var version := 0
 
 var _undo: Array = []  # 단계마다 [{layer, key, had, old, old_auto}]
 var _stroke: Array = []
@@ -153,6 +155,7 @@ func erase_cell(c: Vector2i) -> bool:
 func auto_floor(c: Vector2i) -> void:
 	if _cell_ok(c) and not floors.has(c):
 		floors[c] = AUTO_COLOR
+		version += 1
 
 
 ## 경계 표시가 비어 있으면 쓰고 자동 목록에 넣는다.
@@ -160,6 +163,7 @@ func auto_edge(e: Vector3i, mark: String) -> void:
 	if _edge_ok(e) and not edges.has(e):
 		edges[e] = mark
 		auto_edges[e] = true
+		version += 1
 
 
 ## 자동으로 쓴 벽 표시만 지운다(찾은 숨은 통로).
@@ -167,6 +171,7 @@ func clear_auto_wall(e: Vector3i) -> void:
 	if auto_edges.has(e) and edges.get(e, "") == "wall":
 		edges.erase(e)
 		auto_edges.erase(e)
+		version += 1
 
 
 # ---- 내부 ----
@@ -209,6 +214,7 @@ func _edit(layer: String, key: Variant, value: Variant) -> void:
 		d[key] = value
 	if layer == "edges":
 		auto_edges.erase(key)
+	version += 1
 	if not _stroke_open:
 		_flush_stroke()
 
@@ -237,6 +243,8 @@ func _net_changed(changes: Array) -> bool:
 
 
 func _revert(changes: Array) -> void:
+	if not changes.is_empty():
+		version += 1
 	for i in range(changes.size() - 1, -1, -1):
 		var ch: Dictionary = changes[i]
 		var d := _layer(ch["layer"])

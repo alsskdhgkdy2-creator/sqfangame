@@ -38,7 +38,7 @@ func test_max_triangle_fixed() -> void:
 	var b := DungeonMeshBuilder.build(Fx.f1(), _all_open_world(Fx.f1()))
 	check(absf(b.max_triangle - 2.0 * sqrt(2.0)) < 1e-4, "삼각형 최대 변 %.4f (2√2 기대)" % b.max_triangle)
 	var r := CameraGuard.reach(b.max_triangle)
-	check(r > 7.5 and r < 9.0, "보정 반경 %.2f m" % r)
+	check(r > 9.5 and r < 10.5, "보정 반경(가장 넓은 유효 화면비 %.2f) %.2f m" % [CameraGuard.MAX_ASPECT, r])
 
 
 func test_surfaces_per_material_under_ten() -> void:

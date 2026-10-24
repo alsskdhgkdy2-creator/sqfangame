@@ -33,6 +33,8 @@ var checked := false:
 	set(v):
 		checked = v
 		queue_redraw()
+## 부품 모양 이름(UiTheme.SKIN_LOOKS 의 「부품:」 앞부분, 예 "tool"·"pill"). 그 부품에 없는 상태는 공용 모양.
+var skin := ""
 ## 색 견본(바닥 색 도구). 알파 0 이면 그리지 않는다.
 var swatch := Color(0, 0, 0, 0)
 ## 지금 눌려 있는지(누르고 있으면 반복용).
@@ -109,7 +111,10 @@ func _up(inside: bool) -> void:
 
 ## 지금 상태 모양 이름(UiTheme). 색 견본 단추는 고르면 채움 대신 테두리(견본 색이 그대로 보인다).
 func theme_state() -> String:
-	return UiTheme.state_of(held, selected, checked, disabled, swatch.a > 0.0)
+	var st := UiTheme.state_of(held, selected, checked, disabled, swatch.a > 0.0)
+	if not skin.is_empty() and UiTheme.has_look(skin + ":" + st):
+		return skin + ":" + st
+	return st
 
 
 func _draw() -> void:

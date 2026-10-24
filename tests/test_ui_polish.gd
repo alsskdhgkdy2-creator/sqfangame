@@ -508,16 +508,20 @@ func test_every_member_hp_bar_uses_the_rule() -> void:
 	var hp := [31, 26, 16, 12, 12]
 	for i in hp.size():
 		s.state.party.members[i].hp = hp[i]
-	s.status.refresh()
+	# 탐색 화면에는 상태 칸이 없다(M2.7 R1): 캠프·전투에서 다시 쓸 상태 칸 부품으로 본다.
+	var names: Array[String] = s._member_names.duplicate()
+	var st := StatusPanel.new()
+	st.set_state(s.state, s.texts, names)
 	for i in hp.size():
 		var m := s.state.party.members[i]
-		check_eq(s.status.hp_bar_color(i), HpColor.of(m.hp, m.max_hp), "탐색 상태 칸 %d (%d/%d)" % [i, m.hp, m.max_hp])
-	check_eq(s.status.hp_bar_color(1), HpColor.ORANGE, "26/52 = 50% → 주황")
-	check_eq(s.status.hp_bar_color(4), HpColor.RED, "12/40 = 30% → 빨강")
+		check_eq(st.hp_bar_color(i), HpColor.of(m.hp, m.max_hp), "상태 칸 %d (%d/%d)" % [i, m.hp, m.max_hp])
+	check_eq(st.hp_bar_color(1), HpColor.ORANGE, "26/52 = 50% → 주황")
+	check_eq(st.hp_bar_color(4), HpColor.RED, "12/40 = 30% → 빨강")
 	await kit.press_key(KEY_P)
 	var pm := s.party_menu
 	for i in hp.size():
-		check_eq(pm.cells[i].hp_bar_color(), s.status.hp_bar_color(i), "파티 메뉴 대원 칸 %d" % i)
+		check_eq(pm.cells[i].hp_bar_color(), st.hp_bar_color(i), "파티 메뉴 대원 칸 %d" % i)
+	st.free()
 	await kit.press_key(KEY_ESCAPE)
 	s.state.encounter.danger = s.state.encounter.threshold - 1
 	for k in 6:

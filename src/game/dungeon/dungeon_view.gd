@@ -7,6 +7,8 @@ extends Node3D
 signal animation_finished
 
 const EYE_HEIGHT := 1.0
+## 세로 시야각(도). 렌즈 이동(PROJECTION_FRUSTUM)도 같은 세로 시야가 되게 근평면 높이를 이 값으로 정한다.
+const FOV := 75.0
 const MOVE_TIME := 0.2
 const SLIDE_TIME := 0.12
 const TURN_TIME := 0.15
@@ -62,6 +64,9 @@ var _verts := PackedVector3Array()
 var _index: CameraGuard.Index
 ## 보정이 보는 정점 반경(m, CameraGuard.reach).
 var guard_radius := 8.0
+## 오른쪽에서 판(지도 판)이 덮은 화면 폭의 비율 p(0 = 덮이지 않음). 렌즈를 밀어 소실점을 덮이지 않은 영역 가운데
+## (왼쪽에서 (1 − p)/2)로 옮긴다(research 05 §1.2-6). 카메라 위치는 그대로다(h_offset 은 카메라를 옮겨 쓰지 않는다).
+var lens_cover := 0.0
 var _max_triangle := 0.0
 var _segments: Array[Dictionary] = []
 var _seg_time := 0.0
@@ -118,9 +123,11 @@ var _plan_time := 0.0
 
 func _ready() -> void:
 	add_child(_mesh_instance)
-	_camera.fov = 75.0
+	_camera.fov = FOV
+	_camera.projection = Camera3D.PROJECTION_FRUSTUM
 	_camera.current = true
 	add_child(_camera)
+	_update_lens()
 	_light.omni_range = 9.0
 	_light.light_color = Color(0.7, 0.9, 1.0)
 	_light.light_energy = 1.2
@@ -143,6 +150,7 @@ func _ready() -> void:
 ## 연출 중이면 정지 해를 끼워 넣지 않는다. 먼저 새 반경에서 이번 프레임의 δ 를 정하고(지금 δ 가 새 조건에서도 안전하면
 ## 그대로, 아니면 그에 가장 가까운 안전한 값, solve_near), 그 실제로 보인 값에서 남은 연출을 다시 계획한다.
 func _on_viewport_resized() -> void:
+	_update_lens()
 	_last_pose = Transform3D()
 	if _index == null:
 		return
@@ -187,17 +195,49 @@ func camera_fov() -> float:
 	return _camera.fov
 
 
+func camera() -> Camera3D:
+	return _camera
+
+
+## 덮인 비율을 바꾼다(지도 판을 열고 닫을 때·화면 크기가 바뀔 때). 보정 반경이 바뀔 수 있어 크기 바뀜과 같은 길로 다시 맞춘다.
+func set_lens_cover(p: float) -> void:
+	p = clampf(p, 0.0, 0.9)
+	if is_equal_approx(p, lens_cover) and _camera.size > 0.0:
+		return
+	lens_cover = p
+	if is_inside_tree():
+		_on_viewport_resized()
+	else:
+		_update_lens()
+
+
+## 근평면 창: 높이 = 2·near·tan(fov/2)(fov 75 와 같은 세로 시야), 가로 이동 = (p/2)·근평면 폭.
+## Projection.set_frustum: left = −w/2 + offset.x, right = w/2 + offset.x 라 소실점(앞 방향)이 NDC x = −p 에 온다.
+func _update_lens() -> void:
+	var aspect := _aspect()
+	_camera.size = 2.0 * _camera.near * tan(deg_to_rad(FOV) / 2.0)
+	_camera.frustum_offset = Vector2(lens_cover / 2.0 * _camera.size * aspect, 0.0)
+
+
+func _aspect() -> float:
+	var sz := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2.ZERO
+	return sz.x / sz.y if sz.y > 0.0 else CameraGuard.MAX_SCREEN_ASPECT
+
+
 func reset_guard_stats() -> void:
 	guard_frames = 0
 	guard_max_delta = 0.0
 	guard_max_step = 0.0
 
 
-## 보정 반경을 지금 Camera3D 의 세로 시야각과 시야 영역의 화면비로 정한다.
+## 보정 반경을 지금 세로 시야각과 시야 영역의 화면비로 정한다. 렌즈를 밀면 한쪽 끝이 넓어지므로
+## 넓은 쪽 반폭으로 잰 화면비 2·max(|left|, |right|)/높이 = 화면비·(1 + p) 를 쓴다(05 §9.2.1).
+func effective_aspect() -> float:
+	return _aspect() * (1.0 + lens_cover)
+
+
 func _update_radius() -> void:
-	var sz := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2.ZERO
-	var aspect := sz.x / sz.y if sz.y > 0.0 else CameraGuard.MAX_ASPECT
-	guard_radius = CameraGuard.reach(_max_triangle, _camera.fov, aspect)
+	guard_radius = CameraGuard.reach(_max_triangle, FOV, effective_aspect())
 
 
 ## 연출 없이 자세를 바로 정한다(새 게임·불러오기). 진행 중이던 재생과 아직 내지 않은 끝 신호를 취소한다.

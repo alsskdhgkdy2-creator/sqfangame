@@ -1,6 +1,7 @@
 ## 실제 시야 노드의 연출을 프레임 간격으로 돌리며 카메라 보정(05 §9.2.1)을 잰다.
 ## 모든 칸·네 방향에서 좌우 회전, 열린 쪽 이동, 막힌 쪽 막힘 연출. 세계는 처음 상태와 장치를 모두 연 상태 둘.
-## 시야 영역 화면비 둘: 1280 창에서 지도를 연 시야(768×720)와 가장 넓게 잡는 MAX_ASPECT(반경이 가장 크다).
+## 시야 영역 화면비: 옛 1280 창의 지도 옆 시야(768×720), 가장 넓은 대상 화면(MAX_SCREEN_ASPECT 2.4, 렌즈 가운데),
+## 지도 판을 연 화면 둘(M2.7 R1 렌즈 이동: 1280×720 p = 550/1280, 1728×720 p = 550/1728 → 유효 화면비 ≈ 3.164 = 가장 넓다).
 ## 연출 중 목표는 play 때 세운 계획(DungeonView._plan_guard: 안전 구간만 지나며 표본 사이 |Δδ| 최댓값이 가장 작은 경로),
 ## 실제 프레임은 계획 값에 가장 가까운 유효 후보(CameraGuard.solve_near), 정지 자세는 결정적 해(solve).
 ## 연출마다: 프레임 한도 안에 실제로 끝났는지, 중간 자세가 움직였는지, 끝 자세가 사건에서 따로 구한 도착 자세
@@ -32,8 +33,9 @@ const FRAME_LIMIT := 240
 ## 독립 확인의 δ 격자 간격(m).
 const GRID := 0.001
 
-## 시야 영역 화면비(세로 720 기준). 측정 스크립트가 바꿔 부를 수 있다.
-var aspect := CameraGuard.MAX_ASPECT
+## 시야 영역 화면비(세로 720 기준)와 렌즈 이동 비율(지도 판이 덮은 폭 비율). 측정 스크립트가 바꿔 부를 수 있다.
+var aspect := CameraGuard.MAX_SCREEN_ASPECT
+var lens := 0.0
 ## 프레임 간격(초, _dt_at). spike_frame 번째 프레임(0부터)만 spike_dt, switch_frame 번째부터는 switch_dt(주기 전환),
 ## jitter > 0 이면 간격마다 ±jitter 를 고정 시드로 더한다. -1 이면 그 일이 없다.
 var frame_dt := FRAME
@@ -86,6 +88,7 @@ func _make_view(f: FloorModel) -> DungeonView:
 	v.set_process(false)  # 프레임은 시험이 직접 돌린다
 	v.speed = 1.0
 	v.setup(f, WorldState.new())
+	v.set_lens_cover(lens)
 	return v
 
 
@@ -256,7 +259,21 @@ func test_animation_frames_narrow_view() -> void:
 
 
 func test_animation_frames_max_aspect() -> void:
-	aspect = CameraGuard.MAX_ASPECT
+	aspect = CameraGuard.MAX_SCREEN_ASPECT
+	_measure_and_check("max")
+
+
+## 지도 판을 연 1728×720(가장 넓은 유효 화면비). 연속성 도입 전 측정값이 없어 가장 넓던 「max」(2.4) 기준과 견준다.
+func test_animation_frames_map_open_wide() -> void:
+	aspect = 1728.0 / 720.0
+	lens = MapWindow.WIDTH / 1728.0
+	_measure_and_check("max")
+
+
+## 지도 판을 연 1280×720.
+func test_animation_frames_map_open_1280() -> void:
+	aspect = 1280.0 / 720.0
+	lens = MapWindow.WIDTH / 1280.0
 	_measure_and_check("max")
 
 
@@ -267,7 +284,9 @@ func _measure_and_check(base_key: String) -> void:
 	var f := Fx.f1()
 	var v := _make_view(f)
 	var real_aspect := float(_sv.size.x) / _sv.size.y
-	check(is_equal_approx(v.guard_radius, CameraGuard.reach(2.0 * sqrt(2.0), v.camera_fov(), real_aspect)), "반경은 지금 시야각·화면비로 정한다")
+	check(is_equal_approx(v.effective_aspect(), real_aspect * (1.0 + lens)), "유효 화면비 = 화면비·(1 + 렌즈 이동 %.3f)" % lens)
+	check(v.effective_aspect() <= CameraGuard.MAX_ASPECT + 1e-6, "유효 화면비 %.3f ≤ MAX_ASPECT" % v.effective_aspect())
+	check(is_equal_approx(v.guard_radius, CameraGuard.reach(2.0 * sqrt(2.0), v.camera_fov(), v.effective_aspect())), "반경은 지금 시야각·유효 화면비로 정한다")
 	for kind in ["turn", "move", "bump"]:
 		_reset(kind)
 	v.max_plan_ms = 0.0
@@ -758,7 +777,8 @@ func test_set_pose_keeps_frame_history() -> void:
 ## 계획 표본의 허용 구간(구간 후보 _seg_cands 로 고른 정점)이 보정과 같은 정점 집합(_index.near)으로 구한 것과 같다.
 func test_sample_candidates_match_near() -> void:
 	timeout_sec = 60.0
-	aspect = CameraGuard.MAX_ASPECT
+	aspect = CameraGuard.MAX_SCREEN_ASPECT
+	lens = MapWindow.WIDTH / 1728.0  # 가장 넓은 유효 화면비(지도 판을 연 1728×720)
 	var f := Fx.f1()
 	var v := _make_view(f)
 	var world := _all_open_world(f)
@@ -881,7 +901,8 @@ func test_resize_wider_replans_from_applied_delta() -> void:
 	aspect = 768.0 / 720.0
 	var f := Fx.f1()
 	var v := _make_view(f)
-	var wide_r := CameraGuard.reach(2.0 * sqrt(2.0), v.camera_fov(), CameraGuard.MAX_ASPECT)
+	var wide_w := roundi(720 * CameraGuard.MAX_ASPECT)
+	var wide_r := CameraGuard.reach(2.0 * sqrt(2.0), v.camera_fov(), wide_w / 720.0)
 	var found := []
 	for c in f.cells():
 		for facing in 4:
@@ -917,7 +938,7 @@ func test_resize_wider_replans_from_applied_delta() -> void:
 	for i in found[3]:
 		v._process(FRAME)
 	var d0 := v.last_guard_delta
-	_sv.size = Vector2i(roundi(720 * CameraGuard.MAX_ASPECT), 720)
+	_sv.size = Vector2i(wide_w, 720)
 	check(is_equal_approx(v.guard_radius, wide_r), "반경이 넓은 화면비로 커졌다")
 	var eye := v._view_pos + Vector3.UP * DungeonView.EYE_HEIGHT
 	var fwd := -Basis(Vector3.UP, v._view_yaw).z

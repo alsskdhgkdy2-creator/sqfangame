@@ -92,11 +92,33 @@ const INNER_GAP := 2.0
 const STATES := ["normal", "pressed", "selected", "selected_pressed", "checked", "checked_pressed", "disabled", "disabled_selected",
 	"marked", "marked_pressed", "checked_marked", "checked_marked_pressed"]
 
+## 부품별 모양(「부품:상태」). 없는 상태는 공용 모양을 쓴다(고른 도구는 공용 따뜻한 커서 그대로).
+## 지도 판 도구 열(원작 HD nin_02 의 파란 도구 칸)·「돌아가기」 밝은 알약.
+const SKIN_LOOKS := ["tool:normal", "tool:pressed", "pill:normal", "pill:pressed"]
+const TOOL_TOP := Color("0f7aab")
+const TOOL_BOTTOM := Color("0b6593")
+const TOOL_PRESSED_TOP := Color("0a5a82")
+const TOOL_PRESSED := Color("084a6c")
+const TOOL_EDGE := Color("01274b")
+const TOOL_LINE := Color("5fc3e6")
+const TOOL_TEXT := Color(1, 1, 1)
+const PILL_TOP := Color("a5d9ef")
+const PILL_BOTTOM := Color("8ccbe6")
+const PILL_PRESSED_TOP := Color("8ccbe6")
+const PILL_PRESSED := Color("76bddc")
+const PILL_TEXT := Color("01274b")
+
 static var _looks := {}
 
 
 ## 상태 모양: fill(채우는지) · top/bottom(세로 그라데이션) · outer/outer_w(바깥 테두리) · inner/inner_w(안쪽 선) · glow(번짐)
 ## · marker(왼쪽 표시 막대, 알파 0 이면 없음) · chamfer · text(본 글자) · sub(작은 글자: 바뀌는 값·칸 이름) · reason(이유 글자).
+static func has_look(state: String) -> bool:
+	if _looks.is_empty():
+		_looks = _build_looks()
+	return _looks.has(state)
+
+
 static func look(state: String) -> Dictionary:
 	if _looks.is_empty():
 		_looks = _build_looks()
@@ -160,7 +182,22 @@ static func _build_looks() -> Dictionary:
 	glass["muted"] = GLASS_DIM_TEXT
 	glass["reason"] = GLASS_DOWN_TEXT
 	d["glass"] = glass
+	d["tool:normal"] = _plain(_btn(TOOL_TOP, TOOL_BOTTOM, TOOL_EDGE, BTN_OUTER_W, TOOL_LINE, 1.0, none, TOOL_TEXT, TOOL_TEXT, TOOL_TEXT))
+	d["tool:pressed"] = _plain(_btn(TOOL_PRESSED_TOP, TOOL_PRESSED, TOOL_EDGE, BTN_OUTER_W, TOOL_LINE, 1.0, none, TOOL_TEXT, TOOL_TEXT, TOOL_TEXT))
+	for k in ["pill:normal", "pill:pressed"]:
+		var top := PILL_TOP if k == "pill:normal" else PILL_PRESSED_TOP
+		var bottom := PILL_BOTTOM if k == "pill:normal" else PILL_PRESSED
+		var p := _plain(_btn(top, bottom, TOOL_EDGE, BTN_OUTER_W, Color(1, 1, 1, 0.6), 1.0, none, PILL_TEXT, PILL_TEXT, PILL_TEXT))
+		p["chamfer"] = 32.0
+		d[k] = p
 	return d
+
+
+## 글자 몫을 모두 본 글자색으로(밝은 파랑·밝은 알약 위에서는 따뜻한 강조색이 대비를 못 지킨다).
+static func _plain(lk: Dictionary) -> Dictionary:
+	for role in TEXT_ROLES:
+		lk[role] = lk["text"]
+	return lk
 
 
 ## 직접 그리는 단추의 상태. color_content: 안의 색이 뜻을 가진 단추(견본·직업색) → 채움을 바꾸지 않는 테두리 모양.

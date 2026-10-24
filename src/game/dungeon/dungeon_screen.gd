@@ -3,7 +3,12 @@
 ## 연출 전에 부른다), 새 게임, 수동 슬롯 불러오기, 가져오기 직후, 파티 메뉴의 배분 확정·장착 변경·임시 보급(07 §8.5).
 ## 저장 쓰기는 한 프레임 안에서 끝낸다(웹 IndexedDB 반영, 05 §8.3).
 ## 입력(05 §9.3): 키보드는 _unhandled_input, 화면 단추는 TouchButton. 창이 열려 있거나 전투 중·전멸이면 이동을 받지 않는다.
-## 전투(06 §9): 전투 중이면 전투 층(BattleLayer)을 덮는다. 3D 시야 크기는 그대로 두고 지도·이동 단추·메뉴를 감춘다.
+## 화면 짜임(M2.7 R1, research 05 §1.2·§2.2): 3D 시야는 언제나 화면 전체이고 UI 는 그 위 CanvasLayer 에 뜬다.
+##   층 0 ViewContainer(시야, 크기를 바꾸지 않는다)·피해 번쩍임 → 층 1 Hud(층 문패·미니맵·위험 보석·이동 단추·안내 줄)
+##   → 층 2 Windows(지도 판·전투 층·파티 메뉴) → 층 3 Modal → 층 4 Toast. 보이는 위아래 = 누르는 위아래.
+##   층마다 화면 전체 뿌리 Control(IGNORE), 부품은 앵커 + 여백으로 가장자리·모서리에 붙인다.
+##   지도 판은 오른쪽을 덮고 시야는 렌즈를 밀어 소실점을 덮이지 않은 영역 가운데로 옮긴다(DungeonView.set_lens_cover).
+## 전투(06 §9): 전투 중이면 전투 층(BattleLayer)을 덮는다. HUD·지도 판을 감춘다.
 ## 파티 메뉴(07 §9): 「파티」 단추·P 로 여는 불투명 전체 화면 층(PartyMenu). 열린 동안은 창이 열린 것과 같다(이동·지도·메뉴 키를 막는다).
 ## 미리 받는 입력은 하나(나중 것이 대신)이고, 창이 열릴 때·불러올 때·포커스를 잃을 때·입력 창이 닫힌 뒤 비운다.
 class_name DungeonScreen
@@ -27,11 +32,23 @@ const PAD_BUTTON := 80.0
 ## 메뉴의 저장 칸 단추 높이(세 줄: 슬롯·층과 걸음·시각).
 const SLOT_H := 84.0
 const PAD_GAP := 8.0
-const TOP_BAR := 64.0
-const SIDE_COLLAPSED := 300.0
-const STATUS_H := 190.0
-## 지도를 닫았을 때 시야 위에 뜬 상태 칸의 바깥 여백(오른쪽·위).
-const FLOAT_MARGIN := 10.0
+## 화면 가장자리 여백(HUD 부품).
+const EDGE := 12.0
+## 안내 줄(원작 왼쪽 아래 CAMP·MAP 안내 자리) 단추 크기와 간격.
+const HINT_H := 64.0
+const HINT_GAP := 8.0
+## 이동 단추 묶음(3×2 + 조사·휴식 열) 크기.
+const PAD_W := 3.0 * (PAD_BUTTON + PAD_GAP) + 8.0 + PAD_BUTTON + 16.0
+const PAD_H := 2.0 * PAD_BUTTON + PAD_GAP
+## 미니맵 크기(원작 III HD gw_28: 16:9 화면의 가로 약 17%·세로 약 20%).
+const MINI_SIZE := Vector2(218, 144)
+## 층 문패(원작 왼쪽 위 다이얼 자리) 크기.
+const PLATE_SIZE := Vector2(250, 76)
+## CanvasLayer 번호.
+const LAYER_HUD := 1
+const LAYER_WINDOWS := 2
+const LAYER_MODAL := 3
+const LAYER_TOAST := 4
 const PROMPT_BLOCKED_MS := 40
 ## 누르고 있기 반복은 누른 지 이만큼 지나야 시작한다(연출이 없는 행동 뒤 짧은 누르기가 두 번 되지 않게).
 const HOLD_REPEAT_MS := 220
@@ -70,9 +87,22 @@ var last_autosave_error := ""
 # ---- 화면 부품 ----
 var view: DungeonView
 var view_container: SubViewportContainer
+## 지도 판(층 2)과 그 안의 그리기 격자·도구 열.
+var map_window: MapWindow
 var map: MapPanel
 var toolbar: MapToolbar
-var status: StatusPanel
+## HUD(층 1): 뿌리(화면 전체), 시야 영역(지도 판이 덮지 않는 곳), 미니맵·위험 보석·층 문패·이동 단추 묶음·안내 줄.
+var hud_root: Control
+var view_area: Control
+var minimap: MapOverview
+var orb: DangerOrb
+var floor_plate: Control
+var pad_box: Control
+var hint_row: HBoxContainer
+## 창 층(층 2)의 뿌리와 알림 층(층 4)의 알림 영역.
+var windows_root: Control
+var toast_area: Control
+var layers := {}  # 이름 → CanvasLayer
 var modal: ModalLayer
 var battle_layer: BattleLayer
 var party_menu: PartyMenu
@@ -108,7 +138,8 @@ var _file_req := 0
 var _epoch := 0
 var _import_token := 0
 var _import_epoch := -1
-var _map_open := true
+## 지도 판이 열렸는지. 기본은 닫힘(원작 탐색 기본 화면: 시야 전체 + 다이얼·미니맵·위험 보석·안내 줄).
+var _map_open := false
 ## 전투 층이 덮고 있어 탐색 부품을 감춘 상태.
 var _battle_view := false
 ## 디버그 상태 요약을 다시 낼지 보려고 기억하는 전투 층 모습(단계·명령 단계·대원).
@@ -118,6 +149,9 @@ var _debug_dirty := false
 var _debug_busy := false
 var _debug_settle := 0
 var _member_names: Array[String] = []
+## 지도 보기(그리기 격자·층 전체 보기·미니맵)가 마지막으로 맞춘 지도 표시와 그 판(version).
+var _views_ann: MapAnnotation
+var _views_version := -1
 var _file_dialog: FileDialog
 
 
@@ -180,8 +214,8 @@ func _set_state(s: ExplorationState) -> void:
 	_clear_input()
 	view.rebuild(state.world)
 	view.set_pose(state.party.at, state.party.facing)
-	map.set_state(state)
-	status.set_state(state, texts, _member_names)
+	map_window.set_state(state)
+	minimap.set_state(state)
 	_refresh_hud()
 
 
@@ -265,7 +299,6 @@ func _do_action(action: int) -> void:
 		view.rebuild(state.world)
 	view.play(events, move_dir)
 	map.refresh()
-	status.refresh()
 	_refresh_hud()
 
 
@@ -345,7 +378,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return  # 파티 메뉴가 키를 받는다(07 §9.4: 아래 Esc·Ctrl+Z·M·R·이동 키 갈래는 _input_blocked 를 보지 않는다)
 	if event.is_action_pressed("open_menu"):
 		get_viewport().set_input_as_handled()
-		if modal.kind == "menu" or modal.kind == "icons":
+		if modal.kind == "menu":
 			modal.close()
 		elif not modal.is_open():
 			_open_menu()
@@ -399,8 +432,8 @@ func _clear_input() -> void:
 	_pad_since.clear()
 	for a in pad:
 		(pad[a] as TouchButton).cancel()
-	if toolbar != null:
-		toolbar.cancel_all()
+	if map_window != null:
+		map_window.cancel_all()
 	if map != null:
 		map.cancel_input()
 	if map_button != null:
@@ -619,20 +652,19 @@ func _open_battle() -> void:
 func _on_battle_closed(_outcome: String) -> void:
 	_set_battle_view(false)
 	_clear_input()
-	status.refresh()
 	map.refresh()
 	_refresh_hud()
 	_debug_dirty = true
 	_check_windows()
 
 
-## 전투 층이 열린 동안 지도 패널·도구 줄·이동 단추·메뉴·상태 표시를 감추고 3D 시야를 화면 전체로 넓힌다(06 §9.1, M2.6 U1).
+## 전투 층이 열린 동안 HUD·지도 판을 감춘다(3D 시야는 언제나 화면 전체, 06 §9.1, M2.6 U1).
 func _set_battle_view(on: bool) -> void:
 	_battle_view = on
 	_layout()
 
 
-## 탐색 HUD(지도 패널·도구 줄·이동 단추·휴식·파티/지도/메뉴 단추·상태 칸·층 이름·걸음)를 감추고 3D 시야만 화면 전체로 두는지.
+## 탐색 HUD(층 문패·미니맵·위험 보석·이동 단추·휴식·안내 줄)와 지도 판을 감추는지(3D 시야만 남는다).
 ## 전투 층이 열린 동안(06 §9.1, U1)과 파티 메뉴가 열린 동안(M2.6 2.5단계: 메뉴 뒤에는 어둡게 한 3D 시야만 보인다).
 ## 감춘 단추는 누르기를 받지 않는다. 파티 메뉴가 열리고 닫힐 때(어느 길로 닫혀도: 키·「닫기」·상태 바꾸기) visibility_changed 로 다시 맞춘다.
 func _hud_hidden() -> bool:
@@ -658,7 +690,6 @@ func _open_party() -> void:
 ## 파티 메뉴가 닫혔다: 눌림·미리 받은 입력을 버리고(닫은 뒤 누르고 있던 이동 키가 걸음이 되지 않는다) 탐색 화면을 다시 맞춘다.
 func _on_party_closed() -> void:
 	_clear_input()
-	status.refresh()
 	_refresh_hud()
 	_debug_dirty = true
 	_debug_settle = 2
@@ -771,25 +802,6 @@ func _close_alert() -> void:
 		_check_windows()
 
 
-func _open_icon_picker() -> void:
-	var grid := GridContainer.new()
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-	for t in MapAnnotation.ICONS:
-		var b := TouchButton.new().setup(t, texts.t("icon." + t))
-		b.name = "Icon_" + t
-		b.custom_minimum_size = Vector2(96, 80)
-		b.selected = t == map.icon_type and map.tool == "icon"
-		b.activated.connect(func() -> void:
-			map.icon_type = t
-			_choose_tool("icon", 0)
-			modal.close())
-		grid.add_child(b)
-	var rows: Array[Control] = [grid, _named(ModalLayer.button(texts.t("ui.cancel"), modal.close), "IconCancel")]
-	modal.open("icons", texts.t("map.icon_title"), rows)
-
-
 # ---- 메모 (05 §9.3: 웹은 브라우저 입력 창, PC 는 LineEdit 창) ----
 
 func _on_memo_requested(c: Vector2i) -> void:
@@ -846,11 +858,18 @@ func _on_map_edited(changed: bool) -> void:
 	_refresh_toolbar()
 
 
+## 도구를 고른다. 바닥 색은 견본(1~4)이면 그 색, 도구 열의 바닥 색 단추(0)면 지금 색 그대로.
 func _choose_tool(tool: String, color: int) -> void:
 	map.tool = tool
-	if tool == "color":
+	if tool == "color" and color > 0:
 		map.paint_color = color
 	_refresh_toolbar()
+
+
+## 아이콘 판에서 고른 아이콘으로 아이콘 도구를 쓴다(판은 아이콘 도구인 동안 층 전체 보기 자리에 남는다, 원작 nin_04).
+func _choose_icon(icon: String) -> void:
+	map.icon_type = icon
+	_choose_tool("icon", 0)
 
 
 func _on_toolbar_action(name: String) -> void:
@@ -863,19 +882,41 @@ func _on_toolbar_action(name: String) -> void:
 			map.zoom(1.25)
 		"zoom_out":
 			map.zoom(0.8)
-		"icon_picker":
-			_open_icon_picker()
 
 
 func _refresh_toolbar() -> void:
-	toolbar.show_current(map.tool, map.paint_color, map.icon_type, state != null and state.annotation.can_undo())
+	map_window.show_current(map.tool, map.paint_color, map.icon_type, state != null and state.annotation.can_undo())
 	_debug_dirty = true
 
 
 func _toggle_map() -> void:
-	_map_open = not _map_open
+	_set_map_open(not _map_open)
+
+
+## 지도 판을 열거나 닫는다(지도 단추·M 키는 바꾸기, 「돌아가기」는 닫기). 어느 길이든 판 안에서 누르고 있던 것
+## (그리기 획·「돌아가기」·도구·견본·아이콘 판)을 취소한다: 숨긴 단추의 떼기가 뒤늦게 일하지 않는다.
+## 열 때마다 그리기 격자는 파티를 따라가는 기본 확대(약 7칸)로 돌아간다.
+func _set_map_open(open: bool) -> void:
+	if open == _map_open:
+		return
+	_map_open = open
 	map.cancel_input()
+	map_window.cancel_all()
 	_layout()
+	if _map_open:
+		map.to_party()
+
+
+## 지도 표시가 바뀌었으면(편집·되돌리기·메모·자동 기록·상태 바꾸기) 지도 보기 셋을 다시 그린다. 한 곳에서 판(version)을 본다.
+func _sync_map_views() -> void:
+	var ann := state.annotation
+	if ann == _views_ann and ann.version == _views_version:
+		return
+	_views_ann = ann
+	_views_version = ann.version
+	map.queue_redraw()
+	map_window.overview.queue_redraw()
+	minimap.queue_redraw()
 
 
 # ---- 화면 구성 ----
@@ -883,9 +924,11 @@ func _toggle_map() -> void:
 func _build_ui() -> void:
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	mouse_filter = MOUSE_FILTER_IGNORE
+	# 층 0: 3D 시야(화면 전체, 어느 모드에서도 크기를 바꾸지 않는다)와 피해 번쩍임(시야 위, HUD 아래).
 	view_container = SubViewportContainer.new()
 	view_container.set_script(preload("res://src/game/dungeon/view_container.gd"))
 	view_container.name = "ViewContainer"
+	view_container.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	add_child(view_container)
 	var sv := SubViewport.new()
 	sv.own_world_3d = true
@@ -898,76 +941,38 @@ func _build_ui() -> void:
 	view.setup(floor_def, WorldState.new())
 	view.animation_finished.connect(_on_animation_finished)
 
+	_flash.name = "DamageFlash"
 	_flash.color = Color(1, 0.1, 0.05, 0.0)
 	_flash.mouse_filter = MOUSE_FILTER_IGNORE
+	_flash.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	add_child(_flash)
 
-	_floor_label.text = texts.t(floor_def.name_key)
-	_floor_label.add_theme_font_size_override("font_size", 22)
-	_floor_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	_floor_label.add_theme_constant_override("outline_size", 6)
-	add_child(_floor_label)
-	_steps_label.add_theme_font_size_override("font_size", 18)
-	_steps_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	_steps_label.add_theme_constant_override("outline_size", 6)
-	add_child(_steps_label)
-	map_button = TouchButton.new().setup("map", texts.t("map.toggle"))
-	map_button.name = "MapButton"
-	map_button.activated.connect(_toggle_map)
-	add_child(map_button)
-	menu_button = TouchButton.new().setup("menu", "")
-	menu_button.name = "MenuButton"
-	menu_button.activated.connect(_open_menu)
-	add_child(menu_button)
-	party_button = TouchButton.new()
-	party_button.name = "PartyButton"
-	party_button.activated.connect(_open_party)
-	add_child(party_button)
+	hud_root = _layer_root("Hud", LAYER_HUD)
+	windows_root = _layer_root("Windows", LAYER_WINDOWS)
+	var toast_root := _layer_root("Toast", LAYER_TOAST)
+	_build_hud()
 
-	var pad_defs := [
-		[A.TURN_LEFT, "turn_left", ""], [A.FORWARD, "up", ""], [A.TURN_RIGHT, "turn_right", ""],
-		[A.STRAFE_LEFT, "strafe_left", ""], [A.BACK, "down", ""], [A.STRAFE_RIGHT, "strafe_right", ""],
-		[A.INVESTIGATE, "investigate", texts.t("action.investigate")],
-	]
-	for d in pad_defs:
-		var b := TouchButton.new().setup(d[1], d[2], true)
-		b.name = "Pad_" + ExplorationRules.ACTION_NAMES.find_key(d[0])
-		b.activated.connect(_on_pad.bind(d[0]))
-		b.released.connect(func() -> void: _pad_since.erase(d[0]))  # 떼거나 취소하면 그 단추의 승인을 지운다
-		add_child(b)
-		pad[d[0]] = b
-	rest_button = TouchButton.new().setup("", texts.t("action.rest"))
-	rest_button.name = "Pad_rest"
-	rest_button.activated.connect(_on_pad.bind(A.REST))
-	rest_button.released.connect(func() -> void: _pad_since.erase(A.REST))
-	add_child(rest_button)
-
-	_toast.add_theme_font_size_override("font_size", 22)
-	_toast.add_theme_color_override("font_outline_color", Color.BLACK)
-	_toast.add_theme_constant_override("outline_size", 8)
-	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_toast.mouse_filter = MOUSE_FILTER_IGNORE
-
-	toolbar = MapToolbar.new()
-	toolbar.name = "MapToolbar"
-	toolbar.build(texts)
+	# 층 2: 지도 판 → 전투 층 → 파티 메뉴(트리 순서 = 그리는·누르는 순서).
+	map_window = MapWindow.new()
+	map_window.name = "MapWindow"
+	windows_root.add_child(map_window)
+	map_window.build(texts, texts.t(floor_def.name_key))
+	map = map_window.map
+	toolbar = map_window.toolbar
 	toolbar.tool_chosen.connect(_choose_tool)
 	toolbar.action.connect(_on_toolbar_action)
-	add_child(toolbar)
-	map = MapPanel.new()
-	map.name = "MapPanel"
+	map_window.icon_chosen.connect(_choose_icon)
+	map_window.back_requested.connect(_set_map_open.bind(false))
 	map.edited.connect(_on_map_edited)
 	map.memo_requested.connect(_on_memo_requested)
 	map.view_changed.connect(func() -> void: _debug_dirty = true)
-	add_child(map)
-	status = StatusPanel.new()
-	status.name = "StatusPanel"
-	add_child(status)
+	# 실행 취소·확대·축소·파티로는 안내 줄(지도 판이 열린 동안만, 원작 UNDO 안내 자리).
+	for b in toolbar.action_buttons():
+		hint_row.add_child(b)
 
-	# 전투 층은 탐색 부품 위, 알림 줄·창 아래: 전투 중 저장 실패 알림(알림 줄)과 알림 창이 전투 층에 가리지 않는다.
 	battle_layer = BattleLayer.new()
 	battle_layer.name = "BattleLayer"
-	add_child(battle_layer)
+	windows_root.add_child(battle_layer)
 	battle_layer.build(texts)
 	battle_layer.save_hook = _on_battle_save
 	battle_layer.closed.connect(_on_battle_closed)
@@ -976,10 +981,9 @@ func _build_ui() -> void:
 		_debug_dirty = true
 		_debug_settle = 2)
 	battle_layer.submitted.connect(func(_e: Array) -> void: _debug_dirty = true)
-	# 파티 메뉴도 탐색 부품 위, 알림 줄·창 아래(저장 실패 알림이 메뉴에 가리지 않는다).
 	party_menu = PartyMenu.new()
 	party_menu.name = "PartyMenu"
-	add_child(party_menu)
+	windows_root.add_child(party_menu)
 	party_menu.build(texts)
 	party_menu.save_hook = _on_party_save
 	party_menu.opened.connect(func() -> void:
@@ -988,14 +992,17 @@ func _build_ui() -> void:
 		_debug_settle = 2)
 	party_menu.closed.connect(_on_party_closed)
 	party_menu.visibility_changed.connect(_layout)
-	party_menu.changed.connect(func(_e: Array) -> void:
-		status.refresh()
-		_debug_dirty = true)
-	party_button.setup("", texts.t("party.title"))
-	add_child(_toast)
+	party_menu.changed.connect(func(_e: Array) -> void: _debug_dirty = true)
 
+	# 층 3: 창(메뉴·알림·메모·전멸). ModalLayer 가 화면 전체 뿌리다.
+	var modal_cl := CanvasLayer.new()
+	modal_cl.name = "Modal"
+	modal_cl.layer = LAYER_MODAL
+	add_child(modal_cl)
+	layers["Modal"] = modal_cl
 	modal = ModalLayer.new()
 	modal.name = "ModalLayer"
+	modal.theme = theme
 	modal.opened.connect(func(_k: String) -> void:
 		_clear_input()
 		_debug_dirty = true
@@ -1004,85 +1011,206 @@ func _build_ui() -> void:
 		_clear_input()  # 창 안에서 누른 키·단추는 닫힌 뒤에도 승인되지 않는다
 		_debug_dirty = true
 		_debug_settle = 2)
-	add_child(modal)
+	modal_cl.add_child(modal)
+
+	# 층 4: 알림 줄(전투 중 저장 실패 알림도 전투 층·창에 가리지 않는다).
+	toast_area = Control.new()
+	toast_area.name = "ToastArea"
+	toast_area.mouse_filter = MOUSE_FILTER_IGNORE
+	toast_area.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	toast_root.add_child(toast_area)
+	_toast.name = "Toast"
+	_toast.add_theme_font_size_override("font_size", 22)
+	_toast.add_theme_color_override("font_outline_color", Color.BLACK)
+	_toast.add_theme_constant_override("outline_size", 8)
+	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast.mouse_filter = MOUSE_FILTER_IGNORE
+	toast_area.add_child(_toast)
 	_layout()
 
 
+## CanvasLayer 하나와 그 화면 전체 뿌리 Control(IGNORE: 빈 곳 누르기는 아래 층으로 간다). 테마는 층을 건너 이어지지 않아 다시 준다.
+func _layer_root(layer_name: String, n: int) -> Control:
+	var cl := CanvasLayer.new()
+	cl.name = layer_name
+	cl.layer = n
+	add_child(cl)
+	layers[layer_name] = cl
+	var root := Control.new()
+	root.name = layer_name + "Root"
+	root.mouse_filter = MOUSE_FILTER_IGNORE
+	root.theme = theme
+	root.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	cl.add_child(root)
+	return root
+
+
+## 층 1 HUD(원작 탐색 화면 gw_28·gs_683213·nin_02). 부품은 시야 영역(view_area: 지도 판이 덮지 않는 곳)의 모서리에 앵커로 붙는다.
+## 미니맵·위험 보석·층 문패는 장식(IGNORE). 이동 단추·조사·휴식은 원작에 없다(휴대폰 조작): 안내 줄 바로 위에 둔다.
+func _build_hud() -> void:
+	view_area = Control.new()
+	view_area.name = "ViewArea"
+	view_area.mouse_filter = MOUSE_FILTER_IGNORE
+	view_area.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	hud_root.add_child(view_area)
+
+	# 위험 보석: 오른쪽 아래 모서리, 일부가 화면(지도 판이 열리면 판) 밖으로 잘린다.
+	orb = DangerOrb.new()
+	orb.name = "DangerOrb"
+	view_area.add_child(orb)
+
+	# 미니맵: 오른쪽 위, 파티 둘레 반투명(지도 판이 열리면 감춘다).
+	minimap = MapOverview.new().setup(true)
+	minimap.name = "MiniMap"
+	minimap.set_anchors_preset(PRESET_TOP_RIGHT)
+	minimap.offset_left = -EDGE - MINI_SIZE.x
+	minimap.offset_right = -EDGE
+	minimap.offset_top = EDGE
+	minimap.offset_bottom = EDGE + MINI_SIZE.y
+	view_area.add_child(minimap)
+
+	# 층 문패: 왼쪽 위(원작 시각 다이얼 자리), 층 이름 + 걸음.
+	floor_plate = HudPlate.new()
+	floor_plate.name = "FloorPlate"
+	floor_plate.set_anchors_preset(PRESET_TOP_LEFT)
+	floor_plate.offset_right = PLATE_SIZE.x
+	floor_plate.offset_bottom = PLATE_SIZE.y
+	view_area.add_child(floor_plate)
+	_floor_label.name = "FloorName"
+	_floor_label.text = texts.t(floor_def.name_key)
+	_floor_label.add_theme_font_size_override("font_size", 22)
+	_floor_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_floor_label.add_theme_constant_override("outline_size", 6)
+	_floor_label.position = Vector2(26, 8)
+	_floor_label.mouse_filter = MOUSE_FILTER_IGNORE
+	floor_plate.add_child(_floor_label)
+	_steps_label.name = "Steps"
+	_steps_label.add_theme_font_size_override("font_size", 18)
+	_steps_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_steps_label.add_theme_constant_override("outline_size", 6)
+	_steps_label.position = Vector2(26, 40)
+	_steps_label.mouse_filter = MOUSE_FILTER_IGNORE
+	floor_plate.add_child(_steps_label)
+
+	# 안내 줄: 왼쪽 아래 가장자리(원작 CAMP·MAP). 파티·지도·메뉴(+ 지도 판이 열리면 실행 취소·확대·축소·파티로).
+	hint_row = HBoxContainer.new()
+	hint_row.name = "HintRow"
+	hint_row.mouse_filter = MOUSE_FILTER_IGNORE
+	hint_row.add_theme_constant_override("separation", int(HINT_GAP))
+	hint_row.anchor_top = 1.0
+	hint_row.anchor_bottom = 1.0
+	hint_row.offset_left = EDGE
+	hint_row.offset_right = EDGE
+	hint_row.offset_top = -EDGE - HINT_H
+	hint_row.offset_bottom = -EDGE
+	hint_row.grow_horizontal = GROW_DIRECTION_END
+	view_area.add_child(hint_row)
+	party_button = TouchButton.new().setup("", texts.t("party.title"))
+	party_button.name = "PartyButton"
+	party_button.activated.connect(_open_party)
+	map_button = TouchButton.new().setup("map", texts.t("map.toggle"))
+	map_button.name = "MapButton"
+	map_button.activated.connect(_toggle_map)
+	menu_button = TouchButton.new().setup("menu", "")
+	menu_button.name = "MenuButton"
+	menu_button.activated.connect(_open_menu)
+	for b in [party_button, map_button, menu_button]:
+		hint_row.add_child(b)
+
+	# 이동 단추 묶음: 안내 줄 바로 위(겹치지 않는다). 안의 배치는 고정 크기 단추의 칸.
+	pad_box = Control.new()
+	pad_box.name = "Pad"
+	pad_box.mouse_filter = MOUSE_FILTER_IGNORE
+	pad_box.anchor_top = 1.0
+	pad_box.anchor_bottom = 1.0
+	pad_box.offset_left = EDGE
+	pad_box.offset_right = EDGE + PAD_W
+	pad_box.offset_bottom = -EDGE - HINT_H - HINT_GAP
+	pad_box.offset_top = pad_box.offset_bottom - PAD_H
+	view_area.add_child(pad_box)
+	var pad_defs := [
+		[A.TURN_LEFT, "turn_left", ""], [A.FORWARD, "up", ""], [A.TURN_RIGHT, "turn_right", ""],
+		[A.STRAFE_LEFT, "strafe_left", ""], [A.BACK, "down", ""], [A.STRAFE_RIGHT, "strafe_right", ""],
+		[A.INVESTIGATE, "investigate", texts.t("action.investigate")],
+	]
+	for i in pad_defs.size():
+		var d: Array = pad_defs[i]
+		var b := TouchButton.new().setup(d[1], d[2], true)
+		b.name = "Pad_" + ExplorationRules.ACTION_NAMES.find_key(d[0])
+		b.activated.connect(_on_pad.bind(d[0]))
+		b.released.connect(func() -> void: _pad_since.erase(d[0]))  # 떼거나 취소하면 그 단추의 승인을 지운다
+		pad_box.add_child(b)
+		pad[d[0]] = b
+		if i < 6:
+			b.position = Vector2((i % 3) * (PAD_BUTTON + PAD_GAP), (i / 3) * (PAD_BUTTON + PAD_GAP))
+			b.size = Vector2(PAD_BUTTON, PAD_BUTTON)
+	var side_x := 3.0 * (PAD_BUTTON + PAD_GAP) + 8.0
+	var inv: TouchButton = pad[A.INVESTIGATE]
+	inv.position = Vector2(side_x, PAD_BUTTON + PAD_GAP)
+	inv.size = Vector2(PAD_BUTTON + 16.0, PAD_BUTTON)
+	rest_button = TouchButton.new().setup("", texts.t("action.rest"))
+	rest_button.name = "Pad_rest"
+	rest_button.activated.connect(_on_pad.bind(A.REST))
+	rest_button.released.connect(func() -> void: _pad_since.erase(A.REST))
+	rest_button.position = Vector2(side_x, 0)
+	rest_button.size = Vector2(PAD_BUTTON + 16.0, PAD_BUTTON)
+	pad_box.add_child(rest_button)
+
+
+## 모드(지도 판 열림·전투·파티 메뉴)와 화면 폭에 따라 바뀌는 것만 맞춘다. 자리는 앵커가 정하고 여기서는
+## 앵커로 나타낼 수 없는 것만 한다: 시야 영역·알림 영역의 오른쪽 여백(지도 판 폭), 알림 줄 자리(탐색 ↔ 전투), 보이기,
+## 렌즈 이동 비율(판 폭 / 화면 폭). 3D 시야(ViewContainer)는 건드리지 않는다.
 func _layout() -> void:
 	if view_container == null:
 		return
-	var s := size
-	if s.x <= 0.0:
-		s = get_viewport_rect().size
-	var side_w := roundf(s.x * 0.4) if _map_open else SIDE_COLLAPSED
-	# 지도를 열면 시야 6 : 지도 4(HD 리마스터 배치). 닫으면 시야가 화면 전체이고 상태 칸이 시야 오른쪽 위에 떠 있다
-	# (옆 칸 아래가 빈 판으로 남지 않는다, M2.6 2.5단계). view_w 는 시야 위 단추·알림 줄이 쓰는 폭(상태 칸 왼쪽까지).
-	var view_w := s.x - side_w if _map_open else s.x - SIDE_COLLAPSED - FLOAT_MARGIN
-	# 전투 중·파티 메뉴가 열린 동안에는 3D 시야가 화면 전체(그 층이 어둡게 덮는 배경, 지도 칸 자리가 빈 판으로 남지 않는다).
-	# 닫히면 탐색 배치로.
-	var stage_w := s.x if _hud_hidden() or not _map_open else view_w
-	view_container.position = Vector2.ZERO
-	view_container.size = Vector2(stage_w, s.y)
-	_flash.position = Vector2.ZERO
-	_flash.size = Vector2(stage_w, s.y)
-	_floor_label.position = Vector2(18, 12)
-	_steps_label.position = Vector2(18, 42)
-	menu_button.size = Vector2(64, 64)
-	menu_button.position = Vector2(view_w - 64 - 12, 10)
-	map_button.size = Vector2(64, 64)
-	map_button.position = Vector2(view_w - 2 * 64 - 20, 10)
-	party_button.size = Vector2(64, 64)
-	party_button.position = Vector2(view_w - 3 * 64 - 28, 10)
-	var pad_top := s.y - 2.0 * PAD_BUTTON - PAD_GAP - 16.0
-	var order := [A.TURN_LEFT, A.FORWARD, A.TURN_RIGHT, A.STRAFE_LEFT, A.BACK, A.STRAFE_RIGHT]
-	for i in order.size():
-		var b: TouchButton = pad[order[i]]
-		b.size = Vector2(PAD_BUTTON, PAD_BUTTON)
-		b.position = Vector2(16.0 + (i % 3) * (PAD_BUTTON + PAD_GAP), pad_top + (i / 3) * (PAD_BUTTON + PAD_GAP))
-	var inv: TouchButton = pad[A.INVESTIGATE]
-	inv.size = Vector2(PAD_BUTTON + 16.0, PAD_BUTTON)
-	inv.position = Vector2(16.0 + 3.0 * (PAD_BUTTON + PAD_GAP) + 8.0, pad_top + PAD_BUTTON + PAD_GAP)
-	_toast.position = Vector2(0, pad_top - 46.0)
-	_toast.size = Vector2(view_w, 36)
-
-	var rb := pad[A.INVESTIGATE] as TouchButton
-	rest_button.size = Vector2(PAD_BUTTON + 16.0, PAD_BUTTON)
-	rest_button.position = Vector2(rb.position.x, pad_top)
-	if _battle_view:
-		_toast.position = Vector2(0, BattleLayer.TOAST_Y)
-		_toast.size = Vector2(s.x, BattleLayer.TOAST_H)
+	var w := get_viewport_rect().size.x
 	var explore := not _hud_hidden()
-	for a in pad:
-		(pad[a] as TouchButton).visible = explore
-	map_button.visible = explore
-	menu_button.visible = explore
-	party_button.visible = explore
-	_floor_label.visible = explore
-	_steps_label.visible = explore
-	status.visible = explore
-	_refresh_rest_button()
-
-	var x0 := view_w
-	toolbar.visible = _map_open and explore
-	map.visible = _map_open and explore
-	if _map_open:
-		toolbar.position = Vector2(x0 + 12, 10)
-		toolbar.size = toolbar.custom_minimum_size
-		var map_top := toolbar.position.y + toolbar.size.y + 10.0
-		map.position = Vector2(x0 + 8, map_top)
-		map.size = Vector2(side_w - 16, s.y - STATUS_H - map_top - 8.0)
-		status.position = Vector2(x0, s.y - STATUS_H)
-		status.size = Vector2(side_w, STATUS_H)
+	var open := _map_open and explore
+	hud_root.visible = explore
+	map_window.visible = open
+	var cover := MapWindow.WIDTH if open else 0.0
+	if not open:
+		map_window.cancel_all()  # 숨긴 판의 단추는 누름을 남기지 않는다(전투·파티 메뉴로 감출 때도)
+	view_area.offset_right = -cover
+	minimap.visible = not _map_open
+	for b in toolbar.action_buttons():
+		b.visible = _map_open
+		if not _map_open:
+			b.cancel()
+	if _battle_view:
+		# 전투 중: 전투 층 위 막대 바로 아래(BattleLayer.TOAST_Y), 화면 전체 폭.
+		toast_area.offset_right = 0.0
+		_toast.set_anchors_preset(PRESET_TOP_WIDE)
+		_toast.offset_left = 0.0
+		_toast.offset_right = 0.0
+		_toast.offset_top = BattleLayer.TOAST_Y
+		_toast.offset_bottom = BattleLayer.TOAST_Y + BattleLayer.TOAST_H
 	else:
-		status.position = Vector2(s.x - SIDE_COLLAPSED - FLOAT_MARGIN, FLOAT_MARGIN)
-		status.size = Vector2(SIDE_COLLAPSED, STATUS_H)
+		# 탐색: 시야 영역 아래쪽, 이동 단추 묶음 바로 위.
+		toast_area.offset_right = -cover
+		_toast.set_anchors_preset(PRESET_BOTTOM_WIDE)
+		_toast.offset_left = 0.0
+		_toast.offset_right = 0.0
+		_toast.offset_bottom = -EDGE - HINT_H - HINT_GAP - PAD_H - 10.0
+		_toast.offset_top = _toast.offset_bottom - 36.0
+	view.set_lens_cover(cover / w if w > 0.0 else 0.0)
+	_refresh_rest_button()
 	map.refresh()
 	_debug_dirty = true
 	_debug_settle = 2
 
 
+## 덮이지 않은 시야 영역(화면 좌표). 지도 판이 열리면 판 왼쪽까지.
+func view_area_rect() -> Rect2:
+	var s := get_viewport_rect().size
+	var cover := MapWindow.WIDTH if _map_open and not _hud_hidden() else 0.0
+	return Rect2(Vector2.ZERO, Vector2(s.x - cover, s.y))
+
+
 func _refresh_hud() -> void:
 	_steps_label.text = texts.t("hud.steps", {"steps": state.steps})
+	orb.gauge = state.encounter.gauge()
+	minimap.refresh()
 	_refresh_rest_button()
 	_refresh_toolbar()
 
@@ -1114,6 +1242,7 @@ func _process(delta: float) -> void:
 		return
 	if _autosave_pending and not map.is_stroking():
 		_autosave()
+	_sync_map_views()
 	if state != null and not view.is_busy() and Engine.get_process_frames() != _action_frame:
 		if _queued >= 0:
 			# 같은 프레임이라 미뤘던 행동(연출이 없는 행동 뒤): 다시 막힘을 보고 한다.
@@ -1174,13 +1303,17 @@ func debug_snapshot() -> Dictionary:
 	if party_menu.is_open():
 		buttons.merge(party["buttons"])  # 메뉴가 덮은 탐색 단추는 내지 않는다(누를 수 없다)
 	else:
-		for b in pad.values() + [rest_button, menu_button, map_button, party_button]:
+		for b in pad.values() + [rest_button, menu_button, map_button, party_button, map_window.back_button]:
 			if (b as TouchButton).is_visible_in_tree():
 				buttons[b.name] = _css(b.size / 2.0, b)
-		if toolbar.visible:
-			for key in toolbar.buttons:
-				var tb: TouchButton = toolbar.buttons[key]
+		for key in toolbar.buttons:
+			var tb: TouchButton = toolbar.buttons[key]
+			if tb.is_visible_in_tree():
 				buttons["Tool_" + key] = _css(tb.size / 2.0, tb)
+		for t in map_window.icon_buttons:
+			var ib: TouchButton = map_window.icon_buttons[t]
+			if ib.is_visible_in_tree():
+				buttons[ib.name] = _css(ib.size / 2.0, ib)
 	var battle := battle_layer.debug_info(_css)
 	if battle_layer.is_open() and not modal.is_open():
 		buttons.merge(battle["buttons"])
@@ -1192,7 +1325,7 @@ func debug_snapshot() -> Dictionary:
 	for c in state.annotation.memos:
 		memo_texts["%d,%d" % [c.x, c.y]] = state.annotation.memos[c]
 	var map_info := {}
-	if map.visible:
+	if map.is_visible_in_tree():
 		var o: Array = _css(map.geo.origin, map)
 		var o2: Array = _css(map.geo.origin + Vector2(map.geo.cell_px, map.geo.cell_px), map)
 		map_info = {"origin": o, "cell": [o2[0] - o[0], o2[1] - o[1]]}
@@ -1205,7 +1338,7 @@ func debug_snapshot() -> Dictionary:
 		"shortcuts_open": state.world.shortcuts_open.size(), "passages_found": state.world.passages_found.size(),
 		"memos": state.annotation.memos.size(), "edges": state.annotation.edges.size(), "epoch": _epoch,
 		"memo_texts": memo_texts,
-		"user_dir": OS.get_user_data_dir(), "buttons": buttons, "map": map_info, "tool": map.tool,
+		"user_dir": OS.get_user_data_dir(), "buttons": buttons, "map": map_info, "tool": map.tool, "map_open": _map_open, "lens_cover": view.lens_cover,
 		"guard_delta": view.last_guard_delta, "guard_radius": view.guard_radius,
 		"plan_ms_last": view.last_plan_ms, "plan_ms_max": view.max_plan_ms,
 		# 지난 연출(끝난 연출 묶음)의 계획 횟수·누적 계획 시간, 지금까지 연출 하나의 가장 큰 누적·횟수.
@@ -1292,7 +1425,6 @@ func _on_debug_request(json_text: String) -> String:
 			if events.size() == 1 and events[0]["type"] == "rejected":
 				return JSON.stringify({"ok": false, "reason": events[0]["reason"]})
 			_autosave()
-			status.refresh()
 			party_menu.refresh_view()
 			_debug_dirty = true
 			return JSON.stringify({"ok": true, "events": events})
@@ -1345,3 +1477,14 @@ func _show_start_error(errors: Array) -> void:
 	body.size_flags_horizontal = SIZE_EXPAND_FILL
 	body.add_theme_font_size_override("font_size", 17)
 	scroll.add_child(body)
+
+
+## 층 문패 판(원작 왼쪽 위 다이얼 자리): 기울어진 판만 그리고 글자는 자식 Label 이 맡는다. 장식이라 누르기를 받지 않는다.
+class HudPlate:
+	extends Control
+
+	func _init() -> void:
+		mouse_filter = MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		UiTheme.draw_plate(self, Rect2(Vector2(-UiTheme.PLATE_SLANT, 0), size + Vector2(UiTheme.PLATE_SLANT, 0)), "", 1)

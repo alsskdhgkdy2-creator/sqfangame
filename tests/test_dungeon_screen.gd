@@ -85,8 +85,8 @@ func test_opens_new_game_and_autosaves() -> void:
 	check_eq(s.modal.kind, "", "창 없음")
 	check_eq(s.view.camera_fov(), CameraGuard.VFOV_DEG, "카메라 시야각 = 반경 시험의 기준 시야각")
 	var sz := s.view.get_viewport().get_visible_rect().size
-	check(sz.x / sz.y <= CameraGuard.MAX_ASPECT, "기본 창의 시야 영역 화면비 ≤ MAX_ASPECT (%s)" % sz)
-	var want := CameraGuard.reach(2.0 * sqrt(2.0), 75.0, sz.x / sz.y)
+	check(s.view.effective_aspect() <= CameraGuard.MAX_ASPECT, "기본 창의 유효 화면비 ≤ MAX_ASPECT (%s)" % sz)
+	var want := CameraGuard.reach(2.0 * sqrt(2.0), 75.0, s.view.effective_aspect())
 	check(is_equal_approx(s.view.guard_radius, want), "보정 반경 = 지금 시야각·화면비로 계산 (%f, %f)" % [s.view.guard_radius, want])
 
 
@@ -136,6 +136,7 @@ func test_hold_repeats_only_after_delay() -> void:
 
 func test_map_press_and_drag_onto_pad_does_not_move() -> void:
 	var s := await _open()
+	await kit.open_map()
 	var before := kit.hash_now()
 	var from := kit.map_cell(START)
 	var fwd := kit.center_of(_pad(s, A.FORWARD))
@@ -168,6 +169,7 @@ func test_map_press_and_drag_onto_pad_does_not_move() -> void:
 
 func test_pad_press_then_drag_to_map_does_not_draw() -> void:
 	var s := await _open()
+	await kit.open_map()
 	var edges := s.state.annotation.edges.size()
 	s.map.tool = "wall"
 	var turn := kit.center_of(_pad(s, A.TURN_LEFT))
@@ -185,6 +187,7 @@ func test_pad_press_then_drag_to_map_does_not_draw() -> void:
 
 func test_wall_tap_toggles_exactly_once() -> void:
 	var s := await _open()
+	await kit.open_map()
 	s.map.tool = "wall"
 	var e_pos := kit.map_edge(Vector2i(3, 17), Dir.E)
 	var saves := s.autosave_count
@@ -200,6 +203,7 @@ func test_wall_tap_toggles_exactly_once() -> void:
 
 func test_second_finger_cancels_stroke() -> void:
 	var s := await _open()
+	await kit.open_map()
 	s.map.tool = "wall"
 	var saves := s.autosave_count
 	var a := kit.map_edge(Vector2i(1, 17), Dir.N)
@@ -258,6 +262,7 @@ func test_focus_loss_clears_input() -> void:
 
 func test_memo_dialog_swallows_movement_keys() -> void:
 	var s := await _open()
+	await kit.open_map()
 	s.map.tool = "memo"
 	await kit.tap(kit.map_cell(Vector2i(3, 18)))
 	check_eq(s.modal.kind, "memo", "메모 창 열림")
@@ -358,6 +363,7 @@ func test_import_replaces_state_and_late_result_is_dropped() -> void:
 
 func test_autosave_call_points() -> void:
 	var s := await _open("native", "debug=1")
+	await kit.open_map()
 	var n := s.autosave_count
 	await kit.press_key(KEY_A)
 	check_eq(s.autosave_count, n + 1, "규칙 행동(회전)")
@@ -445,6 +451,7 @@ func _auto_edges(s: DungeonScreen) -> int:
 ## 지도 그리기 획이 열린 동안 키·이동 단추 행동을 받지 않고, 확정하지 않은 획을 저장하지 않는다(05 §9.3, §8.4).
 func test_stroke_blocks_actions_and_unsaved_stroke() -> void:
 	var s := await _open()
+	await kit.open_map()
 	s.map.tool = "wall"
 	var saves := s.autosave_count
 	var a := kit.map_edge(Vector2i(1, 17), Dir.N)
@@ -487,6 +494,7 @@ func test_stroke_blocks_actions_and_unsaved_stroke() -> void:
 ## 끌어 이동·핀치·아이콘 누르기 동안에도 막는다. 연출 중 미리 받은 행동과 누르고 있기 반복도 버린다.
 func test_map_interaction_drops_queue_and_hold() -> void:
 	var s := await _open()
+	await kit.open_map()
 	s.view.speed = 0.02
 	await kit.press_key(KEY_W)
 	await kit.press_key(KEY_D)
@@ -542,6 +550,7 @@ func test_map_interaction_drops_queue_and_hold() -> void:
 ## 창이 열린 동안 누른 키는 창이 닫혀도 반복하지 않는다(05 §9.3: 승인된 키만 반복).
 func test_key_pressed_in_window_does_not_repeat() -> void:
 	var s := await _open()
+	await kit.open_map()
 	s.view.speed = 0.02
 	await kit.press_key(KEY_W)
 	check(s.view.is_busy(), "준비: 이동 연출 중")
@@ -741,6 +750,7 @@ func test_native_export_import_check_file_errors() -> void:
 ## 세 손가락에서 하나를 떼면 남은 두 손가락으로 핀치 기준을 다시 잡는다(확대가 튀지 않는다).
 func test_pinch_rebases_when_finger_lifts() -> void:
 	var s := await _open()
+	await kit.open_map()
 	s.map.tool = "pan"
 	var p0 := kit.map_cell(Vector2i(2, 18))
 	var p1 := kit.map_cell(Vector2i(3, 18))
@@ -782,6 +792,7 @@ func test_screen_exit_disposes_bridge() -> void:
 ## 연출 끝. 막힌 누르기는 승인을 만들지도 앞 누르기의 승인을 다시 쓰지도 않아 반복하지 않는다.
 func test_blocked_pad_press_gets_no_old_approval() -> void:
 	var s := await _open()
+	await kit.open_map()
 	var rt := _pad(s, A.TURN_RIGHT)
 	await kit.tap(kit.center_of(rt), 1)
 	check_eq(s.state.party.facing, Dir.E, "준비: 단추 한 번 = 회전 하나")
@@ -838,6 +849,7 @@ func test_queued_action_is_replaced_not_bypassed() -> void:
 ## 이동 도구로 누른 손가락은 바꾼 뒤 끌어도 벽을 그리지 않고, 벽 획은 지우개로 바꾸면 되돌린다. 편집·저장 없음.
 func test_tool_change_cancels_map_gesture() -> void:
 	var s := await _open()
+	await kit.open_map()
 	var edits := [0]
 	s.map.edited.connect(func(_c: bool) -> void: edits[0] += 1)
 	var saves := s.autosave_count
@@ -867,7 +879,9 @@ func test_tool_change_cancels_map_gesture() -> void:
 	kit.touch(0, a, false)
 	await kit.frames(3)
 	check_eq(s.state.annotation.edges.size(), 0, "바꾼 뒤 끌기도 아무것도 하지 않는다")
-	# 3) 색 획 중 다른 색(같은 도구) → 취소.
+	# 3) 색 획 중 다른 색(같은 도구) → 취소. 견본 줄은 바닥 색 도구를 고르면 뜬다(M2.7 R1, 설명서 7쪽).
+	await kit.tap(kit.center_of(s.toolbar.buttons["color"]), 1)
+	check(s.toolbar.palette.is_visible_in_tree(), "바닥 색 도구 → 견본 줄")
 	await kit.tap(kit.center_of(s.toolbar.buttons["color1"]), 1)
 	var f0: Dictionary = s.state.annotation.floors.duplicate()
 	var c0 := kit.map_cell(Vector2i(2, 17))
@@ -898,6 +912,7 @@ func test_tool_change_cancels_map_gesture() -> void:
 ## 획이 열린 동안 미룬 자동 저장: 획을 끝내면 저장 하나(획 포함), 두 번째 손가락으로 취소하면 획 없는 상태를 저장 하나.
 func test_deferred_autosave_on_stroke_end_and_cancel() -> void:
 	var s := await _open()
+	await kit.open_map()
 	s.map.tool = "wall"
 	var a := kit.map_edge(Vector2i(1, 17), Dir.N)
 	var b := kit.map_edge(Vector2i(4, 17), Dir.N)
@@ -945,6 +960,7 @@ func test_deferred_autosave_on_stroke_end_and_cancel() -> void:
 ## 핀치 손가락이 바뀌어도 지도 중심이 튀지 않는다(세 손가락 중 하나를 떼고 남은 둘로 아주 조금 끌기).
 func test_pinch_finger_swap_keeps_center() -> void:
 	var s := await _open()
+	await kit.open_map()
 	s.map.tool = "pan"
 	var p0 := kit.map_cell(Vector2i(2, 18))
 	var p1 := kit.map_cell(Vector2i(3, 18))
@@ -986,13 +1002,22 @@ func _req(s: DungeonScreen, req: Dictionary) -> Dictionary:
 	return r if typeof(r) == TYPE_DICTIONARY else {}
 
 
+## 탐색 화면에는 파티 상태 칸이 없다(원작: 상태는 캠프·전투에서, M2.7 R1). StatusPanel 부품은 그대로 레벨을 보인다.
 func test_status_panel_shows_level_and_updates_after_level_up() -> void:
 	var s := await _open("native", "debug=1")
-	check_eq(s.status.level_text(1), "Lv 1", "대원 칸의 「Lv 1」")
+	check(s.find_children("*", "StatusPanel", true, false).is_empty(), "탐색 화면에 상태 칸 없음")
+	var names: Array[String] = []
+	for k in s.party_data.name_keys:
+		names.append(s.texts.t(k))
+	var st := StatusPanel.new()
+	st.set_state(s.state, s.texts, names)
+	check_eq(st.level_text(1), "Lv 1", "대원 칸의 「Lv 1」")
 	var r := _req(s, {"op": "grant_exp", "member": 1, "n": s.state.defs.battle.growth.cum(3)})
 	check(r.get("ok", false), "grant_exp: %s" % str(r))
-	check_eq(s.status.level_text(1), "Lv 3", "레벨업 뒤 바로 「Lv 3」")
-	check_eq(s.status.level_text(0), "Lv 1", "다른 대원 그대로")
+	st.refresh()
+	check_eq(st.level_text(1), "Lv 3", "레벨업 뒤 「Lv 3」")
+	check_eq(st.level_text(0), "Lv 1", "다른 대원 그대로")
+	st.free()
 
 
 func test_debug_supply_and_grant_exp_requests_autosave() -> void:

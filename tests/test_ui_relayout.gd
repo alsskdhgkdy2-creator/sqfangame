@@ -424,7 +424,7 @@ func test_touch_targets_stay_at_least_64() -> void:
 		for a in s.pad:
 			check_eq((s.pad[a] as Control).size.y, DungeonScreen.PAD_BUTTON, "%s: 이동 단추 높이" % tag)
 		for b in [s.party_button, s.map_button, s.menu_button]:
-			check_eq((b as Control).size, Vector2(64, 64), "%s: 위 단추 %s" % [tag, b.name])
+			check_eq((b as Control).size, Vector2(64, 64), "%s: 안내 줄 단추 %s" % [tag, b.name])
 		await kit.press_key(KEY_P)
 		var pm := s.party_menu
 		for i in pm.tab_buttons.size():
@@ -486,7 +486,7 @@ func test_enemy_cards_stay_uncovered_while_targetable() -> void:
 		_check_enemies_clear(tag + " 스킬 대상")
 
 
-# ---- 탐색: 지도 닫힘 ----
+# ---- 탐색: 지도 닫힘 (M2.7 R1: 기본 화면, 자세한 시험은 test_overlay_ui) ----
 
 func test_closed_map_lets_the_view_fill_the_screen() -> void:
 	_kit()
@@ -494,29 +494,26 @@ func test_closed_map_lets_the_view_fill_the_screen() -> void:
 	for px in WINDOWS:
 		var size: Vector2 = await _window(px)
 		var tag := "%s(논리 %s)" % [str(px), str(size)]
-		if s._map_open:
-			s._toggle_map()
-			await kit.frames(3)
-		check_eq(_rect(s.view_container), Rect2(Vector2.ZERO, size), tag + ": 지도를 닫으면 3D 시야가 화면 전체")
-		var st := _rect(s.status)
-		check(Rect2(Vector2.ZERO, size).encloses(st) and st.position.x > size.x * 0.5 and st.position.y <= 12.0, "%s: 상태 칸 %s 은 시야 오른쪽 위에 뜬다" % [tag, str(st)])
-		check(st.end.x < size.x and st.end.y < size.y * 0.5, "%s: 상태 칸 둘레로 시야가 보인다" % tag)
-		for b in [s.party_button, s.map_button, s.menu_button]:
-			check(_rect(b).end.x <= st.position.x, "%s: %s 는 상태 칸 왼쪽" % [tag, b.name])
-		check(not s.map.visible and not s.toolbar.visible, tag + ": 지도·도구 숨김")
+		check(not s._map_open, tag + ": 기본은 지도 닫힘")
+		check_eq(_rect(s.view_container), Rect2(Vector2.ZERO, size), tag + ": 3D 시야가 화면 전체")
+		var mm := _rect(s.minimap)
+		check(s.minimap.is_visible_in_tree() and mm.end.x <= size.x and mm.position.x > size.x * 0.5 and mm.position.y <= 16.0, "%s: 미니맵 %s 은 오른쪽 위" % [tag, str(mm)])
+		check(not s.map_window.is_visible_in_tree(), tag + ": 지도 판 숨김")
 		s._toggle_map()
 		await kit.frames(3)
-		var side := roundf(size.x * 0.4)
-		check_eq(_rect(s.view_container).size.x, size.x - side, tag + ": 지도를 열면 시야 6 : 지도 4")
-		check(s.map.visible and _rect(s.status).position.x == size.x - side, tag + ": 지도 열림 → 상태 칸은 옆 칸 아래")
+		check_eq(_rect(s.view_container), Rect2(Vector2.ZERO, size), tag + ": 지도를 열어도 3D 시야는 화면 전체")
+		check_eq(_rect(s.map_window), Rect2(size.x - MapWindow.WIDTH, 0, MapWindow.WIDTH, size.y), tag + ": 지도 판은 오른쪽 위에서 아래까지")
+		s._toggle_map()
+		await kit.frames(3)
 
 
 # ---- 파티 메뉴 뒤 탐색 HUD ----
 
-## 탐색 HUD(전투 중에 감추는 것과 같은 묶음: 지도 패널·도구 줄·이동 단추·휴식·파티/지도/메뉴 단추·상태 칸·층 이름·걸음).
+## 탐색 HUD(전투 중에 감추는 것과 같은 묶음: 지도 판·이동 단추·휴식·안내 줄 단추·층 문패·위험 보석).
+## 미니맵은 지도 판이 열리면 따로 감추므로(원작) 이 묶음에 넣지 않는다.
 static func _hud(s: DungeonScreen) -> Dictionary:
-	var out := {"map": s.map, "toolbar": s.toolbar, "party": s.party_button, "map_button": s.map_button, "menu": s.menu_button,
-		"status": s.status, "floor": s._floor_label, "steps": s._steps_label, "rest": s.rest_button}
+	var out := {"map": s.map_window, "party": s.party_button, "map_button": s.map_button, "menu": s.menu_button,
+		"floor": s.floor_plate, "orb": s.orb, "rest": s.rest_button}
 	for a in s.pad:
 		out["pad_%d" % int(a)] = s.pad[a]
 	return out
@@ -540,7 +537,7 @@ func _check_hidden(s: DungeonScreen, size: Vector2, tag: String) -> void:
 func _check_restored(s: DungeonScreen, before: Dictionary, size: Vector2, tag: String) -> void:
 	check(not s.party_menu.is_open(), tag + ": 파티 메뉴 닫힘")
 	check_eq(_vis(s), before, tag + ": HUD 가 열기 전대로")
-	check_eq(_rect(s.view_container).size.x, size.x - roundf(size.x * 0.4), tag + ": 시야 6 : 지도 4 로 돌아온다")
+	check_eq(_rect(s.view_container), Rect2(Vector2.ZERO, size), tag + ": 3D 시야는 화면 전체 그대로")
 
 
 func _close_by_key(s: DungeonScreen) -> void:

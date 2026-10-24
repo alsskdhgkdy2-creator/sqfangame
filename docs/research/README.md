@@ -8,6 +8,7 @@
 | `02-battle-classes-formulas.md` | 턴 흐름, 행동 순서, 대열, 능력치, 피해 공식, 상태이상·봉인, 강화 슬롯, 작품별 특수 전투 자원, 직업, 스킬 트리, 장비, 적 설계, 초반 수치 |
 | `03-ui-reference-gap.md` | 원작 공식 스크린샷과 지금 임시 UI 캡처의 비교, 화면별 개선 목록과 단계(2026-10-18, Antigravity Gemini 분석 + 조정자 대조) |
 | `04-godot-layered-ui.md` | Godot 그리기·입력 순서(트리 순서·`CanvasLayer`·`z_index`·`mouse_filter`, 엔진 소스 확인)와 원작의 겹침 구성, UI 지시서에 넣을 겹침 배치 원칙(2026-10-18) |
+| `05-overlay-ui-reference.md` | 화면 위에 뜨는 UI의 Godot 방식(공식 문서·공식 데모 RPG·GDQuest Open RPG·엔진 소스의 렌즈 이동)과 원작 HD 화면별 짜임(탐색·지도·전투·시설·상점·스킬·상태·옵션), 지금 화면과의 차이(2026-10-24, D23) |
 
 ## 작성 경위
 

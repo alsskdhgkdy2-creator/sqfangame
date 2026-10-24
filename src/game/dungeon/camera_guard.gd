@@ -9,9 +9,14 @@ const EPS := 0.05
 const WIDE_LIMIT := 0.25
 ## 연출 계획(plan_path)이 찾는 최대 |Δδ| 의 정밀도(m).
 const PLAN_M_TOL := 2e-4
-## 반경 계산에 쓰는 시야: 세로 시야각(Camera3D.fov, 세로 고정)과 대상 화면비 가운데 가장 넓은 것(시야 영역 가로/세로).
+## 반경 계산에 쓰는 시야: 세로 시야각(Camera3D.fov, 세로 고정)과 유효 화면비의 가장 넓은 값.
 const VFOV_DEG := 75.0
-const MAX_ASPECT := 2.4
+## 대상 화면 가운데 가장 넓은 화면비(2400×1000 → 논리 1728×720).
+const MAX_SCREEN_ASPECT := 2.4
+## 대상 화면에서 생기는 가장 넓은 유효 화면비(M2.7 R1): 지도 판(550px)이 열리면 렌즈를 밀어 한쪽 반폭이 넓어진다.
+## 유효 화면비 = 화면비·(1 + p) = (논리 폭 + 550)/720 이라 1728×720 에서 (1728 + 550)/720 ≈ 3.164. 올림해 3.17.
+## 이보다 넓은 창이면 DungeonView 가 실제 유효 화면비로 반경을 계산한다(이 값은 한도가 아니라 시험·기본값의 기준).
+const MAX_ASPECT := 3.17
 ## 안전 조건의 허용치(m): 유효한 δ 는 |δ| ≤ 한도이고 모든 정점과 |w − δ| ≥ ε − FREE_TOL(is_free).
 ## nearest_free 는 이 허용 집합 하나로 「그대로」「가장 가까운 허용 점」「없음」을 정한다. search_within 은 돌려주기 전에 다시 확인한다.
 const FREE_TOL := 1e-6
@@ -391,7 +396,7 @@ static func min_depth(verts: PackedVector3Array, cam: Vector3, fwd: Vector3) -> 
 ## 삼각형 최대 변 L, 가로 시야 반각 tan = k 이면 P 의 옆 거리가 L·(1 + k) 를 넘을 때 그 삼각형의 꼭짓점은 모두
 ## 같은 옆면 밖이라 통째로 버려진다. 그런 정점은 보정할 필요가 없다(겹침 검사에서도 뺀다). 여유로 ε·(1 + k) 를 더한다.
 ## 보정 뒤 카메라는 처음 위치에서 최대 WIDE_LIMIT 떨어지므로 그만큼 더 넓게 본다.
-## 실제 화면은 DungeonView 가 지금 Camera3D.fov 와 시야 영역 화면비로 부른다(2.4 보다 넓은 창이면 반경이 커진다).
+## 실제 화면은 DungeonView 가 세로 시야각과 유효 화면비(렌즈 이동 포함, DungeonView.effective_aspect)로 부른다.
 static func reach(max_triangle: float, vfov_deg: float = VFOV_DEG, max_aspect: float = MAX_ASPECT, eps: float = EPS) -> float:
 	var k := tan(deg_to_rad(vfov_deg) / 2.0) * maxf(max_aspect, 1.0)
 	return (max_triangle + eps) * (1.0 + k) + WIDE_LIMIT

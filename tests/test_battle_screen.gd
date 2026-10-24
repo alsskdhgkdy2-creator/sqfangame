@@ -659,7 +659,7 @@ func _finish_battle(s: DungeonScreen) -> void:
 
 func _explore_ui_visible(s: DungeonScreen) -> Array[Control]:
 	var out: Array[Control] = []
-	for c in [s.map, s.toolbar, s.status, s.menu_button, s.map_button, s.rest_button] + s.pad.values():
+	for c in [s.map_window, s.minimap, s.orb, s.floor_plate, s.menu_button, s.map_button, s.rest_button] + s.pad.values():
 		if (c as Control).is_visible_in_tree():
 			out.append(c)
 	return out
@@ -672,18 +672,19 @@ func test_encounter_opens_layer_and_hides_explore_ui() -> void:
 	await _walk_into_battle(s)
 	check(s.state.encounter.pending and s.battle_layer.is_open(), "인카운트 → 전투 층")
 	check_eq(s.modal.kind, "", "M1 자리표시 전투 창은 없다")
-	check(_explore_ui_visible(s).is_empty(), "지도·도구 줄·이동 단추·메뉴·상태 표시를 감춘다: %s" % str(_explore_ui_visible(s).map(func(c): return c.name)))
+	check(_explore_ui_visible(s).is_empty(), "지도 판·HUD(미니맵·위험 보석·층 문패·이동 단추·안내 줄)를 감춘다: %s" % str(_explore_ui_visible(s).map(func(c): return c.name)))
 	var cam := s.view.camera_transform()
 	var full := Rect2(Vector2.ZERO, s.size)
 	check_eq(s.view_container.get_global_rect(), full, "전투 중 3D 시야는 화면 전체(지도 칸 자리가 빈 판으로 남지 않는다, M2.6 U1)")
 	check_eq(Vector2((s.view_container.get_child(0) as SubViewport).size), s.size, "시야 해상도도 화면 전체")
-	check(s.battle_layer.get_index() < s._toast.get_index() and s._toast.get_index() < s.modal.get_index(), "층 순서: 전투 층 < 알림 줄 < 창")
+	check(s.battle_layer.get_parent() == s.windows_root and s.layers["Windows"].layer < s.layers["Modal"].layer \
+		and s.layers["Modal"].layer < s.layers["Toast"].layer, "층 순서: 전투 층(창 층) < 창(모달 층) < 알림 줄(알림 층)")
 	await _finish_battle(s)
 	check(not s.battle_layer.is_open() and not s.state.encounter.pending, "전투 끝 → 탐색")
 	check_eq(s.view_container.get_global_rect(), rect, "전투 뒤에는 탐색 시야 사각형 그대로")
 	check_eq((s.view_container.get_child(0) as SubViewport).size, sv_size, "탐색 시야 해상도 그대로")
 	check_eq(s.view.camera_transform(), cam, "카메라 자세는 전투 전후 같다")
-	check(s.map.is_visible_in_tree() and s.menu_button.is_visible_in_tree() and s.pad[A_FORWARD].is_visible_in_tree(), "탐색 부품이 다시 보인다")
+	check(s.minimap.is_visible_in_tree() and s.menu_button.is_visible_in_tree() and s.pad[A_FORWARD].is_visible_in_tree(), "탐색 부품이 다시 보인다")
 
 const A_FORWARD := ExplorationRules.Action.FORWARD
 

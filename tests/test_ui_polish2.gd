@@ -4,6 +4,11 @@ extends TestCase
 
 const Kit := preload("res://tests/scene_kit.gd")
 const SIZES := [Vector2(1280, 720), Vector2(2400, 1000)]
+## 상태 칸 부품의 두 폭(M2.6 의 탐색 배치에서 쓰던 넓은 꼴 = 화면 40%, 좁은 꼴 300)과 높이.
+## 탐색 화면에는 이제 상태 칸이 없고(M2.7 R1) 캠프·전투에서 다시 쓸 부품으로 시험한다.
+const STATUS_WIDE := 0.4
+const STATUS_NARROW := 300.0
+const STATUS_H := 190.0
 
 var kit: Kit
 var texts: TextDb
@@ -56,8 +61,16 @@ func _max_party(s: DungeonScreen) -> void:
 		m.tp = m.max_tp
 
 
-func _check_status_rows(s: DungeonScreen, tag: String) -> bool:
-	var st := s.status
+## 탐색 화면 아래에 붙인 상태 칸 부품(화면 상태·글을 그대로 쓴다). 화면이 지울 때 함께 지워진다.
+func _status_panel(s: DungeonScreen) -> StatusPanel:
+	var st := StatusPanel.new()
+	st.name = "TestStatusPanel"
+	st.set_state(s.state, s.texts, s._member_names.duplicate())
+	s.add_child(st)
+	return st
+
+
+func _check_status_rows(s: DungeonScreen, st: StatusPanel, tag: String) -> bool:
 	var font := st.get_theme_default_font()
 	var panel := Rect2(Vector2.ZERO, st.size)
 	var gauge := st.gauge_rect()
@@ -109,6 +122,7 @@ func test_status_rows_show_hp_and_thinner_tp_without_overlap() -> void:
 	for i in s.state.party.members.size():
 		class_names.append(texts.t(s.state.defs.class_of(i).name_key))
 	var compact_seen := 0
+	var st := _status_panel(s)
 	for values in ["레벨 1", "최대"]:
 		if values == "최대":
 			_max_party(s)
@@ -116,19 +130,17 @@ func test_status_rows_show_hp_and_thinner_tp_without_overlap() -> void:
 			check(s.state.party.members.any(func(m: PartyState.Member) -> bool: return m.max_hp >= 100 and m.max_tp >= 100), "준비: 세 자리 HP·TP")
 		for sz in SIZES:
 			for open in [true, false]:
-				if s._map_open != open:
-					s._toggle_map()
 				await _resize(s, sz)
-				var st := s.status
-				var tag := "%s %dx%d %s" % [values, sz.x, sz.y, "지도" if open else "지도 닫음"]
-				check_eq(st.size, Vector2(roundf(sz.x * 0.4) if open else DungeonScreen.SIDE_COLLAPSED, DungeonScreen.STATUS_H), tag + ": 상태 칸 크기 그대로")
+				st.size = Vector2(roundf(s.size.x * STATUS_WIDE) if open else STATUS_NARROW, STATUS_H)
+				st.refresh()
+				var tag := "%s %dx%d %s" % [values, sz.x, sz.y, "넓은 꼴" if open else "좁은 꼴"]
 				for names in [party_names, class_names]:
 					st.member_names.assign(names)
-					var compact := _check_status_rows(s, "%s %s" % [tag, "대원 이름" if names == party_names else "직업 이름"])
+					var compact := _check_status_rows(s, st, "%s %s" % [tag, "대원 이름" if names == party_names else "직업 이름"])
 					if compact:
 						compact_seen += 1
 					if open:
-						check(not compact, tag + ": 지도를 열면 넓은 꼴")
+						check(not compact, tag + ": 넓은 폭이면 넓은 꼴")
 				st.member_names.assign(party_names)
 	check(compact_seen >= 2, "좁은 꼴(값 쌓기)도 보았다(%d)" % compact_seen)
 	check_eq(UiTheme.TP_BAR, Color(0.4, 0.65, 1.0), "TP 색 = 전투 대원 칸 TP 색")
@@ -261,153 +273,74 @@ func test_equip_totals_fit_under_slots_at_both_sizes() -> void:
 		check((t.line_layout(0)["line"] as Rect2).end.x <= (t.line_layout(BattleLimits.GEAR.size())["line"] as Rect2).position.x, tag + ": 두 묶음이 나란히")
 
 
-# ---- U7 지도 모눈·좌표 ----
+# ---- U7 지도 모눈·구역 자 (M2.7 R1: 원작 HD 처럼 자는 층 전체 보기에만, 5×5 칸 구역마다 하나) ----
 
-func _check_labels(map: MapPanel, tag: String) -> Dictionary:
-	var font := map.get_theme_default_font()
-	var out := {}
-	for vertical in [false, true]:
-		var labels: Array[Dictionary] = map.row_labels() if vertical else map.column_labels()
-		var kind := "행" if vertical else "열"
-		check(not labels.is_empty(), "%s: %s 머리가 보인다" % [tag, kind])
-		var prev := Rect2()
-		for j in labels.size():
-			var l := labels[j]
-			var i: int = l["index"]
-			var r: Rect2 = l["rect"]
-			var who := "%s %s %s" % [tag, kind, l["text"]]
-			check(i >= 0 and i < (map.geo.height if vertical else map.geo.width), who + ": 층 칸 번호 안")
-			check_eq(l["text"], MapPanel.row_name(i) if vertical else MapPanel.column_name(i), who + ": 이름 = 칸 번호")
-			var cell := map.geo.cell_rect(Vector2i(0, i) if vertical else Vector2i(i, 0)).get_center()
-			check(font.get_string_size(l["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, MapPanel.HEAD_FS).x <= r.size.x, who + ": 글자 폭")
-			check(font.get_height(MapPanel.HEAD_FS) * 0.8 <= r.size.y + 0.01, who + ": 글자 높이")
-			if vertical:
-				check(absf(r.get_center().y - cell.y) < 0.01, who + ": 그 행 가운데")
-				check(r.position.x >= 0.0 and r.end.x <= MapPanel.HEAD_W + 0.01 and r.position.y >= MapPanel.HEAD_H - 0.01 and r.end.y <= map.size.y + 0.01, who + ": 왼쪽 띠 안")
-			else:
-				check(absf(r.get_center().x - cell.x) < 0.01, who + ": 그 열 가운데")
-				check(r.position.y >= -0.01 and r.end.y <= MapPanel.HEAD_H + 0.01 and r.position.x >= MapPanel.HEAD_W - 0.01 and r.end.x <= map.size.x + 0.01, who + ": 위 띠 안")
-			if j > 0:
-				check(not prev.intersects(r), who + ": 앞 머리와 겹치지 않는다")
-			prev = r
-			out["%s%d" % [kind, i]] = r.get_center()
-	return out
-
-
-func test_map_headers_follow_cells_at_every_zoom_and_pan() -> void:
+func test_overview_sector_ruler_matches_major_grid() -> void:
 	_kit()
 	var s := await kit.open("native", 7)
-	var map := s.map
-	await kit.frames(2)
-	var base := _check_labels(map, "기본")
-	check_eq(map.header_step(false), 1, "기본 확대: 열 머리 모두")
-	var at := s.state.party.at
-	check(base.has("열%d" % at.x) and absf((base["열%d" % at.x] as Vector2).x - map.cell_point(at).x) < 0.01, "파티 열의 머리 = 파티 칸 가운데")
-	check(base.has("행%d" % at.y) and absf((base["행%d" % at.y] as Vector2).y - map.cell_point(at).y) < 0.01, "파티 행의 머리 = 파티 칸 가운데")
-	# 끌어 옮기면 같은 칸의 머리가 같은 만큼 따라간다
-	map.follow = false
-	map.geo.pan(Vector2(37, -23))
-	map.queue_redraw()
-	var moved := _check_labels(map, "옮김")
-	var same := 0
-	for k in base:
-		if moved.has(k):
-			same += 1
-			var d: Vector2 = moved[k] - base[k]
-			check(absf(d.x - (37.0 if k.begins_with("열") else 0.0)) < 0.01 and absf(d.y - (-23.0 if k.begins_with("행") else 0.0)) < 0.01, "%s: 옮긴 만큼 따라간다(%s)" % [k, str(d)])
-	check(same > 4, "같이 보이는 머리 %d개" % same)
-	map.to_party()
-	map.zoom(10.0)
-	check_eq(map.geo.cell_px, MapGeometry.MAX_CELL_PX, "준비: 가장 크게")
-	_check_labels(map, "가장 크게")
-	map.zoom(0.01)
-	check_eq(map.geo.cell_px, MapGeometry.MIN_CELL_PX, "준비: 가장 작게")
-	_check_labels(map, "가장 작게")
-	check(map.header_step(false) > 1, "가장 작게: 열 머리를 솎는다(%d칸마다)" % map.header_step(false))
-	check(map.header_step(true) > 1, "가장 작게: 행 머리를 솎는다(%d칸마다)" % map.header_step(true))
+	await kit.open_map()
+	var ov := s.map_window.overview
+	check(ov.is_visible_in_tree(), "준비: 층 전체 보기")
+	var font := ov.get_theme_default_font()
+	var w := s.state.floor_def.width
+	var h := s.state.floor_def.height
+	for vertical in [false, true]:
+		var labels := ov.sector_labels(vertical)
+		var n := h if vertical else w
+		check_eq(labels.size(), ceili(float(n) / MapPanel.GRID_MAJOR), "%s 구역 수" % ("세로" if vertical else "가로"))
+		for l in labels:
+			var i: int = l["index"]
+			var r: Rect2 = l["rect"]
+			var who := "%s 구역 %s" % ["세로" if vertical else "가로", l["text"]]
+			check_eq(l["text"], MapOverview.sector_name(i, vertical), who + ": 이름")
+			# 자 칸의 양 끝 = 밝은 5칸 모눈 선(구역 경계)
+			var a := ov.geo.to_screen(Vector2(0, i * MapPanel.GRID_MAJOR) if vertical else Vector2(i * MapPanel.GRID_MAJOR, 0))
+			check(absf((r.position.y if vertical else r.position.x) - (a.y if vertical else a.x)) < 0.01, who + ": 구역 시작 선에 맞춘다")
+			check(font.get_string_size(l["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, MapOverview.RULER_FS).x <= (r.size.y if vertical else r.size.x), who + ": 글자가 칸 안")
+			check(Rect2(Vector2.ZERO, ov.size).grow(0.01).encloses(r), who + ": 보기 안")
+	check_eq([MapOverview.sector_name(0, false), MapOverview.sector_name(3, false)], ["1", "4"], "가로는 번호")
+	check_eq([MapOverview.sector_name(0, true), MapOverview.sector_name(3, true), MapOverview.sector_name(26, true)], ["A", "D", "AA"], "세로는 글자")
+	check(contrast(MapOverview.RULER_TEXT, MapOverview.RULER_BG) >= 4.5, "자 글자 대비 %.1f" % contrast(MapOverview.RULER_TEXT, MapOverview.RULER_BG))
+	check(contrast(UiTheme.TEXT, MapPanel.BG) >= 4.5, "층 문패(도구 열) 글자 대비 %.1f" % contrast(UiTheme.TEXT, MapPanel.BG))
+	# 원작 색(nin_02): 도구 열 단추는 파란 모양, 고른 도구는 공용 따뜻한 커서, 「돌아가기」는 밝은 알약
+	var wall: TouchButton = s.toolbar.buttons["wall"]
+	s._choose_tool("door", 0)
+	check_eq(wall.theme_state(), "tool:normal", "고르지 않은 도구: 파란 도구 칸")
+	s._choose_tool("wall", 0)
+	check_eq(wall.theme_state(), "selected", "고른 도구: 따뜻한 커서")
+	check_eq(s.map_window.back_button.theme_state(), "pill:normal", "「돌아가기」: 밝은 알약")
+	check(MapPanel.FLOOR_COLORS.slice(1).all(func(c: Color) -> bool: return absf(c.h - MapPanel.FLOOR_COLORS[0].h) > 0.06 or absf(c.v - MapPanel.FLOOR_COLORS[0].v) > 0.25), "플레이어 바닥 색 1~4 는 자동 파랑과 다르다")
+	# 층 전체가 보기 안에 들어온다
+	var fr := ov.floor_rect()
+	check(ov.map_area().grow(0.01).encloses(fr), "층 전체가 보인다 %s ⊂ %s" % [str(fr), str(ov.map_area())])
+	# 그리기 격자의 보이는 범위(점선 사각형)는 그리기 격자를 옮기면 따라간다
+	var v0 := ov.view_rect()
+	check(v0.size.x > 0.0 and v0.size.y > 0.0, "보이는 범위 사각형")
+	s.map.follow = false
+	s.map.geo.pan(Vector2(-s.map.geo.cell_px * 3.0, 0))
+	var v1 := ov.view_rect()
+	check(absf(v1.position.x - v0.position.x - 3.0 * ov.geo.cell_px) < 0.01, "그리기 격자를 오른쪽으로 세 칸 옮기면 범위도 세 칸")
+	check(MapPanel.LAYERS.find("headers") < 0, "그리기 격자에는 좌표 자가 없다")
 
 
-## 여러 글자 열 이름(AA…·AAA…)이 있는 층 폭을 확대 중간값마다 본다: 보이는 열 머리가 서로(좌우 2px 여백 포함) 겹치지 않는다.
-## 지도 패널만 따로 띄우고 geo 를 직접 둔다(층 그림은 없다: 머리 자리만 본다).
-func test_map_headers_never_overlap_with_multi_letter_columns() -> void:
-	var map := MapPanel.new()
-	map.size = Vector2(496, 360)
-	tree.root.add_child(map)
-	var font := map.get_theme_default_font()
-	# 이 층(35열, 끝 「AI」)은 셀 15px 에서 「AG」「AH」가 마지막 열보다 넓다: 가장 넓은 이름으로 솎아야 한다.
-	map.geo.width = 35
-	map.geo.height = 12
-	map.geo.cell_px = 15.0
-	var widest := 0.0
-	for i in 35:
-		widest = maxf(widest, font.get_string_size(MapPanel.column_name(i), HORIZONTAL_ALIGNMENT_LEFT, -1, MapPanel.HEAD_FS).x)
-	var last := font.get_string_size(MapPanel.column_name(34), HORIZONTAL_ALIGNMENT_LEFT, -1, MapPanel.HEAD_FS).x
-	check(widest > last + 2.0, "준비: 가장 넓은 열 이름(%.1f)이 마지막 「AI」(%.1f)보다 넓다" % [widest, last])
-	check_eq(map.header_need(false), widest + 4.0, "열 머리 폭 = 가장 넓은 이름 + 여백")
-	check(map.header_step(false) * 15.0 >= widest + 4.0, "15px 칸: %d칸마다" % map.header_step(false))
-	var cases := 0
-	for width in [20, 35, 60, 730]:
-		map.geo.width = width
-		map.geo.height = 12
-		for px in [10.0, 12.0, 14.0, 15.0, 16.0, 18.0, 21.0, 24.0, 30.0, 40.0, 72.0]:
-			map.geo.cell_px = px
-			# 왼쪽 끝(A…)·두 글자 시작(AA…)·끝(마지막 열)이 보이게 세 곳으로 옮겨 본다.
-			for from in [0, 26, width - 1]:
-				if from >= width:
-					continue
-				map.geo.origin = Vector2(MapPanel.HEAD_W + 2.0 - from * px, MapPanel.HEAD_H)
-				if from == width - 1:
-					map.geo.origin.x = map.size.x - width * px
-				var labels := map.column_labels()
-				var tag := "%d열 %.0fpx %s부터" % [width, px, MapPanel.column_name(from)]
-				var k := map.header_step(false)
-				if k > 0:
-					check(not labels.is_empty(), tag + ": 머리가 보인다")
-				for j in labels.size():
-					var r: Rect2 = labels[j]["rect"]
-					var tw := font.get_string_size(labels[j]["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, MapPanel.HEAD_FS).x
-					check(tw + 4.0 <= r.size.x + 0.01, "%s %s: 글자 + 여백" % [tag, labels[j]["text"]])
-					if j > 0:
-						var p: Rect2 = labels[j - 1]["rect"]
-						check(p.end.x <= r.position.x + 0.01, "%s: %s 와 %s 가 겹치지 않는다(%.1f > %.1f)" % [tag, labels[j - 1]["text"], labels[j]["text"], p.end.x, r.position.x])
-						check_eq(int(labels[j]["index"]) - int(labels[j - 1]["index"]), k, tag + ": 같은 간격으로 솎는다")
-				cases += 1
-	check(cases > 100, "본 경우 %d" % cases)
-	tree.root.remove_child(map)
-	map.free()
-
-
-func test_map_marks_draw_above_headers_and_grid_is_dimmer_outside() -> void:
+func test_map_marks_order_and_grid_is_dimmer_outside() -> void:
 	var order := MapPanel.LAYERS
-	var head := order.find("headers")
-	check(head >= 0, "머리 층이 있다")
-	for mark in ["floors", "edges", "icons", "memos", "party"]:
-		check(order.find(mark) > head, "%s 는 머리 위에 그린다(머리가 덮지 않는다)" % mark)
 	for under in ["blueprint", "grid"]:
-		check(order.find(under) < head, "%s 는 머리 아래" % under)
+		check(order.find(under) < order.find("floors"), "%s 는 지도 표시 아래" % under)
 	check_eq(order[order.size() - 1], "party", "파티 표시는 맨 위")
 	check(MapPanel.GRID_OUT.a < MapPanel.GRID.a and MapPanel.GRID_MAJOR_OUT.a < MapPanel.GRID_MAJOR_IN.a, "층 밖 모눈은 더 흐리다")
 	check(_lum(MapPanel.FLOOR_BG) > _lum(MapPanel.BG), "층 칸 안 바탕이 밖보다 밝다")
-	# 머리 띠는 반투명: 그 아래에 올 수 있는 가장 밝은 것(층 칸 바탕 위의 굵은 모눈선) 위에 겹친 색과 견준다.
-	var under := MapPanel.FLOOR_BG.lerp(Color(MapPanel.GRID_MAJOR_IN, 1.0), MapPanel.GRID_MAJOR_IN.a)
-	var band := under.lerp(Color(MapPanel.HEAD_BG, 1.0), MapPanel.HEAD_BG.a)
-	check(contrast(MapPanel.HEAD_TEXT, band) >= 4.5, "머리 글자 대비 %.1f(겹친 바탕)" % contrast(MapPanel.HEAD_TEXT, band))
 
 
-func test_map_header_names_and_glyphs() -> void:
-	var cases := [[0, "A"], [1, "B"], [19, "T"], [25, "Z"], [26, "AA"], [27, "AB"], [51, "AZ"], [52, "BA"], [701, "ZZ"], [702, "AAA"]]
-	for c in cases:
-		check_eq(MapPanel.column_name(c[0]), c[1], "열 %d" % c[0])
-	check_eq(MapPanel.row_name(0), "1", "행 0 → 1")
-	check_eq(MapPanel.row_name(19), "20", "행 19 → 20")
+func test_sector_ruler_glyphs_are_in_the_font() -> void:
 	var font := load(str(ProjectSettings.get_setting("gui/theme/custom_font"))) as Font
 	var missing := {}
-	for i in 100:
-		for t in [MapPanel.column_name(i), MapPanel.row_name(i)]:
+	for i in 60:
+		for t in [MapOverview.sector_name(i, false), MapOverview.sector_name(i, true)]:
 			for j in t.length():
 				if not font.has_char(t.unicode_at(j)):
 					missing[t[j]] = true
-	check(missing.is_empty(), "좌표 글자가 글꼴에 있다: 없는 글자 %s" % str(missing.keys()))
+	check(missing.is_empty(), "자 글자가 글꼴에 있다: 없는 글자 %s" % str(missing.keys()))
 
 
 ## WCAG 상대 휘도 대비.
@@ -425,7 +358,7 @@ static func _lum(c: Color) -> float:
 # ---- U6 공용 창·단추 모양 ----
 
 func test_theme_text_pairs_meet_contrast_on_every_fill() -> void:
-	for st in UiTheme.STATES + ["window"]:
+	for st in UiTheme.STATES + ["window"] + UiTheme.SKIN_LOOKS:
 		var lk := UiTheme.look(st)
 		check(lk["fill"], "%s: 채움" % st)
 		check(lk["top"].a == 1.0 and lk["bottom"].a == 1.0, "%s: 불투명 채움(뒤에 무엇이 있어도 대비 그대로)" % st)

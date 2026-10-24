@@ -43,6 +43,7 @@
   "menu.close": "닫기",
   "map.toggle": "지도",
   "map.to_party": "파티로",
+  "map.back": "돌아가기",
   "map.tool.wall": "벽 선",
   "map.tool.door": "문 표시",
   "map.tool.color": "바닥 색",
