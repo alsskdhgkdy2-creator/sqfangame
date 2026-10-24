@@ -128,13 +128,14 @@ func test_view_fills_the_screen_in_every_mode() -> void:
 		await _set_map(s, true)
 		check_eq(_rect(s.view_container), full, tag + " 지도 열림")
 		check_eq(Vector2((s.view_container.get_child(0) as SubViewport).size), size, tag + ": 시야 해상도도 화면 전체")
-		await kit.tap(kit.center_of(s.menu_button))
-		check_eq(s.modal.kind, "menu", tag + ": 준비: 메뉴 창")
-		check_eq(_rect(s.view_container), full, tag + " 메뉴 창")
+		s._alert("시험 알림")
+		await kit.frames(2)
+		check_eq(s.modal.kind, "alert", tag + ": 준비: 알림 창")
+		check_eq(_rect(s.view_container), full, tag + " 알림 창")
 		s.modal.close()
 		await kit.frames(2)
-		await kit.press_key(KEY_P)
-		check(s.party_menu.is_open(), tag + ": 준비: 파티 메뉴")
+		await kit.tap(kit.center_of(s.camp_button))
+		check(s.party_menu.is_open(), tag + ": 준비: 캠프")
 		check_eq(_rect(s.view_container), full, tag + " 파티 메뉴")
 		check(not s.map_window.is_visible_in_tree() and not s.hud_root.visible, tag + ": 파티 메뉴 뒤 HUD·지도 판 감춤")
 		check_eq(s.view.lens_cover, 0.0, tag + ": 파티 메뉴 뒤 렌즈는 가운데")
@@ -264,7 +265,7 @@ func test_input_goes_to_the_visible_top_at_every_overlap() -> void:
 		check(got == fwd, "%s: 이동 단추(시야 위) → 단추, 실제 %s" % [tag, _name_of(got)])
 		got = await _receiver_at(_rect(s.pad_box).position + Vector2(PadGapProbe.X, PadGapProbe.Y))
 		check(got == s.view_container, "%s: 이동 단추 사이 틈 → 3D 시야, 실제 %s" % [tag, _name_of(got)])
-		for b in [s.party_button, s.map_button, s.menu_button]:
+		for b in [s.camp_button, s.map_button]:
 			got = await _receiver_at(_rect(b).get_center())
 			check(got == b, "%s: 안내 줄 %s, 실제 %s" % [tag, b.name, _name_of(got)])
 		await kit.tap(kit.center_of(s.map_button))
@@ -350,7 +351,7 @@ func test_every_tap_target_is_at_least_64() -> void:
 				check(b.size.x >= 64.0 and b.size.y >= 64.0, "%s: %s 크기 %s" % ["지도 열림" if open else "지도 닫힘", b.name, str(b.size)])
 			if not open:
 				break
-	for k in ["Pad_forward", "PartyButton", "MapButton", "MenuButton", "MapBack", "Tool_wall", "Tool_color2", "Icon_chest", "Tool_undo", "Tool_to_party"]:
+	for k in ["Pad_forward", "CampButton", "MapButton", "MapBack", "Tool_wall", "Tool_color2", "Icon_chest", "Tool_undo", "Tool_to_party"]:
 		check(seen.has(k), "본 단추에 %s" % k)
 
 

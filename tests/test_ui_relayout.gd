@@ -264,36 +264,49 @@ func test_overlapping_taps_reach_the_visible_top_element_in_menus() -> void:
 	for px in WINDOWS:
 		var size: Vector2 = await _window(px)
 		var tag := "%s(논리 %s)" % [str(px), str(size)]
-		# ⑤ 폴더 탭 ∩ 내용 창: 탭(위)이 받는다. 탭마다.
+		# ⑤ 캠프 장비·소지품(M2.7 R2-c, 상점 짜임): 보이는 맨 위가 받는다. 창·띠·문패·인물 판은 장식이라 그 빈 곳은 캠프가 받는다
+		# (뒤 탐색 화면에 닿지 않는다). 캠프 → 장비 → 칸 0 대원.
 		await kit.press_key(KEY_P)
+		await kit.press_key(KEY_3)
+		await kit.press_key(KEY_ENTER)
 		var pm := s.party_menu
-		check(pm.is_open(), tag + ": 파티 메뉴")
-		var cr := pm.content_rect()
-		cr.position += pm.global_position
-		for i in pm.tab_buttons.size():
-			pm.handle("tab", i)
-			await kit.frames(2)
-			for j in pm.tab_buttons.size():
-				var tb := pm.tab_buttons[j]
-				var o := _rect(tb).intersection(cr)
-				check(o.has_area() and o.size.y == PartyMenu.TAB_OVERLAP, "%s 탭 %d: 탭 %d 는 내용 창 위 가장자리에 걸친다 %s" % [tag, i, j, str(o)])
-				var got := await _receiver_at(o.get_center())
-				check(got == tb, "%s 탭 %d: 탭 %d 와 내용 창이 겹친 곳 → 탭, 실제 %s" % [tag, i, j, _name_of(got)])
-			check_eq(pm.tab, i, tag + ": 겹친 곳 누르기 시험은 탭을 바꾸지 않는다(창 밖에서 뗀다)")
-		var close := _rect(pm.close_button).intersection(cr)
-		var got_close := await _receiver_at(close.get_center())
-		check(close.has_area() and got_close == pm.close_button, "%s: 「닫기」와 내용 창이 겹친 곳 → 닫기, 실제 %s" % [tag, _name_of(got_close)])
-		# 대원 카드 사이(간격)는 바탕(메뉴)이 받는다: 뒤 탐색 화면에 닿지 않는다.
-		var gap := Vector2(_rect(pm.cells[0]).get_center().x, (_rect(pm.cells[0]).end.y + _rect(pm.cells[1]).position.y) / 2.0)
-		var got_gap := await _receiver_at(gap)
-		check(got_gap == pm, "%s: 대원 카드 사이 → 메뉴 바탕, 실제 %s" % [tag, _name_of(got_gap)])
+		check(pm.is_open() and pm.tab == 2 and pm.find_child("Tab_status", false, false) == null, tag + ": 장비 화면(앞 파티 메뉴 틀 없음)")
+		var et := pm.equip_tab
+		var f := et.frame
+		var pr := _rect(f.panel)
+		var lw := _rect(f.list_window)
+		var spots := [
+			["칸 0", _rect(et.slot_rows[0]).get_center(), et.slot_rows[0]],
+			["뒤로", _rect(f.back_button).get_center(), f.back_button],
+			["앞 대원", _rect(f.panel.prev_button()).get_center(), f.panel.prev_button()],
+			["다음 대원", _rect(f.panel.next_button()).get_center(), f.panel.next_button()],
+			["목록 창 빈 곳", Vector2(lw.get_center().x, lw.end.y - 8.0), pm],
+			["설명 창", _rect(f.desc_window).get_center(), pm],
+			["설명 띠", _rect(f.banner).get_center(), pm],
+			["화면 이름 문패", _rect(f.title_plate).get_center(), pm],
+			["인물 판 초상", pr.position + Vector2(pr.size.x - 40.0, 500.0), pm],
+			["인물 판 장비 줄", pr.position + f.panel.equip_rect(0).get_center(), pm],
+		]
+		for sp in spots:
+			var got := await _receiver_at(sp[1])
+			check(got == sp[2], "%s 장비: %s → %s, 실제 %s" % [tag, sp[0], _name_of(sp[2]), _name_of(got)])
+		await kit.press_key(KEY_ESCAPE)
+		await kit.press_key(KEY_4)
+		check(pm.tab == 3, tag + ": 소지품 화면")
+		var it := pm.items_tab
+		var iw := _rect(it.frame.list_window)
+		var on_list := await _receiver_at(Vector2(iw.get_center().x, iw.position.y + 60.0))
+		check(_under(it.list, on_list), "%s 소지품: 읽기만 하는 줄 → 목록(끌어 내리기), 실제 %s" % [tag, _name_of(on_list)])
+		var on_panel := await _receiver_at(_rect(it.frame.panel).position + Vector2(400.0, 500.0))
+		check(on_panel == pm, "%s 소지품: 인물 판 → 캠프, 실제 %s" % [tag, _name_of(on_panel)])
 		for k in 3:
 			if pm.is_open():
 				await kit.press_key(KEY_ESCAPE)
 				await kit.frames(2)
 		check(not pm.is_open(), tag + ": 파티 메뉴 닫힘")
-		# ⑥ 메뉴 창 제목 문패 ∩ 창: 창이 받는다(문패는 장식). 창 밖 절반은 어둡게 덮은 판이 받는다.
-		s._open_menu()
+		# ⑥ 층 3 창(알림 창; 메뉴 창은 R2-d 에서 캠프 「기록」으로 옮겼다) 제목 문패 ∩ 창: 창이 받는다(문패는 장식).
+		# 창 밖 절반은 어둡게 덮은 판이 받는다.
+		s._alert("시험 알림")
 		await kit.frames(3)
 		var m := s.modal
 		var panel := _rect(m._panel)
@@ -326,11 +339,14 @@ func test_no_control_relies_on_z_index() -> void:
 	_kit()
 	var s := await kit.open("native", 7)
 	await kit.press_key(KEY_P)
-	_check_z(tree.root, "파티 메뉴")
+	_check_z(tree.root, "캠프")
+	await kit.press_key(KEY_5)
+	_check_z(tree.root, "캠프 기록")
 	await kit.press_key(KEY_ESCAPE)
-	s._open_menu()
+	await kit.press_key(KEY_ESCAPE)
+	s._alert("시험 알림")
 	await kit.frames(2)
-	_check_z(tree.root, "메뉴 창")
+	_check_z(tree.root, "알림 창")
 	s.modal.close()
 	await _layer(Vector2(1280, 720))
 	_check_z(host, "전투 층")
@@ -412,14 +428,25 @@ func test_touch_targets_stay_at_least_64() -> void:
 		await _window(px)
 		for a in s.pad:
 			check_eq((s.pad[a] as Control).size.y, DungeonScreen.PAD_BUTTON, "%s: 이동 단추 높이" % tag)
-		for b in [s.party_button, s.map_button, s.menu_button]:
+		for b in [s.camp_button, s.map_button]:
 			check_eq((b as Control).size, Vector2(64, 64), "%s: 안내 줄 단추 %s" % [tag, b.name])
 		await kit.press_key(KEY_P)
 		var pm := s.party_menu
-		for i in pm.tab_buttons.size():
+		_check_targets(pm.visible_buttons(), "%s 캠프 뿌리" % tag)
+		pm.handle("camp", 0)
+		await kit.frames(2)
+		_check_targets(pm.visible_buttons(), "%s 대원 고르기" % tag)
+		pm.handle("member", 0)
+		await kit.frames(2)
+		for i in PartyMenu.TAB_KEYS.size():
 			pm.handle("tab", i)
 			await kit.frames(2)
-			_check_targets(pm.visible_buttons(), "%s 파티 탭 %d" % [tag, i])
+			_check_targets(pm.visible_buttons(), "%s 캠프 하위 화면 %s" % [tag, PartyMenu.TAB_KEYS[i]])
+		pm.handle("record_new_game")
+		await kit.frames(2)
+		_check_targets(pm.visible_buttons(), "%s 기록 새 게임 확인 창" % tag)
+		pm.handle("dialog_back")
+		await kit.frames(2)
 		check_eq(PartySkillTab.STEP_BUTTON, Vector2(96, 64), "스킬 +/- 단추")
 		check_eq([PartyItemsTab.ROW_H, PartyEquipTab.ROW_H], [64.0, 64.0], "목록 줄 높이")
 		for k in 3:
@@ -506,7 +533,7 @@ func test_closed_map_lets_the_view_fill_the_screen() -> void:
 ## 탐색 HUD(전투 중에 감추는 것과 같은 묶음: 지도 판·이동 단추·휴식·안내 줄 단추·층 문패·위험 보석).
 ## 미니맵은 지도 판이 열리면 따로 감추므로(원작) 이 묶음에 넣지 않는다.
 static func _hud(s: DungeonScreen) -> Dictionary:
-	var out := {"map": s.map_window, "party": s.party_button, "map_button": s.map_button, "menu": s.menu_button,
+	var out := {"map": s.map_window, "camp": s.camp_button, "map_button": s.map_button,
 		"floor": s.floor_plate, "orb": s.orb, "rest": s.rest_button}
 	for a in s.pad:
 		out["pad_%d" % int(a)] = s.pad[a]
@@ -569,11 +596,11 @@ func test_party_menu_hides_the_exploration_hud_and_restores_it() -> void:
 		check(s.state.party.at == at and s.state.steps == steps, tag + ": 앞으로 단추 자리를 실제로 눌러도 걷지 않는다")
 		await _close_by_key(s)
 		_check_restored(s, before, size, tag + " Esc")
-		# ② 「파티」 단추를 눌러 열고 「닫기」를 눌러 닫는다.
-		await kit.tap(kit.center_of(s.party_button))
-		check(s.party_menu.is_open(), tag + ": 「파티」 단추 → 파티 메뉴")
+		# ② 「캠프」 단추를 눌러 열고 캠프 「닫기」 줄을 눌러 닫는다.
+		await kit.tap(kit.center_of(s.camp_button))
+		check(s.party_menu.is_open(), tag + ": 「캠프」 단추 → 캠프")
 		_check_hidden(s, size, tag + " 단추")
-		await kit.tap(kit.center_of(s.party_menu.close_button))
+		await kit.tap(kit.center_of(s.party_menu.camp_list.rows[5]))
 		_check_restored(s, before, size, tag + " 닫기")
 	# ③ 연 채로 상태가 바뀐다(가져오기): 메뉴는 알리지 않고 닫히고 HUD 가 돌아온다.
 	var size: Vector2 = await _window(WINDOWS[0])
@@ -633,12 +660,6 @@ func test_modal_buttons_are_at_least_64_and_fit() -> void:
 	for px in WINDOWS:
 		var size: Vector2 = await _window(px)
 		var tag := "%s(논리 %s)" % [str(px), str(size)]
-		s._open_menu()
-		await kit.frames(3)
-		_check_modal(s, size, tag + " 메뉴")
-		s._confirm_new_game()
-		await kit.frames(3)
-		_check_modal(s, size, tag + " 새 게임 확인")
 		s._open_wipe()
 		await kit.frames(3)
 		_check_modal(s, size, tag + " 전멸 창")

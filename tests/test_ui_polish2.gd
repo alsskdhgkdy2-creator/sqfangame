@@ -144,20 +144,21 @@ func test_status_rows_show_hp_and_thinner_tp_without_overlap() -> void:
 				st.member_names.assign(party_names)
 	check(compact_seen >= 2, "좁은 꼴(값 쌓기)도 보았다(%d)" % compact_seen)
 	check_eq(UiTheme.TP_BAR, Color(0.4, 0.65, 1.0), "TP 색(파티 메뉴·상태 칸)")
-	for sc in [MemberCell, StatusPanel]:
-		check(_source(sc).contains("UiTheme.TP_BAR"), "%s: 같은 TP 색 상수를 쓴다" % (sc as Script).resource_path)
-	# M2.7 R3: 전투 카드는 원작 색(시안 TP 막대 UiTheme.CARD_TP). 파티 메뉴는 R2 에서 맞춘다.
+	check(_source(StatusPanel).contains("UiTheme.TP_BAR"), "탐색 상태 칸: 같은 TP 색 상수를 쓴다")
+	# M2.7 R3·R2: 전투 카드는 원작 색(시안 TP 막대 UiTheme.CARD_TP)이고 캠프 대원 카드도 같은 부품(PartyCards/BattleCard)이다.
 	check(_source(BattleCard).contains("UiTheme.CARD_TP") and not _source(BattleCard).contains("UiTheme.TP_BAR"), "전투 카드 TP 막대 = CARD_TP")
+	check(_source(PartyMenu).contains("PartyCards.new()"), "캠프 대원 카드 = 전투 카드 부품")
 
 
 # ---- U8 장비 합계 표 ----
 
-## 이온 세이버 하나를 가방에 넣고 파티 메뉴 → 듀얼리스트 A → 장비 탭.
+## 이온 세이버 하나를 가방에 넣고 캠프 → 장비 → 듀얼리스트 A.
 func _equip_tab(s: DungeonScreen) -> PartyEquipTab:
 	s._on_debug_request(JSON.stringify({"op": "supply", "item": "equip.ion_saber", "n": 1}))
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_E)
 	await kit.press_key(KEY_3)
+	await kit.press_key(KEY_RIGHT)  # 캠프 대원 고르기: 듀얼리스트 A
+	await kit.press_key(KEY_ENTER)
 	return s.party_menu.equip_tab
 
 
@@ -237,32 +238,33 @@ func test_equip_totals_show_profile_and_compare_the_highlighted_row() -> void:
 	_check_totals(t, now, null, "못 고르는 줄")
 
 
-func test_equip_totals_fit_under_slots_at_both_sizes() -> void:
+## 인물 판의 능력치 묶음(원작 상점 인물 판의 STR~LUC 열 + 攻撃·防御 판): 두 크기에서 판 안, 다른 판 부품·목록과 겹치지 않고, 글자가 칸에 든다.
+func test_equip_totals_fit_in_the_character_panel_at_both_sizes() -> void:
 	_kit()
 	var s := await kit.open("native", 7, "debug=1")
 	var et := await _equip_tab(s)
 	await kit.press_key(KEY_ENTER)
 	await kit.press_key(KEY_DOWN)
 	var t := et.totals
+	var panel := et.frame.panel
 	var font := t.get_theme_default_font()
 	for sz in SIZES:
 		await _resize(s, sz)
 		var tag := "%dx%d" % [sz.x, sz.y]
 		check(t.comparing, tag + ": 준비: 견주는 중")
-		var tr := Rect2(t.position, t.size)
-		check(_inside(tr, Rect2(Vector2.ZERO, sz)), tag + ": 화면 안")
-		check(t.size.y >= EquipTotals.needed_height() - 0.01, "%s: 줄이 다 들어가는 높이(%.0f)" % [tag, t.size.y])
-		for b in et.slot_rows:
-			check(not Rect2(b.position, b.size).intersects(tr), "%s: %s 와 겹치지 않는다" % [tag, b.name])
-		check(not Rect2(et.list.position, et.list.size).intersects(tr), tag + ": 목록과 겹치지 않는다")
-		var head_w := font.get_string_size(t.title, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x + font.get_string_size(t.compare_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
-		check(head_w + 2.0 * EquipTotals.PAD <= t.size.x, tag + ": 머리 글자")
+		var tr := t.get_global_rect()
+		var pr := panel.get_global_rect()
+		check(_inside(tr, pr) and _inside(pr, et.menu.get_global_rect()), "%s: 판 안·캠프 안 %s %s" % [tag, str(tr), str(pr)])
+		check_eq(t.size, EquipTotals.needed_size(), tag + ": 줄이 다 들어가는 크기")
+		var cp := Rect2(pr.position + panel.class_rect().position, panel.class_rect().size)
+		check(tr.position.y >= cp.end.y and tr.end.y <= pr.position.y + panel.equip_rect(0).position.y, tag + ": 직업 문패와 장비 줄 사이")
+		check(not et.list.get_global_rect().intersects(tr), tag + ": 목록과 겹치지 않는다")
 		for j in t.lines.size():
 			var l := t.lines[j]
 			var c := t.line_layout(j)
 			var who := "%s %s" % [tag, l["key"]]
-			check(_inside(c["line"], Rect2(Vector2.ZERO, t.size)), who + ": 표 안")
-			for k in ["name", "now", "arrow", "after", "delta"]:
+			check(_inside(c["line"], Rect2(Vector2.ZERO, t.size)), who + ": 묶음 안")
+			for k in ["box", "name", "now", "arrow", "after", "delta"]:
 				check(_inside(c[k], c["line"]), "%s: %s 이 줄 안" % [who, k])
 			var order := ["name", "now", "arrow", "after", "delta"]
 			for q in order.size() - 1:
@@ -270,9 +272,13 @@ func test_equip_totals_fit_under_slots_at_both_sizes() -> void:
 			check(font.get_string_size(l["name"], HORIZONTAL_ALIGNMENT_LEFT, -1, EquipTotals.NAME_FS).x <= (c["name"] as Rect2).size.x + 0.5, who + ": 이름")
 			check(font.get_string_size(str(l["after"]), HORIZONTAL_ALIGNMENT_LEFT, -1, EquipTotals.VALUE_FS).x <= (c["after"] as Rect2).size.x + 0.5, who + ": 바꾸면 값")
 			check(font.get_string_size(EquipTotals.delta_text(l), HORIZONTAL_ALIGNMENT_LEFT, -1, EquipTotals.VALUE_FS).x <= (c["delta"] as Rect2).size.x + 0.5, who + ": 차이")
-			if j > 0 and j != BattleLimits.GEAR.size():
-				check((t.line_layout(j - 1)["line"] as Rect2).end.y <= (c["line"] as Rect2).position.y + 0.01, who + ": 위 줄과 겹치지 않는다")
-		check((t.line_layout(0)["line"] as Rect2).end.x <= (t.line_layout(BattleLimits.GEAR.size())["line"] as Rect2).position.x, tag + ": 두 묶음이 나란히")
+			for q in range(j + 1, t.lines.size()):
+				check(not (c["line"] as Rect2).intersects(t.line_layout(q)["line"]), "%s: %s 와 겹치지 않는다" % [who, t.lines[q]["key"]])
+		# 원작 짜임: 능력치(힘~행운)가 한 열로 위, 공격·방어 판이 그 아래 2×2.
+		var last_stat: Rect2 = t.line_layout(t.lines.size() - 1)["line"]
+		for g in BattleLimits.GEAR.size():
+			check((t.line_layout(g)["line"] as Rect2).position.y >= last_stat.end.y, tag + ": 공격·방어 판은 능력치 열 아래")
+		check((t.line_layout(0)["line"] as Rect2).end.x <= (t.line_layout(1)["line"] as Rect2).position.x, tag + ": 공격 | 마법 공격 나란히")
 
 
 # ---- U7 지도 모눈·구역 자 (M2.7 R1: 원작 HD 처럼 자는 층 전체 보기에만, 5×5 칸 구역마다 하나) ----
@@ -429,22 +435,20 @@ func test_widgets_use_theme_states() -> void:
 	var wall: TouchButton = s.toolbar.buttons["wall"]
 	check(wall != null and wall.theme_state() == "selected", "고른 벽 도구: selected")
 	check(sw.theme_state() == "normal", "고르지 않은 견본: normal")
-	# 파티 메뉴: 지금 탭 = 켜짐, 지금 대원 = 켜짐 테두리, 목록이 열린 칸 = 켜짐, 목록 커서 = 고름
+	# 캠프 장비(상점 짜임, 시설 「fac:*」 모양): 칸 커서 = 고름, 목록이 열린 칸 = 인물 판 장비 줄 노랑 테두리, 목록 커서 = 고름
 	var et := await _equip_tab(s)
 	var pm := s.party_menu
-	check_eq(pm.tab_buttons[2].theme_state(), "checked", "지금 탭")
-	check_eq(pm.tab_buttons[0].theme_state(), "normal", "다른 탭")
-	check_eq(pm.cells[pm.member].theme_state(), "checked_marked", "지금 대원 칸")
-	check_eq(et.slot_rows[0].theme_state(), "selected", "목록 닫힘: 칸 커서")
+	check_eq(et.slot_rows[0].theme_state(), "fac:selected", "목록 닫힘: 칸 커서")
+	check_eq(et.slot_rows[1].theme_state(), "fac:normal", "목록 닫힘: 다른 칸")
 	await kit.press_key(KEY_ENTER)
-	check_eq(et.slot_rows[0].theme_state(), "checked", "목록이 열린 칸")
-	check_eq(et.rows[0].theme_state(), "selected", "목록 커서 줄")
+	check_eq(et.frame.panel.drawn["mark"], 0, "목록이 열린 칸 = 판의 장비 줄 표시")
+	check_eq(et.rows[0].theme_state(), "fac:selected", "목록 커서 줄")
 	await kit.press_key(KEY_ESCAPE)
 	for k in 3:
 		await kit.press_key(KEY_DOWN)
 	await kit.press_key(KEY_ENTER)
 	check(not et.row_block[0].is_empty(), "준비: 못 고르는 줄")
-	check_eq(et.rows[0].theme_state(), "disabled_selected", "못 고르는 줄에 커서")
+	check_eq(et.rows[0].theme_state(), "fac:disabled_selected", "못 고르는 줄에 커서")
 	for k in 3:
 		if pm.is_open():
 			await kit.press_key(KEY_ESCAPE)

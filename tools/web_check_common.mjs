@@ -68,6 +68,21 @@ export async function clickButton(name) {
   if (!p) throw new Error(`단추 없음: ${name} (있는 것: ${Object.keys(s.buttons).join(',')})`);
   await page.mouse.click(p[0], p[1]);
 }
+// 캠프(M2.7 R2-d): 안내 줄 「캠프」 단추 → 캠프 뿌리 → 「기록」 줄 → 기록 화면(앞 「메뉴」 창이 하던 저장·불러오기·내보내기·
+// 가져오기·자동 지도·새 게임). 단추 이름(Export·Import·Save_·Load_·Automap_·NewGame)은 앞 메뉴 창과 같다.
+export async function openRecords() {
+  await clickButton('CampButton');
+  await waitFor((x) => x.party_menu?.open && x.party_menu.page === 'root', '캠프 뿌리');
+  await clickButton('Camp_records');
+  return waitFor((x) => x.party_menu?.page === 'sub' && x.party_menu.tab === 'records' && x.modal === '', '기록 화면');
+}
+// 기록 화면 「뒤로」 → 캠프 뿌리 「닫기」 줄 → 탐색(앞 메뉴 창 「닫기」 자리).
+export async function closeCamp() {
+  await clickButton('RecordsBack');
+  await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');
+  await clickButton('Camp_close');
+  return waitFor((x) => !x.party_menu?.open && x.modal === '', '캠프 닫힘');
+}
 export async function idbAuto() {
   return page.evaluate(() => new Promise((resolve) => {
     const req = indexedDB.open('/userfs');
@@ -148,11 +163,10 @@ export async function firstBattle(s) {
     if (!preOk) throw new Error('전멸했지만 돌아올 전투 시작 저장이 없다');
     await clickButton('WipeNewGame');
     s = await waitFor((x) => !x.wiped && x.modal === '', '전멸 창 → 새 게임');
-    await clickButton('MenuButton');
-    s = await waitFor((x) => x.modal === 'menu', '메뉴');
+    s = await openRecords();
     const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import')]);
     await chooser.setFiles(prePath);
-    s = await waitFor((x) => x.battle?.open && x.battle.phase === 'command' && x.hash === startHash, '전투 시작 저장 가져오기', 10000);
+    s = await waitFor((x) => x.battle?.open && x.battle.phase === 'command' && x.hash === startHash && !x.party_menu?.open, '전투 시작 저장 가져오기', 10000);
     check(s.battle.turn === 0 && !s.wiped, '전멸 뒤 전투 시작 저장을 가져와 같은 전투(턴 0)로 돌아옴', { turn: s.battle.turn, generation: s.generation });
     await page.mouse.click(Math.round(W * 0.3), 30);  // 캔버스에 키 포커스
   } else if (!(s.battle?.open && s.battle.phase === 'command')) {
@@ -166,8 +180,8 @@ export async function firstBattleTurn(s) {
   await page.waitForTimeout(150);
   await page.screenshot({ path: `${outDir}/05_battle.png` });
   check(s.battle.phase === 'command' && s.battle.member >= 0 && s.modal === '', '인카운트 → 전투 층(명령 입력)', { phase: s.battle.phase, member: s.battle.member, modal: s.modal });
-  check(!s.buttons.MenuButton && !s.buttons.Pad_forward && !s.buttons.Tool_wall && s.buttons.Cmd_attack && s.buttons.LogButton,
-    '전투 중 지도·이동 단추·메뉴 없음, 명령 단추 있음', { buttons: Object.keys(s.buttons) });
+  check(!s.buttons.CampButton && !s.buttons.Pad_forward && !s.buttons.Tool_wall && s.buttons.Cmd_attack && s.buttons.LogButton,
+    '전투 중 지도·이동 단추·캠프 없음, 명령 단추 있음', { buttons: Object.keys(s.buttons) });
   const g0 = s.generation;
   const hash0 = s.hash;
   const turn0 = s.battle.turn;

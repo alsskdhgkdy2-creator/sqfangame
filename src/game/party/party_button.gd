@@ -73,8 +73,10 @@ func _down() -> void:
 
 
 ## 못 고름(dimmed)도 못 누름과 같은 흐린 모양(누르기는 받는다).
+## skin 이 있으면 그 부품 모양(「hint:normal」 등), 없는 상태는 공용 모양.
 func theme_state() -> String:
-	return UiTheme.state_of(held, selected, checked, disabled or dimmed)
+	var st := UiTheme.state_of(held, selected, checked, disabled or dimmed)
+	return skin + ":" + st if not skin.is_empty() and UiTheme.has_look(skin + ":" + st) else st
 
 
 func _draw() -> void:

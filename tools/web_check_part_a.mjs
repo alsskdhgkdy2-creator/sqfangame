@@ -1,9 +1,10 @@
 // web_check 부분 A(탐색·전투): 1) 공략 행동열(첫 전투의 새로 고침·실제 누르기 한 턴·결과 창, 뒤 전투는 battle_finish)
-// 2) 지도 편집 3) IndexedDB 반영 4) 새로 고침 뒤 같은 상태·같은 다음 행동 5) 내보내기·가져오기·늦은 앞 가져오기·1MB 거부·고르기 취소.
+// 2) 지도 편집 3) IndexedDB 반영 4) 새로 고침 뒤 같은 상태·같은 다음 행동 5) 내보내기·가져오기·늦은 앞 가져오기·1MB 거부·고르기 취소
+// (5 는 캠프 「기록」 화면에서: 「캠프」 단추 → 「기록」 줄, M2.7 R2-d).
 import fs from 'node:fs';
 import {
   W, H, SEED, outDir, route, FOLLOW_UP, page, log, check, snap, request, waitFor, waitReady, clickButton, waitIdb,
-  battles, battleTurns, reloadChecked, act,
+  battles, battleTurns, reloadChecked, act, openRecords, closeCamp,
 } from './web_check_common.mjs';
 
 export async function partA() {
@@ -119,41 +120,36 @@ export async function partA() {
   await page.screenshot({ path: `${outDir}/04_after_reload.png` });
 
   // ---- 5) 내보내기 → 이동 → 가져오기 ----
-  await clickButton('MenuButton', s);
-  s = await waitFor((x) => x.modal === 'menu', '메뉴');
-  await page.screenshot({ path: `${outDir}/06_menu.png` });
+  s = await openRecords();
+  await page.screenshot({ path: `${outDir}/06_records.png` });
   const exportHash = s.hash;
   const [download] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), clickButton('Export', s)]);
   const exportPath = `${outDir}/export.json`;
   await download.saveAs(exportPath);
   const exported = JSON.parse(fs.readFileSync(exportPath, 'utf8'));
   check(exported.format === 'sqfangame-save' && download.suggestedFilename().endsWith('.json'), '내보내기: 단추 처리 안에서 내려받기', { file: download.suggestedFilename(), bytes: fs.statSync(exportPath).size });
-  await clickButton('Close');
-  s = await waitFor((x) => x.modal === '', '메뉴 닫힘');
+  s = await closeCamp();
   s = await act('turn_right');
   s = await act('forward');
   check(s.hash !== exportHash, '내보낸 뒤 상태가 바뀜');
-  await clickButton('MenuButton', s);
-  s = await waitFor((x) => x.modal === 'menu', '메뉴');
+  s = await openRecords();
   let [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import', s)]);
   g = s.generation;
   await chooser.setFiles(exportPath);
   s = await waitFor((x) => x.modal === '' && x.hash === exportHash, '가져오기 결과', 10000);
-  check(true, '가져오기: 내보낸 상태 해시로 돌아옴', { generation: s.generation, previous: g });
+  check(!s.party_menu?.open, '가져오기: 내보낸 상태 해시로 돌아옴, 캠프 닫힘', { generation: s.generation, previous: g });
   idb = await waitIdb(s);
   check(!idb.timeout, '가져오기 직후 자동 저장(세대·상태 해시)이 IndexedDB 에 반영', idb);
   await page.screenshot({ path: `${outDir}/07_imported.png` });
   // 늦게 끝난 앞 가져오기: 첫 파일 읽기(A)를 붙잡아 두고 새 가져오기(B)를 끝낸 뒤 A 를 풀면 상태는 B 그대로다.
   s = await act('turn_right');
   s = await act('forward');
-  await clickButton('MenuButton', s);
-  s = await waitFor((x) => x.modal === 'menu', '메뉴');
+  s = await openRecords();
   const [downloadB] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), clickButton('Export', s)]);
   const exportBPath = `${outDir}/export_b.json`;
   await downloadB.saveAs(exportBPath);
   const hashB = s.hash;
-  await clickButton('Close');
-  s = await waitFor((x) => x.modal === '', '메뉴 닫힘');
+  s = await closeCamp();
   s = await act('turn_left');
   check(s.hash !== hashB && s.hash !== exportHash, '늦은 읽기 준비: 지금 상태는 A·B 와 다르다');
   const dropped0 = await page.evaluate(() => {
@@ -166,15 +162,16 @@ export async function partA() {
     };
     return window.sqfImportState?.dropped ?? 0;
   });
-  await clickButton('MenuButton', s);
-  s = await waitFor((x) => x.modal === 'menu', '메뉴');
+  s = await openRecords();
   [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import', s)]);
   await chooser.setFiles(exportPath);  // A: 읽기가 붙잡힌다
   await page.waitForFunction(() => typeof window.sqfHoldRead.release === 'function', null, { timeout: 5000 });
-  const heldHash = (await snap()).hash;
+  const held = await snap();
+  const heldHash = held.hash;
+  check(held.party_menu?.tab === 'records', '읽기가 붙잡힌 동안 기록 화면 그대로(두 번째 가져오기를 누를 수 있다)', { tab: held.party_menu?.tab });
   [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import', s)]);
   await chooser.setFiles(exportBPath);  // B: 바로 읽힌다
-  s = await waitFor((x) => x.modal === '' && x.hash === hashB, '새 가져오기(B) 결과', 10000);
+  s = await waitFor((x) => x.modal === '' && x.hash === hashB && !x.party_menu?.open, '새 가져오기(B) 결과', 10000);
   const genB = s.generation;
   await page.evaluate(() => window.sqfHoldRead.release());
   await page.waitForFunction((d) => (window.sqfImportState?.dropped ?? 0) > d, dropped0, { timeout: 5000 }).catch(() => {});
@@ -190,21 +187,20 @@ export async function partA() {
   const bigPath = `${outDir}/too_large.json`;
   fs.writeFileSync(bigPath, 'x'.repeat(1100000));
   const keep = s.hash;
-  await clickButton('MenuButton', s);
-  s = await waitFor((x) => x.modal === 'menu', '메뉴');
+  s = await openRecords();
   [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import', s)]);
   await chooser.setFiles(bigPath);
   s = await waitFor((x) => x.modal === 'alert', '크기 초과 알림', 10000);
   check(s.hash === keep, '1MB 넘는 파일 거부, 상태 그대로');
   await page.screenshot({ path: `${outDir}/08_too_large.png` });
   await clickButton('AlertOk', s);
+  s = await waitFor((x) => x.modal === '', '알림 닫힘');
+  check(s.party_menu?.tab === 'records', '알림을 닫으면 기록 화면으로 돌아온다', { tab: s.party_menu?.tab });
   // 고르기 취소.
-  await clickButton('MenuButton');
-  s = await waitFor((x) => x.modal === 'menu', '메뉴');
   [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import', s)]);
   await chooser.setFiles([]);
   await page.waitForTimeout(500);
   s = await snap();
-  check(s.hash === keep, '파일 고르기 취소: 상태 그대로', { modal: s.modal });
+  check(s.hash === keep && s.party_menu?.tab === 'records', '파일 고르기 취소: 상태 그대로(기록 화면 그대로)', { modal: s.modal, tab: s.party_menu?.tab });
   log('부분 A 끝', { maxGuardDuringRoute: maxGuard });
 }

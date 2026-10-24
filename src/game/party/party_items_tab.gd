@@ -1,4 +1,5 @@
-## 파티 메뉴 소지품 탭(07 §9.2, §5.6): 「장비」(가방 개수, 낄 수 있는 직업)·「소재」(개수, 읽기만) 두 묶음, 줄 64.
+## 캠프 소지품 화면(07 §9.2, §5.6, M2.7 R2-c: 원작 상점 팔기 화면 jp_guide3_img2 짜임, ShopFrame 설명 창 없이 목록 창이 아래까지).
+## 목록 창: 「장비」(가방 개수, 낄 수 있는 직업)·「소재」(개수, 읽기만) 두 묶음, 줄 64. 오른쪽 인물 판은 지금 대원(Q·E·판 단추로 넘김).
 ## 디버그일 때만 맨 위에 「임시 보급(시험용)」(07 §5.7): 누르면 장비마다 「+1」, 대원마다 「경험치 +100」「다음 레벨까지」 줄이 열린다.
 ## 보급은 GrowthRules.supply·grant_exp → 자동 저장. ↑↓ 는 디버그면 누를 수 있는 단추 사이 커서(Enter 로 누름)이고, 마지막 단추에서
 ## ↓ 를 더 누르면 아래 읽기만 하는 목록을 내리며(↑ 는 커서 단추가 다시 보일 때까지 올린 뒤 커서를 옮긴다), 디버그가 아니면 내리기만.
@@ -14,6 +15,7 @@ const EXP_SIZE := Vector2(200, 64)
 const EXP_STEP := 100
 
 var menu: PartyMenu
+var frame: ShopFrame
 var list: PartyScroll
 ## 보급 줄이 열려 있는지.
 var supply_open := false
@@ -34,9 +36,21 @@ var _label_used := 0
 func setup(m: PartyMenu) -> void:
 	menu = m
 	mouse_filter = MOUSE_FILTER_IGNORE
+	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	frame = ShopFrame.new()
+	frame.name = "ItemsFrame"
+	add_child(frame)
+	frame.build("Items", menu.texts.t("camp.back"), false)
+	frame.back.connect(func() -> void: menu.handle("back"))
+	frame.panel.step.connect(func(d: int) -> void: menu.handle("member_step", d))
 	list = PartyScroll.new()
 	list.name = "ItemsList"
 	add_child(list)
+	var la: Array = frame.list_anchor()
+	PartyMenu.place(list, la[0], la[1], la[2])
+	list.resized.connect(func() -> void:
+		if menu.state != null and visible:
+			refresh())
 	supply_button = _press_button("SupplyToggle", SUPPLY_SIZE, "supply_toggle", null)
 
 
@@ -64,9 +78,7 @@ func context() -> String:
 	return ""
 
 
-func place(s: Vector2) -> void:
-	list.position = Vector2(PartyMenu.TAB_X, PartyMenu.TOP)
-	list.size = Vector2(s.x - PartyMenu.TAB_X - 8, s.y - PartyMenu.TOP - 8)
+func place(_s: Vector2) -> void:
 	if menu.state != null and visible:
 		refresh()
 
@@ -195,6 +207,9 @@ func refresh() -> void:
 	_used = 0
 	_label_used = 0
 	var defs := menu.state.defs
+	frame.show_title(menu.texts.t("camp.cmd.items"))
+	_refresh_banner()
+	frame.panel.show_member(menu, menu.member, null, -1)
 	var w := list.size.x
 	var y := 0.0
 	supply_button.visible = menu.debug
@@ -278,6 +293,16 @@ func refresh() -> void:
 		acts[k].selected = k == cursor
 
 
+## 설명 띠: 화면 설명 + 안내(경험치 최대 등).
+func _refresh_banner() -> void:
+	frame.banner.show_lines(menu.texts.t("camp.desc.items"), menu.notice, not menu.notice.is_empty())
+
+
+func notice_changed() -> void:
+	if menu.state != null:
+		_refresh_banner()
+
+
 ## 낄 수 있는 직업(지금 파티의 직업 가운데, 파티 순서).
 func _fits_text(e: BattleDb.EquipDef) -> String:
 	var names: Array[String] = []
@@ -300,6 +325,7 @@ func _row(pos: Vector2, sz: Vector2, main: String, right_text: String, note_text
 		r = PartyButton.new()
 		r.name = "Line_%d" % _rows.size()
 		r.align_left = true
+		r.skin = "fac"
 		r.mouse_filter = MOUSE_FILTER_IGNORE  # 읽기만: 누르기·끌기는 뒤의 목록 영역이 받는다
 		list.content.add_child(r)
 		list.content.move_child(r, 0)
@@ -319,7 +345,7 @@ func _label(pos: Vector2, t: String) -> void:
 		l = Label.new()
 		l.mouse_filter = MOUSE_FILTER_IGNORE
 		l.add_theme_font_size_override("font_size", 20)
-		l.add_theme_color_override("font_color", Color(0.6, 0.85, 0.95))
+		l.add_theme_color_override("font_color", UiTheme.SHOP_SECTION_TEXT)
 		list.content.add_child(l)
 		_labels.append(l)
 	_label_used += 1

@@ -97,7 +97,9 @@ const STATES := ["normal", "pressed", "selected", "selected_pressed", "checked",
 const SKIN_LOOKS := ["tool:normal", "tool:pressed", "pill:normal", "pill:pressed",
 	"cmd:normal", "cmd:pressed", "cmd:selected", "cmd:selected_pressed", "cmd:disabled", "cmd:disabled_selected",
 	"hint:normal", "hint:pressed", "cmd:chosen",
-	"skill:normal", "skill:pressed", "skill:selected", "skill:selected_pressed", "skill:disabled", "skill:disabled_selected"]
+	"skill:normal", "skill:pressed", "skill:selected", "skill:selected_pressed", "skill:disabled", "skill:disabled_selected",
+	"fac:normal", "fac:pressed", "fac:selected", "fac:selected_pressed", "fac:disabled", "fac:disabled_selected", "fac:chosen",
+	"tree:normal", "tree:pressed", "tree:selected", "tree:selected_pressed", "tree:disabled", "tree:disabled_selected"]
 ## 전투 명령 목록(원작 HD 1868180_0e36b17e): 줄은 청록, 커서 줄은 노랑 + 어두운 글자, 못 고르는 줄은 어두운 초록 + 회색 글자.
 const CMD_TOP := Color("00644c")
 const CMD_BOTTOM := Color("00573f")
@@ -157,6 +159,83 @@ const CARD_HP_FROM := Color("fff043")
 const CARD_HP_TO := Color("ffa62b")
 const CARD_TP := Color("4dffff")
 const CARD_BAR_BG := Color("0a2a30")
+## 시설·캠프(M2.7 R2, 원작 HD gs2_653222·653235·jp_facility_img1): 위 설명 띠(짙은 청록 그라데이션, 밝은 두 줄 글자),
+## 명령 목록 뒤판(거의 검은 판, 청록 테두리). 줄은 전투와 같은 「cmd:*」. 띠 색은 원작(#32725a → #236251)을 안내 글자(BATTLE_BANNER_NOTICE)
+## 대비 4.5 이상이 되게 조금 어둡게 했다.
+const FAC_BANNER_TOP := Color("246c58")
+const FAC_BANNER_BOTTOM := Color("1a5546")
+const FAC_BANNER_EDGE := Color("06231d")
+const FAC_PLATE := Color("010d10")
+## 시설·캠프 명령 줄 글자(원작 시설 화면의 청록 줄 위 물빛 글자, #00644c 위 5.3:1). 커서 줄·고른 줄·누름은 전투 「cmd:*」 그대로.
+const FAC_TEXT := Color("6ff3db")
+const FAC_PLATE_EDGE := Color("1f6d63")
+## 캠프 뒤 3D 시야를 어둡게(전투와 같게).
+const CAMP_DIM := BATTLE_DIM
+## 상태 화면(원작 HD gs2_653218·653223·653241): 위 이름 칸(밝은 판 + 짙은 글자), Lv 띠(짙은 초록), 정보 띠(청록, 흰 글자 대비로 원작
+## #1d8761 보다 어둡게), 직업 문패, 능력치 줄(이름 상자 + 값 + 노랑 막대), 공격·방어 판, 장비 줄, 오른쪽 아래 문패(원작 FORCE 자리).
+const ST_NAME_TAB := Color("e1ffef")
+const ST_NAME_TEXT := Color("0a3b26")
+const ST_LV_BAND := Color("0a3b26")
+const ST_LV_TEXT := Color("fff0a0")
+const ST_INFO_TOP := Color("1f6352")
+const ST_INFO_BOTTOM := Color("17604f")
+const ST_CLASS_PLATE := Color("1f6352")
+const ST_CLASS_EDGE := Color("8fe0c8")
+const ST_ROW := Color("0b3a2e")
+const ST_ROW_NAME := Color("021d16")
+const ST_BAR_TRACK := Color("155d47")
+const ST_BAR_FILL := Color("dff07e")
+const ST_GEAR_LABEL := Color("005132")
+const ST_GEAR_VALUE := Color("01361f")
+const ST_EQUIP_ROW := Color("0f4c3c")
+const ST_SIDE_TOP := Color("185d7a")
+const ST_SIDE_BOTTOM := Color("002036")
+const ST_SIDE_EDGE := Color("4fb6d8")
+## 캠프 장비·소지품(원작 상점 화면 jp_guide3_img1~3): 왼쪽 목록·설명 창(짙은 남색 반투명, 청록 테두리·양 끝 마개, 설명 머리 띠),
+## 오른쪽 인물 판(청록 반투명 + 옅은 모눈), 판의 장비 줄.
+const SHOP_WIN_TOP := Color(0.03, 0.12, 0.26, 0.92)
+const SHOP_WIN_BOTTOM := Color(0.02, 0.08, 0.19, 0.94)
+const SHOP_WIN_EDGE := Color("3fb6c8")
+const SHOP_WIN_CAP := Color("1f6d8f")
+const SHOP_DESC_HEAD := Color("06142a")
+const SHOP_PANEL_TOP := Color(0.05, 0.33, 0.37, 0.86)
+const SHOP_PANEL_BOTTOM := Color(0.03, 0.22, 0.26, 0.9)
+const SHOP_PANEL_GRID := Color(0.45, 0.95, 1.0, 0.1)
+const SHOP_SECTION_TEXT := Color("6ff3db")
+## 스킬 트리 화면(원작 HD jp_guide2_img2·img3, gw_14): 파랑 계열. 위 줄(이름 칸·Lv 띠·SKILL POINT 띠), 직업 폴더 탭,
+## 반투명 파랑 창(트리·아래 설명 띠·확인 창), 노드 알약(짙은 파랑 + 밝은 글자, 커서는 밝은 하늘색 + 짙은 글자, 오른쪽 Lv 상자),
+## 설명 띠의 레벨 칸(배운 레벨 시안·초안 노랑·남은 칸 짙은 파랑).
+const TREE_NAME_TAB := Color("e3f4ff")
+const TREE_NAME_TEXT := Color("0b2a4a")
+const TREE_LV_BAND := Color("12364e")
+const TREE_INFO_TOP := Color("05599f")
+const TREE_INFO_BOTTOM := Color("044a86")
+const TREE_TAB := Color("0f3f54")
+const TREE_WIN_TOP := Color(0.03, 0.27, 0.5, 0.9)
+const TREE_WIN_BOTTOM := Color(0.02, 0.18, 0.37, 0.92)
+const TREE_WIN_EDGE := Color("6fd0ff")
+const TREE_WIN_OUTER := Color("021a33")
+const TREE_NODE_TOP := Color("063a76")
+const TREE_NODE := Color("02336e")
+const TREE_NODE_PRESSED := Color("0a4c94")
+const TREE_PRESSED_MUTED := Color("c3ccd6")
+const TREE_NODE_TEXT := Color("bff3ff")
+const TREE_NODE_EDGE := Color("3f8fd0")
+const TREE_PICK_TOP := Color("e2f6ff")
+const TREE_PICK := Color("aae0fe")
+const TREE_PICK_TEXT := Color("04244a")
+const TREE_OFF := Color("142c47")
+const TREE_OFF_TEXT := Color("93a9bd")
+const TREE_LV_BOX := Color("56e6e0")
+const TREE_LV_BOX_TEXT := Color("04244a")
+const TREE_BOX_LEARNED := Color("21d8f0")
+const TREE_BOX_DRAFT := Color("ffe066")
+const TREE_BOX_EMPTY := Color("104779")
+const TREE_BOX_EMPTY_TEXT := Color("cfe8ff")
+const TREE_KIND_TEXT := Color("7fe6ff")
+## 트리 연결선(선행을 채움 / 못 채움).
+const TREE_LINE_MET := Color("8ff4ff")
+const TREE_LINE_UNMET := Color("4d6a85")
 const TOOL_TOP := Color("0f7aab")
 const TOOL_BOTTOM := Color("0b6593")
 const TOOL_PRESSED_TOP := Color("0a5a82")
@@ -259,6 +338,26 @@ static func _build_looks() -> Dictionary:
 	d["skill:selected"] = _plain(_btn(SKILL_PICK_TOP, SKILL_PICK, CMD_EDGE, BTN_OUTER_W, SKILL_PICK_TOP, 1.0, none, CMD_PICK_TEXT, CMD_PICK_TEXT, CMD_PICK_TEXT))
 	d["skill:selected_pressed"] = _plain(_btn(SKILL_PICK_PRESSED, SKILL_PICK_TOP, CMD_EDGE, BTN_OUTER_W, SKILL_PICK, 1.0, none, CMD_PICK_TEXT, CMD_PICK_TEXT,
 		CMD_PICK_TEXT))
+	# 시설·캠프 명령 줄(「fac:*」): 평소 줄만 물빛 글자, 나머지는 전투 명령 줄과 같다(누름 채움 위 물빛은 4.5 아래라 흰 글자 그대로).
+	for st in ["pressed", "selected", "selected_pressed", "disabled", "disabled_selected", "chosen"]:
+		d["fac:" + st] = d["cmd:" + st]
+	d["fac:normal"] = _plain(_btn(CMD_TOP, CMD_BOTTOM, CMD_EDGE, BTN_OUTER_W, CMD_PRESSED_TOP, 1.0, none, FAC_TEXT, FAC_TEXT, FAC_TEXT))
+	# 스킬 트리 노드(「tree:*」): 짙은 파랑 알약(밝은 글자), 커서 = 밝은 하늘색(짙은 글자), 못 배움 = 어두운 회청(흐린 글자).
+	d["tree:normal"] = _btn(TREE_NODE_TOP, TREE_NODE, TREE_WIN_OUTER, BTN_OUTER_W, TREE_NODE_EDGE, 1.0, none, TREE_NODE_TEXT, TREE_NODE_TEXT,
+		BTN_REASON)
+	d["tree:pressed"] = _btn(TREE_NODE_PRESSED, TREE_NODE_TOP, TREE_WIN_OUTER, BTN_OUTER_W, TREE_WIN_EDGE, 1.0, none, TREE_NODE_TEXT,
+		TREE_NODE_TEXT, TREE_NODE_TEXT)
+	d["tree:selected"] = _btn(TREE_PICK_TOP, TREE_PICK, TREE_WIN_OUTER, BTN_PICK_W, Color(1, 1, 1, 0.8), 1.0, none, TREE_PICK_TEXT,
+		TREE_PICK_TEXT, TREE_PICK_TEXT)
+	d["tree:selected_pressed"] = _btn(TREE_PICK, TREE_PICK_TOP, TREE_WIN_OUTER, BTN_PICK_W, Color(1, 1, 1, 0.8), 1.0, none, TREE_PICK_TEXT,
+		TREE_PICK_TEXT, TREE_PICK_TEXT)
+	d["tree:disabled"] = _plain(_btn(TREE_OFF, TREE_OFF, TREE_WIN_OUTER, BTN_OUTER_W, TREE_NODE_EDGE, 1.0, none, TREE_OFF_TEXT, TREE_OFF_TEXT,
+		TREE_OFF_TEXT))
+	d["tree:disabled_selected"] = _plain(_btn(TREE_OFF, TREE_OFF, TREE_PICK, BTN_PICK_W, TREE_PICK_TOP, 1.0, none, TREE_OFF_TEXT, TREE_OFF_TEXT,
+		TREE_OFF_TEXT))
+	d["tree:pressed"]["muted"] = TREE_PRESSED_MUTED  # 누른 채움이 밝아 공용 흐린 글자는 4.5:1 미만
+	for k in ["tree:normal", "tree:pressed", "tree:selected", "tree:selected_pressed", "tree:disabled", "tree:disabled_selected"]:
+		d[k]["chamfer"] = 20.0
 	d["skill:disabled"] = d["cmd:disabled"]
 	d["skill:disabled_selected"] = d["cmd:disabled_selected"]
 	d["hint:normal"] = _plain(_btn(HINT_PILL, HINT_PILL, HINT_EDGE, BTN_OUTER_W, HINT_PILL, 1.0, none, BATTLE_BANNER_TEXT, BATTLE_BANNER_TEXT,
@@ -307,6 +406,36 @@ static func draw_glass(ci: CanvasItem, r: Rect2) -> void:
 ## 흰 바탕 위에 겹친 색(반투명 채움 위 글자 대비를 가장 나쁜 바탕으로 볼 때).
 static func over_white(c: Color) -> Color:
 	return Color(1, 1, 1).lerp(Color(c, 1.0), c.a)
+
+
+## 스킬 트리 화면의 반투명 파랑 창(트리 창·설명 띠·확인 창): 위 → 아래 그라데이션, 어두운 바깥 선 + 밝은 안쪽 선, 모서리 깎음.
+static func draw_tree_window(ci: CanvasItem, r: Rect2, opaque: bool = false) -> void:
+	var c := minf(14.0, minf(r.size.x, r.size.y) * 0.3)
+	var pts := chamfer_points(r, c)
+	var cols := PackedColorArray()
+	for p in pts:
+		var col := TREE_WIN_TOP.lerp(TREE_WIN_BOTTOM, (p.y - r.position.y) / maxf(1.0, r.size.y))
+		cols.append(Color(col, 1.0) if opaque else col)
+	ci.draw_polygon(pts, cols)
+	_outline(ci.get_canvas_item(), r.grow(-1.5), c, TREE_WIN_OUTER, 3.0)
+	_outline(ci.get_canvas_item(), r.grow(-5.0), maxf(0.0, c - 3.0), TREE_WIN_EDGE, 1.5)
+
+
+## 상점 짜임의 목록·설명 창(원작 jp_guide3_img1~3): 짙은 남색 반투명 그라데이션, 모서리 깎음, 청록 테두리, 왼쪽·오른쪽 끝 마개.
+## head_h > 0 이면 위에 그 높이의 머리 띠(설명 창의 이름 줄).
+static func draw_shop_window(ci: CanvasItem, r: Rect2, head_h: float = 0.0) -> void:
+	var c := minf(12.0, minf(r.size.x, r.size.y) * 0.3)
+	var pts := chamfer_points(r, c)
+	var cols := PackedColorArray()
+	for p in pts:
+		cols.append(SHOP_WIN_TOP.lerp(SHOP_WIN_BOTTOM, (p.y - r.position.y) / maxf(1.0, r.size.y)))
+	ci.draw_polygon(pts, cols)
+	if head_h > 0.0:
+		ci.draw_rect(Rect2(r.position.x + 6.0, r.position.y + 6.0, r.size.x - 12.0, head_h), SHOP_DESC_HEAD)
+	var cap := 8.0
+	for x in [r.position.x + 3.0, r.end.x - 3.0 - cap]:
+		ci.draw_rect(Rect2(x, r.position.y + c, cap, r.size.y - 2.0 * c), SHOP_WIN_CAP)
+	_outline(ci.get_canvas_item(), r.grow(-1.0), c, SHOP_WIN_EDGE, 2.0)
 
 
 ## 위쪽 알림·연출 띠(반투명, 모서리 깎음, 테두리 없음).

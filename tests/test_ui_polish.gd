@@ -435,66 +435,51 @@ static func contrast(a: Color, b: Color) -> float:
 	return (maxf(la, lb) + 0.05) / (minf(la, lb) + 0.05)
 
 
+## 캠프 「기록」(M2.7 R2-d, 앞 주 메뉴 창을 옮긴 것): 단추는 시설 모양(fac:*)이고 모든 상태의 글자 대비는 polish2 의 모양 표 시험이 본다.
+## 여기서는 기록 화면의 상태 표시: 커서 = 고름(노랑, 색 말고도 굵은 테두리), 지금 자동 지도 = 켜짐, 빈 칸 불러오기 = 못 누름(커서는 간다).
 func test_menu_buttons_have_borders_and_clear_checked_and_selected_states() -> void:
 	_kit()
 	var s := await kit.open("native", 7)
 	s._save_slot("slot1")
 	await kit.frames(2)
-	s._open_menu()
-	await kit.frames(3)
-	check_eq(s.modal.kind, "menu", "준비: 메뉴")
-	var buttons: Array = s.modal.find_children("*", "Button", true, false)
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_5)
+	var pm := s.party_menu
+	var rt := pm.records_tab
+	check_eq([pm.page, pm.tab], ["sub", 4], "준비: 기록")
+	var buttons: Array = rt.save_buttons + rt.load_buttons + rt.band_buttons
 	check(buttons.size() >= 12, "단추 %d개" % buttons.size())
-	var warm := func(c: Color) -> bool: return c.r > 0.9 and c.g > 0.7 and c.b < 0.5
 	var disabled_seen := 0
 	for bb in buttons:
-		var b := bb as Button
-		var sb := (b.get_theme_stylebox("normal") as UiTheme.Box).look
-		var focus := (b.get_theme_stylebox("focus") as UiTheme.Box).look
-		var dis := (b.get_theme_stylebox("disabled") as UiTheme.Box).look
-		check(sb["inner_w"] >= 1.0 and minf(contrast(sb["inner"], sb["top"]), contrast(sb["inner"], sb["bottom"])) >= 1.8, "%s: 보이는 테두리(안쪽 선)" % b.name)
-		check(dis["inner_w"] >= 1.0 and contrast(dis["inner"], dis["bottom"]) >= 1.5, "%s: 못 누름도 칸 테두리" % b.name)
-		# Godot 가 실제로 겹쳐 그리는 짝: 상태 채움(위·아래 색, + 포커스면 그 위 focus 상자, 채움이 있으면 그 색) 과 그 상태의 글자색
-		var under := dis if b.disabled else sb
-		var focus_fill: Dictionary = focus if focus["fill"] else under
-		var pairs := []
+		var b := bb as PartyButton
+		var st := b.theme_state()
+		check(st.begins_with("fac:") or (b.checked and st.begins_with("checked")), "%s: 시설 모양(켜짐은 공용 켜짐) %s" % [b.name, st])
+		var lk := UiTheme.look(st)
+		check(lk["inner_w"] >= 1.0 or lk["outer_w"] >= 1.0, "%s: 보이는 테두리" % b.name)
+		check(b.size.x >= 64.0 and b.size.y >= 64.0, "%s: 64 이상 %s" % [b.name, str(b.size)])
 		if b.disabled:
 			disabled_seen += 1
-			pairs = [[dis, b.get_theme_color("font_disabled_color"), "못 누름"], [focus_fill, b.get_theme_color("font_disabled_color"), "못 누름 + 포커스"]]
-			check(not focus["fill"] and focus["outer_w"] >= 3.0 and warm.call(focus["outer"]) and warm.call(focus["marker"]),
-				"%s: 못 누르는 단추도 포커스는 따뜻한 굵은 테두리 + 표시 막대" % b.name)
-		else:
-			pairs = [[sb, b.get_theme_color("font_color"), "평소"], [focus_fill, b.get_theme_color("font_focus_color"), "포커스"],
-				[(b.get_theme_stylebox("hover") as UiTheme.Box).look, b.get_theme_color("font_hover_color"), "포인터 위"],
-				[(b.get_theme_stylebox("pressed") as UiTheme.Box).look, b.get_theme_color("font_pressed_color"), "누름"]]
-			check(focus["fill"] and warm.call(focus["bottom"]) and warm.call(focus["top"]), "%s: 고른 것은 따뜻한 채움" % b.name)
-			check(focus["outer_w"] > sb["outer_w"] and (focus["marker"] as Color).a > 0.0, "%s: 고른 것은 색 말고도 굵은 테두리 + 표시 막대" % b.name)
-		for p in pairs:
-			var c := minf(contrast(p[0]["top"], p[1]), contrast(p[0]["bottom"], p[1]))
-			check(c >= 4.5, "%s %s: 글자 대비 %.1f" % [b.name, p[2], c])
 	check(disabled_seen >= 2, "못 누르는 단추(빈 불러오기 칸)도 보았다(%d)" % disabled_seen)
+	var sel := UiTheme.look(rt.save_buttons[0].theme_state())
+	var normal := UiTheme.look(rt.save_buttons[1].theme_state())
+	check(rt.save_buttons[0].selected and rt.save_buttons[0].theme_state() == "fac:selected", "커서 단추 = 고름")
+	check((sel["text"] as Color).get_luminance() < 0.3 and (normal["text"] as Color).get_luminance() > 0.5, "고른 것은 색 말고도 글자 밝기가 뒤집힌다(밝은 채움 + 어두운 글자)")
+	check(rt.cur_row == 0, "커서 카드는 번호 칸 노랑 + 테두리(그리기)")
 	var mode: String = s.settings.automap
 	for m in ExplorationRules.AUTOMAP_MODES:
-		var ab: Button = s.modal.find_child("Automap_" + m, true, false)
-		check_eq(ModalLayer.is_checked(ab), m == mode, "자동 지도 %s 켜짐 = 지금 설정" % m)
-		var nb := (ab.get_theme_stylebox("normal") as UiTheme.Box).look
-		if m == mode:
-			check(nb["bottom"] == UiTheme.BTN_CHECKED and contrast(nb["bottom"], ab.get_theme_color("font_color")) >= 4.5, "켜진 단추: 밝은 채움 + 어두운 글자")
-	var load1: Button = s.modal.find_child("Load_slot1", true, false)
-	load1.grab_focus()
-	await kit.frames(1)
-	check(load1.has_focus(), "키보드 포커스")
-	var lines := load1.text.split("\n")
-	check_eq(lines.size(), 3, "채운 저장 칸 세 줄: %s" % str(lines))
-	check_eq(lines[0], "슬롯 1", "슬롯 번호")
-	check_eq(lines[1], "%s · 걸음 %d" % [texts.t(s.floor_def.name_key), s.state.steps], "층·걸음(저장에 있는 값)")
-	check(not load1.disabled, "채운 칸은 불러올 수 있다")
-	var load2: Button = s.modal.find_child("Load_slot2", true, false)
-	check(load2.disabled and load2.text == "슬롯 2\n비어 있음", "빈 칸: 「비어 있음」, 못 누름")
-	load2.grab_focus()
-	await kit.frames(1)
-	check(load2.has_focus(), "빈 칸도 키보드 포커스는 받는다(이동이 건너뛰지 않는다)")
-	check(load2.custom_minimum_size.y >= 64.0, "저장 칸 높이 64 이상")
+		var ab: PartyButton = rt.find_child("Automap_" + m, true, false)
+		check_eq(ab.checked, m == mode, "자동 지도 %s 켜짐 = 지금 설정" % m)
+	check_eq(rt.card_lines(0), [s.texts.t(s.state.defs.party.name_keys[0]) + "  " + s.texts.t("party.level", {"level": s.state.party.members[0].level}),
+		"%s · 걸음 %d" % [texts.t(s.floor_def.name_key), s.state.steps], rt.slots[0]["time"]], "채운 칸: 대표 대원·Lv, 층·걸음(저장에 있는 값), 저장 시각")
+	check(not str(rt.slots[0]["time"]).is_empty() and not rt.load_buttons[0].disabled, "채운 칸은 불러올 수 있다")
+	check_eq(rt.card_lines(1), ["비어 있음", "", ""], "빈 칸: 「비어 있음」")
+	check(rt.load_buttons[1].disabled, "빈 칸 불러오기: 못 누름")
+	await kit.press_key(KEY_DOWN)
+	await kit.press_key(KEY_RIGHT)
+	check(rt.load_buttons[1].selected and rt.load_buttons[1].theme_state() == "fac:disabled_selected", "빈 칸도 커서는 받는다(이동이 건너뛰지 않는다)")
+	var h := kit.hash_now()
+	await kit.press_key(KEY_ENTER)
+	check(pm.is_open() and kit.hash_now() == h, "못 누르는 칸에서 Enter: 아무 일도 없다")
 
 
 # ---- U5 대원 HP 막대 색 ----
@@ -525,8 +510,11 @@ func test_every_member_hp_bar_uses_the_rule() -> void:
 	check_eq(st.hp_bar_color(4), HpColor.RED, "12/40 = 30% → 빨강")
 	await kit.press_key(KEY_P)
 	var pm := s.party_menu
+	# 캠프(M2.7 R2)의 대원 카드는 전투 카드와 같은 부품: 원작 색(비율과 상관없이 노랑 → 주황), 값은 탐색 상태의 HP.
+	for c in pm.cards.cards:
+		check_eq(c.hp_bar_colors(), [UiTheme.CARD_HP_FROM, UiTheme.CARD_HP_TO], "캠프 대원 카드 %s: 노랑 → 주황" % c.unit().name)
 	for i in hp.size():
-		check_eq(pm.cells[i].hp_bar_color(), st.hp_bar_color(i), "파티 메뉴 대원 칸 %d" % i)
+		check_eq(pm.display.party[i].hp, s.state.party.members[i].hp, "캠프 대원 카드 %d HP = 탐색 상태" % i)
 	st.free()
 	await kit.press_key(KEY_ESCAPE)
 	s.state.encounter.danger = s.state.encounter.threshold - 1

@@ -1,20 +1,39 @@
-## 파티 메뉴 스킬 탭(07 §9.2, §4.6): 트리 영역(자르기, 넘치면 세로로 끌어 내림)·설명 칸·조작 줄.
+## 캠프 「스킬」 화면(07 §9.2, §4.6, M2.7 R2: 원작 HD 스킬 트리 jp_guide2_img2·img3, gw_14). 어둡게 한 화면 전체 3D 시야 위에:
+## 위 줄(MemberHeader 파랑: 이름 칸 + 앞·다음 대원, Lv 띠, 정보 띠 = HP·TP 와 오른쪽 「남은 SP」(원작 SKILL POINT 자리)),
+## 직업 폴더 탭(장식), 화면 폭 거의 전체 반투명 파랑 트리 창(자르기, 넘치면 세로로 끌어 내림, 노드는 알약 + Lv 상자, 직각 연결선),
+## 아래 설명 띠(스킬 이름 + 레벨 칸 1~최대(배운 레벨 시안·초안 노랑), 종류·TP 줄과 다음 레벨 값·선행 줄을 세로 다섯 줄씩 칸으로,
+## 오른쪽에 「−」「+」와 「되돌리기」「확정」). 원작은 노드마다 YES/NO 로 바로 배우지만 우리는 초안 → 「확정」 → 확인 창 한 번(07 §4.6).
 ## 「+」「−」는 화면의 초안(스킬 → 더한 레벨)만 바꾸고(판정은 GrowthRules.learn_block·unlearn_block), 「확정」은 확정 확인 창 →
 ## GrowthRules.allocate 한 번(목표 레벨 사전). 초안은 저장하지 않는다.
-## 노드는 트리 영역 왼쪽 위 (8, 8)부터 열 피치 152·행 피치 112(1280×720 에서 첫 노드 (308, 88)). 트리 영역은 내용 영역 가운데,
-## 설명 칸은 오른쪽에 붙는다(넓은 화면비에서도).
+## 노드 칸: 4 열 × 5 행, 노드 높이 64(원작 32, 누르는 칸 64 이상), 행 피치 78, 열 피치 = (트리 영역 폭 − 8 + 열 틈 40) / 4(1280 에서 298).
 class_name PartySkillTab
 extends Control
 
-const NODE := Vector2(136, 88)
-const PITCH := Vector2(152, 112)
-const FIRST := Vector2(8, 8)
-const TREE_SIZE := Vector2(600, 552)
-const DESC_W := 364.0
-const ROW_Y := 640.0
+## 1280×720 의 노드 크기·피치(열 피치는 트리 영역 폭을 따라 늘어난다, node_rect)와 첫 노드 자리(트리 영역 기준).
+const NODE := Vector2(258, 64)
+const PITCH := Vector2(298, 78)
+const FIRST := Vector2(4, 4)
+const COLS := 4
+## 트리 창(원작 x 48~1232·y 138~548): 왼쪽·오른쪽 여백, 위·아래. 직업 폴더 탭(원작 x 72~290·y 100~138).
+const WIN_SIDE := 48.0
+const WIN_TOP := 150.0
+const WIN_BOTTOM := 542.0
+const WIN_INSET := 4.0
+const CLASS_TAB := Rect2(72, 120, 220, 34)
+## 설명 띠(원작 y 552~708): 아래 여백·높이, 안 여백, 레벨 칸, 줄.
+const DESC_BOTTOM := 8.0
+const DESC_H := 164.0
+const DESC_PAD := 16.0
+const LEVEL_BOX := Vector2(30, 28)
+const LEVEL_BOX_X := 300.0
+const LINE_H := 22.0
+const LINES_PER_COL := 5
+const BODY_Y := 50.0
 const STEP_BUTTON := Vector2(96, 64)
 const REVERT_SIZE := Vector2(160, 64)
 const COMMIT_SIZE := Vector2(200, 64)
+## 오른쪽 단추 묶음 폭(되돌리기 + 확정 줄).
+const BUTTONS_W := REVERT_SIZE.x + 8.0 + COMMIT_SIZE.x
 ## 퍼밀(‰)로 적힌 줄 필드: 화면은 %로 보인다.
 ## 선행 연결선: 굵기, 들어가는 쪽 화살표 길이·너비.
 const LINE_W := 3.0
@@ -27,6 +46,9 @@ var menu: PartyMenu
 var cursor := 0
 ## 초안: 스킬 ID → 초안으로 더한 레벨(1 이상만 둔다).
 var draft := {}
+var top: MemberHeader
+var tree_window: Control
+var class_tab: Control
 var tree_area: PartyScroll
 var nodes: Array[SkillNode] = []
 var desc: Control
@@ -35,57 +57,96 @@ var plus_button: PartyButton
 var revert_button: PartyButton
 var commit_button: PartyButton
 var _desc_title := Label.new()
-var _desc_body := Label.new()
+## 설명 줄(첫 줄 = 종류·TP·Lv, 다음 레벨 값, 선행·관문). 설명 띠에 세로 다섯 줄씩 칸으로 그린다.
+var desc_lines: Array[String] = []
+## 설명 띠 레벨 칸 [배운 레벨, 초안, 최대].
+var level_boxes := [0, 0, 0]
 var _sp_label := Label.new()
 var _note_label := Label.new()
-var _class_id := ""
+var _class_name := ""
 
 
 func setup(m: PartyMenu) -> void:
 	menu = m
 	mouse_filter = MOUSE_FILTER_IGNORE
+	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	top = MemberHeader.new()
+	top.name = "SkillTop"
+	top.palette = "tree"
+	add_child(top)
+	top.build("Skill", menu.texts.t("camp.back"))
+	top.step.connect(func(d: int) -> void: menu.handle("member_step", d))
+	top.back.connect(func() -> void: menu.handle("back"))
+	tree_window = Control.new()
+	tree_window.name = "TreeWindow"
+	tree_window.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(tree_window)
+	PartyMenu.place(tree_window, Vector2(0, 0), Vector2(1, 0), Vector4(WIN_SIDE, WIN_TOP, -WIN_SIDE, WIN_BOTTOM))
+	tree_window.draw.connect(func() -> void: UiTheme.draw_tree_window(tree_window, Rect2(Vector2.ZERO, tree_window.size)))
+	class_tab = Control.new()
+	class_tab.name = "ClassTab"
+	class_tab.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(class_tab)
+	PartyMenu.place(class_tab, Vector2.ZERO, Vector2.ZERO, Vector4(CLASS_TAB.position.x, CLASS_TAB.position.y, CLASS_TAB.end.x, CLASS_TAB.end.y))
+	class_tab.draw.connect(_draw_class_tab)
 	tree_area = PartyScroll.new()
 	tree_area.name = "TreeArea"
 	tree_area.content.draw.connect(_draw_lines)
 	add_child(tree_area)
+	PartyMenu.place(tree_area, Vector2(0, 0), Vector2(1, 0),
+		Vector4(WIN_SIDE + WIN_INSET + 8, WIN_TOP + WIN_INSET, -WIN_SIDE - WIN_INSET - 8, WIN_BOTTOM - WIN_INSET))
+	tree_area.resized.connect(func() -> void:
+		if menu.state != null and visible:
+			refresh())
 	desc = Control.new()
 	desc.name = "SkillDesc"
 	desc.mouse_filter = MOUSE_FILTER_IGNORE
-	desc.draw.connect(func() -> void: _panel(desc))
+	desc.draw.connect(_draw_desc)
 	add_child(desc)
+	PartyMenu.place(desc, Vector2(0, 1), Vector2(1, 1), Vector4(WIN_SIDE, -DESC_BOTTOM - DESC_H, -WIN_SIDE, -DESC_BOTTOM))
+	_desc_title.name = "DescTitle"
 	_desc_title.add_theme_font_size_override("font_size", 22)
-	_desc_title.position = Vector2(16, 12)
+	_desc_title.position = Vector2(DESC_PAD, 8)
+	_desc_title.size = Vector2(LEVEL_BOX_X - DESC_PAD - 12, 34)
 	_desc_title.clip_text = true
+	_desc_title.mouse_filter = MOUSE_FILTER_IGNORE
 	desc.add_child(_desc_title)
-	_desc_body.add_theme_font_size_override("font_size", 17)
-	_desc_body.position = Vector2(16, 48)
-	_desc_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.add_child(_desc_body)
-	minus_button = _button("SkillMinus", "", STEP_BUTTON, "minus", desc)
-	minus_button.icon = "zoom_out"  # 「−」「+」 기호(글꼴 부분 집합에 U+2212 가 없다)
-	plus_button = _button("SkillPlus", "", STEP_BUTTON, "plus", desc)
-	plus_button.icon = "zoom_in"
-	revert_button = _button("SkillRevert", menu.texts.t("party.revert"), REVERT_SIZE, "revert", self)
-	commit_button = _button("SkillCommit", menu.texts.t("party.commit"), COMMIT_SIZE, "commit", self)
+	plus_button = _button("SkillPlus", "", "plus", desc, Vector4(-DESC_PAD - STEP_BUTTON.x, 8, -DESC_PAD, 8 + STEP_BUTTON.y))
+	plus_button.icon = "zoom_in"  # 「−」「+」 기호(글꼴 부분 집합에 U+2212 가 없다)
+	minus_button = _button("SkillMinus", "", "minus", desc,
+		Vector4(-DESC_PAD - 2.0 * STEP_BUTTON.x - 8, 8, -DESC_PAD - STEP_BUTTON.x - 8, 8 + STEP_BUTTON.y))
+	minus_button.icon = "zoom_out"
+	var by := DESC_H - 8 - COMMIT_SIZE.y
+	commit_button = _button("SkillCommit", menu.texts.t("party.commit"), "commit", desc, Vector4(-DESC_PAD - COMMIT_SIZE.x, by, -DESC_PAD, by + COMMIT_SIZE.y))
+	revert_button = _button("SkillRevert", menu.texts.t("party.revert"), "revert", desc,
+		Vector4(-DESC_PAD - BUTTONS_W, by, -DESC_PAD - COMMIT_SIZE.x - 8, by + REVERT_SIZE.y))
+	# 「남은 SP」는 정보 띠 오른쪽(원작 SKILL POINT 자리), 확정 안내는 그 왼쪽.
 	_sp_label.name = "SpLine"
-	_sp_label.add_theme_font_size_override("font_size", 20)
+	_sp_label.add_theme_font_size_override("font_size", 22)
+	_sp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_sp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_sp_label.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(_sp_label)
+	PartyMenu.place(_sp_label, Vector2(1, 0), Vector2(1, 0), Vector4(-420, MemberHeader.INFO_Y, -20, MemberHeader.INFO_Y + MemberHeader.INFO_H))
+	_note_label.name = "CommitNote"
 	_note_label.add_theme_font_size_override("font_size", 16)
-	_note_label.add_theme_color_override("font_color", Color(1.0, 0.75, 0.55))
+	_note_label.add_theme_color_override("font_color", UiTheme.ST_LV_TEXT)
+	_note_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_note_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_note_label.clip_text = true
 	_note_label.text = menu.texts.t("party.commit_note")
+	_note_label.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(_note_label)
+	PartyMenu.place(_note_label, Vector2(0, 0), Vector2(1, 0), Vector4(400, MemberHeader.INFO_Y, -440, MemberHeader.INFO_Y + MemberHeader.INFO_H))
 
 
-func _button(n: String, label: String, sz: Vector2, kind: String, parent: Node) -> PartyButton:
+func _button(n: String, label: String, kind: String, parent: Control, off: Vector4) -> PartyButton:
 	var b := PartyButton.new()
 	b.name = n
 	b.text = label
-	b.size = sz
 	b.activated.connect(func() -> void: menu.handle(kind))
 	parent.add_child(b)
+	PartyMenu.place(b, Vector2(1, 0), Vector2(1, 0), off)
 	return b
 
 
@@ -113,6 +174,14 @@ func clear_draft() -> void:
 	draft.clear()
 
 
+## 정보 띠 가운데: 안내(거부 이유 등)가 있으면 그것을 따뜻한 색으로, 없으면 확정 안내.
+func notice_changed() -> void:
+	var has := not menu.notice.is_empty()
+	_note_label.text = menu.notice if has else menu.texts.t("party.commit_note")
+	_note_label.add_theme_color_override("font_color", PartyMenu.NOTICE_TEXT if has else UiTheme.ST_LV_TEXT)
+	_note_label.add_theme_font_size_override("font_size", 18 if has else 16)
+
+
 ## 초안이 쓰는 SP.
 func draft_sp() -> int:
 	return GrowthRules.sp_used(draft)
@@ -122,13 +191,51 @@ func tree_rect() -> Rect2:
 	return Rect2(tree_area.position, tree_area.size)
 
 
+func tree_window_rect() -> Rect2:
+	return Rect2(tree_window.position, tree_window.size)
+
+
 func desc_rect() -> Rect2:
 	return Rect2(desc.position, desc.size)
 
 
+func class_tab_rect() -> Rect2:
+	return Rect2(class_tab.position, class_tab.size)
+
+
+## 열 피치(트리 영역 폭을 4 열로 나눈다. 열 틈은 PITCH.x − NODE.x 그대로).
+func pitch() -> Vector2:
+	var w := tree_area.size.x if tree_area.size.x > 0.0 else 1160.0
+	return Vector2((w - 2.0 * FIRST.x + (PITCH.x - NODE.x)) / COLS, PITCH.y)
+
+
+func node_size() -> Vector2:
+	return Vector2(pitch().x - (PITCH.x - NODE.x), NODE.y)
+
+
 func node_rect(i: int) -> Rect2:
 	var p := _pos(i)
-	return Rect2(FIRST + Vector2(p) * PITCH, NODE)
+	return Rect2(FIRST + Vector2(p) * pitch(), node_size())
+
+
+## 설명 띠 레벨 칸 k(1부터, 설명 띠 기준).
+func level_box_rect(k: int) -> Rect2:
+	return Rect2(LEVEL_BOX_X + (k - 1) * (LEVEL_BOX.x + 4.0), 11, LEVEL_BOX.x, LEVEL_BOX.y)
+
+
+## 설명 줄 i 의 자리(설명 띠 기준): 다섯 줄씩 칸, 칸 폭 = 단추 묶음 왼쪽까지를 셋으로.
+func desc_line_pos(i: int) -> Vector2:
+	var col_w := body_width() / 3.0
+	return Vector2(DESC_PAD + (i / LINES_PER_COL) * col_w, BODY_Y + (i % LINES_PER_COL + 1) * LINE_H - 5.0)
+
+
+func body_width() -> float:
+	return maxf(120.0, desc.size.x - 2.0 * DESC_PAD - BUTTONS_W - 16.0)
+
+
+## 설명 줄 전부(시험·디버그용, 줄바꿈으로 잇는다).
+func desc_text() -> String:
+	return "\n".join(desc_lines)
 
 
 ## 지금 고른 스킬 ID(트리가 비면 "").
@@ -137,27 +244,9 @@ func cursor_skill() -> String:
 	return str(tree[cursor]["skill"]) if cursor < tree.size() else ""
 
 
-func place(s: Vector2) -> void:
-	var desc_x := s.x - 8 - DESC_W
-	var free_left := PartyMenu.TAB_X
-	var free_w := desc_x - 8 - free_left
-	tree_area.position = Vector2(roundf(free_left + maxf(0.0, (free_w - TREE_SIZE.x) / 2.0)), PartyMenu.TOP)
-	tree_area.size = TREE_SIZE
-	desc.position = Vector2(desc_x, PartyMenu.TOP)
-	desc.size = Vector2(DESC_W, TREE_SIZE.y)
-	_desc_title.size = Vector2(DESC_W - 32, 30)
-	_desc_body.size = Vector2(DESC_W - 32, TREE_SIZE.y - 48 - STEP_BUTTON.y - 16)
-	var by := desc.size.y - STEP_BUTTON.y - 8
-	minus_button.position = Vector2(16, by)
-	plus_button.position = Vector2(DESC_W - 16 - STEP_BUTTON.x, by)
-	var row_mid := ROW_Y + 4
-	_sp_label.position = Vector2(PartyMenu.TAB_X + 8, row_mid)
-	_sp_label.size = Vector2(300, 64)
-	revert_button.position = Vector2(PartyMenu.TAB_X + 316, row_mid)
-	commit_button.position = Vector2(revert_button.position.x + REVERT_SIZE.x + 8, row_mid)
-	var note_x := commit_button.position.x + COMMIT_SIZE.x + 12
-	_note_label.position = Vector2(note_x, row_mid)
-	_note_label.size = Vector2(maxf(0.0, s.x - 8 - note_x), 64)
+func place(_s: Vector2) -> void:
+	if menu.state != null and visible:
+		refresh()
 
 
 func dispatch(kind: String, arg: Variant) -> bool:
@@ -264,6 +353,7 @@ func _show_cursor() -> void:
 func refresh() -> void:
 	if menu.state == null:
 		return
+	notice_changed()
 	var defs := menu.state.defs
 	var i := menu.member
 	var m := menu.current_member()
@@ -273,7 +363,6 @@ func refresh() -> void:
 	while nodes.size() < tree.size():
 		var nd := SkillNode.new()
 		nd.name = "Node_%d" % nodes.size()
-		nd.size = NODE
 		nd.scroller = tree_area
 		nd.index = nodes.size()
 		nd.activated.connect(func() -> void: menu.handle("node", nd.index))
@@ -292,6 +381,7 @@ func refresh() -> void:
 		var s := defs.battle.skill(sid)
 		var now := int(m.skills.get(sid, 0)) + int(draft.get(sid, 0))
 		nd.position = node_rect(j).position
+		nd.size = node_size()
 		max_row = maxi(max_row, _pos(j).y)
 		nd.text = menu.texts.t(s.name_key)
 		nd.level_line = menu.texts.t("party.node.level", {"level": now, "max": s.max_level()})
@@ -316,8 +406,15 @@ func refresh() -> void:
 				nd.status_line = ""
 		nd.queue_redraw()
 	tree_area.set_content_height(FIRST.y + max_row * PITCH.y + NODE.y + FIRST.y)
+	_class_name = menu.texts.t(defs.party.class_ids[i])
+	class_tab.queue_redraw()
+	top.name_text = menu.member_name(i)
+	top.level_text = menu.texts.t("party.level", {"level": m.level})
+	top.level_extra = ""
+	top.hp_text = menu.texts.t("party.hp", {"hp": m.hp, "max": m.max_hp})
+	top.tp_text = menu.texts.t("party.tp", {"tp": m.tp, "max": m.max_tp})
+	top.queue_redraw()
 	tree_area.content.queue_redraw()
-	_class_id = c.id
 	_refresh_desc()
 	var left := GrowthRules.sp_left(defs, m)
 	var used := draft_sp()
@@ -331,7 +428,9 @@ func _refresh_desc() -> void:
 	var sid := cursor_skill()
 	if sid.is_empty():
 		_desc_title.text = ""
-		_desc_body.text = ""
+		desc_lines = []
+		level_boxes = [0, 0, 0]
+		desc.queue_redraw()
 		return
 	var defs := menu.state.defs
 	var m := menu.current_member()
@@ -365,7 +464,8 @@ func _refresh_desc() -> void:
 	var gate := int(e.get("min_level", 1))
 	if gate > 1:
 		lines.append("%s  %s" % [menu.texts.t("party.skill.gate", {"level": gate}), menu.texts.t("party.skill.met" if m.level >= gate else "party.skill.unmet")])
-	_desc_body.text = "\n".join(lines)
+	desc_lines = lines
+	level_boxes = [int(m.skills.get(sid, 0)), int(draft.get(sid, 0)), s.max_level()]
 	var learn := GrowthRules.learn_block(defs, menu.member, m, draft, sid)
 	plus_button.dimmed = not learn.is_empty()
 	minus_button.dimmed = not GrowthRules.unlearn_block(defs, menu.member, m, draft, sid).is_empty()
@@ -440,13 +540,13 @@ func _draw_lines() -> void:
 			var from := int(c.tree_index.get(r["skill"], -1))
 			if from < 0:
 				continue
-			var path := connector_path(node_rect(from), node_rect(j), PITCH - NODE)
+			var path := connector_path(node_rect(from), node_rect(j), pitch() - node_size())
 			(met if int(levels.get(r["skill"], 0)) >= int(r["level"]) else unmet).append(path)
 	# 갖춘 선을 나중에 그린다: 두 선행이 한 노드로 들어가 겹치는 끝 토막은 갖춘 쪽 색으로 보인다.
 	for path in unmet:
-		_draw_connector(tree_area.content, path, Color(0.35, 0.42, 0.48))
+		_draw_connector(tree_area.content, path, UiTheme.TREE_LINE_UNMET)
 	for path in met:
-		_draw_connector(tree_area.content, path, Color(0.4, 0.9, 1.0))
+		_draw_connector(tree_area.content, path, UiTheme.TREE_LINE_MET)
 
 
 static func _draw_connector(canvas: CanvasItem, path: PackedVector2Array, col: Color) -> void:
@@ -510,5 +610,35 @@ static func arrow_points(path: PackedVector2Array) -> PackedVector2Array:
 	return PackedVector2Array([tip, base + side, base - side])
 
 
-func _panel(c: Control) -> void:
-	UiTheme.draw_window(c, Rect2(Vector2.ZERO, c.size))
+## 직업 폴더 탭(원작 트리 창 위 가장자리에 걸친 탭, 직업이 하나라 탭도 하나): 짙은 청록 판 + 밝은 글자. 장식.
+func _draw_class_tab() -> void:
+	var r := Rect2(Vector2.ZERO, class_tab.size)
+	class_tab.draw_colored_polygon(PackedVector2Array([Vector2(0, r.end.y), Vector2(6, 0), Vector2(r.end.x - 6, 0), r.end]), UiTheme.TREE_TAB)
+	class_tab.draw_polyline(PackedVector2Array([Vector2(0, r.end.y), Vector2(6, 0), Vector2(r.end.x - 6, 0), r.end]), UiTheme.TREE_WIN_EDGE, 1.5, true)
+	class_tab.draw_string(class_tab.get_theme_default_font(), Vector2(0, r.get_center().y + 18 * 0.36), _class_name, HORIZONTAL_ALIGNMENT_CENTER,
+		r.size.x, 18, UiTheme.TEXT)
+
+
+## 설명 띠: 파랑 창, 레벨 칸 1~최대(배운 레벨 시안·초안 노랑·남은 칸 짙은 파랑), 설명 줄(첫 줄 시안)을 다섯 줄씩 칸으로.
+func _draw_desc() -> void:
+	UiTheme.draw_tree_window(desc, Rect2(Vector2.ZERO, desc.size))
+	var font := desc.get_theme_default_font()
+	var learned: int = level_boxes[0]
+	var drafted: int = level_boxes[1]
+	for k in range(1, int(level_boxes[2]) + 1):
+		var r := level_box_rect(k)
+		var bg := UiTheme.TREE_BOX_EMPTY
+		var fg := UiTheme.TREE_BOX_EMPTY_TEXT
+		if k <= learned:
+			bg = UiTheme.TREE_BOX_LEARNED
+			fg = UiTheme.TREE_LV_BOX_TEXT
+		elif k <= learned + drafted:
+			bg = UiTheme.TREE_BOX_DRAFT
+			fg = UiTheme.TREE_LV_BOX_TEXT
+		desc.draw_rect(r, bg)
+		desc.draw_rect(r, UiTheme.TREE_WIN_OUTER, false, 1.5)
+		desc.draw_string(font, Vector2(r.position.x, r.get_center().y + 16 * 0.36), str(k), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 16, fg)
+	var col_w := body_width() / 3.0
+	for i in desc_lines.size():
+		var p := desc_line_pos(i)
+		desc.draw_string(font, p, desc_lines[i], HORIZONTAL_ALIGNMENT_LEFT, col_w - 12.0, 16, UiTheme.TREE_KIND_TEXT if i == 0 else UiTheme.TEXT)

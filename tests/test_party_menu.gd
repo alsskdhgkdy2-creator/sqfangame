@@ -56,9 +56,11 @@ func _prep_duelist(s: DungeonScreen, bag: Dictionary = {}) -> void:
 		GrowthRules.supply(s.state, id, bag[id])
 
 
+## 캠프(M2.7 R2): P → 2(스킬) → Enter(대원 고르기 커서 = 칸 0) → E(다음 대원).
 func _skill_tab_on_duelist(s: DungeonScreen) -> PartyMenu:
 	await kit.press_key(KEY_P)
 	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_ENTER)
 	await kit.press_key(KEY_E)
 	var pm := s.party_menu
 	check(pm.is_open() and pm.tab == 1 and pm.member == DUELIST_A, "준비: 스킬 탭·듀얼리스트 A")
@@ -68,6 +70,7 @@ func _skill_tab_on_duelist(s: DungeonScreen) -> PartyMenu:
 func _equip_tab_on(s: DungeonScreen, member_steps: int) -> PartyMenu:
 	await kit.press_key(KEY_P)
 	await kit.press_key(KEY_3)
+	await kit.press_key(KEY_ENTER)
 	for i in member_steps:
 		await kit.press_key(KEY_E)
 	var pm := s.party_menu
@@ -131,6 +134,11 @@ func _host_menu(defs: GameDefs, sz: Vector2, debug: bool = false, bag: Dictionar
 	for id in bag:
 		GrowthRules.supply(st, id, bag[id])
 	pm.open(st)
+	await kit.frames(1)
+	# 캠프 뿌리 → 상태 → 칸 0 대원(M2.7 R2): 하위 화면(상태 탭)에서 시작한다.
+	pm.handle("camp", 0)
+	await kit.frames(1)
+	pm.handle("member", 0)
 	await kit.frames(2)
 	return pm
 
@@ -146,25 +154,28 @@ func _step(pm: PartyMenu, kind: String, arg: Variant = null) -> bool:
 func test_opens_by_button_and_key_on_status_tab_member_0() -> void:
 	var s := await _open()
 	var pm := s.party_menu
-	check(s.party_button.is_visible_in_tree(), "탐색 중 「파티」 단추가 보인다")
-	check(s.party_button.get_parent() == s.hint_row and s.party_button.get_index() < s.map_button.get_index(), "자리: 왼쪽 아래 안내 줄, 지도 단추 왼쪽")
-	check_eq(s.party_button.size, Vector2(64, 64), "64×64")
-	check(not s.party_button.get_global_rect().intersects(s.map_button.get_global_rect()), "지도 단추와 겹치지 않는다")
-	await kit.tap(kit.center_of(s.party_button))
+	check(s.camp_button.is_visible_in_tree(), "탐색 중 「캠프」 단추가 보인다")
+	check(s.camp_button.get_parent() == s.hint_row and s.camp_button.get_index() < s.map_button.get_index(), "자리: 왼쪽 아래 안내 줄, 지도 단추 왼쪽")
+	check_eq(s.camp_button.size, Vector2(64, 64), "64×64")
+	check(not s.camp_button.get_global_rect().intersects(s.map_button.get_global_rect()), "지도 단추와 겹치지 않는다")
+	await kit.tap(kit.center_of(s.camp_button))
 	check(pm.is_open(), "단추로 열림")
-	check_eq([pm.tab, pm.member, pm.dialog_kind], [0, 0, ""], "상태 탭·칸 0 대원·확인 창 없음")
-	await kit.tap(kit.center_of(pm.close_button))
+	check_eq([pm.page, pm.camp_cursor, pm.member, pm.dialog_kind], ["root", 0, 0, ""], "캠프 뿌리·커서 0·칸 0 대원·확인 창 없음")
+	await kit.tap(kit.center_of(pm.camp_list.rows[5]))
 	check(not pm.is_open(), "「닫기」로 닫힘")
 	await kit.press_key(KEY_P)
 	check(pm.is_open(), "P 로 열림")
 	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_ENTER)
 	await kit.press_key(KEY_E)
 	await kit.press_key(KEY_RIGHT)
 	check_eq([pm.tab, pm.member, pm.skill_tab.cursor], [1, 1, 1], "준비: 스킬 탭·대원 1·커서 1")
 	await kit.press_key(KEY_P)
+	check(pm.is_open() and pm.page == "root", "P 로 한 단계 뒤(캠프 뿌리)")
+	await kit.press_key(KEY_P)
 	check(not pm.is_open(), "P 로 닫힘")
 	await kit.press_key(KEY_P)
-	check_eq([pm.tab, pm.member, pm.skill_tab.cursor, pm.equip_tab.cursor], [0, 0, 0, 0], "다시 열면 상태 탭·칸 0·커서 처음")
+	check_eq([pm.page, pm.tab, pm.member, pm.skill_tab.cursor, pm.equip_tab.cursor], ["root", 0, 0, 0, 0], "다시 열면 뿌리·칸 0·커서 처음")
 	await kit.press_key(KEY_ESCAPE)
 	check(not pm.is_open(), "Esc 로 닫힘")
 	check_eq(s.modal.kind, "", "Esc 는 주 메뉴를 열지 않는다")
@@ -173,22 +184,24 @@ func test_opens_by_button_and_key_on_status_tab_member_0() -> void:
 func test_not_opened_with_window_moving_battle_or_wipe() -> void:
 	var s := await _open("debug=1")
 	var pm := s.party_menu
-	# 다른 창
-	await kit.press_key(KEY_ESCAPE)
-	check_eq(s.modal.kind, "menu", "준비: 주 메뉴")
+	# 다른 창(층 3 알림 창)
+	s._alert("시험 알림")
+	await kit.frames(2)
+	check_eq(s.modal.kind, "alert", "준비: 알림 창")
 	await kit.press_key(KEY_P)
-	check(not pm.is_open(), "주 메뉴가 떠 있으면 P 를 무시한다")
+	await kit.press_key(KEY_ESCAPE)
+	check(not pm.is_open(), "창이 떠 있으면 P·Esc 를 무시한다")
 	s._open_party()
 	check(not pm.is_open(), "창이 열려 있으면 열지 않는다")
-	await kit.press_key(KEY_ESCAPE)
-	check_eq(s.modal.kind, "", "준비: 주 메뉴 닫힘")
+	await kit.tap(kit.center_of(s.modal.find_child("AlertOk", true, false)))
+	check_eq(s.modal.kind, "", "준비: 알림 닫힘")
 	# 이동 연출 중
 	s.view.speed = 1.0
 	await kit.press_key(KEY_W)
 	check(s.view.is_busy(), "준비: 이동 연출 중")
 	await kit.press_key(KEY_P)
 	check(not pm.is_open(), "이동 연출 중에는 P 로 열리지 않는다")
-	await kit.tap(kit.center_of(s.party_button))
+	await kit.tap(kit.center_of(s.camp_button))
 	check(not pm.is_open(), "이동 연출 중에는 단추로도 열리지 않는다")
 	for i in 40:
 		if not s.view.is_busy():
@@ -199,13 +212,13 @@ func test_not_opened_with_window_moving_battle_or_wipe() -> void:
 	# 전투
 	await _walk_into_battle(s)
 	check(s.battle_layer.is_open(), "준비: 전투")
-	check(not s.party_button.is_visible_in_tree(), "전투 중에는 「파티」 단추를 숨긴다")
+	check(not s.camp_button.is_visible_in_tree(), "전투 중에는 「캠프」 단추를 숨긴다")
 	await kit.press_key(KEY_P)
 	check(not pm.is_open(), "전투 중 P 무시")
 	s._open_party()
 	check(not pm.is_open(), "전투 중에는 열지 않는다")
 	await _finish_battle(s)
-	check(not s.battle_layer.is_open() and s.party_button.is_visible_in_tree(), "전투가 끝나면 단추가 다시 보인다")
+	check(not s.battle_layer.is_open() and s.camp_button.is_visible_in_tree(), "전투가 끝나면 단추가 다시 보인다")
 	# 전멸
 	for m in s.state.party.members:
 		m.hp = 0
@@ -364,8 +377,8 @@ func test_draft_then_member_tab_or_close_asks_to_discard() -> void:
 	check_eq(pm.member, DUELIST_A, "아직 대원 그대로")
 	await kit.tap(kit.center_of(pm.dialog_buttons[0]))
 	check_eq([pm.dialog_kind, pm.member, st.draft], ["", DUELIST_A, {HIGH_SLASH: 1}], "「돌아가기」 → 초안 유지·대원 그대로")
-	await kit.tap(kit.center_of(pm.cells[3]))
-	check_eq(pm.dialog_kind, "discard", "대원 칸 누르기도 확인 창")
+	await kit.tap(kit.center_of(st.top.next_button))
+	check_eq(pm.dialog_kind, "discard", "다음 대원 단추 누르기도 확인 창")
 	await kit.press_key(KEY_ESCAPE)
 	check_eq([pm.dialog_kind, pm.member, st.draft], ["", DUELIST_A, {HIGH_SLASH: 1}], "확인 창 Esc = 「돌아가기」")
 	await kit.press_key(KEY_1)
@@ -376,10 +389,10 @@ func test_draft_then_member_tab_or_close_asks_to_discard() -> void:
 	check_eq(kit.hash_now(), h, "상태 해시 그대로")
 	await kit.press_key(KEY_2)
 	await kit.tap(kit.center_of(st.plus_button))
-	await kit.tap(kit.center_of(pm.close_button))
-	check_eq(pm.dialog_kind, "discard", "「닫기」 → 확인 창")
+	await kit.tap(kit.center_of(st.top.back_button))
+	check_eq(pm.dialog_kind, "discard", "「뒤로」 → 확인 창")
 	await kit.tap(kit.center_of(pm.dialog_buttons[1]))
-	check(not pm.is_open(), "「버리기」 → 메뉴 닫힘")
+	check(pm.is_open() and pm.page == "root", "「버리기」 → 캠프 뿌리")
 	check_eq(kit.hash_now(), h, "버린 뒤 상태 해시 그대로")
 	check_eq(s.autosave_count, n, "자동 저장 없음")
 
@@ -396,7 +409,7 @@ func test_presses_behind_dialog_do_nothing() -> void:
 	# 확인 창 사각형 밖에 보이는 뒤 화면의 것만 누른다(시험 창은 1280×1280 으로 늘어나 창이 조작 줄 위에 올 수 있다).
 	var panel := Rect2(pm.get_global_transform_with_canvas() * pm.dialog_rect().position, pm.dialog_rect().size)
 	var behind := 0
-	for c in [st.nodes[1], pm.tab_buttons[0], pm.cells[3], pm.close_button, st.plus_button, st.revert_button, st.commit_button]:
+	for c in [st.nodes[1], st.top.prev_button, st.top.next_button, st.top.back_button, st.plus_button, st.revert_button, st.commit_button]:
 		if panel.has_point((c as Control).get_global_rect().get_center()):
 			continue
 		behind += 1
@@ -420,7 +433,7 @@ func test_locked_node_plus_shows_reason_without_change() -> void:
 	check_eq(st.cursor, j, "노드 누르기 → 그 노드")
 	check_eq(st._desc_title.text, texts.t(QUICK_DRAW), "설명 칸이 그 스킬")
 	check_eq([st.nodes[j].status_kind, st.nodes[j].status_line], ["locked", "잠김"], "잠긴 노드")
-	check(st._desc_body.text.contains("미충족") and st._desc_body.text.contains("Lv 5 이상"), "선행·관문 줄: %s" % st._desc_body.text)
+	check(st.desc_text().contains("미충족") and st.desc_text().contains("Lv 5 이상"), "선행·관문 줄: %s" % st.desc_text())
 	var why := GrowthRules.learn_block(s.state.defs, DUELIST_A, s.state.party.members[DUELIST_A], {}, QUICK_DRAW)
 	var h := kit.hash_now()
 	await kit.tap(kit.center_of(st.plus_button))
@@ -446,7 +459,7 @@ func test_skill_preview_shows_tp_change_only_and_increase() -> void:
 	var st := pm.skill_tab
 	await kit.tap(kit.center_of(st.nodes[defs.class_of(medic).tree_index[refresh]]))
 	check_eq(st.cursor_skill(), refresh, "준비: 리프레시 패치")
-	var lines := st._desc_body.text.split("\n")
+	var lines := st.desc_text().split("\n")
 	check(lines.has("Lv 2 → Lv 3"), "Lv 2 → Lv 3: %s" % str(lines))
 	check(lines.has("TP  4 → 3"), "TP 만 바뀌는 스킬: 「TP  4 → 3」")
 	await _step(pm, "member", DUELIST_A)
@@ -454,11 +467,11 @@ func test_skill_preview_shows_tp_change_only_and_increase() -> void:
 	GrowthRules.grant_exp(pm.state, DUELIST_A, defs.battle.growth.cum(3) - d.exp)
 	pm.refresh_view()
 	await kit.tap(kit.center_of(st.nodes[defs.class_of(DUELIST_A).tree_index[HIGH_SLASH]]))
-	lines = st._desc_body.text.split("\n")
+	lines = st.desc_text().split("\n")
 	check(lines.has("TP  4 → 4"), "하이 슬래시 Lv1 → 2: TP 그대로도 보인다: %s" % str(lines))
 	await kit.tap(kit.center_of(st.plus_button))
 	check_eq(st.draft, {HIGH_SLASH: 1}, "「+」 → 초안 Lv2")
-	lines = st._desc_body.text.split("\n")
+	lines = st.desc_text().split("\n")
 	check(lines.has("Lv 2 → Lv 3") and lines.has("TP  4 → 5"), "초안 Lv2 → 3: TP 가 오른다 「TP  4 → 5」: %s" % str(lines))
 	check(lines.has("위력  160 → 170"), "다른 값 줄도 그대로")
 
@@ -468,21 +481,23 @@ func test_notice_does_not_survive_close_and_reopen() -> void:
 	var pm := s.party_menu
 	await kit.press_key(KEY_P)
 	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_ENTER)
 	check_eq(GrowthRules.sp_left(s.state.defs, s.state.party.members[pm.member]), 0, "준비: 남은 SP 0")
 	await kit.press_key(KEY_ENTER)
 	check_eq(pm.notice, "SP가 부족하다", "준비: 알림")
-	check_eq(pm._notice_label.text, "SP가 부족하다", "알림 줄 글")
+	check_eq(pm.skill_tab._note_label.text, "SP가 부족하다", "정보 띠 안내 글")
 	await kit.press_key(KEY_ESCAPE)
-	check(not pm.is_open(), "닫힘")
+	await kit.press_key(KEY_ESCAPE)
+	check(not pm.is_open(), "닫힘(하위 화면 → 뿌리 → 닫힘)")
 	await kit.press_key(KEY_P)
-	check(pm.is_open() and pm.tab == 0, "곧바로 다시 열림(상태 탭)")
-	check_eq([pm.notice, pm._notice_label.text], ["", ""], "앞 알림이 남지 않는다")
+	check(pm.is_open() and pm.page == "root", "곧바로 다시 열림(캠프 뿌리)")
+	check_eq([pm.notice, pm.banner.body], ["", ""], "앞 알림이 남지 않는다")
 	await _wait_sec(0.3)
-	check_eq(pm._notice_label.text, "", "조금 지나도 비어 있다")
+	check_eq(pm.banner.body, "", "조금 지나도 비어 있다")
 	await kit.press_key(KEY_2)
 	await kit.press_key(KEY_ENTER)
-	check_eq(pm._notice_label.text, "SP가 부족하다", "새 알림은 그대로 뜬다")
-	check_eq(pm._notice_label.modulate.a, 1.0, "흐림 없이")
+	await kit.press_key(KEY_ENTER)
+	check_eq(pm.skill_tab._note_label.text, "SP가 부족하다", "새 알림은 그대로 뜬다")
 
 
 func test_no_sp_node_is_dimmed_like_locked_and_plus_does_nothing() -> void:
@@ -542,10 +557,10 @@ func test_tree_area_edge_nodes_are_inside_and_pressable() -> void:
 		await _step(pm, "member", WIZARD)
 		var st := pm.skill_tab
 		var area := st.tree_rect()
-		var row := Rect2(PartyMenu.TAB_X, PartySkillTab.ROW_Y, sz.x - PartyMenu.TAB_X, 72)
+		var row := st.desc_rect()
 		if sz == BASE:
-			check_eq(area, Rect2(300, 80, 600, 552), "1280×720 트리 영역 x 300~900, y 80~632")
-		check(area.end.x <= st.desc_rect().position.x and area.position.x >= PartyMenu.TAB_X, "%s: 트리 영역은 설명 칸 왼쪽" % str(sz))
+			check_eq(area, Rect2(60, 154, 1160, 384), "1280×720 트리 영역 = 트리 창 안(x 60~1220, y 154~538)")
+		check(st.tree_window_rect().encloses(area) and area.end.y <= row.position.y, "%s: 트리 영역은 트리 창 안, 설명 띠 위" % str(sz))
 		for sid in [EDGE_LEFT, EDGE_RIGHT]:
 			var j: int = defs.class_of(WIZARD).tree_index[sid]
 			var nd := st.nodes[j]
@@ -553,9 +568,7 @@ func test_tree_area_edge_nodes_are_inside_and_pressable() -> void:
 			check(area.encloses(full), "%s %s: 노드 %s 가 트리 영역 %s 안" % [str(sz), sid, str(full), str(area)])
 			check(not full.intersects(row), "%s %s: 조작 줄과 겹치지 않는다" % [str(sz), sid])
 			check_eq(pm.clipped_rect(nd), full, "%s %s: 잘리지 않는다" % [str(sz), sid])
-			if sz == BASE:
-				var want := Rect2(308, 536, 136, 88) if sid == EDGE_LEFT else Rect2(764, 536, 136, 88)
-				check_eq(full, want, "1280×720 %s 자리" % sid)
+			check_eq(full.size, st.node_size(), "%s %s: 노드 크기" % [str(sz), sid])
 			await kit.tap(kit.center_of(nd))
 			check_eq(st.cursor, j, "%s %s: 가운데 누르기 → 그 노드" % [str(sz), sid])
 			check_eq(st._desc_title.text, texts.t(sid), "%s %s: 설명 칸이 그 스킬" % [str(sz), sid])
@@ -613,6 +626,9 @@ func test_unequippable_rows_are_dimmed_with_reason_and_cannot_be_chosen() -> voi
 	check_eq(m.equip[0], TWIN_EDGE, "키보드로 골라도 장착 없음")
 	check_eq(kit.hash_now(), h, "상태 그대로")
 	check_eq(s.autosave_count, n, "자동 저장 없음")
+	# 칸과 목록은 한 목록 창을 나눠 쓴다(원작 상점 목록 하나): 다른 칸은 목록을 닫고(뒤로·Esc) 고른다.
+	await kit.tap(kit.center_of(et.frame.back_button))
+	check(not et.list_open and et.slot_rows[3].is_visible_in_tree(), "「뒤로」 → 목록 닫힘, 칸 줄이 다시 보인다")
 	await kit.tap(kit.center_of(et.slot_rows[3]))
 	check_eq(et.row_items, ["", "equip.medic_coat"], "칸 3: 몸 장비는 같은 종류 제한")
 	check_eq(et.row_block, ["unchanged", "kind_limit"], "빈 칸 빼기·같은 종류")
@@ -785,7 +801,8 @@ func test_keyboard_only_full_path() -> void:
 	await kit.press_key(KEY_P)
 	check(pm.is_open(), "P 열기")
 	await kit.press_key(KEY_2)
-	await kit.press_key(KEY_E)
+	await kit.press_key(KEY_RIGHT)  # 대원 고르기: 윗줄 다음 카드(듀얼리스트 A)
+	await kit.press_key(KEY_ENTER)
 	check_eq([pm.tab, pm.member, st.cursor_skill()], [1, DUELIST_A, HIGH_SLASH], "스킬 탭·듀얼리스트 A·커서는 트리 첫 항목")
 	await kit.press_key(KEY_RIGHT)
 	check_eq(st.cursor_skill(), CROSS_SWEEP, "→ 크로스 스윕")
@@ -819,11 +836,11 @@ func test_keyboard_only_full_path() -> void:
 	check_eq([pm.dialog_kind, pm.dialog_pick], ["discard", 0], "Esc → 버리기 확인 창")
 	await kit.press_key(KEY_RIGHT)
 	await kit.press_key(KEY_ENTER)
-	check(not pm.is_open(), "→ Enter → 메뉴 닫힘")
+	check(pm.is_open() and pm.page == "root" and pm.camp_cursor == 1, "→ Enter → 캠프 뿌리(커서 스킬)")
 	check_eq(kit.hash_now(), h1, "상태 해시가 확정 직후와 같다")
-	await kit.press_key(KEY_P)
 	await kit.press_key(KEY_3)
-	await kit.press_key(KEY_E)
+	check_eq([pm.page, pm.pick_cursor], ["pick", DUELIST_A], "3 → 장비 대원 고르기, 커서는 지난 대원")
+	await kit.press_key(KEY_ENTER)
 	check_eq([pm.tab, pm.member, et.cursor], [2, DUELIST_A, 0], "장비 탭·듀얼리스트 A·칸 0")
 	await kit.press_key(KEY_ENTER)
 	check(et.list_open, "Enter → 칸 0 목록")
@@ -836,6 +853,8 @@ func test_keyboard_only_full_path() -> void:
 	await kit.press_key(KEY_BACKSPACE)
 	check_eq(m.equip[0], "", "Backspace → 빼기")
 	check_eq(s.autosave_count, n0 + 3, "자동 저장")
+	await kit.press_key(KEY_ESCAPE)
+	check(pm.is_open() and pm.page == "root", "Esc → 캠프 뿌리")
 	await kit.press_key(KEY_ESCAPE)
 	check(not pm.is_open(), "Esc 닫기")
 	var at := s.state.party.at
@@ -861,7 +880,9 @@ func test_keys_do_not_leak_behind_menu() -> void:
 	var facing := s.state.party.facing
 	var n := s.autosave_count
 	await kit.press_key(KEY_P)
-	check(pm.is_open(), "준비: 메뉴")
+	await kit.press_key(KEY_1)
+	await kit.press_key(KEY_ENTER)
+	check(pm.is_open() and pm.page == "sub", "준비: 캠프 → 상태(칸 0)")
 	for k in [KEY_M, KEY_R, KEY_SPACE, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_A, KEY_S, KEY_D]:
 		await kit.press_key(k)
 	await kit.press_key(KEY_Z, true)
@@ -884,7 +905,8 @@ func test_keys_do_not_leak_behind_menu() -> void:
 	check_eq(pm.member, 0, "키 반복은 아무 일 없음")
 	check(pm.is_open(), "메뉴는 열린 채")
 	await kit.press_key(KEY_ESCAPE)
-	check(not pm.is_open(), "Esc → 메뉴만 닫힘")
+	await kit.press_key(KEY_ESCAPE)
+	check(not pm.is_open(), "Esc 두 번 → 캠프만 닫힘")
 	check_eq(s.modal.kind, "", "주 메뉴는 열리지 않는다")
 	check_eq(s._map_open, map_open, "지도 패널 열림 상태 그대로(M 이 새지 않음)")
 	check_eq(_annotation_json(s), ann, "지도 데이터 그대로(Ctrl+Z 가 새지 않음)")
@@ -907,14 +929,14 @@ func test_drag_from_list_released_on_tab_changes_nothing() -> void:
 	var bag := s.state.gear_bag.duplicate()
 	var n := s.autosave_count
 	var from := kit.center_of(it.plus_buttons[0])
-	var to := kit.center_of(pm.tab_buttons[0])
+	var to := kit.center_of(it.frame.panel.next_button())
 	kit.touch(0, from, true)
 	await kit.frames(1)
 	kit.drag(0, from, to)
 	await kit.frames(1)
 	kit.touch(0, to, false)
 	await kit.frames(3)
-	check_eq(pm.tab, 3, "목록에서 끌다가 탭 위에서 떼도 탭 그대로")
+	check_eq([pm.tab, pm.member], [3, 0], "목록에서 끌다가 판의 「다음 대원」 위에서 떼도 화면·대원 그대로")
 	check_eq(s.state.gear_bag, bag, "끌기는 「+1」 누르기가 아니다")
 	check_eq(s.autosave_count, n, "자동 저장 없음")
 	check(it.list.scroll > 0.0, "끌기가 목록을 내렸다 (%s)" % it.list.scroll)
@@ -978,15 +1000,15 @@ func test_context_change_cancels_pressed_pointer() -> void:
 	await kit.press_key(KEY_ESCAPE)
 	await kit.press_key(KEY_R)
 	check_eq([pm.dialog_kind, st.draft], ["", {}], "준비: 창 닫고 초안 없음")
-	# ② 대원 칸을 누른 채 Q → 뗌
-	var cell := kit.center_of(pm.cells[3])
+	# ② 다음 대원 단추를 누른 채 Q → 뗌
+	var cell := kit.center_of(st.top.next_button)
 	kit.touch(0, cell, true)
 	await kit.frames(2)
 	await kit.press_key(KEY_Q)
 	check_eq(pm.member, 0, "Q → 앞 대원")
 	kit.touch(0, cell, false)
 	await kit.frames(3)
-	check_eq(pm.member, 0, "누르고 있던 칸의 대원은 골라지지 않는다")
+	check_eq(pm.member, 0, "누르고 있던 단추는 대원을 넘기지 않는다")
 	# ③ 장비 목록 줄을 누른 채 Esc → 뗌
 	await kit.press_key(KEY_3)
 	await kit.press_key(KEY_E)
@@ -1003,15 +1025,25 @@ func test_context_change_cancels_pressed_pointer() -> void:
 	await kit.frames(3)
 	check_eq(s.state.party.members[DUELIST_A].equip[0], TWIN_EDGE, "장착 없음")
 	check_eq(s.autosave_count, n, "자동 저장 없음")
-	# 메뉴를 닫을 때도: 「닫기」를 누른 채 Esc 로 닫고 뗀 뒤 다시 열면 아무것도 눌려 있지 않다
-	var close := kit.center_of(pm.close_button)
+	# 하위 화면을 떠날 때도: 「뒤로」를 누른 채 Esc 로 캠프 뿌리로 가고 뗀 뒤 아무것도 눌려 있지 않다
+	var back_b := et.frame.back_button
+	var close := kit.center_of(back_b)
 	kit.touch(0, close, true)
 	await kit.frames(2)
 	await kit.press_key(KEY_ESCAPE)
-	check(not pm.is_open(), "Esc 로 닫힘")
+	check(pm.is_open() and pm.page == "root", "Esc 로 캠프 뿌리")
 	kit.touch(0, close, false)
 	await kit.frames(3)
-	check(not pm.close_button.held, "닫을 때 눌림을 버렸다")
+	check(not back_b.held, "떠날 때 눌림을 버렸다")
+	# 캠프를 닫을 때도: 「닫기」 줄을 누른 채 Esc 로 닫고 뗀다
+	var row5 := kit.center_of(pm.camp_list.rows[5])
+	kit.touch(0, row5, true)
+	await kit.frames(2)
+	await kit.press_key(KEY_ESCAPE)
+	check(not pm.is_open(), "Esc 로 닫힘")
+	kit.touch(0, row5, false)
+	await kit.frames(3)
+	check(not pm.camp_list.rows[5].held, "닫을 때 눌림을 버렸다")
 
 
 # ---- 다시 열기 (07 §10.4) ----
@@ -1067,8 +1099,8 @@ func test_layout_no_overlap_and_min_size_per_tab() -> void:
 		await _step(pm, "member", DUELIST_A)
 		_check_layout(pm, sz, tag + " 스킬")
 		var st := pm.skill_tab
-		check(st.tree_rect().end.y <= PartySkillTab.ROW_Y and st.desc_rect().end.y <= PartySkillTab.ROW_Y, tag + ": 트리·설명 칸은 조작 줄 위")
-		check_eq(st.desc_rect().end.x, sz.x - 8, tag + ": 설명 칸은 오른쪽에 붙는다")
+		check(st.tree_window_rect().end.y <= st.desc_rect().position.y, tag + ": 트리 창은 설명 띠 위")
+		check_eq([st.desc_rect().position.x, st.desc_rect().end.x, st.desc_rect().end.y], [48.0, sz.x - 48, sz.y - 8], tag + ": 설명 띠는 아래 넓게")
 		await _step(pm, "plus")
 		await _step(pm, "commit")
 		check_eq(pm.dialog_kind, "commit", tag + " 준비: 확정 창")
@@ -1087,6 +1119,7 @@ func test_layout_no_overlap_and_min_size_per_tab() -> void:
 		await _step(pm, "supply_toggle")
 		_check_layout(pm, sz, tag + " 임시 보급")
 		await _step(pm, "member", 4)
-		check_eq(pm.member, 4, tag + ": 대원 칸 5 개가 화면 안")
-		check(pm.cells[4].get_global_rect().end.y <= sz.y, tag + ": 마지막 대원 칸이 화면 안")
+		check_eq([pm.member, pm.items_tab.frame.panel.drawn["name"]], [4, pm.member_name(4)], tag + ": 마지막 대원도 인물 판에")
+		await _step(pm, "tab", 4)
+		_check_layout(pm, sz, tag + " 기록")
 

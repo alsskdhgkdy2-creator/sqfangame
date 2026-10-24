@@ -1,14 +1,16 @@
-## 파티 메뉴 장비 탭(07 §9.2, §5.7): 왼쪽 4칸 줄(칸 이름·장비 이름·주요 값), 칸을 누르면 오른쪽에 그 칸의 목록.
+## 캠프 장비 화면(07 §9.2, §5.7, M2.7 R2-c: 원작 상점 사기 화면 jp_guide3_img1 짜임, ShopFrame).
+## 왼쪽 목록 창: 목록이 닫혀 있으면 장비 칸 넷(장비 이름·오른쪽 칸 이름·주요 값), 칸을 누르면 그 칸의 목록.
 ## 목록: 맨 위 「빼기」, 낄 수 있는 가방 장비(이름·개수·바뀌는 값), 아래에 낄 수 없는 가방 장비를 흐리게 이유와 함께.
 ## 줄을 누르면 바로 GrowthRules.equip(초안 없음) → 자동 저장, 목록을 닫고 커서는 그 칸. 칸 0 에 무기 아닌 것·칸 1~3 에 무기처럼
 ## 칸 종류가 다른 장비는 목록에 넣지 않는다. 판정은 GrowthRules.equip_block, 바뀌는 값은 바꾼 뒤의 GrowthRules.profile 과의 차이.
-## 칸 줄 아래 합계 표(M2.6 U8): 목록이 닫혀 있으면 지금 합계, 열려 있으면 커서 줄로 바꿨을 때의 「지금 → 바꾸면」.
+## 왼쪽 아래 설명 창: 커서 칸의 장비(닫힘) 또는 커서 줄(열림)의 이름·주요 값·바뀌는 값/막는 이유.
+## 오른쪽 인물 판(CharPanel): 능력치 묶음(M2.6 U8 합계)이 닫혀 있으면 지금 값, 열려 있으면 커서 줄로 바꿨을 때의 「지금 → 바꾸면」.
+## 설명 띠: 물음(어느 칸 / 무엇을 낄까) + 안내(거부 이유).
 class_name PartyEquipTab
 extends Control
 
-const SLOT_SIZE := Vector2(460, 80)
+const SLOT_H := 64.0
 const SLOT_GAP := 8.0
-const LIST_X := 768.0
 const ROW_H := 64.0
 const ROW_GAP := 4.0
 
@@ -18,6 +20,7 @@ var cursor := 0
 var list_open := false
 ## 목록 줄 커서.
 var list_cursor := 0
+var frame: ShopFrame
 var slot_rows: Array[PartyButton] = []
 var list: PartyScroll
 var rows: Array[PartyButton] = []
@@ -31,21 +34,34 @@ var totals: EquipTotals
 func setup(m: PartyMenu) -> void:
 	menu = m
 	mouse_filter = MOUSE_FILTER_IGNORE
+	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	frame = ShopFrame.new()
+	frame.name = "EquipFrame"
+	add_child(frame)
+	frame.build("Equip", menu.texts.t("camp.back"), true)
+	frame.back.connect(func() -> void: menu.handle("back"))
+	frame.panel.step.connect(func(d: int) -> void: menu.handle("member_step", d))
+	totals = frame.panel.totals
+	var la: Array = frame.list_anchor()
+	var off: Vector4 = la[2]
 	for slot in BattleLimits.EQUIP_SLOTS:
 		var b := PartyButton.new()
 		b.name = "Slot_%d" % slot
-		b.size = SLOT_SIZE
 		b.align_left = true
+		b.skin = "fac"
 		b.activated.connect(func() -> void: menu.handle("slot", slot))
 		add_child(b)
+		var y := off.y + slot * (SLOT_H + SLOT_GAP)
+		PartyMenu.place(b, Vector2(0, 0), Vector2(1, 0), Vector4(off.x, y, off.z, y + SLOT_H))
 		slot_rows.append(b)
 	list = PartyScroll.new()
 	list.name = "EquipList"
 	list.visible = false
 	add_child(list)
-	totals = EquipTotals.new()
-	totals.name = "EquipTotals"
-	add_child(totals)
+	PartyMenu.place(list, la[0], la[1], off)
+	list.resized.connect(func() -> void:
+		if menu.state != null and visible and list_open:
+			refresh())
 
 
 func reset() -> void:
@@ -61,16 +77,9 @@ func context() -> String:
 	return "%s|%d" % [str(list_open), cursor if list_open else -1]
 
 
-func place(s: Vector2) -> void:
-	for slot in slot_rows.size():
-		slot_rows[slot].position = Vector2(PartyMenu.TAB_X, PartyMenu.TOP + slot * (SLOT_SIZE.y + SLOT_GAP))
-	var totals_y := PartyMenu.TOP + slot_rows.size() * (SLOT_SIZE.y + SLOT_GAP)
-	totals.position = Vector2(PartyMenu.TAB_X, totals_y)
-	totals.size = Vector2(SLOT_SIZE.x, minf(EquipTotals.needed_height(), s.y - totals_y - 8))
-	list.position = Vector2(LIST_X, PartyMenu.TOP)
-	list.size = Vector2(maxf(504.0, s.x - 8 - LIST_X), s.y - PartyMenu.TOP - 8)
-	for r in rows:
-		r.size = Vector2(list.size.x, ROW_H)
+func place(_s: Vector2) -> void:
+	if menu.state != null and visible:
+		refresh()
 
 
 func dispatch(kind: String, arg: Variant) -> bool:
@@ -180,30 +189,38 @@ func refresh() -> void:
 	for slot in slot_rows.size():
 		var b := slot_rows[slot]
 		var id: String = m.equip[slot]
-		b.caption = menu.slot_name(slot)
+		b.visible = not list_open
+		if list_open:
+			b.cancel()
+		# 원작 상점 줄(이름 + 오른쪽 값) 짜임: 장비 이름, 오른쪽 칸 이름, 아래 주요 값.
 		if id.is_empty():
-			b.show_row(menu.texts.t("party.slot.empty"), "", "", true)
+			b.show_row(menu.texts.t("party.slot.empty"), menu.slot_name(slot), "", true)
 		else:
-			b.show_row(menu.item_name(id), "", item_summary(defs.battle.equip(id)))
-		# 목록이 열린 칸은 「지금 이 칸」(켜짐), 닫혀 있으면 커서.
-		b.checked = list_open and slot == cursor
+			b.show_row(menu.item_name(id), menu.slot_name(slot), item_summary(defs.battle.equip(id)))
 		b.selected = slot == cursor and not list_open
 	list.visible = list_open
+	frame.show_title(menu.texts.t("camp.cmd.equip"))
+	_refresh_banner()
 	var base := GrowthRules.profile(defs, menu.member, m)
 	if not list_open:
-		totals.show_totals(menu.texts, base, null)
+		frame.panel.show_member(menu, menu.member, null, cursor)
+		var cur: String = m.equip[cursor]
+		var lines: Array[String] = [menu.slot_name(cursor)]
+		if not cur.is_empty():
+			lines.append(item_summary(defs.battle.equip(cur)))
+		frame.show_desc(menu.texts.t("party.slot.empty") if cur.is_empty() else menu.item_name(cur), lines)
 		return
 	_build_rows()
 	# 낄 수 없는 줄이면 견주지 않는다(지금 값만).
 	var blocked := not row_block[list_cursor].is_empty()
-	totals.show_totals(menu.texts, base, null if blocked else profile_if(row_items[list_cursor]))
+	frame.panel.show_member(menu, menu.member, null if blocked else profile_if(row_items[list_cursor]), cursor)
 	while rows.size() < row_items.size():
 		var r := PartyButton.new()
 		var j := rows.size()
 		r.name = "Row_%d" % j
 		r.align_left = true
+		r.skin = "fac"
 		r.scroller = list
-		r.size = Vector2(list.size.x, ROW_H)
 		r.activated.connect(func() -> void: menu.handle("row", j))
 		list.content.add_child(r)
 		rows.append(r)
@@ -216,6 +233,7 @@ func refresh() -> void:
 			continue
 		r.visible = true
 		r.position = Vector2(0, j * (ROW_H + ROW_GAP))
+		r.size = Vector2(list.size.x, ROW_H)
 		var id := row_items[j]
 		var why := row_block[j]
 		var name := menu.texts.t("party.unequip") if id.is_empty() else menu.item_name(id)
@@ -224,6 +242,24 @@ func refresh() -> void:
 		r.show_row(name, count, note, not why.is_empty())
 		r.selected = j == list_cursor
 	list.set_content_height(row_items.size() * (ROW_H + ROW_GAP))
+	var cid := row_items[list_cursor]
+	var lines: Array[String] = [menu.slot_name(cursor)]
+	if not cid.is_empty():
+		lines[0] += "  " + menu.texts.t("party.count", {"n": int(menu.state.gear_bag.get(cid, 0))})
+		lines.append(item_summary(defs.battle.equip(cid)))
+	lines.append(menu.reason_text(row_block[list_cursor]) if blocked else change_text(base, cid))
+	frame.show_desc(menu.texts.t("party.unequip") if cid.is_empty() else menu.item_name(cid), lines)
+
+
+## 설명 띠: 물음 + 안내(거부 이유 등).
+func _refresh_banner() -> void:
+	var head := menu.texts.t("camp.equip.list", {"slot": menu.slot_name(cursor)}) if list_open else menu.texts.t("camp.equip.slots")
+	frame.banner.show_lines(head, menu.notice, not menu.notice.is_empty())
+
+
+func notice_changed() -> void:
+	if menu.state != null:
+		_refresh_banner()
 
 
 ## 장비의 주요 값(공격·방어 등과 능력치 보정, 무기 속성).

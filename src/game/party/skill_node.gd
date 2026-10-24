@@ -1,10 +1,13 @@
-## 스킬 트리 노드 하나(07 §9.2): 이름(두 줄까지), 「Lv 2/5」, 상태 글자(「배움 가능」 밝게·「잠김」 흐리게·「최대」).
-## 초안으로 올린 노드는 금색 테두리와 레벨 줄 오른쪽 「+1」, 키보드 커서가 있는 노드는 고른 모양(UiTheme, selected).
+## 스킬 트리 노드 하나(07 §9.2, M2.7 R2: 원작 HD 스킬 트리 jp_guide2_img3 의 알약): 왼쪽 이름(한 줄, 넘치면 글자를 줄인다)과 그 아래
+## 상태 글자(「배움 가능」·「잠김」·「SP 부족」·「최대」), 오른쪽 Lv 상자(「Lv 2/5」). 모양은 UiTheme 「tree:*」(짙은 파랑, 커서 = 밝은 하늘색,
+## 잠김·SP 부족 = 흐린 회청). 초안으로 올린 노드는 금색 테두리와 Lv 상자 왼쪽 「+1」.
 ## 누르기는 TouchButton 그대로(그 노드 고르기). 끌면 트리 영역을 끌어 내린다(PartyButton 과 같은 규칙).
 class_name SkillNode
 extends PartyButton
 
-const NAME_FS := 16
+const NAME_FS := 18
+const MIN_FS := 13
+const BOX_W := 84.0
 
 ## 트리 칸 번호.
 var index := -1
@@ -14,19 +17,8 @@ var status_line := ""
 var status_kind := ""
 ## 초안으로 더한 레벨(0 = 없음).
 var draft := 0
-
-
-## 이름을 두 줄까지 나눈다: 한 줄에 안 들어가면 띄어쓰기에서 나누고(낱말 가운데서 끊지 않는다), 그래도 넘치는 줄은 잘라 그린다.
-static func name_lines(font: Font, t: String, width: float, fs: int) -> Array[String]:
-	if font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= width or not t.contains(" "):
-		return [t]
-	var words := t.split(" ")
-	var first := words[0]
-	var k := 1
-	while k < words.size() - 1 and font.get_string_size(first + " " + words[k], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= width:
-		first += " " + words[k]
-		k += 1
-	return [first, " ".join(words.slice(k))]
+## 마지막으로 그린 이름 글자 크기(시험용).
+var name_fs := NAME_FS
 
 
 ## 흐리게 그리는지(「잠김」·「SP 부족」 같은 꼴).
@@ -35,7 +27,12 @@ func is_dim() -> bool:
 
 
 func theme_state() -> String:
-	return UiTheme.state_of(held, selected, false, is_dim())
+	return "tree:" + UiTheme.state_of(held, selected, false, is_dim())
+
+
+## 오른쪽 Lv 상자 자리.
+func box_rect() -> Rect2:
+	return Rect2(size.x - 10.0 - BOX_W, (size.y - 32.0) / 2.0, BOX_W, 32.0)
 
 
 func _draw() -> void:
@@ -43,21 +40,26 @@ func _draw() -> void:
 	# 불투명: 선행 선이 노드 면에 비치지 않는다.
 	var lk := UiTheme.draw_button(self, r, theme_state())
 	if draft > 0:
-		UiTheme.draw_outline(self, r, UiTheme.BTN_PICK, UiTheme.BTN_PICK_W)
+		UiTheme.draw_outline(self, r, UiTheme.BTN_PICK, UiTheme.BTN_PICK_W, 20.0)
 	var font := get_theme_default_font()
 	var fg: Color = lk["text"]
-	var lines := name_lines(font, text, size.x - 16, NAME_FS)
-	var y := 26.0 if lines.size() == 1 else 22.0
-	for line in lines:
-		draw_string(font, Vector2(8, y), line, HORIZONTAL_ALIGNMENT_CENTER, size.x - 16, NAME_FS, fg)
-		y += 19.0
-	draw_string(font, Vector2(0, 62), level_line, HORIZONTAL_ALIGNMENT_CENTER, size.x, 15, fg)
+	var box := box_rect()
+	UiTheme.fill_round(self, box, UiTheme.TREE_LV_BOX if not is_dim() else UiTheme.TREE_BOX_EMPTY, 16)
+	draw_string(font, Vector2(box.position.x, box.get_center().y + 15 * 0.36), level_line, HORIZONTAL_ALIGNMENT_CENTER, box.size.x, 15,
+		UiTheme.TREE_LV_BOX_TEXT if not is_dim() else UiTheme.TREE_BOX_EMPTY_TEXT)
+	var right := box.position.x - 8.0
+	if draft > 0:
+		draw_string(font, Vector2(right - 36.0, size.y / 2.0 + 16 * 0.36), "+%d" % draft, HORIZONTAL_ALIGNMENT_RIGHT, 32, 16, lk["accent"])
+		right -= 40.0
+	var w := right - 16.0
+	name_fs = NAME_FS
+	while name_fs > MIN_FS and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, name_fs).x > w:
+		name_fs -= 1
+	draw_string(font, Vector2(16, 28), text, HORIZONTAL_ALIGNMENT_LEFT, w, name_fs, fg)
 	var sc: Color = lk["good"]
 	match status_kind:
 		"locked", "no_sp":
 			sc = lk["muted"]
 		"max":
 			sc = lk["accent"]
-	draw_string(font, Vector2(0, 79), status_line, HORIZONTAL_ALIGNMENT_CENTER, size.x, 13, sc)
-	if draft > 0:
-		draw_string(font, Vector2(size.x - 44, 62), "+%d" % draft, HORIZONTAL_ALIGNMENT_RIGHT, 36, 16, lk["accent"])
+	draw_string(font, Vector2(16, 51), status_line, HORIZONTAL_ALIGNMENT_LEFT, w, 13, sc)

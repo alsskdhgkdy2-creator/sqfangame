@@ -9,7 +9,9 @@
 ##   층마다 화면 전체 뿌리 Control(IGNORE), 부품은 앵커 + 여백으로 가장자리·모서리에 붙인다.
 ##   지도 판은 오른쪽을 덮고 시야는 렌즈를 밀어 소실점을 덮이지 않은 영역 가운데로 옮긴다(DungeonView.set_lens_cover).
 ## 전투(06 §9): 전투 중이면 전투 층(BattleLayer)을 덮는다. HUD·지도 판을 감춘다.
-## 파티 메뉴(07 §9): 「파티」 단추·P 로 여는 불투명 전체 화면 층(PartyMenu). 열린 동안은 창이 열린 것과 같다(이동·지도·메뉴 키를 막는다).
+## 캠프(07 §9, M2.7 R2): 안내 줄 「캠프」 단추·P·Esc 로 여는 층 2 의 창(PartyMenu). 열린 동안은 창이 열린 것과 같다(이동·지도·메뉴 키를 막는다).
+## 저장·불러오기·내보내기·가져오기·자동 지도·새 게임은 캠프 「기록」 화면이 records 갈고리로 부른다(따로 된 메뉴 창은 없다, R2-d).
+## 층 3 Modal 은 알림·파일 고르기·메모·전멸 창만 띄운다.
 ## 미리 받는 입력은 하나(나중 것이 대신)이고, 창이 열릴 때·불러올 때·포커스를 잃을 때·입력 창이 닫힌 뒤 비운다.
 class_name DungeonScreen
 extends Control
@@ -30,7 +32,6 @@ const KEY_ACTIONS := {
 const REPEATABLE := [A.FORWARD, A.BACK, A.STRAFE_LEFT, A.STRAFE_RIGHT, A.TURN_LEFT, A.TURN_RIGHT]
 const PAD_BUTTON := 80.0
 ## 메뉴의 저장 칸 단추 높이(세 줄: 슬롯·층과 걸음·시각).
-const SLOT_H := 84.0
 const PAD_GAP := 8.0
 ## 화면 가장자리 여백(HUD 부품).
 const EDGE := 12.0
@@ -110,8 +111,8 @@ var party_menu: PartyMenu
 var start_error: Control
 var pad := {}  # 규칙 행동 → TouchButton
 var map_button: TouchButton
-var menu_button: TouchButton
-var party_button: TouchButton
+## 안내 줄 「캠프」(원작 CAMP·MAP 의 CAMP).
+var camp_button: TouchButton
 ## 휴식(06 §8.8): 층의 시작 칸에서만 보인다.
 var rest_button: TouchButton
 var _floor_label := Label.new()
@@ -375,13 +376,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if battle_layer == null or battle_layer.is_open():
 		return  # 전투 층이 키를 받는다(메뉴도 열지 않는다, 06 §8.7)
 	if party_menu.is_open():
-		return  # 파티 메뉴가 키를 받는다(07 §9.4: 아래 Esc·Ctrl+Z·M·R·이동 키 갈래는 _input_blocked 를 보지 않는다)
+		# 캠프가 키를 받는다(07 §9.4: 아래 Esc·Ctrl+Z·M·R·이동 키 갈래는 _input_blocked 를 보지 않는다).
+		# 캠프 위에 창(알림·파일 고르기)이 떠 있으면 캠프는 키를 받지 않는다(그 창이 받는다).
+		return
 	if event.is_action_pressed("open_menu"):
 		get_viewport().set_input_as_handled()
-		if modal.kind == "menu":
-			modal.close()
-		elif not modal.is_open():
-			_open_menu()
+		if not modal.is_open():
+			_open_party()  # Esc 도 캠프를 연다(M2.7 R2, 원작 CAMP)
 		return
 	if modal.is_open():
 		return
@@ -438,8 +439,7 @@ func _clear_input() -> void:
 		map.cancel_input()
 	if map_button != null:
 		map_button.cancel()
-		menu_button.cancel()
-		party_button.cancel()
+		camp_button.cancel()
 		rest_button.cancel()
 
 
@@ -485,7 +485,7 @@ func _save_slot(slot: String) -> void:
 	else:
 		_alert(texts.t("msg.save_failed", {"reason": why}))
 		return
-	_open_menu()
+	party_menu.refresh_view()
 
 
 func _start_new_game() -> void:
@@ -676,8 +676,8 @@ func _on_battle_save() -> void:
 	_autosave()
 
 
-## 파티 메뉴를 연다(07 §9.1): 전투·전멸이 아니고, 다른 창(메뉴·메모·파일 고르기·전멸·전투)이 없고, 연출 중이 아닐 때만.
-## 열 때마다 상태 탭·칸 0 대원에서 시작한다. 임시 보급은 디버그 주소이거나 네이티브 디버그 실행일 때만 보인다(07 §5.7).
+## 캠프를 연다(07 §9.1): 전투·전멸이 아니고, 다른 창(메뉴·메모·파일 고르기·전멸·전투)이 없고, 연출 중이 아닐 때만.
+## 열 때마다 캠프 뿌리(명령 커서 0, 대원 칸 0)에서 시작한다. 임시 보급은 디버그 주소이거나 네이티브 디버그 실행일 때만 보인다(07 §5.7).
 func _open_party() -> void:
 	if state == null or party_menu.is_open() or battle_layer.is_open() or modal.is_open() or state.encounter.pending:
 		return
@@ -714,74 +714,26 @@ func _open_wipe() -> void:
 	modal.open("wipe", texts.t("wipe.title"), rows)
 
 
-func _open_menu() -> void:
-	if battle_layer.is_open() or (state != null and state.encounter.pending):
-		return  # 전투 중에는 메뉴를 열지 않는다(06 §8.7)
-	var save_row: Array[Control] = []
-	var load_row: Array[Control] = []
-	for i in SaveStore.MANUAL_SLOTS.size():
-		var slot: String = SaveStore.MANUAL_SLOTS[i]
+## 캠프 「기록」 화면의 슬롯 카드 값(07 §9.2): 검사를 지난 저장이면 대표 대원(파티 칸 0)·Lv, 층 · 걸음, 저장 시각(저장에 이미 있는 값).
+func record_slots() -> Array:
+	var out := []
+	for slot in SaveStore.MANUAL_SLOTS:
 		var l := store.load_slot(slot)
-		var label := slot_label(i, l)
-		var sb := ModalLayer.button(label, _save_slot.bind(slot))
-		sb.name = "Save_" + slot
-		sb.custom_minimum_size = Vector2(170, SLOT_H)
-		sb.add_theme_font_size_override("font_size", 15)
-		save_row.append(sb)
-		var lb := ModalLayer.button(label, _load_slot.bind(slot), l.ok())
-		lb.name = "Load_" + slot
-		lb.custom_minimum_size = Vector2(170, SLOT_H)
-		lb.add_theme_font_size_override("font_size", 15)
-		load_row.append(lb)
-	var auto_row: Array[Control] = []
-	for mode in ExplorationRules.AUTOMAP_MODES:
-		var on: bool = settings.automap == mode
-		var ab := ModalLayer.button(("● " if on else "") + texts.t("menu.automap." + mode), _set_automap.bind(mode))
-		ab.name = "Automap_" + mode
-		ab.custom_minimum_size = Vector2(150, 64)
-		ModalLayer.set_checked(ab, on)
-		auto_row.append(ab)
-	var export_b := ModalLayer.button(texts.t("menu.export"), _export)
-	export_b.name = "Export"
-	var import_b := ModalLayer.button(texts.t("menu.import"), _import)
-	import_b.name = "Import"
-	var new_b := ModalLayer.button(texts.t("menu.new_game"), _confirm_new_game)
-	new_b.name = "NewGame"
-	var close_b := ModalLayer.button(texts.t("menu.close"), modal.close)
-	close_b.name = "Close"
-	var rows: Array[Control] = [
-		ModalLayer.section(texts.t("menu.save")), ModalLayer.row(save_row),
-		ModalLayer.section(texts.t("menu.load")), ModalLayer.row(load_row),
-		ModalLayer.row([export_b, import_b] as Array[Control]),
-		ModalLayer.section(texts.t("menu.automap")), ModalLayer.row(auto_row),
-		ModalLayer.row([new_b, close_b] as Array[Control]),
-	]
-	modal.open("menu", texts.t("menu.title"), rows)
-
-
-## 저장 칸 단추 글: 「슬롯 1」 아래에, 검사를 지난 저장이면 그 저장의 층·걸음과 저장 시각(저장에 이미 있는 값), 아니면 「비어 있음」.
-func slot_label(i: int, l: SaveStore.SlotLoad) -> String:
-	var head := texts.t("menu.slot", {"n": i + 1})
-	if not l.ok():
-		return "%s\n%s" % [head, texts.t("menu.empty_slot")]
-	var st := l.result.state
-	return "%s\n%s\n%s" % [head, texts.t("menu.slot_where", {"floor": texts.t(st.floor_def.name_key), "steps": st.steps}),
-		_local_time(l.result.saved_at)]
+		if not l.ok():
+			out.append({"slot": slot, "ok": false})
+			continue
+		var st := l.result.state
+		out.append({"slot": slot, "ok": true, "leader": texts.t(st.defs.party.name_keys[0]),
+			"level": texts.t("party.level", {"level": st.party.members[0].level}),
+			"where": texts.t("menu.slot_where", {"floor": texts.t(st.floor_def.name_key), "steps": st.steps}),
+			"time": _local_time(l.result.saved_at)})
+	return out
 
 
 func _set_automap(mode: String) -> void:
 	if settings.set_automap(mode):
 		settings.save_to(settings_path)
-	_open_menu()
-
-
-func _confirm_new_game() -> void:
-	var yes := ModalLayer.button(texts.t("menu.new_game"), _start_new_game)
-	yes.name = "ConfirmNewGame"
-	var no := ModalLayer.button(texts.t("ui.cancel"), _open_menu)
-	no.name = "ConfirmCancel"
-	var rows: Array[Control] = [ModalLayer.label(texts.t("menu.confirm_new_game")), ModalLayer.row([yes, no] as Array[Control])]
-	modal.open("confirm", texts.t("menu.new_game"), rows)
+	party_menu.refresh_view()
 
 
 static func _named(c: Control, n: String) -> Control:
@@ -986,6 +938,9 @@ func _build_ui() -> void:
 	windows_root.add_child(party_menu)
 	party_menu.build(texts)
 	party_menu.save_hook = _on_party_save
+	party_menu.records = {"slots": record_slots, "save": _save_slot, "load": _load_slot, "export": _export, "import": _import,
+		"automap": func() -> String: return settings.automap, "set_automap": _set_automap, "new_game": _start_new_game}
+	party_menu.blocked_hook = func() -> bool: return modal.is_open()
 	party_menu.opened.connect(func() -> void:
 		_clear_input()
 		_debug_dirty = true
@@ -1005,10 +960,12 @@ func _build_ui() -> void:
 	modal.theme = theme
 	modal.opened.connect(func(_k: String) -> void:
 		_clear_input()
+		party_menu.cancel_pointers()  # 캠프에서 누르고 있던 단추는 창이 덮은 뒤 떼도 일하지 않는다
 		_debug_dirty = true
 		_debug_settle = 2)
 	modal.closed.connect(func(_k: String) -> void:
 		_clear_input()  # 창 안에서 누른 키·단추는 닫힌 뒤에도 승인되지 않는다
+		party_menu.cancel_pointers()  # 창이 뜨기 전부터 캠프에서 누르고 있던 손가락도(다른 손가락으로 창을 닫은 뒤 떼기)
 		_debug_dirty = true
 		_debug_settle = 2)
 	modal_cl.add_child(modal)
@@ -1092,7 +1049,7 @@ func _build_hud() -> void:
 	_steps_label.mouse_filter = MOUSE_FILTER_IGNORE
 	floor_plate.add_child(_steps_label)
 
-	# 안내 줄: 왼쪽 아래 가장자리(원작 CAMP·MAP). 파티·지도·메뉴(+ 지도 판이 열리면 실행 취소·확대·축소·파티로).
+	# 안내 줄: 왼쪽 아래 가장자리(원작 CAMP·MAP). 캠프·지도(+ 지도 판이 열리면 실행 취소·확대·축소·파티로).
 	hint_row = HBoxContainer.new()
 	hint_row.name = "HintRow"
 	hint_row.mouse_filter = MOUSE_FILTER_IGNORE
@@ -1105,16 +1062,13 @@ func _build_hud() -> void:
 	hint_row.offset_bottom = -EDGE
 	hint_row.grow_horizontal = GROW_DIRECTION_END
 	view_area.add_child(hint_row)
-	party_button = TouchButton.new().setup("", texts.t("party.title"))
-	party_button.name = "PartyButton"
-	party_button.activated.connect(_open_party)
+	camp_button = TouchButton.new().setup("", texts.t("camp.title"))
+	camp_button.name = "CampButton"
+	camp_button.activated.connect(_open_party)
 	map_button = TouchButton.new().setup("map", texts.t("map.toggle"))
 	map_button.name = "MapButton"
 	map_button.activated.connect(_toggle_map)
-	menu_button = TouchButton.new().setup("menu", "")
-	menu_button.name = "MenuButton"
-	menu_button.activated.connect(_open_menu)
-	for b in [party_button, map_button, menu_button]:
+	for b in [camp_button, map_button]:
 		hint_row.add_child(b)
 
 	# 이동 단추 묶음: 안내 줄 바로 위(겹치지 않는다). 안의 배치는 고정 크기 단추의 칸.
@@ -1303,7 +1257,7 @@ func debug_snapshot() -> Dictionary:
 	if party_menu.is_open():
 		buttons.merge(party["buttons"])  # 메뉴가 덮은 탐색 단추는 내지 않는다(누를 수 없다)
 	else:
-		for b in pad.values() + [rest_button, menu_button, map_button, party_button, map_window.back_button]:
+		for b in pad.values() + [rest_button, map_button, camp_button, map_window.back_button]:
 			if (b as TouchButton).is_visible_in_tree():
 				buttons[b.name] = _css(b.size / 2.0, b)
 		for key in toolbar.buttons:

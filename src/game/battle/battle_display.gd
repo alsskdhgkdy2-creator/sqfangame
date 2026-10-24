@@ -60,6 +60,38 @@ static func from_state(state: ExplorationState, text_db: TextDb) -> BattleDispla
 	return d
 
 
+## 전투 밖(캠프·시설, M2.7 R2): 탐색 상태의 파티만으로 만든다(같은 대원 카드 PartyCards·BattleCard 가 읽는다). 적은 없다.
+static func from_party(state: ExplorationState, text_db: TextDb) -> BattleDisplay:
+	var d := BattleDisplay.new()
+	d.texts = text_db
+	d.sync_party(state)
+	return d
+
+
+## 탐색 상태의 파티 값으로 대원 칸을 다시 맞춘다(편성 열은 파티 정의의 열).
+func sync_party(state: ExplorationState) -> void:
+	var defs := state.defs.party
+	var fresh := party.size() != state.party.members.size()
+	if fresh:
+		party.clear()
+	for i in state.party.members.size():
+		var m := state.party.members[i]
+		var u := DUnit.new() if fresh else party[i]
+		u.side = BattleUnit.PARTY
+		u.slot = i
+		u.def_id = m.id
+		u.name = texts.t(defs.name_keys[i])
+		u.row = defs.rows[i] if i < defs.rows.size() else "front"
+		u.hp = m.hp
+		u.max_hp = m.max_hp
+		u.tp = m.tp
+		u.max_tp = m.max_tp
+		if fresh:
+			party.append(u)
+	enemies.clear()
+	promoted = {BattleUnit.PARTY: false, BattleUnit.ENEMY: false}
+
+
 ## 규칙 상태로 모두 다시 맞춘다(전투가 없으면 그대로).
 func sync(state: ExplorationState) -> void:
 	var b := state.battle

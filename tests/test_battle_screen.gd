@@ -666,7 +666,7 @@ func _finish_battle(s: DungeonScreen) -> void:
 
 func _explore_ui_visible(s: DungeonScreen) -> Array[Control]:
 	var out: Array[Control] = []
-	for c in [s.map_window, s.minimap, s.orb, s.floor_plate, s.menu_button, s.map_button, s.rest_button] + s.pad.values():
+	for c in [s.map_window, s.minimap, s.orb, s.floor_plate, s.camp_button, s.map_button, s.rest_button] + s.pad.values():
 		if (c as Control).is_visible_in_tree():
 			out.append(c)
 	return out
@@ -691,7 +691,7 @@ func test_encounter_opens_layer_and_hides_explore_ui() -> void:
 	check_eq(s.view_container.get_global_rect(), rect, "전투 뒤에는 탐색 시야 사각형 그대로")
 	check_eq((s.view_container.get_child(0) as SubViewport).size, sv_size, "탐색 시야 해상도 그대로")
 	check_eq(s.view.camera_transform(), cam, "카메라 자세는 전투 전후 같다")
-	check(s.minimap.is_visible_in_tree() and s.menu_button.is_visible_in_tree() and s.pad[A_FORWARD].is_visible_in_tree(), "탐색 부품이 다시 보인다")
+	check(s.minimap.is_visible_in_tree() and s.camp_button.is_visible_in_tree() and s.pad[A_FORWARD].is_visible_in_tree(), "탐색 부품이 다시 보인다")
 
 const A_FORWARD := ExplorationRules.Action.FORWARD
 
@@ -743,10 +743,10 @@ func test_menu_is_blocked_during_battle() -> void:
 	tree.root.remove_child(probe)
 	probe.free()
 	await kit.press_key(KEY_ESCAPE)
-	check_eq(s.modal.kind, "", "Esc 로 메뉴가 열리지 않는다")
-	s._open_menu()
-	check_eq(s.modal.kind, "", "메뉴 함수도 열지 않는다")
-	check(not s.menu_button.is_visible_in_tree(), "메뉴 단추 없음")
+	check(s.modal.kind == "" and not s.party_menu.is_open(), "Esc 로 캠프·창이 열리지 않는다")
+	s._open_party()
+	check(not s.party_menu.is_open(), "캠프 여는 함수도 열지 않는다(기록은 캠프 안에만 있다)")
+	check(not s.camp_button.is_visible_in_tree(), "캠프 단추 없음")
 	await kit.press_key(KEY_SPACE)
 	await kit.press_key(KEY_R)
 	check(s.state.encounter.pending, "조사·휴식 키도 전투 층이 받는다")
