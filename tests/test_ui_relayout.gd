@@ -651,11 +651,11 @@ func test_party_menu_hides_the_exploration_hud_and_restores_it() -> void:
 		check(s.state.party.at == at and s.state.steps == steps, tag + ": 앞으로 단추 자리를 실제로 눌러도 걷지 않는다")
 		await _close_by_key(s)
 		_check_restored(s, before, size, tag + " Esc")
-		# ② 「캠프」 단추를 눌러 열고 캠프 「닫기」 줄을 눌러 닫는다.
+		# ② 「캠프」 단추를 눌러 열고 캠프 키패드 「취소」를 눌러 닫는다(P3: 「닫기」 줄 없음).
 		await kit.tap(kit.center_of(s.camp_button))
 		check(s.party_menu.is_open(), tag + ": 「캠프」 단추 → 캠프")
 		_check_hidden(s, size, tag + " 단추")
-		await kit.tap(kit.center_of(s.party_menu.camp_list.rows[5]))
+		await kit.tap(kit.center_of(s.party_menu.key_pad.button("back")))
 		_check_restored(s, before, size, tag + " 닫기")
 	# ③ 연 채로 상태가 바뀐다(가져오기): 메뉴는 알리지 않고 닫히고 HUD 가 돌아온다.
 	var size: Vector2 = await _window(WINDOWS[0])

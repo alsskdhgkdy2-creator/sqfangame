@@ -38,7 +38,7 @@ func setup(m: PartyMenu) -> void:
 	frame = ShopFrame.new()
 	frame.name = "EquipFrame"
 	add_child(frame)
-	frame.build("Equip", menu.texts.t("camp.back"), true)
+	frame.build("Equip", menu.texts.t("camp.back"), true, ShopFrame.PAD_SIDE)
 	frame.back.connect(func() -> void: menu.handle("back"))
 	frame.panel.step.connect(func(d: int) -> void: menu.handle("member_step", d))
 	totals = frame.panel.totals

@@ -1063,13 +1063,15 @@ func test_snapshot_lists_party_menu_buttons_and_growth_fields() -> void:
 	await kit.press_key(KEY_P)
 	snap = s.debug_snapshot()
 	var b: Dictionary = snap["buttons"]
-	check(b.has("Camp_status") and b.has("Camp_close") and not b.has("Member_0"), "열려 있으면 캠프 명령 줄(카드는 고르기 때만): %s" % str(b.keys()))
+	check(b.has("Camp_status") and b.has("Camp_records") and not b.has("Camp_close") and not b.has("Member_0"), "열려 있으면 캠프 명령 줄 다섯(카드는 고르기 때만): %s" % str(b.keys()))
+	check(b.has("VPad_back") and b.has("VPad_ok") and b.has("VPad_up") and not b.has("VPad_left"), "키패드: 켜진 단추만(뿌리 ←→ 흐림): %s" % str(b.keys()))
+	check_eq(snap["party_menu"]["pad"], {"up": true, "down": true, "left": false, "right": false, "ok": true, "back": true}, "키패드 상태 필드")
 	check(not b.has("Pad_forward") and not b.has("MapButton") and not b.has("CampButton") and not b.has("Tool_wall"), "덮인 탐색 단추는 내지 않는다")
 	check_eq([snap["party_menu"]["open"], snap["party_menu"]["page"], snap["party_menu"]["tab"], snap["party_menu"]["member"]], [true, "root", "", 0], "메뉴 필드")
 	check_eq(snap["party_menu"]["banner"], [s.texts.t("camp.desc.status"), ""], "설명 띠")
 	await kit.press_key(KEY_1)
 	snap = s.debug_snapshot()
-	check(snap["buttons"].has("Member_0") and snap["buttons"].has("Camp_close") and snap["buttons"].has("Camp_equip") and snap["buttons"].has("Camp_records"),
+	check(snap["buttons"].has("Member_0") and snap["buttons"].has("VPad_back") and snap["buttons"].has("Camp_equip") and snap["buttons"].has("Camp_records"),
 		"고르기: 카드와 명령 줄 모두(고르기 중에도 다른 명령으로 바꿀 수 있다)")
 	check_eq([snap["party_menu"]["page"], snap["party_menu"]["pick"], snap["party_menu"]["banner"][0]], ["pick", "status", s.texts.t("camp.pick.status")], "고르기 필드")
 	await kit.press_key(KEY_ENTER)

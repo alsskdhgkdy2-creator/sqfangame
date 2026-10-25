@@ -1,6 +1,6 @@
 ## 캠프 장비·소지품의 상점 짜임(M2.7 R2-c, 원작 상점 화면 jp_guide3_img1~3, 1280×720 기준 실측):
 ## 원작 다이얼 자리(x 0~180, y 0~100) → 「뒤로」 140×64, 설명 띠 x 192 → 인물 판 왼쪽(원작 180~750) · y 0~100,
-## 돈 문패 자리(x 0~340, y 140~190) → 화면 이름 문패 x 0~340 · y 112~162, 목록 창 x 16 → 판 왼쪽 − 24 · y 172~500(원작 30~710 · 240~505),
+## 돈 문패 자리(x 0~340, y 140~190) → 화면 이름 문패 x 0~340 · y 112~162, 목록 창 x 16(캠프는 232, P3 키패드 자리) → 판 왼쪽 − 24 · y 172~500(원작 30~710 · 240~505),
 ## 설명 창 같은 폭 · y 510 → 아래 − 8(원작 15~730 · 520~710), 인물 판 오른쪽 W(원작 765~1280). 앵커로 붙여 넓은 창에서는 왼쪽이 넓어진다.
 ## 장식(띠·문패·창)은 그리기만, 누르는 것은 「뒤로」와 판의 대원 단추. 목록 줄은 놓는 하위 화면이 list_offsets() 자리에 둔다.
 class_name ShopFrame
@@ -11,6 +11,8 @@ signal back
 const BACK := Rect2(16, 18, 140, 64)
 const TITLE := Rect2(0, 112, 340, 50)
 const SIDE := 16.0
+## 캠프의 왼쪽 창 왼쪽 끝(P3, 사용자 결정 2026-10-25): 왼쪽 아래 방향 십자(x 8~208) 오른쪽 + 24. 띠·문패·「뒤로」는 그대로.
+const PAD_SIDE := 232.0
 ## 왼쪽 창과 인물 판 사이.
 const GAP := 24.0
 const LIST_TOP := 172.0
@@ -33,6 +35,8 @@ var title_text := ""
 var desc_title := ""
 var desc_lines: Array[String] = []
 var _has_desc := true
+## 왼쪽 목록·설명 창의 왼쪽 끝(build 의 left).
+var left := SIDE
 
 
 func _init() -> void:
@@ -41,13 +45,15 @@ func _init() -> void:
 
 
 ## prefix: 단추 이름 앞(「Equip」→ EquipBack·EquipPrev·EquipNext). with_desc: 설명 창이 있는지(없으면 목록 창이 아래까지).
-func build(prefix: String, back_label: String, with_desc: bool) -> void:
+## left_x: 왼쪽 목록·설명 창의 왼쪽 끝(캠프는 PAD_SIDE, 가상 키패드 자리를 비운다).
+func build(prefix: String, back_label: String, with_desc: bool, left_x: float = SIDE) -> void:
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	_has_desc = with_desc
+	left = left_x
 	list_window = _deco(prefix + "ListWindow", Vector2(0, 0), Vector2(1, 0 if with_desc else 1),
-		Vector4(SIDE, LIST_TOP, -CharPanel.W - GAP, LIST_BOTTOM if with_desc else -BOTTOM),
+		Vector4(left, LIST_TOP, -CharPanel.W - GAP, LIST_BOTTOM if with_desc else -BOTTOM),
 		func(c: Control) -> void: UiTheme.draw_shop_window(c, Rect2(Vector2.ZERO, c.size)))
-	desc_window = _deco(prefix + "DescWindow", Vector2(0, 0), Vector2(1, 1), Vector4(SIDE, DESC_TOP, -CharPanel.W - GAP, -BOTTOM), _draw_desc)
+	desc_window = _deco(prefix + "DescWindow", Vector2(0, 0), Vector2(1, 1), Vector4(left, DESC_TOP, -CharPanel.W - GAP, -BOTTOM), _draw_desc)
 	desc_window.visible = with_desc
 	title_plate = _deco(prefix + "Title", Vector2.ZERO, Vector2.ZERO, Vector4(TITLE.position.x, TITLE.position.y, TITLE.end.x, TITLE.end.y),
 		func(c: Control) -> void: UiTheme.draw_plate(c, Rect2(Vector2.ZERO, c.size), title_text, 24))
@@ -80,7 +86,7 @@ func _deco(n: String, a0: Vector2, a1: Vector2, off: Vector4, painter: Callable)
 ## 목록 창 안쪽(줄을 놓는 곳)의 앵커와 여백: [a0, a1, Vector4].
 func list_anchor() -> Array:
 	return [Vector2(0, 0), Vector2(1, 0 if _has_desc else 1),
-		Vector4(SIDE + PAD, LIST_TOP + PAD * 0.75, -CharPanel.W - GAP - PAD, (LIST_BOTTOM if _has_desc else -BOTTOM) - PAD * 0.75)]
+		Vector4(left + PAD, LIST_TOP + PAD * 0.75, -CharPanel.W - GAP - PAD, (LIST_BOTTOM if _has_desc else -BOTTOM) - PAD * 0.75)]
 
 
 func list_window_rect() -> Rect2:

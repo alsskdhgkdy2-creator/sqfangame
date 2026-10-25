@@ -63,7 +63,7 @@ async function growthChecks(s) {
   await clickButton('Camp_status');
   s = await waitFor((x) => x.party_menu?.page === 'pick', '대원 고르기');
   // 고르기 중에도 명령 줄이 일한다(휴대폰 확인 2026-10-25): 「장비」 줄 → 장비 고르기, 「상태」 줄 → 다시 상태 고르기.
-  check(s.buttons.Camp_equip && s.buttons.Camp_items && s.buttons.Camp_close, '성장 1: 고르기 중에도 명령 줄을 누를 수 있다', { buttons: Object.keys(s.buttons) });
+  check(s.buttons.Camp_equip && s.buttons.Camp_items && s.buttons.VPad_back && !s.buttons.Camp_close, '성장 1: 고르기 중에도 명령 줄을 누를 수 있다(뒤로 = 키패드 「취소」)', { buttons: Object.keys(s.buttons) });
   await clickButton('Camp_equip');
   s = await waitFor((x) => x.party_menu?.pick === 'equip', '장비 고르기로 바꿈');
   const equipBanner = s.party_menu.banner[0];
@@ -76,6 +76,14 @@ async function growthChecks(s) {
   check(s.party_menu.tab === 'status' && s.party_menu.member === 0 && s.buttons.StatusNext && s.buttons.StatusBack,
     '성장 1: 「상태」 → 카드 0 → 상태 화면·칸 0', { tab: s.party_menu.tab, member: s.party_menu.member });
   await page.screenshot({ path: `${outDir}/10_party_status_${tag}.png` });
+  // 1b. 캠프 가상 키패드(P3): 상태에서 ←→ = 앞·다음 대원(↑↓ 흐림), 실제 누르기.
+  const padState = s.party_menu.pad;
+  await clickButton('VPad_right');
+  s = await waitFor((x) => x.party_menu?.member === 1, '키패드 → 다음 대원');
+  await clickButton('VPad_left');
+  s = await waitFor((x) => x.party_menu?.member === 0, '키패드 ← 앞 대원');
+  check(padState && !padState.up && !padState.down && padState.left && padState.right && padState.ok && padState.back && !s.buttons.VPad_up
+    && s.party_menu.tab === 'status', '성장 1: 상태 화면 키패드 ←→ = 대원 넘기기, ↑↓ 흐림(요약에 없음)', { pad: padState, member: s.party_menu.member });
   // 2. grant_exp(듀얼리스트 A, cum(3) = 115).
   let g = s.generation;
   let r = await request({ op: 'grant_exp', member: 1, n: 115 });

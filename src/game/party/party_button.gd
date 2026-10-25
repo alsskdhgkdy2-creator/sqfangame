@@ -79,17 +79,56 @@ func theme_state() -> String:
 	return skin + ":" + st if not skin.is_empty() and UiTheme.has_look(skin + ":" + st) else st
 
 
+## 글자 안 여백(왼쪽 정렬 줄의 양 끝).
+const PAD := 16.0
+const NOTE_FS := 14
+const CAPTION_FS := 14
+
+
+## 글자마다 [글, 글자 크기, 그릴 폭](그리기와 같은 값). 시험이 잘림을 본다(clipped_parts).
+func text_parts() -> Dictionary:
+	var out := {}
+	if not icon.is_empty() and text.is_empty():
+		return out
+	var font := get_theme_default_font()
+	if not caption.is_empty():
+		out["caption"] = [caption, CAPTION_FS, size.x - 2.0 * PAD]
+	if align_left:
+		var right_w := 0.0
+		if not right.is_empty():
+			right_w = font.get_string_size(right, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size - 2).x
+			out["right"] = [right, font_size - 2, size.x - 2.0 * PAD]
+		out["main"] = [text, font_size, size.x - 2.0 * PAD - right_w - 8.0]
+	else:
+		out["main"] = [text, font_size, size.x - 2.0 * PAD]
+	if not note.is_empty():
+		out["note"] = [note, NOTE_FS, size.x - 2.0 * PAD if align_left else size.x]
+	return out
+
+
+## 그릴 폭보다 넓어 잘리는 글자 이름(main·right·note·caption).
+func clipped_parts() -> Array[String]:
+	var out: Array[String] = []
+	var font := get_theme_default_font()
+	var parts := text_parts()
+	for k in parts:
+		var p: Array = parts[k]
+		if font.get_string_size(str(p[0]), HORIZONTAL_ALIGNMENT_LEFT, -1, int(p[1])).x > float(p[2]) + 0.5:
+			out.append(k)
+	return out
+
+
 func _draw() -> void:
 	var r := Rect2(Vector2.ZERO, size)
 	var lk := UiTheme.draw_button(self, r, theme_state())
 	var font := get_theme_default_font()
 	var fg: Color = lk["text"]
-	var pad := 16.0
+	var pad := PAD
 	var main_y := size.y / 2.0 + font_size * 0.36
 	if not note.is_empty() or not caption.is_empty():
 		main_y = size.y * 0.5 + font_size * 0.2
 	if not caption.is_empty():
-		draw_string(font, Vector2(pad, 22), caption, HORIZONTAL_ALIGNMENT_LEFT, size.x - 2.0 * pad, 14, lk["sub"])
+		draw_string(font, Vector2(pad, 22), caption, HORIZONTAL_ALIGNMENT_LEFT, size.x - 2.0 * pad, CAPTION_FS, lk["sub"])
 	if not icon.is_empty() and text.is_empty():
 		var side := minf(size.x, size.y) * 0.5
 		VectorIcons.draw(self, icon, Rect2((size - Vector2(side, side)) / 2.0, Vector2(side, side)), fg, icon_dir)
@@ -105,4 +144,4 @@ func _draw() -> void:
 		var nx := pad if align_left else 0.0
 		var nw := size.x - 2.0 * pad if align_left else size.x
 		var al := HORIZONTAL_ALIGNMENT_LEFT if align_left else HORIZONTAL_ALIGNMENT_CENTER
-		draw_string(font, Vector2(nx, size.y - 10.0), note, al, nw, 14, lk["reason"] if dimmed else lk["sub"])
+		draw_string(font, Vector2(nx, size.y - 10.0), note, al, nw, NOTE_FS, lk["reason"] if dimmed else lk["sub"])

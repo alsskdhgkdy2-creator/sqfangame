@@ -1,14 +1,18 @@
 ## 캠프 기록 화면(07 §9.1·§9.2, M2.7 R2-d: 원작 HD 불러오기 화면 gs2_653240 짜임, 1280×720 기준 실측):
 ## 왼쪽 위 이름 문패(원작 「Load Game」 x 0~272 · y 38~92), 오른쪽 위 「뒤로」(원작 「Ⓧ DELETE」 안내 자리),
 ## 가운데 슬롯 창(원작 x 170~1110 · y 105~690, 짙은 남색 창 안에 슬롯 카드 셋: 번호 칸 + 대표 이름·Lv 띠 + 줄 둘) →
-## 우리 x 가운데 ±470 · y 100~594, 카드 150 높이(번호 칸, 「대표 대원 Lv n」, 「층 · 걸음」, 저장 시각, 오른쪽에 「저장」「불러오기」).
+## 우리 x 가운데 ±430 · y 100~594(P3: 940 → 860, 좁은 화면에서는 왼쪽 아래 방향 십자를 비켜 x 224 부터), 카드 150 높이(번호 칸, 「대표 대원 Lv n」, 「층 · 걸음」, 저장 시각, 오른쪽에 「저장」「불러오기」).
 ## 아래 띠(원작에 없음): 「내보내기」「가져오기」, 「자동 지도」 끔·바닥만·바닥+벽, 「새 게임」(확인 창).
 ## 값·일은 바깥(탐색 화면)이 menu.records 갈고리로 준다: slots·save·load·export·import·automap·set_automap·new_game.
 ## 키보드: ↑↓ 줄(카드 셋 + 아래 띠), ←→ 줄 안, Enter 누름. 단추를 누르면(포인터) 커서도 그 단추로.
 class_name PartyRecordsTab
 extends Control
 
-const WIN_W := 940.0
+const WIN_W := 860.0
+## 슬롯 창 왼쪽 끝의 최소(P3, 사용자 결정 2026-10-25): 왼쪽 아래 방향 십자(x 8~208) 오른쪽 + 16. 넓은 화면은 가운데 그대로.
+const LEFT_MIN := 224.0
+## 아래 띠가 슬롯 창보다 양옆으로 나온 폭(띠 880).
+const BAND_OUT := 10.0
 const WIN_TOP := 100.0
 const PAD := 14.0
 const CARD_H := 150.0
@@ -18,7 +22,9 @@ const SLOT_BUTTON := Vector2(150, 64)
 const BAND_TOP := 602.0
 const BAND_BUTTON_Y := 636.0
 const WIDE_BUTTON := Vector2(150, 64)
-const AUTO_BUTTON := Vector2(130, 64)
+const AUTO_BUTTON := Vector2(120, 64)
+## 아래 띠 단추 사이.
+const BAND_GAP := 8.0
 const TITLE := Rect2(0, 36, 272, 56)
 const BACK_SIZE := Vector2(120, 64)
 
@@ -36,6 +42,10 @@ var band_buttons: Array[PartyButton] = []
 ## 마지막으로 읽은 슬롯 정보([{slot, ok, leader, level, where, time}]).
 var slots: Array = []
 var _dirty := true
+## 가운데 앵커로 붙인 부품과 기본 여백([Control, Vector4]): 좁은 화면에서 place 가 함께 오른쪽으로 민다.
+var _centred: Array = []
+## 지금 민 양.
+var shift := 0.0
 
 
 func setup(m: PartyMenu) -> void:
@@ -46,8 +56,8 @@ func setup(m: PartyMenu) -> void:
 		func(c: Control) -> void: UiTheme.draw_plate(c, Rect2(Vector2.ZERO, c.size), menu.texts.t("camp.cmd.records"), 26))
 	var win_bottom := WIN_TOP + 2.0 * PAD + 2.0 * CARD_PITCH + CARD_H
 	window = _deco("RecordsWindow", Vector2(0.5, 0), Vector2(0.5, 0), Vector4(-WIN_W / 2.0, WIN_TOP, WIN_W / 2.0, win_bottom), _draw_window)
-	band = _deco("RecordsBand", Vector2(0.5, 0), Vector2(0.5, 0), Vector4(-WIN_W / 2.0 - PAD, BAND_TOP, WIN_W / 2.0 + PAD, BAND_BUTTON_Y + 64 + 10),
-		_draw_band)
+	band = _deco("RecordsBand", Vector2(0.5, 0), Vector2(0.5, 0),
+		Vector4(-WIN_W / 2.0 - BAND_OUT, BAND_TOP, WIN_W / 2.0 + BAND_OUT, BAND_BUTTON_Y + 64 + 10), _draw_band)
 	for i in 3:
 		var y := WIN_TOP + PAD + i * CARD_PITCH
 		var x1 := WIN_W / 2.0 - PAD - 12.0
@@ -60,13 +70,13 @@ func setup(m: PartyMenu) -> void:
 	var x := -WIN_W / 2.0
 	var by := BAND_BUTTON_Y
 	band_buttons.append(_button("Export", menu.texts.t("menu.export"), "record_export", null, Vector4(x, by, x + WIDE_BUTTON.x, by + 64)))
-	x += WIDE_BUTTON.x + 12.0
+	x += WIDE_BUTTON.x + BAND_GAP
 	band_buttons.append(_button("Import", menu.texts.t("menu.import"), "record_import", null, Vector4(x, by, x + WIDE_BUTTON.x, by + 64)))
-	x += WIDE_BUTTON.x + 24.0
+	x += WIDE_BUTTON.x + BAND_GAP
 	for mode in ExplorationRules.AUTOMAP_MODES:
 		band_buttons.append(_button("Automap_" + mode, menu.texts.t("menu.automap." + mode), "record_automap", mode,
 			Vector4(x, by, x + AUTO_BUTTON.x, by + 64)))
-		x += AUTO_BUTTON.x + 8.0
+		x += AUTO_BUTTON.x + BAND_GAP
 	band_buttons.append(_button("NewGame", menu.texts.t("menu.new_game"), "record_new_game", null,
 		Vector4(WIN_W / 2.0 - WIDE_BUTTON.x, by, WIN_W / 2.0, by + 64)))
 	back_button = PartyButton.new()
@@ -88,6 +98,8 @@ func _deco(n: String, a0: Vector2, a1: Vector2, off: Vector4, painter: Callable)
 	c.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(c)
 	PartyMenu.place(c, a0, a1, off)
+	if a0.x == 0.5:
+		_centred.append([c, off])
 	c.draw.connect(painter.bind(c))
 	return c
 
@@ -99,6 +111,7 @@ func _button(n: String, label: String, kind: String, arg: Variant, off: Vector4)
 	b.skin = "fac"
 	add_child(b)
 	PartyMenu.place(b, Vector2(0.5, 0), Vector2(0.5, 0), off)
+	_centred.append([b, off])
 	b.set_meta("kind", kind)
 	b.set_meta("arg", arg)
 	b.activated.connect(func() -> void: menu.handle(kind, arg))
@@ -119,7 +132,12 @@ func context() -> String:
 	return ""
 
 
-func place(_s: Vector2) -> void:
+## 좁은 화면(1280)에서는 슬롯 창이 x LEFT_MIN 에서 시작하게 가운데 묶음(창·띠·단추)을 오른쪽으로 민다. 넓으면 가운데.
+func place(s: Vector2) -> void:
+	shift = maxf(0.0, LEFT_MIN - (s.x - WIN_W) / 2.0)
+	for e in _centred:
+		var off: Vector4 = e[1]
+		PartyMenu.place(e[0], Vector2(0.5, 0), Vector2(0.5, 0), off + Vector4(shift, 0, shift, 0))
 	if menu.state != null and visible:
 		refresh()
 
@@ -281,6 +299,6 @@ func _draw_window(c: Control) -> void:
 
 func _draw_band(c: Control) -> void:
 	UiTheme.draw_shop_window(c, Rect2(Vector2.ZERO, c.size))
-	var ax := PAD + 2.0 * WIDE_BUTTON.x + 12.0 + 24.0
+	var ax := BAND_OUT + 2.0 * (WIDE_BUTTON.x + BAND_GAP)
 	_txt(c, Vector2(ax, 26), menu.texts.t("menu.automap"), 18, UiTheme.SHOP_SECTION_TEXT)
-	_txt(c, Vector2(PAD, 26), menu.texts.t("camp.records.file"), 18, UiTheme.SHOP_SECTION_TEXT)
+	_txt(c, Vector2(BAND_OUT, 26), menu.texts.t("camp.records.file"), 18, UiTheme.SHOP_SECTION_TEXT)

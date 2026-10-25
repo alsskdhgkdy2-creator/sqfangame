@@ -161,8 +161,8 @@ func test_opens_by_button_and_key_on_status_tab_member_0() -> void:
 	await kit.tap(kit.center_of(s.camp_button))
 	check(pm.is_open(), "단추로 열림")
 	check_eq([pm.page, pm.camp_cursor, pm.member, pm.dialog_kind], ["root", 0, 0, ""], "캠프 뿌리·커서 0·칸 0 대원·확인 창 없음")
-	await kit.tap(kit.center_of(pm.camp_list.rows[5]))
-	check(not pm.is_open(), "「닫기」로 닫힘")
+	await kit.tap(kit.center_of(pm.key_pad.button("back")))
+	check(not pm.is_open(), "키패드 「취소」로 닫힘(P3: 「닫기」 줄 없음)")
 	await kit.press_key(KEY_P)
 	check(pm.is_open(), "P 로 열림")
 	await kit.press_key(KEY_2)
@@ -559,7 +559,7 @@ func test_tree_area_edge_nodes_are_inside_and_pressable() -> void:
 		var area := st.tree_rect()
 		var row := st.desc_rect()
 		if sz == BASE:
-			check_eq(area, Rect2(60, 154, 1160, 384), "1280×720 트리 영역 = 트리 창 안(x 60~1220, y 154~538)")
+			check_eq(area, Rect2(60, 150, 1160, 353), "1280×720 트리 영역 = 트리 창 안(x 60~1220, y 150~503, P3)")
 		check(st.tree_window_rect().encloses(area) and area.end.y <= row.position.y, "%s: 트리 영역은 트리 창 안, 설명 띠 위" % str(sz))
 		for sid in [EDGE_LEFT, EDGE_RIGHT]:
 			var j: int = defs.class_of(WIZARD).tree_index[sid]
@@ -673,7 +673,8 @@ func test_supply_and_exp_buttons_with_debug_flag() -> void:
 	check_eq(s.autosave_count, n + 1, "자동 저장")
 	_check_auto_matches(s, "임시 보급")
 	var e := it.exp_buttons[KNIGHT]
-	check_eq(e.size, Vector2(200, 64), "「경험치 +100」 200×64")
+	check_eq(e.size, Vector2(floorf((it.list.size.x - 8.0) / 2.0), 64), "「경험치 +100」 목록 폭의 반 × 64(P3 검토 수정: 대원 줄 아래 줄)")
+	check(e.size.x >= 64.0 and e.position.x == 0.0 and it.next_buttons[KNIGHT].position.y == e.position.y, "「경험치 +100」「다음 레벨까지」는 대원 이름 줄 아래 한 줄")
 	it.list.ensure_visible(e.position.y, e.position.y + e.size.y)
 	await kit.frames(1)
 	var m := s.state.party.members[KNIGHT]
@@ -1035,15 +1036,18 @@ func test_context_change_cancels_pressed_pointer() -> void:
 	kit.touch(0, close, false)
 	await kit.frames(3)
 	check(not back_b.held, "떠날 때 눌림을 버렸다")
-	# 캠프를 닫을 때도: 「닫기」 줄을 누른 채 Esc 로 닫고 뗀다
-	var row5 := kit.center_of(pm.camp_list.rows[5])
-	kit.touch(0, row5, true)
+	# 캠프를 닫을 때도: 키패드 「취소」를 누른 채 Esc 로 닫고 뗀다(뗄 때 닫힌 캠프에 아무 일 없음)
+	var vback := pm.key_pad.button("back")
+	var at := kit.center_of(vback)
+	kit.touch(0, at, true)
 	await kit.frames(2)
+	check(vback.held, "키패드 「취소」 누르는 중")
 	await kit.press_key(KEY_ESCAPE)
 	check(not pm.is_open(), "Esc 로 닫힘")
-	kit.touch(0, row5, false)
+	var n_in := pm.accepted_inputs
+	kit.touch(0, at, false)
 	await kit.frames(3)
-	check(not pm.camp_list.rows[5].held, "닫을 때 눌림을 버렸다")
+	check(not vback.held and pm.accepted_inputs == n_in and not pm.is_open(), "닫을 때 눌림을 버렸다")
 
 
 # ---- 다시 열기 (07 §10.4) ----
@@ -1100,7 +1104,7 @@ func test_layout_no_overlap_and_min_size_per_tab() -> void:
 		_check_layout(pm, sz, tag + " 스킬")
 		var st := pm.skill_tab
 		check(st.tree_window_rect().end.y <= st.desc_rect().position.y, tag + ": 트리 창은 설명 띠 위")
-		check_eq([st.desc_rect().position.x, st.desc_rect().end.x, st.desc_rect().end.y], [48.0, sz.x - 48, sz.y - 8], tag + ": 설명 띠는 아래 넓게")
+		check_eq([st.desc_rect().position.x, st.desc_rect().end.x, st.desc_rect().end.y], [216.0, sz.x - 48, sz.y - 8], tag + ": 설명 띠는 아래 넓게(x 216 부터: 왼쪽 아래는 방향 십자, P3)")
 		await _step(pm, "plus")
 		await _step(pm, "commit")
 		check_eq(pm.dialog_kind, "commit", tag + " 준비: 확정 창")

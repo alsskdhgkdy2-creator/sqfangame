@@ -11,6 +11,8 @@ const ROW_H := 64.0
 const ROW_GAP := 4.0
 const SUPPLY_SIZE := Vector2(240, 64)
 const PLUS_SIZE := Vector2(96, 64)
+## 대원 줄(디버그 보급): 위에 이름·Lv·경험치 줄(목록 폭 전체), 그 아래에 「경험치 +100」「다음 레벨까지」를 반씩(P3 검토 수정:
+## 좁아진 목록(1280 에서 481)에서 이름이 단추 뒤로 숨지 않게 두 줄로 나눴다). 단추 높이는 64, 폭은 (목록 폭 − 8) / 2.
 const EXP_SIZE := Vector2(200, 64)
 const EXP_STEP := 100
 
@@ -40,7 +42,7 @@ func setup(m: PartyMenu) -> void:
 	frame = ShopFrame.new()
 	frame.name = "ItemsFrame"
 	add_child(frame)
-	frame.build("Items", menu.texts.t("camp.back"), false)
+	frame.build("Items", menu.texts.t("camp.back"), false, ShopFrame.PAD_SIDE)
 	frame.back.connect(func() -> void: menu.handle("back"))
 	frame.panel.step.connect(func(d: int) -> void: menu.handle("member_step", d))
 	list = PartyScroll.new()
@@ -164,8 +166,9 @@ func _move(d: int) -> bool:
 			return true
 		list.scroll_by(ROW_H)
 		return list.scroll != before
-	if b.position.y < list.scroll:
-		list.scroll_to(maxf(b.position.y, list.scroll - ROW_H))
+	var top := group_top(b)
+	if top < list.scroll:
+		list.scroll_to(maxf(top, list.scroll - ROW_H))
 		return list.scroll != before
 	if cursor > 0:
 		cursor -= 1
@@ -197,8 +200,17 @@ func _press(b: PartyButton) -> bool:
 	return false
 
 
+## 커서 단추를 보이게: 대원의 「경험치 +100」「다음 레벨까지」는 위의 그 대원 이름 줄까지 함께(어느 대원에게 주는지 보이게,
+## P3 검토 2차). 다른 단추는 그 단추만.
 func _show(b: Control) -> void:
-	list.ensure_visible(b.position.y, b.position.y + b.size.y)
+	list.ensure_visible(group_top(b), b.position.y + b.size.y)
+
+
+## 단추가 속한 묶음의 위 끝(목록 내용 좌표): 대원 경험치 단추면 그 대원 이름 줄 위, 아니면 단추 위.
+func group_top(b: Control) -> float:
+	if exp_buttons.has(b) or next_buttons.has(b):
+		return b.position.y - ROW_H - ROW_GAP
+	return b.position.y
 
 
 func refresh() -> void:
@@ -245,13 +257,17 @@ func refresh() -> void:
 		if not vis:
 			continue
 		var m := menu.state.party.members[k]
-		_row(Vector2(0, y), Vector2(w - 2 * EXP_SIZE.x - 16, ROW_H), menu.member_name(k), menu.texts.t("party.level", {"level": m.level}), menu.texts.t("party.exp", {"exp": m.exp}))
-		exp_buttons[k].position = Vector2(w - 2 * EXP_SIZE.x - 8, y)
+		_row(Vector2(0, y), Vector2(w, ROW_H), menu.member_name(k), menu.texts.t("party.level", {"level": m.level}), menu.texts.t("party.exp", {"exp": m.exp}))
+		y += ROW_H + ROW_GAP
+		var bw := floorf((w - 8.0) / 2.0)
+		exp_buttons[k].position = Vector2(0, y)
+		exp_buttons[k].size = Vector2(bw, EXP_SIZE.y)
 		exp_buttons[k].text = menu.texts.t("party.supply.exp")
-		next_buttons[k].position = Vector2(w - EXP_SIZE.x, y)
+		next_buttons[k].position = Vector2(w - bw, y)
+		next_buttons[k].size = Vector2(bw, EXP_SIZE.y)
 		next_buttons[k].text = menu.texts.t("party.supply.next")
 		next_buttons[k].dimmed = m.level >= defs.battle.growth.level_cap
-		y += ROW_H + ROW_GAP
+		y += EXP_SIZE.y + ROW_GAP * 3
 	if show_supply:
 		y += ROW_GAP * 4
 	# 장비 가방

@@ -76,11 +76,11 @@ export async function openRecords() {
   await clickButton('Camp_records');
   return waitFor((x) => x.party_menu?.page === 'sub' && x.party_menu.tab === 'records' && x.modal === '', '기록 화면');
 }
-// 기록 화면 「뒤로」 → 캠프 뿌리 「닫기」 줄 → 탐색(앞 메뉴 창 「닫기」 자리).
+// 기록 화면 「뒤로」 → 캠프 뿌리 가상 키패드 「취소」 → 탐색(P3: 「닫기」 줄 대신).
 export async function closeCamp() {
   await clickButton('RecordsBack');
   await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');
-  await clickButton('Camp_close');
+  await clickButton('VPad_back');
   return waitFor((x) => !x.party_menu?.open && x.modal === '', '캠프 닫힘');
 }
 export async function idbAuto() {

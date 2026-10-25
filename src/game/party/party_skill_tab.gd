@@ -2,27 +2,30 @@
 ## 위 줄(MemberHeader 파랑: 이름 칸 + 앞·다음 대원, Lv 띠, 정보 띠 = HP·TP 와 오른쪽 「남은 SP」(원작 SKILL POINT 자리)),
 ## 직업 폴더 탭(장식), 화면 폭 거의 전체 반투명 파랑 트리 창(자르기, 넘치면 세로로 끌어 내림, 노드는 알약 + Lv 상자, 직각 연결선),
 ## 아래 설명 띠(스킬 이름 + 레벨 칸 1~최대(배운 레벨 시안·초안 노랑), 종류·TP 줄과 다음 레벨 값·선행 줄을 세로 다섯 줄씩 칸으로,
-## 오른쪽에 「−」「+」와 「되돌리기」「확정」). 원작은 노드마다 YES/NO 로 바로 배우지만 우리는 초안 → 「확정」 → 확인 창 한 번(07 §4.6).
+## 오른쪽에 「−」「+」와 「되돌리기」「확정」, 그 왼쪽에 캠프의 가상 키패드 「취소」「선택」). P3(사용자 결정 2026-10-25): 왼쪽 아래
+## 방향 십자 자리를 비우려고 설명 띠는 x 216 부터·y 511 까지 높이고, 트리 창은 y 503 에서 끝난다(행 피치 78 → 70). 원작은 노드마다 YES/NO 로 바로 배우지만 우리는 초안 → 「확정」 → 확인 창 한 번(07 §4.6).
 ## 「+」「−」는 화면의 초안(스킬 → 더한 레벨)만 바꾸고(판정은 GrowthRules.learn_block·unlearn_block), 「확정」은 확정 확인 창 →
 ## GrowthRules.allocate 한 번(목표 레벨 사전). 초안은 저장하지 않는다.
-## 노드 칸: 4 열 × 5 행, 노드 높이 64(원작 32, 누르는 칸 64 이상), 행 피치 78, 열 피치 = (트리 영역 폭 − 8 + 열 틈 40) / 4(1280 에서 298).
+## 노드 칸: 4 열 × 5 행, 노드 높이 64(원작 32, 누르는 칸 64 이상), 행 피치 70(노드 사이 6), 열 피치 = (트리 영역 폭 − 8 + 열 틈 40) / 4(1280 에서 298).
 class_name PartySkillTab
 extends Control
 
 ## 1280×720 의 노드 크기·피치(열 피치는 트리 영역 폭을 따라 늘어난다, node_rect)와 첫 노드 자리(트리 영역 기준).
 const NODE := Vector2(258, 64)
-const PITCH := Vector2(298, 78)
+const PITCH := Vector2(298, 70)
 const FIRST := Vector2(4, 4)
 const COLS := 4
 ## 트리 창(원작 x 48~1232·y 138~548): 왼쪽·오른쪽 여백, 위·아래. 직업 폴더 탭(원작 x 72~290·y 100~138).
+## 트리 영역은 창 안 가로로 WIN_INSET + 8, 세로로는 창 높이 그대로(다섯 행 4 + 4 × 70 + 64 + 4 = 352 가 창 높이 353 에 든다).
 const WIN_SIDE := 48.0
 const WIN_TOP := 150.0
-const WIN_BOTTOM := 542.0
+const WIN_BOTTOM := 503.0
 const WIN_INSET := 4.0
 const CLASS_TAB := Rect2(72, 120, 220, 34)
-## 설명 띠(원작 y 552~708): 아래 여백·높이, 안 여백, 레벨 칸, 줄.
+## 설명 띠(원작 y 552~708): 왼쪽 끝(방향 십자 x 8~208 오른쪽 + 8), 아래 여백·높이(y 511~712), 안 여백, 레벨 칸, 줄.
+const DESC_LEFT := 216.0
 const DESC_BOTTOM := 8.0
-const DESC_H := 164.0
+const DESC_H := 201.0
 const DESC_PAD := 16.0
 const LEVEL_BOX := Vector2(30, 28)
 const LEVEL_BOX_X := 300.0
@@ -30,8 +33,9 @@ const LINE_H := 22.0
 const LINES_PER_COL := 5
 const BODY_Y := 50.0
 const STEP_BUTTON := Vector2(96, 64)
-const REVERT_SIZE := Vector2(160, 64)
-const COMMIT_SIZE := Vector2(200, 64)
+## 「되돌리기」「확정」(P3: 160·200 → 120·140, 그 왼쪽 키패드 「취소」「선택」 자리와 설명 두 칸(칸마다 230 이상)을 내려고).
+const REVERT_SIZE := Vector2(120, 64)
+const COMMIT_SIZE := Vector2(140, 64)
 ## 오른쪽 단추 묶음 폭(되돌리기 + 확정 줄).
 const BUTTONS_W := REVERT_SIZE.x + 8.0 + COMMIT_SIZE.x
 ## 퍼밀(‰)로 적힌 줄 필드: 화면은 %로 보인다.
@@ -94,7 +98,7 @@ func setup(m: PartyMenu) -> void:
 	tree_area.content.draw.connect(_draw_lines)
 	add_child(tree_area)
 	PartyMenu.place(tree_area, Vector2(0, 0), Vector2(1, 0),
-		Vector4(WIN_SIDE + WIN_INSET + 8, WIN_TOP + WIN_INSET, -WIN_SIDE - WIN_INSET - 8, WIN_BOTTOM - WIN_INSET))
+		Vector4(WIN_SIDE + WIN_INSET + 8, WIN_TOP, -WIN_SIDE - WIN_INSET - 8, WIN_BOTTOM))
 	tree_area.resized.connect(func() -> void:
 		if menu.state != null and visible:
 			refresh())
@@ -103,7 +107,7 @@ func setup(m: PartyMenu) -> void:
 	desc.mouse_filter = MOUSE_FILTER_IGNORE
 	desc.draw.connect(_draw_desc)
 	add_child(desc)
-	PartyMenu.place(desc, Vector2(0, 1), Vector2(1, 1), Vector4(WIN_SIDE, -DESC_BOTTOM - DESC_H, -WIN_SIDE, -DESC_BOTTOM))
+	PartyMenu.place(desc, Vector2(0, 1), Vector2(1, 1), Vector4(DESC_LEFT, -DESC_BOTTOM - DESC_H, -WIN_SIDE, -DESC_BOTTOM))
 	_desc_title.name = "DescTitle"
 	_desc_title.add_theme_font_size_override("font_size", 22)
 	_desc_title.position = Vector2(DESC_PAD, 8)
@@ -223,14 +227,23 @@ func level_box_rect(k: int) -> Rect2:
 	return Rect2(LEVEL_BOX_X + (k - 1) * (LEVEL_BOX.x + 4.0), 11, LEVEL_BOX.x, LEVEL_BOX.y)
 
 
-## 설명 줄 i 의 자리(설명 띠 기준): 다섯 줄씩 칸, 칸 폭 = 단추 묶음 왼쪽까지를 셋으로.
+## 설명 줄 i 의 자리(설명 띠 기준): 다섯 줄씩 칸, 칸 폭 = 줄 글 자리(body_width)를 쓰는 칸 수(1~3)로 나눈 것.
 func desc_line_pos(i: int) -> Vector2:
-	var col_w := body_width() / 3.0
-	return Vector2(DESC_PAD + (i / LINES_PER_COL) * col_w, BODY_Y + (i % LINES_PER_COL + 1) * LINE_H - 5.0)
+	return Vector2(DESC_PAD + (i / LINES_PER_COL) * col_width(), BODY_Y + (i % LINES_PER_COL + 1) * LINE_H - 5.0)
 
 
+func desc_cols() -> int:
+	return clampi(ceili(desc_lines.size() / float(LINES_PER_COL)), 1, 3)
+
+
+func col_width() -> float:
+	return body_width() / desc_cols()
+
+
+## 줄 글 자리 폭: 안 여백부터 캠프 키패드 「취소」「선택」 왼쪽 − 8 까지(키패드는 오른쪽 아래 앵커, 띠 오른쪽 끝 = 화면 − WIN_SIDE).
 func body_width() -> float:
-	return maxf(120.0, desc.size.x - 2.0 * DESC_PAD - BUTTONS_W - 16.0)
+	var pad_left := desc.size.x + WIN_SIDE + PartyMenu.PAD_KEYS_SKILLS.x
+	return maxf(120.0, pad_left - 8.0 - DESC_PAD)
 
 
 ## 설명 줄 전부(시험·디버그용, 줄바꿈으로 잇는다).
@@ -638,7 +651,7 @@ func _draw_desc() -> void:
 		desc.draw_rect(r, bg)
 		desc.draw_rect(r, UiTheme.TREE_WIN_OUTER, false, 1.5)
 		desc.draw_string(font, Vector2(r.position.x, r.get_center().y + 16 * 0.36), str(k), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 16, fg)
-	var col_w := body_width() / 3.0
+	var col_w := col_width()
 	for i in desc_lines.size():
 		var p := desc_line_pos(i)
 		desc.draw_string(font, p, desc_lines[i], HORIZONTAL_ALIGNMENT_LEFT, col_w - 12.0, 16, UiTheme.TREE_KIND_TEXT if i == 0 else UiTheme.TEXT)

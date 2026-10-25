@@ -125,10 +125,10 @@ func test_camp_root_follows_the_facility_table_at_both_sizes() -> void:
 		check_eq([pm.camp_plate.first, pm.camp_plate.second], [s.texts.t("floor.f1_test"), s.texts.t("hud.steps", {"steps": s.state.steps})], tag + ": 문패 글")
 		check_eq(_rect(pm.banner), Rect2(192, 0, size.x - 192, 100), tag + ": 설명 띠 x 192 → 오른쪽 끝, y 0~100")
 		var lr := _rect(pm.camp_list)
-		check_eq(lr, Rect2(0, 116, 430, FacilityList.content_height(6)), tag + ": 명령 목록 x 0~430, y 116~")
-		check(lr.end.y <= 542.0 + 0.5, tag + ": 목록 아래 끝 542 %s" % str(lr))
+		check_eq(lr, Rect2(0, 116, 430, FacilityList.content_height(5)), tag + ": 명령 목록 x 0~430, y 116~472(P3: 「6 닫기」 줄 없음)")
+		check(lr.end.y <= 472.0 + 0.5, tag + ": 목록 아래 끝 472 %s" % str(lr))
 		var rows := pm.camp_list.rows
-		check_eq(rows.size(), 6, tag + ": 명령 여섯")
+		check_eq(rows.size(), 5, tag + ": 명령 다섯(닫기는 「취소」·Esc·P·6)")
 		for i in rows.size():
 			var r := _rect(rows[i])
 			check(r.size.y >= 64.0 and r.size.x >= 64.0, "%s: 줄 %d %s ≥ 64" % [tag, i, str(r.size)])
@@ -203,13 +203,13 @@ func test_member_pick_and_every_camp_command() -> void:
 	check_eq(pm.banner.head, s.texts.t("camp.desc.skills"), "설명 띠 = 커서 명령의 설명")
 	await kit.press_key(KEY_UP)
 	await kit.press_key(KEY_UP)
-	check_eq(pm.camp_cursor, 5, "↑ 는 끝에서 돈다(닫기)")
+	check_eq(pm.camp_cursor, 4, "↑ 는 끝에서 돈다(기록, 닫기 줄은 없다)")
 	await kit.press_key(KEY_1)
 	check_eq([pm.page, pm.pick_cmd, pm.pick_cursor], ["pick", 0, 0], "1 → 상태 대원 고르기(커서 칸 0)")
 	check_eq(pm.banner.head, s.texts.t("camp.pick.status"), "물음 「누구의 상태를 볼까?」")
 	check_eq(pm.camp_list.rows[0].theme_state(), "fac:chosen", "고른 명령 = 밝은 시안")
-	check_eq(pm.camp_list.rows[5].text, s.texts.t("camp.back"), "마지막 줄 = 「뒤로」")
-	for i in 6:
+	check_eq(pm.camp_list.rows.size(), 5, "「뒤로」 줄은 없다(키패드 「취소」·Esc·P·6)")
+	for i in 5:
 		check_eq(pm.camp_list.rows[i].mouse_filter, Control.MOUSE_FILTER_STOP, "고르기 중에도 명령 줄 %d 를 누를 수 있다" % i)
 	# 전투의 아군 대상 고르기 표시: 고를 수 있는 카드 모두 노랑, 커서 카드에 흰 안쪽 선.
 	for c in pm.cards.cards:
@@ -244,8 +244,8 @@ func test_member_pick_and_every_camp_command() -> void:
 	await kit.press_key(KEY_P)
 	check_eq([pm.page, pm.camp_cursor], ["root", 1], "P → 캠프 뿌리(커서 스킬)")
 	await kit.press_key(KEY_3)
-	await kit.tap(kit.center_of(pm.camp_list.rows[5]))
-	check_eq(pm.page, "root", "「뒤로」 줄 → 캠프 뿌리")
+	await kit.tap(kit.center_of(pm.key_pad.button("back")))
+	check_eq(pm.page, "root", "키패드 「취소」 → 캠프 뿌리")
 	await kit.press_key(KEY_3)
 	await kit.press_key(KEY_ESCAPE)
 	check_eq(pm.page, "root", "고르기에서 Esc → 캠프 뿌리")
@@ -261,12 +261,15 @@ func test_member_pick_and_every_camp_command() -> void:
 	await kit.tap(kit.center_of(pm.records_tab.back_button))
 	check_eq([pm.page, pm.camp_cursor], ["root", 4], "기록 「뒤로」 → 캠프 뿌리")
 	await kit.press_key(KEY_6)
-	check(not pm.is_open(), "6 닫기 → 탐색")
+	check(not pm.is_open(), "6 닫기 → 탐색(줄은 없어도 키는 그대로)")
 	check(s.camp_button.is_visible_in_tree(), "탐색 HUD 가 돌아온다")
+	await kit.press_key(KEY_P)
+	await kit.tap(kit.center_of(pm.key_pad.button("back")))
+	check(not pm.is_open(), "뿌리에서 키패드 「취소」 → 닫기")
 
 
 ## 휴대폰 확인(2026-10-25): 고르기 중에도 명령 줄이 모두 일한다. 상태·스킬·장비는 고르기를 그 명령으로 바꾸고(물음·고른 모양이 따라감,
-## 커서 대원 그대로, 지금 명령은 아무 일 없음), 소지품·기록은 바로 열고, 마지막 줄 「뒤로」는 고르기 취소. 키 1~6 도 같은 줄.
+## 커서 대원 그대로, 지금 명령은 아무 일 없음), 소지품·기록은 바로 열고, 키 6·키패드 「취소」는 고르기 취소(P3 에서 「뒤로」 줄을 뺐다). 키 1~5 도 같은 줄.
 func test_member_pick_keeps_every_command_row_working() -> void:
 	var s := await _open()
 	var pm := s.party_menu
@@ -281,7 +284,6 @@ func test_member_pick_keeps_every_command_row_working() -> void:
 	check_eq([pm.page, pm.pick_cmd, pm.pick_cursor], ["pick", 2, 1], "고르기 중 「장비」 줄 → 장비 고르기(커서 대원 그대로)")
 	check_eq(pm.banner.head, s.texts.t("camp.pick.equip"), "물음이 장비로")
 	check_eq([pm.camp_list.rows[2].theme_state(), pm.camp_list.rows[1].theme_state()], ["fac:chosen", "fac:normal"], "고른 모양이 장비 줄로")
-	check_eq(pm.camp_list.rows[5].text, s.texts.t("camp.back"), "마지막 줄은 여전히 「뒤로」")
 	await kit.tap(kit.center_of(pm.cards.cards[3]))
 	check_eq([pm.page, pm.tab, pm.member], ["sub", 2, 3], "카드 → 그 대원 장비")
 	await kit.press_key(KEY_ESCAPE)
@@ -296,8 +298,8 @@ func test_member_pick_keeps_every_command_row_working() -> void:
 	check_eq([pm.page, pm.tab, s.modal.kind], ["sub", 4, ""], "고르기 중 「기록」 줄 → 바로 기록")
 	await kit.press_key(KEY_ESCAPE)
 	await kit.press_key(KEY_2)
-	await kit.tap(kit.center_of(pm.camp_list.rows[5]))
-	check_eq([pm.page, pm.camp_cursor], ["root", 1], "「뒤로」 줄 → 고르기 취소, 뿌리(커서 스킬)")
+	await kit.tap(kit.center_of(pm.key_pad.button("back")))
+	check_eq([pm.page, pm.camp_cursor], ["root", 1], "키패드 「취소」 → 고르기 취소, 뿌리(커서 스킬)")
 	# 키보드: 고르기 중 1~3 은 고르기 바꾸기, 4·5 는 바로 열기, 6 은 「뒤로」 줄과 같다. ←→ 와 Enter 는 그대로.
 	await kit.press_key(KEY_1)
 	await kit.press_key(KEY_3)
@@ -322,7 +324,7 @@ func test_member_pick_keeps_every_command_row_working() -> void:
 	await kit.press_key(KEY_ESCAPE)
 	await kit.press_key(KEY_3)
 	await kit.press_key(KEY_6)
-	check_eq([pm.page, pm.camp_cursor, pm.is_open()], ["root", 2, true], "고르기 중 6 → 「뒤로」(캠프는 열린 채)")
+	check_eq([pm.page, pm.camp_cursor, pm.is_open()], ["root", 2, true], "고르기 중 6 → 뒤로(캠프는 열린 채)")
 	# 명령이 바뀌면 문맥이 바뀐다: 눌려 있던 카드는 취소되어 뗄 때 아무 일도 하지 않는다.
 	await kit.press_key(KEY_1)
 	var p := kit.center_of(pm.cards.cards[2])
@@ -469,8 +471,8 @@ func test_skill_screen_follows_the_reference_table() -> void:
 			[Rect2(0, 0, 64, 64), Rect2(266, 0, 64, 64), Rect2(size.x - 128, 0, 120, 64)], tag + ": 앞·다음 대원, 「뒤로」")
 		var win := st.tree_window_rect()
 		var desc := st.desc_rect()
-		check_eq(win, Rect2(48, 150, size.x - 96, 392), tag + ": 트리 창 x 48 ~ 오른쪽 48, y 150~542(원작 138~548)")
-		check_eq(desc, Rect2(48, size.y - 172, size.x - 96, 164), tag + ": 설명 띠 아래 넓게(원작 y 552~708)")
+		check_eq(win, Rect2(48, 150, size.x - 96, 353), tag + ": 트리 창 x 48 ~ 오른쪽 48, y 150~503(P3, 원작 138~548)")
+		check_eq(desc, Rect2(216, size.y - 209, size.x - 264, 201), tag + ": 설명 띠 x 216 → 오른쪽 48, y 511~712(P3: 왼쪽 아래는 방향 십자)")
 		check(win.end.y <= desc.position.y, tag + ": 트리 창은 설명 띠 위")
 		var ct := st.class_tab_rect()
 		check(ct.position.y >= MemberHeader.H and ct.position.y < win.position.y and ct.end.y > win.position.y, tag + ": 직업 탭은 트리 창 위 가장자리에 걸친다")
@@ -488,7 +490,10 @@ func test_skill_screen_follows_the_reference_table() -> void:
 				check(not _rect(ctrl[i]).intersects(_rect(ctrl[j])), "%s: %s 와 %s 가 겹친다" % [tag, ctrl[i].name, ctrl[j].name])
 		var boxes_end := st.level_box_rect(10).end.x
 		check(boxes_end < st.minus_button.position.x, tag + ": 레벨 칸 1~10 은 「−」 왼쪽")
-		check(st.desc_line_pos(PartySkillTab.LINES_PER_COL * 3 - 1).x + st.body_width() / 3.0 <= desc.size.x - PartySkillTab.BUTTONS_W, tag + ": 설명 줄은 단추 묶음 왼쪽")
+		var body_end := desc.position.x + PartySkillTab.DESC_PAD + st.body_width()
+		check(body_end <= _rect(pm.key_pad).position.x - 8.0 + 0.5, "%s: 설명 줄 자리 끝 %s 는 키패드 「취소」 왼쪽 − 8" % [tag, body_end])
+		check_eq(_rect(pm.key_pad), Rect2(size.x - 567, 632, 227, 72), tag + ": 키패드 「취소」「선택」은 설명 띠 안 「되돌리기」 왼쪽(P3)")
+		check_eq([_rect(st.revert_button).size, _rect(st.commit_button).size], [Vector2(120, 64), Vector2(140, 64)], tag + ": 「되돌리기」 120·「확정」 140")
 		for d in [st.top, st.tree_window, st.class_tab, st.desc]:
 			check_eq((d as Control).mouse_filter, Control.MOUSE_FILTER_IGNORE, "%s: %s 는 장식" % [tag, d.name])
 		_check_targets(pm, size, tag + " 스킬")
@@ -526,7 +531,7 @@ func test_skill_screen_follows_the_reference_table() -> void:
 
 # ---- 장비·소지품(R2-c, 원작 상점 화면 jp_guide3_img1~3) ----
 
-## 상점 짜임의 공통 자리(1280×720 기준 실측 표, 넓은 창은 왼쪽이 넓어진다).
+## 상점 짜임의 공통 자리(1280×720 기준 실측 표, 넓은 창은 왼쪽이 넓어진다). P3: 왼쪽 창은 x 232 부터(왼쪽 아래 방향 십자 자리).
 func _check_shop_frame(pm: PartyMenu, f: ShopFrame, size: Vector2, with_desc: bool, tag: String) -> void:
 	var pw := CharPanel.W
 	check_eq(_rect(f.back_button), Rect2(16, 18, 140, 64), tag + ": 「뒤로」 = 원작 다이얼 자리")
@@ -534,10 +539,10 @@ func _check_shop_frame(pm: PartyMenu, f: ShopFrame, size: Vector2, with_desc: bo
 	check_eq(_rect(f.title_plate), Rect2(0, 112, 340, 50), tag + ": 화면 이름 문패 = 원작 돈 문패 자리")
 	var lw := _rect(f.list_window)
 	var bottom := 500.0 if with_desc else size.y - 8
-	check_eq(lw, Rect2(16, 172, size.x - pw - 24 - 16, bottom - 172), tag + ": 목록 창")
+	check_eq(lw, Rect2(232, 172, size.x - pw - 24 - 232, bottom - 172), tag + ": 목록 창 x 232 → 판 왼쪽 − 24")
 	check_eq(f.desc_window.is_visible_in_tree(), with_desc, tag + ": 설명 창 있음/없음")
 	if with_desc:
-		check_eq(_rect(f.desc_window), Rect2(16, 510, size.x - pw - 24 - 16, size.y - 8 - 510), tag + ": 설명 창 아래")
+		check_eq(_rect(f.desc_window), Rect2(232, 510, size.x - pw - 24 - 232, size.y - 8 - 510), tag + ": 설명 창 아래, x 232 부터")
 	check_eq(_rect(f.panel), Rect2(size.x - pw, 0, pw, size.y), tag + ": 인물 판 오른쪽 전체 높이")
 	var parts := {"back": _rect(f.back_button), "banner": _rect(f.banner), "title": _rect(f.title_plate), "list": lw, "panel": _rect(f.panel)}
 	if with_desc:
@@ -673,8 +678,13 @@ func test_records_screen_follows_the_load_screen_table() -> void:
 		check_eq(_rect(rt.title_plate), Rect2(0, 36, 272, 56), tag + ": 이름 문패 = 원작 「Load Game」 자리")
 		check_eq(_rect(rt.back_button), Rect2(size.x - 128, 18, 120, 64), tag + ": 「뒤로」 오른쪽 위(원작 DELETE 안내 자리)")
 		var win := _rect(rt.window)
-		check_eq(win, Rect2(size.x / 2.0 - 470, 100, 940, 494), tag + ": 슬롯 창 가운데 940 폭, y 100~594")
+		var wx := maxf(size.x / 2.0 - 430.0, 224.0)
+		check_eq(win, Rect2(wx, 100, 860, 494), tag + ": 슬롯 창 860 폭, y 100~594, 가운데(1280 은 방향 십자를 비켜 x 224)")
 		var band := _rect(rt.band)
+		check_eq([band.position.x, band.size.x], [wx - 10.0, 880.0], tag + ": 아래 띠 880 폭, 슬롯 창 양옆 10")
+		for i in rt.band_buttons.size():
+			for j in range(i + 1, rt.band_buttons.size()):
+				check(not _rect(rt.band_buttons[i]).intersects(_rect(rt.band_buttons[j])), "%s: %s 와 %s 가 겹친다" % [tag, rt.band_buttons[i].name, rt.band_buttons[j].name])
 		check(band.position.y >= win.end.y and band.end.y <= size.y, tag + ": 아래 띠는 슬롯 창 아래, 화면 안")
 		var parts := {"title": _rect(rt.title_plate), "back": _rect(rt.back_button), "window": win, "band": band}
 		var keys := parts.keys()

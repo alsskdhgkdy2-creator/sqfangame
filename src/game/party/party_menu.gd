@@ -19,8 +19,10 @@ extends Control
 
 signal opened
 signal closed
-## 캠프 명령(목록 순서). 숫자 키 1~6.
+## 캠프 명령(목록 순서). 숫자 키 1~6. 목록 줄은 앞 다섯(CAMP_ROWS)이고 「6 닫기」(고르기 중 「뒤로」)는 줄 없이 키 `6`과
+## 키패드 「취소」(= Esc·P)만 한다(P3, 사용자 결정 2026-10-25: 방향 십자를 왼쪽 아래 전투 자리에 두려고 줄을 뺐다).
 const CAMP_KEYS := ["status", "skills", "equip", "items", "records", "close"]
+const CAMP_ROWS := 5
 ## 명령 목록 위(설명 띠 아래 16). 원작은 소지금 문패 아래(y 약 195)지만 소지금이 없어(M3) 위로 올렸다.
 const CAMP_TOP := 116.0
 ## 규칙 함수가 상태를 바꿨다(저장 갈고리 뒤). 탐색 화면이 상태 칸을 새로 그린다.
@@ -32,6 +34,18 @@ const DIALOG_SIZE := Vector2(560, 240)
 const DIALOG_BUTTON := Vector2(200, 64)
 const NOTICE_SEC := 2.5
 const TAB_KEYS := ["status", "skills", "equip", "items", "records"]
+## 가상 키패드 단추 → 같은 일을 하는 물리 키(키 표 key_action 을 같이 써서 키패드 = 키).
+const PAD_KEYS := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "ok": KEY_ENTER, "back": KEY_ESCAPE}
+## 방향 십자 자리(왼쪽 아래 앵커: 왼쪽에서 x, 아래에서 y) — 전투와 같은 엄지 자리(06 §9.10). 상태 화면만 가운데 빈 곳(x 456).
+const PAD_DIR := Vector2(8, -209)
+const PAD_DIR_STATUS := Vector2(456, -209)
+## 「취소」「선택」 자리(오른쪽 아래 앵커: 왼쪽 위 모서리). 가로 = 전투와 같은 자리(W − 247, 427), 스킬은 설명 띠 안 「되돌리기」 왼쪽
+## (계획의 W − 667 에서 100 오른쪽: 가장 긴 설명 8 줄이 두 칸에 들게 「되돌리기」「확정」을 좁혔다, 조정자 결정 2026-10-25),
+## 장비·소지품·기록은 오른쪽 좁은 칸에 세로(110×151).
+const PAD_KEYS_AT := Vector2(-247, -293)
+const PAD_KEYS_SKILLS := Vector2(-567, -88)
+const PAD_KEYS_SHOP := Vector2(-118, -172)
+const PAD_KEYS_RECORDS := Vector2(-118, -300)
 ## 장비 칸 이름 키(칸 0 무기, 칸 1~3 방어구).
 const SLOT_KEYS := ["party.slot.weapon", "party.slot.armor", "party.slot.armor", "party.slot.armor"]
 
@@ -81,6 +95,11 @@ var records_tab: PartyRecordsTab
 var tabs: Array[Control] = []
 var dialog_layer: Control
 var dialog_buttons: Array[PartyButton] = []
+## 가상 키패드(P3, 전투와 같은 부품 VirtualPad): 방향 십자, 「취소」「선택」 가로 한 쌍과 세로 한 쌍(쪽·화면마다 하나만 보인다).
+## 확인 창 층 뒤(트리 순서 = 그리는·누르는 순서)라 확인 창에서도 누를 수 있고, 층 3 창보다는 아래다.
+var dir_pad: VirtualPad
+var key_pad: VirtualPad
+var key_pad_stacked: VirtualPad
 var _dialog_text := Label.new()
 var _notice_left := 0.0
 ## 확인 창의 둘째 단추 뒤에 할 일(버리기 뒤 탭·대원 바꾸기·닫기, 새 게임).
@@ -116,6 +135,7 @@ func build(text_db: TextDb) -> void:
 		add_child(t)
 		t.call("setup", self)
 	_build_dialog()
+	_build_pads()
 	_layout()
 
 
@@ -136,18 +156,16 @@ func _build_camp() -> void:
 	camp_list.name = "CampList"
 	add_child(camp_list)
 	place(camp_list, Vector2.ZERO, Vector2.ZERO,
-		Vector4(0, CAMP_TOP, FacilityList.WIDTH, CAMP_TOP + FacilityList.content_height(CAMP_KEYS.size())))
+		Vector4(0, CAMP_TOP, FacilityList.WIDTH, CAMP_TOP + FacilityList.content_height(CAMP_ROWS)))
 	var items := []
-	for i in CAMP_KEYS.size():
+	for i in CAMP_ROWS:
 		items.append({"name": "Camp_" + CAMP_KEYS[i], "text": camp_label(i)})
 	camp_list.set_items(items)
 	camp_list.pressed.connect(func(i: int) -> void: handle("camp", i))
 
 
-## 명령 줄 글: 「1  상태」(숫자 키), 대원 고르기 중 마지막 줄은 「뒤로」.
+## 명령 줄 글: 「1  상태」(숫자 키).
 func camp_label(i: int) -> String:
-	if page == "pick" and i == CAMP_KEYS.size() - 1:
-		return texts.t("camp.back")
 	return "%d  %s" % [i + 1, texts.t("camp.cmd." + CAMP_KEYS[i])]
 
 
@@ -161,6 +179,55 @@ static func place(c: Control, a0: Vector2, a1: Vector2, off: Vector4) -> void:
 	c.offset_top = off.y
 	c.offset_right = off.z
 	c.offset_bottom = off.w
+
+
+## 가상 키패드(P3, 07 §9.7): 확인 창 층 뒤(그 위에 그려지고 먼저 누르기를 받는다), 층 3 창 아래. 자리는 쪽·화면마다 _place_pads.
+func _build_pads() -> void:
+	var ok := texts.t("battle.ui.pad_ok")
+	var back := texts.t("battle.ui.pad_back")
+	dir_pad = VirtualPad.new().setup_dirs()
+	dir_pad.name = "DirPad"
+	key_pad = VirtualPad.new().setup_keys(ok, back)
+	key_pad.name = "KeyPad"
+	key_pad_stacked = VirtualPad.new().setup_keys(ok, back, true)
+	key_pad_stacked.name = "KeyPadStacked"
+	for p in [dir_pad, key_pad, key_pad_stacked]:
+		add_child(p)
+		(p as VirtualPad).pressed.connect(_on_vpad)
+
+
+## 지금 쪽·화면의 키패드 자리: {dir: 십자 왼쪽 위(왼쪽 아래 앵커), keys: 선택·취소 왼쪽 위(오른쪽 아래 앵커), stacked: 세로인지}.
+## 확인 창은 그 화면 자리 그대로(창은 가운데라 겹치지 않는다).
+func pad_spot() -> Dictionary:
+	var screen: String = TAB_KEYS[tab] if page == "sub" else page
+	match screen:
+		"status":
+			return {"dir": PAD_DIR_STATUS, "keys": PAD_KEYS_AT, "stacked": false}
+		"skills":
+			return {"dir": PAD_DIR, "keys": PAD_KEYS_SKILLS, "stacked": false}
+		"equip", "items":
+			return {"dir": PAD_DIR, "keys": PAD_KEYS_SHOP, "stacked": true}
+		"records":
+			return {"dir": PAD_DIR, "keys": PAD_KEYS_RECORDS, "stacked": true}
+	return {"dir": PAD_DIR, "keys": PAD_KEYS_AT, "stacked": false}
+
+
+## 지금 보이는 「취소」「선택」 묶음.
+func active_key_pad() -> VirtualPad:
+	return key_pad_stacked if bool(pad_spot()["stacked"]) else key_pad
+
+
+func _place_pads() -> void:
+	var spot := pad_spot()
+	var d: Vector2 = spot["dir"]
+	var ds := VirtualPad.dirs_size()
+	place(dir_pad, Vector2(0, 1), Vector2(0, 1), Vector4(d.x, d.y, d.x + ds.x, d.y + ds.y))
+	var stacked: bool = spot["stacked"]
+	var k: Vector2 = spot["keys"]
+	var ks := VirtualPad.keys_size(stacked)
+	place(active_key_pad(), Vector2(1, 1), Vector2(1, 1), Vector4(k.x, k.y, k.x + ks.x, k.y + ks.y))
+	key_pad.visible = not stacked
+	key_pad_stacked.visible = stacked
 
 
 func _build_dialog() -> void:
@@ -356,7 +423,7 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 func _dispatch_root(kind: String, arg: Variant) -> bool:
 	match kind:
 		"camp_cursor":
-			camp_cursor = wrapi(camp_cursor + (int(arg) if arg != null else 1), 0, CAMP_KEYS.size())
+			camp_cursor = wrapi(camp_cursor + (int(arg) if arg != null else 1), 0, CAMP_ROWS)
 			return true
 		"camp":
 			var i := int(arg) if arg != null else -1
@@ -410,7 +477,7 @@ func _dispatch_pick(kind: String, arg: Variant) -> bool:
 			pick_cursor = to
 			return true
 		"camp":
-			# 고르기 중에도 명령 줄은 모두 일한다: 마지막 줄 「뒤로」는 고르기 취소, 상태·스킬·장비는 그 명령으로 고르기를
+			# 고르기 중에도 명령 줄은 모두 일한다: `6`(줄 없음, = 「취소」)은 고르기 취소, 상태·스킬·장비는 그 명령으로 고르기를
 			# 바꾸고(커서 대원 그대로, 지금 명령이면 아무 일 없음), 소지품·기록은 바로 연다.
 			var i := int(arg) if arg != null else -1
 			if i < 0 or i >= CAMP_KEYS.size() or i == pick_cmd:
@@ -548,103 +615,136 @@ func _unhandled_input(event: InputEvent) -> void:
 	if k.echo or k.ctrl_pressed or k.alt_pressed or k.meta_pressed:
 		return
 	var code := k.physical_keycode
-	if not dialog_kind.is_empty():
-		match code:
-			KEY_LEFT:
-				handle("dialog_move", -1)
-			KEY_RIGHT:
-				handle("dialog_move", 1)
-			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
-				handle("dialog_ok")
-			KEY_ESCAPE:
-				handle("dialog_back")
-		return
-	if code == KEY_ESCAPE or event.is_action_pressed("open_party"):
-		handle("back")
-		return
+	if dialog_kind.is_empty() and event.is_action_pressed("open_party"):
+		code = KEY_ESCAPE  # P = Esc(한 단계 뒤로). 확인 창에서는 P 가 아무 일도 하지 않는다
+	var a := key_action(code)
+	if not a.is_empty():
+		handle(a[0], a[1])
+
+
+## 키 표 하나(07 §9.4·§9.7, P3): 물리 키 → 지금 쪽·화면·확인 창에서 그 키가 보내는 [입력 종류, 값], 하는 일이 없으면 [].
+## 부작용 없음. 키보드(_unhandled_input)와 가상 키패드(_on_vpad·pad_state)가 같이 쓴다. Enter 자리는 Enter·키패드 Enter·Space.
+func key_action(code: int) -> Array:
 	var enter := code == KEY_ENTER or code == KEY_KP_ENTER or code == KEY_SPACE
-	if page == "root":
-		if code >= KEY_1 and code <= KEY_6:
-			handle("camp", code - KEY_1)
-		elif code >= KEY_KP_1 and code <= KEY_KP_6:
-			handle("camp", code - KEY_KP_1)
-		elif code == KEY_UP:
-			handle("camp_cursor", -1)
-		elif code == KEY_DOWN:
-			handle("camp_cursor", 1)
-		elif enter:
-			handle("confirm")
-		return
-	if page == "pick":
-		if code >= KEY_1 and code <= KEY_6:
-			handle("camp", code - KEY_1)  # 뿌리와 같은 줄: 1~3 고르기 바꾸기, 4·5 바로 열기, 6 「뒤로」
-			return
-		if code >= KEY_KP_1 and code <= KEY_KP_6:
-			handle("camp", code - KEY_KP_1)
-			return
-		match code:
-			KEY_UP:
-				handle("pick_move", Vector2i(0, -1))
-			KEY_DOWN:
-				handle("pick_move", Vector2i(0, 1))
-			KEY_LEFT:
-				handle("pick_move", Vector2i(-1, 0))
-			KEY_RIGHT:
-				handle("pick_move", Vector2i(1, 0))
+	var dir := _arrow(code)
+	if not dialog_kind.is_empty():
+		if dir.x != 0:
+			return ["dialog_move", dir.x]
+		if code == KEY_ESCAPE:
+			return ["dialog_back", null]
+		return ["dialog_ok", null] if enter else []
+	if code == KEY_ESCAPE:
+		return ["back", null]
+	var num := _number(code)
+	if page != "sub":
+		if num >= 0 and num < CAMP_KEYS.size():
+			return ["camp", num]  # 뿌리: 그 명령. 고르기: 1~3 고르기 바꾸기, 4·5 바로 열기, 6 「뒤로」
 		if enter:
-			handle("confirm")
-		return
+			return ["confirm", null]
+		if page == "pick":
+			return ["pick_move", dir] if dir != Vector2i.ZERO else []
+		return ["camp_cursor", dir.y] if dir.y != 0 else []
+	if num >= 0 and num < TAB_KEYS.size():
+		return ["tab", num]
 	match code:
-		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
-			handle("tab", code - KEY_1)
-			return
-		KEY_KP_1, KEY_KP_2, KEY_KP_3, KEY_KP_4, KEY_KP_5:
-			handle("tab", code - KEY_KP_1)
-			return
 		KEY_Q:
-			handle("member_step", -1)
-			return
+			return ["member_step", -1]
 		KEY_E:
-			handle("member_step", 1)
-			return
-	if tab == 1:
-		match code:
-			KEY_UP:
-				handle("node_dir", Vector2i(0, -1))
-			KEY_DOWN:
-				handle("node_dir", Vector2i(0, 1))
-			KEY_LEFT:
-				handle("node_dir", Vector2i(-1, 0))
-			KEY_RIGHT:
-				handle("node_dir", Vector2i(1, 0))
-			KEY_BACKSPACE:
-				handle("minus")
-			KEY_R:
-				handle("revert")
-			KEY_F:
-				handle("commit")
-		if enter:
-			handle("plus")
-		return
+			return ["member_step", 1]
+	match tab:
+		0:  # 상태: ←→ 앞·다음 대원(= Q/E, 원작 L/R), 선택 = 「내역」(= V). 내릴 것이 없어 ↑↓ 는 없다
+			if dir.x != 0:
+				return ["member_step", dir.x]
+			return ["split", null] if code == KEY_V or enter else []
+		1:  # 스킬: 방향 = 트리 커서, 선택 = 「+」
+			if dir != Vector2i.ZERO:
+				return ["node_dir", dir]
+			match code:
+				KEY_BACKSPACE:
+					return ["minus", null]
+				KEY_R:
+					return ["revert", null]
+				KEY_F:
+					return ["commit", null]
+			return ["plus", null] if enter else []
+		4:  # 기록: ←→ 줄 안
+			if dir.x != 0:
+				return ["cursor_x", dir.x]
+	if dir.y != 0:
+		return ["cursor", dir.y]
+	if dir.x != 0:
+		# 장비 칸·소지품: ←→ 앞·다음 대원(= Q/E). 장비 목록이 열려 있으면 없다(칸 바꾸기는 목록을 닫고, 07 §9.7)
+		return [] if tab == 2 and equip_tab.list_open else ["member_step", dir.x]
+	if code == KEY_BACKSPACE:
+		return ["unequip", null] if tab == 2 else []
+	return ["confirm", null] if enter else []
+
+
+static func _arrow(code: int) -> Vector2i:
 	match code:
 		KEY_UP:
-			handle("cursor", -1)
+			return Vector2i(0, -1)
 		KEY_DOWN:
-			handle("cursor", 1)
-		KEY_BACKSPACE:
-			if tab == 2:
-				handle("unequip")
+			return Vector2i(0, 1)
 		KEY_LEFT:
-			if tab == 4:
-				handle("cursor_x", -1)  # 기록: 줄 안
+			return Vector2i(-1, 0)
 		KEY_RIGHT:
-			if tab == 4:
-				handle("cursor_x", 1)
-		KEY_V:
-			if tab == 0:
-				handle("split")  # 상태: 「내역」(기본·패시브·장비 보기)
-	if enter:
-		handle("confirm")
+			return Vector2i(1, 0)
+	return Vector2i.ZERO
+
+
+## 숫자 키(윗줄·키패드) 1~9 → 0~8, 아니면 -1.
+static func _number(code: int) -> int:
+	if code >= KEY_1 and code <= KEY_9:
+		return code - KEY_1
+	if code >= KEY_KP_1 and code <= KEY_KP_9:
+		return code - KEY_KP_1
+	return -1
+
+
+## 가상 키패드 누르기 → 그 단추와 같은 키의 입력(키 표를 같이 쓴다). 흐린 단추는 눌리지 않는다(VirtualPad).
+func _on_vpad(kind: String, arg: Variant) -> void:
+	var code := KEY_NONE
+	match kind:
+		"ok":
+			code = KEY_ENTER
+		"back":
+			code = KEY_ESCAPE
+		"move":
+			var d := arg as Vector2i
+			for k in ["up", "down", "left", "right"]:
+				if VirtualPad.DIRS[k] == d:
+					code = PAD_KEYS[k]
+	var a := key_action(code)
+	if not a.is_empty():
+		handle(a[0], a[1])
+
+
+## 키패드 단추마다 켤지(이름 → 참). 그 단추의 키가 지금 아무 일도 하지 않으면 흐림: 키 표에 없거나(예: 뿌리 ←→, 확인 창 ↑↓,
+## 장비 목록 ←→), 그 쪽·화면에서 늘 거부되는 것(소지품 선택에 누를 단추가 없음 = 디버그 아님, 기록 선택의 커서 단추가 흐림).
+func pad_state() -> Dictionary:
+	var out := {}
+	for k in PAD_KEYS:
+		var a := key_action(PAD_KEYS[k])
+		out[k] = not a.is_empty() and _may_accept(a)
+	return out
+
+
+func _may_accept(a: Array) -> bool:
+	if page == "sub" and dialog_kind.is_empty() and a[0] == "confirm":
+		match tab:
+			3:
+				return not items_tab.actionable().is_empty()
+			4:
+				return not records_tab.cursor_button().disabled
+	return true
+
+
+func _refresh_pad() -> void:
+	_place_pads()
+	var on := pad_state()
+	for p in [dir_pad, key_pad, key_pad_stacked]:
+		(p as VirtualPad).set_enabled(on)
 
 
 func _notification(what: int) -> void:
@@ -740,6 +840,7 @@ func _refresh() -> void:
 	if not sub:
 		_refresh_camp()
 	_refresh_dialog()
+	_refresh_pad()
 	queue_redraw()
 
 
@@ -747,7 +848,7 @@ func _refresh_camp() -> void:
 	camp_plate.show_lines(texts.t(state.floor_def.name_key), texts.t("hud.steps", {"steps": state.steps}))
 	var pick := page == "pick"
 	var live := []
-	for i in CAMP_KEYS.size():
+	for i in CAMP_ROWS:
 		camp_list.set_row_text(i, camp_label(i))
 		live.append(true)  # 고르기 중에도 모든 줄을 누를 수 있다(고른 줄은 눌러도 아무 일 없음)
 	camp_list.show_rows(-1 if pick else camp_cursor, pick_cmd if pick else -1, live)
@@ -816,6 +917,7 @@ func _layout() -> void:
 	var by := dr.end.y - DIALOG_BUTTON.y - 24
 	dialog_buttons[0].position = Vector2(dr.position.x + 40, by)
 	dialog_buttons[1].position = Vector2(dr.end.x - 40 - DIALOG_BUTTON.x, by)
+	_place_pads()
 	queue_redraw()
 
 
@@ -830,7 +932,8 @@ func _draw_dialog() -> void:
 
 # ---- 시험·디버그 읽기 ----
 
-## 지금 누를 수 있는 단추·노드·줄 전부(확인 창이 떠 있으면 그 창 단추만). 끌어 내리는 영역 밖으로 다 나간 줄은 뺀다.
+## 지금 누를 수 있는 단추·노드·줄 전부(확인 창이 떠 있으면 그 창 단추만)와 켜진 키패드 단추(확인 창이 떠 있어도: 창 층 위에 있다).
+## 끌어 내리는 영역 밖으로 다 나간 줄은 뺀다.
 func visible_buttons() -> Array[TouchButton]:
 	var out: Array[TouchButton] = []
 	if not _open:
@@ -838,6 +941,8 @@ func visible_buttons() -> Array[TouchButton]:
 	var root_node: Node = dialog_layer if dialog_layer.visible else self
 	for n in root_node.find_children("*", "TouchButton", true, false):
 		var b := n as TouchButton
+		if b.get_parent() is VirtualPad:
+			continue
 		if not b.is_visible_in_tree() or b.mouse_filter == MOUSE_FILTER_IGNORE:
 			continue
 		if root_node == self and dialog_layer.is_ancestor_of(b):
@@ -845,6 +950,14 @@ func visible_buttons() -> Array[TouchButton]:
 		if clipped_rect(b).size.y <= 0.0:
 			continue
 		out.append(b)
+	for p in [dir_pad, key_pad, key_pad_stacked]:
+		var vp := p as VirtualPad
+		if not vp.is_visible_in_tree():
+			continue
+		for k in vp.buttons:
+			var b: TouchButton = vp.buttons[k]
+			if not b.disabled:
+				out.append(b)
 	return out
 
 
@@ -888,7 +1001,7 @@ func debug_info(css: Callable) -> Dictionary:
 		"dialog": dialog_kind, "dialog_pick": dialog_pick, "sp_line": skill_tab._sp_label.text if tab == 1 else "",
 		"notice": notice, "debug": debug, "supply_open": items_tab.supply_open, "equip_rows": rows,
 		"records": {"cursor": [records_tab.cur_row, records_tab.cur_col], "cards": [0, 1, 2].map(records_tab.card_lines)} if tab == 4 else {},
-		"buttons": buttons, "nodes": nodes,
+		"buttons": buttons, "nodes": nodes, "pad": pad_state(),
 	}
 
 
