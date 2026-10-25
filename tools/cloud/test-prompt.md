@@ -11,10 +11,10 @@
 3. 덧붙인 시험이 `xvfb-run` 을 쓰고 xvfb·Mesa(llvmpipe)가 없으면 `apt-get install -y xvfb xauth libgl1-mesa-dri`.
 4. 모든 고도 실행에 `export XDG_DATA_HOME=/tmp/xdg GODOT_SILENCE_ROOT_WARNING=1`.
 
-표준 시험(저장소 루트 기준, 차례로. 통과 판정은 로그 문구와 종료 코드로. 시험 파일이 이 커밋에 아예 없으면 「해당 없음」으로 적고 실패로 세지 않는다):
+표준 시험(저장소 루트 기준, 차례로. 통과 판정은 로그 문구와 종료 코드로. 시험 파일이 이 커밋에 있는지는 `git ls-files <경로>` 로 확인한다. 출력이 비어 있을 때만 「해당 없음」으로 적고 실패로 세지 않는다. 출력이 있으면 반드시 돌린다):
 a. `godot --headless --import` 를 두 번(두 번째가 오류 없이 끝나야 한다)
 b. `timeout 600 godot --headless -s tests/run.gd` → 「결과: N개 중 0개 실패」 및 종료 코드 0 (종료 코드 124 는 시간 초과로, 실행기가 컴파일에 실패해 멈춘 것일 수 있다. 실패로 보고한다)
-c. 전투 밸런스 시뮬레이션 `godot --headless -s tests/sim/run.gd`(M2 에서 생긴다) → 마지막 요약 줄을 원문으로 보고하고 종료 코드 0
+c. 전투 밸런스 시뮬레이션 `godot --headless -s tests/sim/run.gd`(`git ls-files tests/sim/run.gd` 로 확인) → 마지막 요약 줄(「SIM 요약:」)을 원문으로 보고하고 종료 코드 0
 
 덧붙인 시험(있으면 표준 시험 뒤에 같은 방식으로):
 {{EXTRA}}
