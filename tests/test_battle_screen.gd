@@ -1338,6 +1338,37 @@ func test_max_status_chips_all_drawn() -> void:
 		check(not enemy_line.contains("HP"), tag + ": 적 줄에 HP 숫자 없음(D13): " + enemy_line)
 
 
+## 로그 창 상태 목록은 두 칸(왼쪽 아군, 오른쪽 적, 06 §9.4): 위아래로 쌓으면 1280×720 에서 로그가 두세 줄밖에 보이지 않았다.
+## 두 칸이 겹치지 않고 글이 칸 안에 다 들며, 로그 줄 자리는 보통 상태에서 다섯 줄(쌓을 때 약 2.8줄), 딱지 가득한 최대 상태에서도 세 줄 이상(2026-10-25).
+func test_log_status_in_two_columns_leaves_room_for_log_lines() -> void:
+	for c in [["보통", false, 5.0], ["최대 상태", true, 3.0]]:
+		for size in [Vector2(1280, 720), Vector2(1728, 720)]:
+			await _open(_max_status_state() if c[1] else _state(), 0.0, size)
+			var tag := "%dx%d %s" % [size.x, size.y, c[0]]
+			check(layer.handle("log"), tag + ": 로그 열기")
+			await kit.frames(2)
+			var lv := layer.log_view
+			var left := lv.status_label
+			var right := lv.status_label_right
+			var cols := layer.status_columns()
+			check_eq([left.text, right.text], [cols[0], cols[1]], tag + ": 왼쪽 = 아군 줄, 오른쪽 = 적 줄")
+			check_eq(layer.status_text(), cols[0] + "\n" + cols[1], tag + ": 전체 글은 아군 다음 적")
+			for u in layer.display.party:
+				check(left.text.contains(u.name), tag + ": 왼쪽에 " + u.name)
+			for u in layer.display.enemies:
+				check(right.text.contains(u.name) and not left.text.contains(u.name), tag + ": 오른쪽에만 " + u.name)
+			var win := Rect2(Vector2.ZERO, lv.size)
+			var lr := left.get_rect()
+			var rr := right.get_rect()
+			check(right.visible and not lr.intersects(rr), tag + ": 두 칸이 겹치지 않는다 %s %s" % [lr, rr])
+			check(win.encloses(lr) and win.encloses(rr), tag + ": 두 칸이 창 안")
+			check(left.get_minimum_size().y <= lr.size.y + 0.5 and right.get_minimum_size().y <= rr.size.y + 0.5, tag + ": 상태 글이 칸 안에 다 든다")
+			var sc := lv.find_child("LogScroll", true, false) as Control
+			check(sc.position.y >= maxf(lr.end.y, rr.end.y), tag + ": 로그 줄은 상태 목록 아래")
+			var line_h := float((lv.find_child("LogLines", true, false) as Label).get_line_height())
+			check(sc.size.y >= c[2] * line_h, tag + ": 로그 줄 자리 %.0f >= %d줄 %.0f" % [sc.size.y, int(c[2]), c[2] * line_h])
+
+
 ## 검토 2: 자리보다 많으면 「+N」으로 남은 개수를 보인다(조용히 버리지 않는다).
 func test_chip_overflow_shows_count() -> void:
 	await _open(_state())

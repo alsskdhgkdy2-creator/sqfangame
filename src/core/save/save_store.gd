@@ -72,7 +72,7 @@ func main_path(slot: String) -> String:
 ## 상태를 슬롯에 쓴다. 성공하면 "" 이고 상태의 generation 이 1 오른다. 실패하면 이유를 돌려주고 generation 은 그대로.
 func save(slot: String, s: ExplorationState, saved_at: String = "") -> String:
 	if s.generation < 0 or s.generation >= SaveCodec.MAX_GENERATION:
-		return "generation 이 범위(0 ~ 2^53 − 2)를 넘어 더 저장할 수 없다"
+		return "generation 이 범위(0 ~ 2^53 - 2)를 넘어 더 저장할 수 없다"
 	var why := _write_slot(slot, s, saved_at, s.generation + 1)
 	if why.is_empty():
 		s.generation += 1

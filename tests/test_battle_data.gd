@@ -226,11 +226,11 @@ func test_rule_constant_checks() -> void:
 	var flip := func(f):
 		f[RULES]["hit_min"] = 900
 		f[RULES]["hit_max"] = 800
-	_rejects("hit_min > hit_max", flip, "%s: hit_min: hit_min ≤ hit_max" % RULES)
+	_rejects("hit_min > hit_max", flip, "%s: hit_min: hit_min <= hit_max" % RULES)
 	_rejects("crit_mult 999", func(f): f[RULES]["crit_mult"] = 999, "%s: crit_mult:" % RULES)
 	_rejects("damage_roll lo 499", func(f): f[RULES]["damage_roll"] = [499, 1050], "%s: damage_roll:" % RULES)
 	_rejects("speed_roll hi 1501", func(f): f[RULES]["speed_roll"] = [900, 1501], "%s: speed_roll:" % RULES)
-	_rejects("escape_clamp lo > hi", func(f): f[RULES]["escape_clamp"] = [900, 800], "%s: escape_clamp: lo ≤ hi" % RULES)
+	_rejects("escape_clamp lo > hi", func(f): f[RULES]["escape_clamp"] = [900, 800], "%s: escape_clamp: lo <= hi" % RULES)
 	_rejects("resist_max 1000", func(f): f[RULES]["resist_max"] = 1000, "%s: resist_max: 정수 0~999" % RULES)
 	_rejects("칸 0", func(f): f[RULES]["buff_slots"] = 0, "%s: buff_slots: 정수 1~5" % RULES)
 	_rejects("칸 6", func(f): f[RULES]["debuff_slots"] = 6, "%s: debuff_slots: 정수 1~5" % RULES)

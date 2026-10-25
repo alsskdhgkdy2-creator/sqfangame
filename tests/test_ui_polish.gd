@@ -548,3 +548,75 @@ func test_every_text_character_is_in_the_bundled_font() -> void:
 				missing["U+%04X %s" % [code, v[i]]] = k
 	check(missing.is_empty(), "글꼴에 없는 글자: %s" % str(missing))
 	check(not font.has_char(0x00D7), "확인: 이 글꼴에는 「×」가 없다(문구에 쓰면 위 검사가 잡는다)")
+
+
+## 코드에 적은 문구(저장·가져오기 오류, 정의 데이터 오류, 시작 오류 화면 등)도 화면에 나온다. 웹에는 시스템 글꼴이 없어
+## 글꼴에 없는 글자는 네모로 나오므로 src/ 의 문자열 글자(주석 밖)를 모두 본다. 화면에 쓰지 않는 줄
+## (push_warning·push_error·print, 또는 줄에 「font-ok」 표시)과 세 따옴표 문자열(웹 JS 코드)은 뺀다.
+func test_every_code_string_character_is_in_the_bundled_font() -> void:
+	var font := load(str(ProjectSettings.get_setting("gui/theme/custom_font"))) as Font
+	var missing := {}
+	var files := _gd_files("res://src")
+	for path in files:
+		var in_triple := false
+		var lines := FileAccess.get_file_as_string(path).split("\n")
+		for n in lines.size():
+			var line: String = lines[n]
+			var r := _string_chars(line, in_triple)
+			in_triple = r[1]
+			if line.contains("font-ok") or line.contains("push_warning(") or line.contains("push_error(") or line.contains("print("):
+				continue
+			for ch: String in r[0]:
+				var code := ch.unicode_at(0)
+				if code >= 32 and not font.has_char(code):
+					missing["U+%04X %s" % [code, ch]] = "%s:%d" % [path, n + 1]
+	check(files.size() > 50, "src 스크립트를 읽었다(%d개)" % files.size())
+	check(missing.is_empty(), "코드 문구에 글꼴에 없는 글자: %s" % str(missing))
+	# 검사기 자체: 주석·이스케이프·세 따옴표를 바르게 가른다.
+	check_eq(_string_chars('var a := "가−" # "×"', false)[0], ["가", "−"] as Array[String], "검사기: 주석 밖 문자열만")
+	check_eq(_string_chars('"a\\"b" + \'c\'', false)[0], ["a", "b", "c"] as Array[String], "검사기: 이스케이프한 따옴표")
+	check_eq(_string_chars('var c := """', false), [[] as Array[String], true], "검사기: 세 따옴표 시작")
+	check_eq(_string_chars('×"""', true), [[] as Array[String], false], "검사기: 세 따옴표 안은 보지 않는다")
+
+
+func _gd_files(dir: String) -> Array[String]:
+	var out: Array[String] = []
+	for f in DirAccess.get_files_at(dir):
+		if f.ends_with(".gd"):
+			out.append(dir.path_join(f))
+	for d in DirAccess.get_directories_at(dir):
+		out.append_array(_gd_files(dir.path_join(d)))
+	return out
+
+
+## 한 줄에서 주석 밖 문자열 안의 글자들과, 줄 끝에서 세 따옴표 문자열 안인지. 역슬래시 다음 글자는 건너뛴다.
+func _string_chars(line: String, in_triple: bool) -> Array:
+	var out: Array[String] = []
+	var quote := ""
+	var i := 0
+	while i < line.length():
+		if in_triple:
+			if line.substr(i, 3) == "\"\"\"":
+				in_triple = false
+				i += 3
+			else:
+				i += 1
+			continue
+		var c := line[i]
+		if quote.is_empty():
+			if line.substr(i, 3) == "\"\"\"":
+				in_triple = true
+				i += 3
+				continue
+			if c == "#":
+				break
+			if c == "\"" or c == "'":
+				quote = c
+		elif c == "\\":
+			i += 1
+		elif c == quote:
+			quote = ""
+		else:
+			out.append(c)
+		i += 1
+	return [out, in_triple]

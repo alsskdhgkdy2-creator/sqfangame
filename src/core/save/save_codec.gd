@@ -279,7 +279,7 @@ static func _check_header(doc: Dictionary) -> String:
 		return "saved_at 이 YYYY-MM-DDTHH:MM:SSZ 꼴의 실제 UTC 시각이 아니다"
 	var gen: Variant = to_int(doc.get("generation"))
 	if gen == null or gen < 0 or gen > MAX_GENERATION:
-		return "generation 이 0 ~ 2^53 − 2 정수가 아니다"
+		return "generation 이 0 ~ 2^53 - 2 정수가 아니다"
 	if typeof(doc.get("state")) != TYPE_DICTIONARY:
 		return "state 가 없다"
 	return ""
@@ -592,7 +592,7 @@ static func _check_consistency(s: ExplorationState) -> String:
 	if s.wiped and s.encounter.pending:
 		return "전멸 상태에서 전투 대기일 수 없다(전멸이면 battle 도 없다)"
 	if s.encounter.pending != (s.encounter.danger >= s.encounter.threshold):
-		return "전투 대기(pending)와 위험도 ≥ 한계값이 맞지 않다"
+		return "전투 대기(pending)와 위험도 >= 한계값이 맞지 않다"
 	for e in s.knowledge.edges:
 		if s.knowledge.edges[e] != ExplorationRules.look_of(s.floor_def, s.world, e):
 			return "knowledge.edges 의 %s 겉모습이 세계 상태와 맞지 않다" % GridKey.edge(e)

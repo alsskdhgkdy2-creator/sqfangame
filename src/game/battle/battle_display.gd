@@ -272,7 +272,7 @@ func chips(u: DUnit) -> Array[Dictionary]:
 func chip_texts(u: DUnit) -> Array[String]:
 	var out: Array[String] = []
 	for c in chips(u):
-		out.append(("▲" if c["kind"] == "buff" else "▼" if c["kind"] == "debuff" else "") + str(c["text"]))
+		out.append(("▲" if c["kind"] == "buff" else "▼" if c["kind"] == "debuff" else "") + str(c["text"]))  # font-ok: 시험 비교용, 화면은 모양으로 그린다
 	return out
 
 

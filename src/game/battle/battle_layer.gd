@@ -416,7 +416,7 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 		return false
 	match kind:
 		"log":
-			log_view.open(status_text())
+			log_view.open(status_columns())
 			_refresh()
 			return true
 		"command":
@@ -1343,20 +1343,32 @@ func _draw() -> void:
 
 ## 로그 창 위에 보이는 지금 상태 전부(06 §9.1 상태 표의 전체 보기). 적 HP 숫자는 쓰지 않는다(D13).
 func status_text() -> String:
-	var lines: Array[String] = []
-	for u in display.party + display.enemies:
-		var parts: Array[String] = [u.name]
-		if u.side == BattleUnit.PARTY:
-			parts.append("HP %d/%d  TP %d/%d" % [u.hp, u.max_hp, u.tp, u.max_tp])
-		if not u.alive():
-			parts.append(texts.t("battle.ui.down"))
-		for c in display.chips(u):
-			var mark := "↑" if c["kind"] == "buff" else "↓" if c["kind"] == "debuff" else ""
-			parts.append(mark + str(c["text"]))
-		if not u.charging.is_empty():
-			parts.append("! " + display.skill_name(u.charging))
-		lines.append(" · ".join(parts))
-	return "\n".join(lines)
+	return "\n".join(status_columns())
+
+
+## 상태 목록 두 칸: [아군 줄들, 적 줄들]. 로그 창이 왼쪽·오른쪽에 나눠 그린다(06 §9.4).
+func status_columns() -> Array[String]:
+	var party: Array[String] = []
+	var foes: Array[String] = []
+	for u in display.party:
+		party.append(_status_line(u))
+	for u in display.enemies:
+		foes.append(_status_line(u))
+	return ["\n".join(party), "\n".join(foes)] as Array[String]
+
+
+func _status_line(u: Variant) -> String:
+	var parts: Array[String] = [u.name]
+	if u.side == BattleUnit.PARTY:
+		parts.append("HP %d/%d  TP %d/%d" % [u.hp, u.max_hp, u.tp, u.max_tp])
+	if not u.alive():
+		parts.append(texts.t("battle.ui.down"))
+	for c in display.chips(u):
+		var mark := "↑" if c["kind"] == "buff" else "↓" if c["kind"] == "debuff" else ""
+		parts.append(mark + str(c["text"]))
+	if not u.charging.is_empty():
+		parts.append("! " + display.skill_name(u.charging))
+	return " · ".join(parts)
 
 
 # ---- 시험·디버그 읽기 ----

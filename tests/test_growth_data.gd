@@ -79,7 +79,7 @@ func test_real_growth_data() -> void:
 
 func test_growth_rule_file_checks() -> void:
 	_rejects("성장 규칙 파일 없음", func(f): f.erase(GR), "%s: 파일이 없다" % GR)
-	_rejects("exp_next 길이", func(f): f[GR]["exp_next"].pop_back(), "%s: exp_next: 길이가 level_cap − 1" % GR)
+	_rejects("exp_next 길이", func(f): f[GR]["exp_next"].pop_back(), "%s: exp_next: 길이가 level_cap - 1" % GR)
 	_rejects("exp_next 0", func(f): f[GR]["exp_next"][0] = 0, "%s: exp_next[0]: 정수 1~999999" % GR)
 	_rejects("level_cap 1", func(f): f[GR]["level_cap"] = 1, "%s: level_cap: 정수 2~99" % GR)
 	_rejects("sp_per_level 10", func(f): f[GR]["sp_per_level"] = 10, "%s: sp_per_level: 정수 0~9" % GR)

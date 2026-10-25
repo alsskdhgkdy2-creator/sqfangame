@@ -141,7 +141,7 @@ static func check_rules(d: Dictionary) -> Array[String]:
 		elif v[0] < r[0] or v[0] > r[1] or v[1] < r[2] or v[1] > r[3]:
 			out.append("%s: lo %d~%d, hi %d~%d 이어야 한다" % [k, r[0], r[1], r[2], r[3]])
 		elif v[0] > v[1]:
-			out.append("%s: lo ≤ hi 이어야 한다" % k)
+			out.append("%s: lo <= hi 이어야 한다" % k)
 	if typeof(d.get("hit_min")) == TYPE_INT and typeof(d.get("hit_max")) == TYPE_INT and d["hit_min"] > d["hit_max"]:
-		out.append("hit_min: hit_min ≤ hit_max 이어야 한다")
+		out.append("hit_min: hit_min <= hit_max 이어야 한다")
 	return out

@@ -1428,7 +1428,7 @@ func _show_start_error(errors: Array) -> void:
 	body.name = "StartErrorList"
 	var lines: Array[String] = []
 	for e in errors:
-		lines.append("• " + str(e))
+		lines.append("- " + str(e))  # 웹 글꼴에 「•」가 없다
 	body.text = "\n".join(lines)
 	body.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	body.size_flags_horizontal = SIZE_EXPAND_FILL

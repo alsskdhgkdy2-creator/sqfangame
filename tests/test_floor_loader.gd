@@ -92,7 +92,7 @@ func test_range_errors() -> void:
 	_expect_error(_with(BASE, {"damage_floor": {"damage": -1}}), "damage", "피해 음수")
 	_expect_error(_with(BASE, {"encounter": {"danger_per_step": -1, "threshold_min": 1, "threshold_max": 2}}), "danger_per_step", "위험도 음수")
 	_expect_error(_with(BASE, {"encounter": {"danger_per_step": 1, "threshold_min": 0, "threshold_max": 2}}), "threshold_min", "한계 0")
-	_expect_error(_with(BASE, {"encounter": {"danger_per_step": 1, "threshold_min": 5, "threshold_max": 4}}), "threshold_min ≤ threshold_max", "한계 뒤집힘")
+	_expect_error(_with(BASE, {"encounter": {"danger_per_step": 1, "threshold_min": 5, "threshold_max": 4}}), "threshold_min <= threshold_max", "한계 뒤집힘")
 	_expect_error(_with(BASE, {"zones": [{"id": "z", "rect": [0, 0, 3, 1], "danger_per_step": 0}]}), "zones[0].rect", "구역 밖")
 	_expect_error(_with(BASE, {"zones": [{"id": "z", "rect": [0, 0, 1, 1], "danger_per_step": -2}]}), "danger_per_step", "구역 위험도 음수")
 

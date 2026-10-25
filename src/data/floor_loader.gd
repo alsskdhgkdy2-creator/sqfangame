@@ -373,7 +373,7 @@ static func _read_encounter(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 	f.threshold_min = ctx.int_value(e, "threshold_min", "encounter", 1)
 	f.threshold_max = ctx.int_value(e, "threshold_max", "encounter", 1)
 	if f.threshold_max < f.threshold_min:
-		ctx.fail_key("encounter", "threshold_min ≤ threshold_max 이어야 한다")
+		ctx.fail_key("encounter", "threshold_min <= threshold_max 이어야 한다")
 	# 출현 표 ID(선택, 06 §8.2). 여기서는 형식만 보고, 표가 있는지는 GameDefs 가 본다.
 	if e.has("table"):
 		if typeof(e["table"]) != TYPE_STRING or not e["table"].begins_with("encounter.") or RegEx.create_from_string(BattleDb.ID_PATTERN).search(e["table"]) == null:

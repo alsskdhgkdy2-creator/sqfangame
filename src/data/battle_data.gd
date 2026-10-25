@@ -401,7 +401,7 @@ func _read_growth(ck: _Ck, d: Dictionary) -> void:
 		ck.err("exp_next", "배열이어야 한다")
 		return
 	if cap != null and d["exp_next"].size() != cap - 1:
-		ck.err("exp_next", "길이가 level_cap − 1(%d)이어야 한다(지금 %d)" % [cap - 1, d["exp_next"].size()])
+		ck.err("exp_next", "길이가 level_cap - 1(%d)이어야 한다(지금 %d)" % [cap - 1, d["exp_next"].size()])
 		ok = false
 	for i in d["exp_next"].size():
 		var v: Variant = SaveCodec.to_int(d["exp_next"][i])
@@ -468,7 +468,7 @@ func _read_equipment(ck: _Ck, d: Dictionary, path: String) -> void:
 		var v: Variant = ck.int_of(d, g, path, "gear")
 		e.gear[g] = v if v != null else 0
 	e.stats = ck.delta_table(d, "stats", path, BattleLimits.STATS, "equip_stat",
-		"능력치 6종(%s)만 받는다(HP·TP 보정은 없다, 07 §5.3)" % ", ".join(BattleLimits.STATS))
+		"능력치 6종(%s)만 받는다(HP·TP 보정은 없다, 설계 07의 5.3)" % ", ".join(BattleLimits.STATS))
 	e.resist = ck.delta_table(d, "resist", path, BattleLimits.ELEMENTS, "equip_delta", "")
 	e.ailment_vuln = ck.delta_table(d, "ailment_vuln", path, BattleLimits.AILMENTS, "equip_delta", "")
 	e.bind_vuln = ck.delta_table(d, "bind_vuln", path, BattleLimits.PARTS, "equip_delta", "")
@@ -848,7 +848,7 @@ func _read_ai_rule(ck: _Ck, v: Variant, path: String, last: bool) -> Dictionary:
 					var n: Variant = SaveCodec.to_int(nr[0]) if typeof(nr) == TYPE_ARRAY and nr.size() == 2 else null
 					var r: Variant = SaveCodec.to_int(nr[1]) if n != null else null
 					if n == null or r == null or typeof(nr[0]) == TYPE_BOOL or typeof(nr[1]) == TYPE_BOOL or not BattleLimits.in_range("turn_mod_n", n) or r < 0 or r >= n:
-						ck.err(cp, "[n, r] 정수, 1 ≤ n ≤ 99, 0 ≤ r < n 이어야 한다")
+						ck.err(cp, "[n, r] 정수, 1 <= n <= 99, 0 <= r < n 이어야 한다")
 					else:
 						out["if"]["turn_mod"] = [n, r]
 				"hp_below":

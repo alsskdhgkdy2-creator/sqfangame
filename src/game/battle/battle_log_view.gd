@@ -13,13 +13,17 @@ const MAX_LINES := 100
 const STEP := 60.0
 const BAR_W := 4.0
 const BAR_GAP := 6.0
+## 상태 목록 두 칸 사이.
+const STATUS_GAP := 16.0
 
 var lines: Array[String] = []
 var close_button: BattleButton
 var _scroll := PartyScroll.new()
 var _label := Label.new()
-## 지금 상태 전부(전투 층이 열 때 넣는다).
+## 지금 상태 전부(전투 층이 열 때 넣는다). 두 칸이면 왼쪽 아군, 오른쪽 적: 위아래로 쌓으면 대원 다섯 + 적 셋이
+## 창 높이를 거의 다 써서 1280×720 에서 로그가 두세 줄밖에 보이지 않았다(2026-10-25).
 var status_label := Label.new()
+var status_label_right := Label.new()
 
 
 func _init() -> void:
@@ -29,11 +33,13 @@ func _init() -> void:
 
 func build(texts: TextDb) -> void:
 	status_label.name = "LogStatus"
-	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label.add_theme_font_size_override("font_size", 16)
-	status_label.add_theme_color_override("font_color", Color(0.75, 0.92, 1.0))
-	status_label.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(status_label)
+	status_label_right.name = "LogStatusRight"
+	for l in [status_label, status_label_right]:
+		(l as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		(l as Label).add_theme_font_size_override("font_size", 16)
+		(l as Label).add_theme_color_override("font_color", Color(0.75, 0.92, 1.0))
+		(l as Label).mouse_filter = MOUSE_FILTER_IGNORE
+		add_child(l)
 	_scroll.name = "LogScroll"
 	add_child(_scroll)
 	_scroll.content.item_rect_changed.connect(queue_redraw)  # 내리면 위치 막대를 다시 그린다
@@ -64,8 +70,14 @@ func clear() -> void:
 	_refresh()
 
 
-func open(status: String = "") -> void:
-	status_label.text = status
+## status: 한 칸 글(String) 또는 두 칸 [왼쪽, 오른쪽](Array).
+func open(status: Variant = "") -> void:
+	if status is Array:
+		status_label.text = str(status[0]) if status.size() > 0 else ""
+		status_label_right.text = str(status[1]) if status.size() > 1 else ""
+	else:
+		status_label.text = str(status)
+		status_label_right.text = ""
 	visible = true
 	_layout()
 	_refresh()
@@ -108,12 +120,20 @@ func _fit_label() -> void:
 
 
 func _layout() -> void:
+	var w := maxf(10.0, size.x - 32)
+	var two := not status_label_right.text.is_empty()
+	var col_w := maxf(10.0, (w - STATUS_GAP) / 2.0) if two else w
 	status_label.position = Vector2(16, 12)
-	status_label.size = Vector2(maxf(10.0, size.x - 32), 10)
+	status_label.size = Vector2(col_w, 10)
+	status_label_right.visible = two
+	status_label_right.position = Vector2(16 + col_w + STATUS_GAP, 12)
+	status_label_right.size = Vector2(col_w, 10)
 	var status_h := 0.0
-	if not status_label.text.is_empty():
-		status_h = status_label.get_minimum_size().y + 4.0  # 줄 간격까지(줄 수 × 줄 높이는 마지막 줄이 로그 첫 줄에 겹쳤다)
+	if not status_label.text.is_empty() or two:
+		# 줄 간격까지(줄 수 × 줄 높이는 마지막 줄이 로그 첫 줄에 겹쳤다). 두 칸이면 긴 쪽.
+		status_h = maxf(status_label.get_minimum_size().y, status_label_right.get_minimum_size().y if two else 0.0) + 4.0
 	status_label.size.y = maxf(10.0, status_h)
+	status_label_right.size.y = maxf(10.0, status_h)
 	var top := 16.0 + (status_h + 8.0 if status_h > 0.0 else 0.0)
 	_scroll.position = Vector2(16, top)
 	_scroll.size = Vector2(maxf(10.0, size.x - 32), maxf(10.0, size.y - top - 88))
