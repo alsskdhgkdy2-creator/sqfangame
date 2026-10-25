@@ -219,6 +219,11 @@ const SHOP_NOTICE_TOP := Color("0a4c39")
 const SHOP_NOTICE_BOTTOM := Color("083e2f")
 const SHOP_NOTICE_EDGE := Color("8fe0c8")
 const SHOP_NOTICE_ITEM := Color("ffa04a")
+## 설명 창 직업 머리글자 칸(08 §8.5, 원작 B·C: 낄 수 있는 직업 밝게).
+const SHOP_BADGE_ON := Color("7fe3f0")
+const SHOP_BADGE_ON_TEXT := Color("06142a")
+const SHOP_BADGE_OFF := Color("0a1838")
+const SHOP_BADGE_OFF_TEXT := Color("5a6f90")
 ## 스킬 트리 화면(원작 HD jp_guide2_img2·img3, gw_14): 파랑 계열. 위 줄(이름 칸·Lv 띠·SKILL POINT 띠), 직업 폴더 탭,
 ## 반투명 파랑 창(트리·아래 설명 띠·확인 창), 노드 알약(짙은 파랑 + 밝은 글자, 커서는 밝은 하늘색 + 짙은 글자, 오른쪽 Lv 상자),
 ## 설명 띠의 레벨 칸(배운 레벨 시안·초안 노랑·남은 칸 짙은 파랑).

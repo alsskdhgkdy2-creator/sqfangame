@@ -3,6 +3,7 @@
 ## 줄 모양은 「fac:*」: 전투 「cmd:*」(청록 줄·노랑 커서·고른 명령 밝은 시안)에 평소 줄 글자만 원작 시설의 물빛(UiTheme.FAC_TEXT).
 ## 줄 높이 64(원작 약 50, 누르는 칸 64 이상).
 ## 놓는 쪽이 왼쪽 위와 크기(WIDTH × content_height)를 앵커로 정한다. 누르기는 pressed(줄 번호) 하나로 보낸다.
+## 줄 사이(row_gap)·안쪽 여백(inner_pad)은 놓는 쪽이 바꿀 수 있다(상점 뿌리 4·4, 08 §8.3). 기본값은 캠프(6·6)다.
 class_name FacilityList
 extends Control
 
@@ -17,6 +18,9 @@ const BULGE := 40.0
 const RIM := 10.0
 
 var rows: Array[ListRow] = []
+## 줄 사이·안쪽 여백(content_height 에 같은 값을 준다).
+var row_gap := GAP
+var inner_pad := PAD
 
 
 func _init() -> void:
@@ -24,9 +28,9 @@ func _init() -> void:
 	focus_mode = FOCUS_NONE
 
 
-## 줄 n 개의 목록 높이.
-static func content_height(n: int) -> float:
-	return 2.0 * PAD + n * ROW_H + maxf(0.0, n - 1.0) * GAP
+## 줄 n 개의 목록 높이(줄 사이 gap, 안쪽 여백 pad).
+static func content_height(n: int, gap: float = GAP, pad: float = PAD) -> float:
+	return 2.0 * pad + n * ROW_H + maxf(0.0, n - 1.0) * gap
 
 
 ## 줄을 만든다(items: [{name, text}]). 이미 있으면 글자만 바꾼다.
@@ -49,11 +53,13 @@ func set_items(items: Array) -> void:
 
 
 ## 줄 모양: cursor 줄은 노랑, chosen 줄은 「고른」 시안, live[i] 가 거짓인 줄은 누르기를 받지 않는다(그림은 그대로).
-func show_rows(cursor: int, chosen: int, live: Array) -> void:
+## dim[i] 가 참인 줄은 흐리다(누르기는 받는다: 상점 뿌리의 대화·장비 바꾸기는 눌러 이유를 본다).
+func show_rows(cursor: int, chosen: int, live: Array, dim: Array = []) -> void:
 	for i in rows.size():
 		var b := rows[i]
 		b.selected = i == cursor
 		b.chosen = i == chosen
+		b.dimmed = dim[i] if i < dim.size() else false
 		var on: bool = live[i] if i < live.size() else true
 		b.mouse_filter = MOUSE_FILTER_STOP if on else MOUSE_FILTER_IGNORE
 		if not on:
@@ -72,8 +78,8 @@ func cancel() -> void:
 		b.cancel()
 
 
-static func row_y(i: int) -> float:
-	return PAD + i * (ROW_H + GAP)
+func row_y(i: int) -> float:
+	return inner_pad + i * (ROW_H + row_gap)
 
 
 ## 목록 기준 y 에서 오른쪽 가장자리 x(원호: 가운데 높이에서 가장 오른쪽, 위·아래 끝은 BULGE 만큼 안쪽).
@@ -88,8 +94,8 @@ func arc_x(y: float) -> float:
 func _layout() -> void:
 	for i in rows.size():
 		var y := row_y(i)
-		rows[i].position = Vector2(PAD, y)
-		rows[i].size = Vector2(maxf(arc_x(y), arc_x(y + ROW_H)) - PAD, ROW_H)
+		rows[i].position = Vector2(inner_pad, y)
+		rows[i].size = Vector2(maxf(arc_x(y), arc_x(y + ROW_H)) - inner_pad, ROW_H)
 		rows[i].queue_redraw()
 	queue_redraw()
 

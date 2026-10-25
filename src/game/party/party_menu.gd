@@ -47,7 +47,7 @@ const PAD_KEYS_SKILLS := Vector2(-567, -88)
 const PAD_KEYS_SHOP := Vector2(-118, -172)
 const PAD_KEYS_RECORDS := Vector2(-118, -300)
 ## 장비 칸 이름 키(칸 0 무기, 칸 1~3 방어구).
-const SLOT_KEYS := ["party.slot.weapon", "party.slot.armor", "party.slot.armor", "party.slot.armor"]
+const SLOT_KEYS := PartyNames.SLOT_KEYS
 
 # ---- 바깥에서 정하는 값 ----
 ## 「기록」의 일(탐색 화면이 준다): slots() -> Array, save(slot), load(slot), export(), import(), automap() -> String,
@@ -257,7 +257,7 @@ func reason_text(code: String) -> String:
 
 
 func member_name(i: int) -> String:
-	return texts.t(state.defs.party.name_keys[i])
+	return PartyNames.member_name(state, texts, i)
 
 
 func current_member() -> PartyState.Member:
@@ -265,12 +265,12 @@ func current_member() -> PartyState.Member:
 
 
 func slot_name(slot: int) -> String:
-	return texts.t(SLOT_KEYS[slot], {"n": slot})
+	return PartyNames.slot_name(texts, slot)
 
 
 ## 부호 붙은 수(글꼴 부분 집합에 U+2212 가 없어 ASCII 「-」를 쓴다).
 static func signed(v: int) -> String:
-	return ("+%d" % v) if v > 0 else str(v)
+	return PartyNames.signed(v)
 
 
 # ---- 열기·닫기 ----
@@ -794,8 +794,7 @@ func events_text(events: Array[Dictionary]) -> String:
 
 
 func item_name(id: String) -> String:
-	var e := state.defs.battle.equip(id)
-	return texts.t(e.name_key) if e != null else texts.t(id)
+	return PartyNames.item_name(state, texts, id)
 
 
 func show_notice(t: String) -> void:

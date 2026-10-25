@@ -1,5 +1,5 @@
 ## 시설·캠프의 왼쪽 위 문패(원작 시각 다이얼 + 「CAMP」 자리, x 0~190·y 0~100): 탐색 화면 층 문패와 같은 기울어진 판에
-## 두 줄(층 이름 · 걸음). 장식이라 누르기를 받지 않는다.
+## 두 줄(층 이름 · 걸음). 둘째 줄이 비면 첫 줄을 세로 가운데에 쓴다(상점 이름 문패, 08 §8.3). 장식이라 누르기를 받지 않는다.
 class_name FacilityPlate
 extends Control
 
@@ -36,5 +36,9 @@ func _draw() -> void:
 		var t := first if i == 0 else second
 		var fs := 22 if i == 0 else 18
 		var y := 32.0 if i == 0 else 62.0
+		if second.is_empty():
+			if i == 1:
+				break
+			y = size.y / 2.0 + fs * 0.36
 		draw_string_outline(font, Vector2(20, y), t, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32.0, fs, 6, Color.BLACK)
 		draw_string(font, Vector2(20, y), t, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32.0, fs, UiTheme.TEXT)

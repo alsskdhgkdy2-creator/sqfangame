@@ -2,6 +2,7 @@
 ## 목록 창에 보이는 줄 수만큼 칸을 채운다(남는 칸은 어두운 빈 줄 + 빈 아이콘 칸, 장식이라 누르기를 받지 않는다).
 ## 줄이 넘치면 오른쪽에 가는 위치 막대(BattleLogView.scroll_bar_rect 와 같은 그림). 막대 자리는 늘 비워 둬서 줄 폭이 바뀌지 않는다.
 ## 커서 줄 하나만 노랑(selected)이다. 줄을 누르면(뗄 때) 커서를 그 줄로 옮기고 picked 를 낸다. 끌기는 고르기가 아니다(PartyButton).
+## route 가 있으면 줄 누르기는 route(i) 만 부른다(커서도 picked 도 그대로): 입력을 받을지 정하는 화면(S3)이 받은 뒤 커서를 옮긴다.
 ## cursor_mode 로 커서 줄 모양을 바꾼다(노랑은 화면에 하나, 07 §9.2): 창이 그 줄에 대해 떠 있으면 「chosen」(밝은 시안), 여러 줄
 ## 팔기 확인처럼 줄 하나에 대한 창이 아니면 「none」, 창이 닫히면 「cursor」. 바꾸는 쪽은 화면(S3)이다.
 ## set_rows 가 다른 줄을 놓으면 눌려 있던 줄·끌기를 버린다(같은 줄을 다시 놓으면 아무것도 바꾸지 않는다).
@@ -24,6 +25,8 @@ var cursor := 0
 var new_text := "NEW"
 ## "cursor"(커서 줄 노랑) · "chosen"(커서 줄 밝은 시안, 노랑은 창 단추) · "none"(커서 줄 표시 없음, 커서 자리는 그대로).
 var cursor_mode := "cursor"
+## 입력 입구(08 §7.4·§8.11, ShopDialog.route 와 같은 방식). 비어 있으면 S2 그대로.
+var route: Callable
 var _empties: Control
 ## 지금 보이는 줄 자료(set_rows 가 같은 자료면 아무것도 하지 않는다).
 var _data: Array = []
@@ -129,6 +132,9 @@ func _show_cursor() -> void:
 
 func _on_row(i: int) -> void:
 	if i >= row_count:
+		return
+	if route.is_valid():
+		route.call(i)
 		return
 	set_cursor(i)
 	picked.emit(i)

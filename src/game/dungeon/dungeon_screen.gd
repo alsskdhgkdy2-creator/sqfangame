@@ -117,12 +117,16 @@ var layers := {}  # 이름 → CanvasLayer
 var modal: ModalLayer
 var battle_layer: BattleLayer
 var party_menu: PartyMenu
+## 상점(08 §8, D24 임시 입구: 디버그일 때만 안내 줄 「상점」·디버그 요청 open_shop 으로 연다).
+var shop_screen: ShopScreen
 ## 정의 읽기에 실패했을 때의 오류 화면(06 §5.6). 정상 시작이면 null.
 var start_error: Control
 var pad := {}  # 규칙 행동 → TouchButton
 var map_button: TouchButton
 ## 안내 줄 「캠프」(원작 CAMP·MAP 의 CAMP).
 var camp_button: TouchButton
+## 안내 줄 「상점」(08 §8.1 임시 입구, 디버그 주소이거나 네이티브 디버그 실행일 때만 보인다). 마을(S4)이 생기면 없앤다.
+var shop_button: TouchButton
 ## 휴식(06 §8.8): 층의 시작 칸에서만 보인다.
 var rest_button: TouchButton
 var _floor_label := Label.new()
@@ -195,6 +199,7 @@ func _ready() -> void:
 		bridge.on_debug_request = _on_debug_request
 		bridge.setup_debug()
 		_debug_dirty = true
+	shop_button.visible = debug_tools()
 	_start()
 
 
@@ -225,6 +230,8 @@ func _set_state(s: ExplorationState) -> void:
 		_set_battle_view(false)
 	if party_menu.is_open():
 		party_menu.close_menu(false)  # 앞 상태의 초안·화면은 버린다
+	if shop_screen.is_open():
+		shop_screen.close_shop(false)  # 앞 상태의 상점 화면·물음은 버린다
 	_clear_input()
 	view.rebuild(state.world)
 	view.set_pose(state.party.at, state.party.facing)
@@ -259,7 +266,7 @@ func _on_pad(action: int) -> void:
 ## 행동을 받지 않는 조건: 상태 없음, 창(메뉴·전멸·메모·파일 고르기 등)·전투 층·파티 메뉴가 열림, 전투 중·전멸,
 ## 지도에서 진행 중인 상호작용(그리기 획·끌어 이동·핀치·아이콘·메모 누르기).
 func _input_blocked() -> bool:
-	return state == null or modal.is_open() or battle_layer.is_open() or party_menu.is_open() \
+	return state == null or modal.is_open() or battle_layer.is_open() or party_menu.is_open() or shop_screen.is_open() \
 		or not ExplorationRules.can_act(state) or map.is_interacting()
 
 
@@ -364,11 +371,13 @@ func _check_windows() -> bool:
 	if state.wiped:
 		if party_menu.is_open():
 			party_menu.close_menu(false)
+		if shop_screen.is_open():
+			shop_screen.close_shop(false)
 		if modal.kind != "wipe":
 			_open_wipe()
 		return true
 	if state.encounter.pending:
-		if not battle_layer.is_open() and not modal.is_open() and not party_menu.is_open():
+		if not battle_layer.is_open() and not modal.is_open() and not party_menu.is_open() and not shop_screen.is_open():
 			_open_battle()
 		return true
 	return false
@@ -392,6 +401,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		# 캠프가 키를 받는다(07 §9.4: 아래 Esc·Ctrl+Z·M·R·이동 키 갈래는 _input_blocked 를 보지 않는다).
 		# 캠프 위에 창(알림·파일 고르기)이 떠 있으면 캠프는 키를 받지 않는다(그 창이 받는다).
 		return
+	if shop_screen.is_open():
+		return  # 상점이 키를 받는다(08 §8: 열린 동안 캠프·지도·이동은 열리거나 움직이지 않는다)
 	if event.is_action_pressed("open_menu"):
 		get_viewport().set_input_as_handled()
 		if not modal.is_open():
@@ -453,6 +464,7 @@ func _clear_input() -> void:
 	if map_button != null:
 		map_button.cancel()
 		camp_button.cancel()
+		shop_button.cancel()
 		rest_button.cancel()
 
 
@@ -736,7 +748,7 @@ func _set_battle_view(on: bool) -> void:
 ## 전투 층이 열린 동안(06 §9.1, U1)과 파티 메뉴가 열린 동안(M2.6 2.5단계: 메뉴 뒤에는 어둡게 한 3D 시야만 보인다).
 ## 감춘 단추는 누르기를 받지 않는다. 파티 메뉴가 열리고 닫힐 때(어느 길로 닫혀도: 키·「닫기」·상태 바꾸기) visibility_changed 로 다시 맞춘다.
 func _hud_hidden() -> bool:
-	return _battle_view or (party_menu != null and party_menu.is_open())
+	return _battle_view or (party_menu != null and party_menu.is_open()) or (shop_screen != null and shop_screen.is_open())
 
 
 ## 전투 층 저장 갈고리(제출 결과가 정해진 직후, 연출 전).
@@ -747,11 +759,11 @@ func _on_battle_save() -> void:
 ## 캠프를 연다(07 §9.1): 전투·전멸이 아니고, 다른 창(메뉴·메모·파일 고르기·전멸·전투)이 없고, 연출 중이 아닐 때만.
 ## 열 때마다 캠프 뿌리(명령 커서 0, 대원 칸 0)에서 시작한다. 임시 보급은 디버그 주소이거나 네이티브 디버그 실행일 때만 보인다(07 §5.7).
 func _open_party() -> void:
-	if state == null or party_menu.is_open() or battle_layer.is_open() or modal.is_open() or state.encounter.pending:
+	if state == null or party_menu.is_open() or shop_screen.is_open() or battle_layer.is_open() or modal.is_open() or state.encounter.pending:
 		return
 	if not ExplorationRules.can_act(state) or _is_busy() or map.is_interacting():
 		return
-	party_menu.debug = _debug or (native_debug and not bridge.is_web())
+	party_menu.debug = debug_tools()
 	party_menu.open(state)
 
 
@@ -766,6 +778,32 @@ func _on_party_closed() -> void:
 
 ## 파티 메뉴 저장 갈고리(배분 확정·장착 변경·임시 보급이 받아들여진 직후).
 func _on_party_save() -> void:
+	_autosave()
+
+
+## 디버그 도구(캠프 임시 보급·상점 임시 입구)를 보이는지: 디버그 주소이거나 네이티브 디버그 실행(07 §5.7, 08 §8.1).
+func debug_tools() -> bool:
+	return _debug or (native_debug and not bridge.is_web())
+
+
+## 상점을 연다(08 §8.1): 캠프와 같은 조건(전투·전투 대기·전멸이 아니고, 다른 창이 없고, 연출 중이 아님)에 디버그일 때만.
+## 열 때마다 뿌리·명령 커서 0·대원 0에서 시작한다.
+func _open_shop() -> void:
+	if state == null or not debug_tools() or shop_screen.is_open() or party_menu.is_open() or battle_layer.is_open() or modal.is_open() \
+			or state.encounter.pending:
+		return
+	if not ExplorationRules.can_act(state) or _is_busy() or map.is_interacting():
+		return
+	shop_screen.open(state)
+
+
+## 상점이 닫혔다: 캠프를 닫을 때와 같은 길(눌림·미리 받은 입력을 버리고 탐색 화면을 다시 맞춘다).
+func _on_shop_closed() -> void:
+	_on_party_closed()
+
+
+## 상점 저장 갈고리(사기·장착이 받아들여진 직후). 실패하면 탐색 화면의 실패 토스트만 띄우고 상점은 차례를 이어 간다(08 §8.11 F6).
+func _on_shop_save() -> void:
 	_autosave()
 
 
@@ -1017,6 +1055,19 @@ func _build_ui() -> void:
 	party_menu.closed.connect(_on_party_closed)
 	party_menu.visibility_changed.connect(_layout)
 	party_menu.changed.connect(func(_e: Array) -> void: _debug_dirty = true)
+	shop_screen = ShopScreen.new()
+	shop_screen.name = "ShopScreen"
+	windows_root.add_child(shop_screen)
+	shop_screen.build(texts)
+	shop_screen.save_hook = _on_shop_save
+	shop_screen.blocked_hook = func() -> bool: return modal.is_open()
+	shop_screen.opened.connect(func() -> void:
+		_clear_input()
+		_debug_dirty = true
+		_debug_settle = 2)
+	shop_screen.closed.connect(_on_shop_closed)
+	shop_screen.visibility_changed.connect(_layout)
+	shop_screen.changed.connect(func(_e: Array) -> void: _debug_dirty = true)
 
 	# 층 3: 창(메뉴·알림·메모·전멸). ModalLayer 가 화면 전체 뿌리다.
 	var modal_cl := CanvasLayer.new()
@@ -1031,12 +1082,14 @@ func _build_ui() -> void:
 		_clear_input()
 		party_menu.cancel_pointers()  # 캠프에서 누르고 있던 단추는 창이 덮은 뒤 떼도 일하지 않는다
 		battle_layer.cancel_pointers()  # 전투도 같다(명령 줄·카드·키패드 등)
+		shop_screen.cancel_pointers()  # 상점도 같다(08 §8.11: 눌린 「예」를 창이 덮으면 뗄 때 사지 않는다)
 		_debug_dirty = true
 		_debug_settle = 2)
 	modal.closed.connect(func(_k: String) -> void:
 		_clear_input()  # 창 안에서 누른 키·단추는 닫힌 뒤에도 승인되지 않는다
 		party_menu.cancel_pointers()  # 창이 뜨기 전부터 캠프에서 누르고 있던 손가락도(다른 손가락으로 창을 닫은 뒤 떼기)
 		battle_layer.cancel_pointers()
+		shop_screen.cancel_pointers()
 		_debug_dirty = true
 		_debug_settle = 2)
 	modal_cl.add_child(modal)
@@ -1168,7 +1221,11 @@ func _build_hud() -> void:
 	map_button = TouchButton.new().setup("map", texts.t("map.toggle"))
 	map_button.name = "MapButton"
 	map_button.activated.connect(_toggle_map)
-	for b in [camp_button, map_button]:
+	shop_button = TouchButton.new().setup("", texts.t("shop.hud"))
+	shop_button.name = "ShopButton"
+	shop_button.activated.connect(_open_shop)
+	shop_button.visible = false  # 디버그 여부는 _ready 가 정한다
+	for b in [camp_button, map_button, shop_button]:
 		hint_row.add_child(b)
 
 	# 이동 단추 묶음: 안내 줄 바로 위(겹치지 않는다). 안의 배치는 고정 크기 단추의 칸.
@@ -1316,8 +1373,8 @@ func _process(delta: float) -> void:
 	if _debug:
 		var busy := _is_busy()
 		# 전투 층·파티 메뉴가 입력을 받으면 상태 요약을 다시 낸다(메뉴 안 탭·초안·확인 창도 요약에 있다).
-		var sig := "%s/%s/%d/%s/%s/%d" % [battle_layer.phase, battle_layer.sub, battle_layer.member, str(battle_layer.log_view.visible),
-			str(party_menu.is_open()), party_menu.accepted_inputs]
+		var sig := "%s/%s/%d/%s/%s/%d/%s/%d" % [battle_layer.phase, battle_layer.sub, battle_layer.member, str(battle_layer.log_view.visible),
+			str(party_menu.is_open()), party_menu.accepted_inputs, str(shop_screen.is_open()), shop_screen.accepted_inputs]
 		if sig != _debug_battle_sig:
 			_debug_battle_sig = sig
 			_debug_dirty = true
@@ -1357,10 +1414,13 @@ func _css(local_point: Vector2, from: CanvasItem) -> Array:
 func debug_snapshot() -> Dictionary:
 	var buttons := {}
 	var party := party_menu.debug_info(_css)
+	var shop := shop_screen.debug_info(_css)
 	if party_menu.is_open():
 		buttons.merge(party["buttons"])  # 메뉴가 덮은 탐색 단추는 내지 않는다(누를 수 없다)
+	elif shop_screen.is_open():
+		buttons.merge(shop["buttons"])
 	else:
-		for b in pad.values() + [rest_button, map_button, camp_button, map_window.back_button]:
+		for b in pad.values() + [rest_button, map_button, camp_button, shop_button, map_window.back_button]:
 			if (b as TouchButton).is_visible_in_tree():
 				buttons[b.name] = _css(b.size / 2.0, b)
 		for key in toolbar.buttons:
@@ -1403,6 +1463,9 @@ func debug_snapshot() -> Dictionary:
 		"plan_ms_total_max": view.max_anim_plan_ms, "plan_count_max": view.max_anim_plan_count,
 		# 성장(07 §8.6): 대원마다 레벨·경험치·남은 SP·스킬·장비와 §6 묶음의 능력치·공격·방어, 가방, 파티 메뉴.
 		"members": _debug_members(), "gear_bag": state.gear_bag.duplicate(), "party_menu": party,
+		# 상점(08 §8.11): 소지금·상점 상태(판 소재·한정 재고·산 물건)와 상점 화면.
+		"money": state.money, "shop_state": {"sold": state.shop.sold.duplicate(), "pool": state.shop.pool.duplicate(),
+			"bought": state.shop.bought_list()}, "shop": shop,
 		# 웹 저장 반영(05 §8.3): IndexedDB 에 아직 없는 저장(슬롯 → generation)과 「저장 중」 표시.
 		"save_pending": save_pending.is_pending(), "save_pending_gens": save_pending.generations(),
 		"save_watch": save_pending.enabled, "save_reads": save_pending.reads, "save_chip": save_chip.is_visible_in_tree(),
@@ -1433,6 +1496,7 @@ func _is_busy() -> bool:
 ## battle_auto: 지금 턴의 명령을 기본 정책으로 만들어 전투 층의 명령 입구로 제출한다(같은 막힘 조건·저장·연출).
 ## battle_finish: 전투 층의 디버그 끝내기로 규칙의 finish(승리) → 저장 → 연출 → 결과 창(「확인」은 따로 누른다).
 ## supply·grant_exp(07 §8.6): 파티 메뉴의 임시 보급 단추와 같은 규칙 함수(GrowthRules.supply·grant_exp) → 받아들여지면 자동 저장.
+## open_shop(08 §8.1): 안내 줄 「상점」과 같은 길(_open_shop)로 상점을 연다. 디버그 주소에서만.
 ## 상태를 바꾸는 이 네 요청은 디버그 주소(?debug=1)에서만 받는다.
 func _on_debug_request(json_text: String) -> String:
 	var req: Variant = JSON.parse_string(json_text)
@@ -1486,8 +1550,15 @@ func _on_debug_request(json_text: String) -> String:
 				return JSON.stringify({"ok": false, "reason": events[0]["reason"]})
 			_autosave()
 			party_menu.refresh_view()
+			shop_screen.refresh_view()
 			_debug_dirty = true
 			return JSON.stringify({"ok": true, "events": events})
+		"open_shop":
+			if not _debug:
+				return JSON.stringify({"error": "debug only"})
+			_open_shop()
+			_debug_dirty = true
+			return JSON.stringify({"ok": shop_screen.is_open()})
 	return JSON.stringify({"error": "unknown op"})
 
 

@@ -95,7 +95,8 @@ func test_entrance_is_camp_and_map_and_p_or_esc_open_the_camp_root() -> void:
 	var s := await _open()
 	var pm := s.party_menu
 	var shown := s.hint_row.get_children().filter(func(c: Node) -> bool: return (c as Control).visible)
-	check_eq(shown, [s.camp_button, s.map_button], "안내 줄 = 「캠프」「지도」(원작 CAMP · MAP)")
+	# 디버그 실행이라 상점 임시 입구(08 §8.1, D24)가 끝에 붙는다. 디버그가 아니면 「캠프」「지도」 둘(test_shop_screen).
+	check_eq(shown, [s.camp_button, s.map_button, s.shop_button], "안내 줄 = 「캠프」「지도」(원작 CAMP · MAP) + 디버그 「상점」")
 	check_eq(s.camp_button.text, s.texts.t("camp.title"), "「캠프」 글")
 	check(s.find_child("MenuButton", true, false) == null and s.find_child("PartyButton", true, false) == null, "「파티」「메뉴」 단추는 없다")
 	for k in [KEY_P, KEY_ESCAPE]:

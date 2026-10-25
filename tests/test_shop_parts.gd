@@ -433,8 +433,11 @@ func test_quantity_window_steps_stop_at_the_ends_and_answer() -> void:
 	check_eq([dialog.step_buttons[0].text, dialog.step_buttons[3].text], ["-10", "+10"], "빼기는 ASCII")
 	for b in dialog.step_buttons:
 		check(not b.selected, "%s: 수량 단추는 노랑이 아니다" % b.name)
-	# 처음 커서는 「아니오」(yes_first 가 없으면), pick 으로 옮긴다. 노랑은 고른 단추 하나.
-	check_eq(dialog.pick, ShopDialog.NO, "처음 커서 = 아니오")
+	# 처음 커서는 「예」(D25, 원작 YES 먼저), pick 으로 옮긴다. 노랑은 고른 단추 하나.
+	check_eq(dialog.pick, ShopDialog.YES, "처음 커서 = 예(D25)")
+	check(dialog.yes_button.selected and not dialog.no_button.selected, "노랑 = 예")
+	check(dialog.handle("pick", 1) and dialog.pick == ShopDialog.NO, "pick → 아니오")
+	check(not dialog.handle("pick", 1), "끝에서 멈춘다")
 	check(dialog.no_button.selected and not dialog.yes_button.selected, "노랑 = 아니오")
 	check(dialog.handle("pick", -1) and dialog.pick == ShopDialog.YES, "pick ← 예")
 	check(not dialog.handle("pick", -1), "끝에서 멈춘다")
@@ -478,7 +481,7 @@ func test_confirm_window_answers_and_blocks_the_screen_behind() -> void:
 	check(picks.is_empty() and answers.is_empty(), "창이 뜬 동안 뒤 화면은 눌리지 않는다")
 	check(not dialog.handle("step", 1), "확인 창에 수량 없음")
 	dialog.handle("confirm")
-	check_eq(answers, [[false, 1]], "처음 커서(아니오)로 confirm → answered(false)")
+	check_eq(answers, [[true, 1]], "처음 커서(예, D25)로 confirm → answered(true)")
 	# 창이 뜨면 눌려 있던 단추를 버린다(문맥이 바뀜).
 	dialog.open_confirm("A", true)
 	await kit.frames(1)
@@ -711,12 +714,12 @@ func test_cursor_mode_keeps_a_single_yellow_while_a_dialog_is_open() -> void:
 	dialog.open_confirm(texts.t("shop.confirm.buy", {"price": "120"}))
 	list.set_cursor_mode("chosen")
 	await kit.frames(1)
-	check_eq(yellow.call(), [str(dialog.no_button.get_path())], "창 + chosen: 노랑은 창 단추 하나")
+	check_eq(yellow.call(), [str(dialog.yes_button.get_path())], "창 + chosen: 노랑은 창 단추 하나(처음 「예」, D25)")
 	check_eq(list.rows[10].theme_state(), "cmd:chosen", "커서 줄 = 밝은 시안 chosen")
 	check_eq([list.cursor, list.scroll.scroll], [10, scroll_before], "모양을 바꿔도 커서·내림 그대로")
 	list.set_cursor_mode("none")
 	check(list.rows.all(func(r: ShopRow) -> bool: return not r.selected and not r.chosen), "none: 커서 줄 표시 없음")
-	check_eq(yellow.call(), [str(dialog.no_button.get_path())], "none: 노랑은 창 단추 하나")
+	check_eq(yellow.call(), [str(dialog.yes_button.get_path())], "none: 노랑은 창 단추 하나")
 	dialog.close()
 	list.set_cursor_mode("cursor")
 	await kit.frames(1)
@@ -751,3 +754,35 @@ func test_shop_colours_meet_contrast() -> void:
 		for fg in [UiTheme.SHOP_NOTICE_ITEM, UiTheme.TEXT]:
 			check(P.contrast(bg, fg) >= 4.5, "알림 %s 위 %s %.2f" % [bg.to_html(false), fg.to_html(false), P.contrast(bg, fg)])
 	check(P.contrast(UiTheme.SHOP_ICON_CELL, UiTheme.SHOP_ICON) >= 4.5, "아이콘 칸 위 아이콘")
+
+
+## route 가 있으면(화면이 입구를 쥔다, 08 §7.4) 줄·탭 누르기는 route(i) 만 부르고 커서·고른 칸·신호를 바꾸지 않는다.
+func test_route_hands_row_and_tab_presses_to_the_screen_untouched() -> void:
+	await _compose("weapon")
+	list.set_rows(_many_rows(3))
+	await kit.frames(1)
+	var got := []
+	var routed := []
+	list.picked.connect(func(i: int) -> void: got.append(["row", i]))
+	tabs.picked.connect(func(i: int) -> void: got.append(["tab", i]))
+	list.route = func(i: int) -> void: routed.append(["row", i])
+	tabs.route = func(i: int) -> void: routed.append(["tab", i])
+	await kit.tap(kit.center_of(list.rows[2]))
+	await kit.tap(kit.center_of(tabs.buttons[2]))
+	check_eq(routed, [["row", 2], ["tab", 2]], "route 가 줄·탭 번호를 받는다")
+	check_eq(got, [], "picked 는 나오지 않는다")
+	check_eq([list.cursor, list.rows[0].selected, list.rows[2].selected], [0, true, false], "줄 커서 그대로")
+	check_eq([tabs.current, tabs.buttons.map(func(b: TouchButton) -> bool: return b.checked)], [0, [true, false, false]], "고른 탭 그대로")
+	# 끌기는 여전히 고르기가 아니다.
+	var c := kit.center_of(list.rows[1])
+	kit.touch(0, c, true)
+	kit.drag(0, c, c + Vector2(0, 60))
+	kit.touch(0, c + Vector2(0, 60), false)
+	await kit.frames(2)
+	check_eq(routed.size(), 2, "끌어 뗀 줄은 route 도 부르지 않는다")
+	# route 를 비우면 S2 그대로(고르고 picked).
+	list.route = Callable()
+	tabs.route = Callable()
+	await kit.tap(kit.center_of(list.rows[1]))
+	await kit.tap(kit.center_of(tabs.buttons[1]))
+	check_eq([got, list.cursor, tabs.current], [[["row", 1], ["tab", 1]], 1, 1], "route 없음: 고르고 picked")

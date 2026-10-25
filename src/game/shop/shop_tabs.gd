@@ -27,6 +27,9 @@ const ICONS := {
 var kinds: Array[String] = []
 var buttons: Array[TouchButton] = []
 var current := 0
+## 입력 입구(08 §7.4·§8.11, ShopDialog.route 와 같은 방식): 있으면 칸 누르기는 route(i) 만 부르고 고른 칸도 picked 도 그대로다.
+## 받을지 정하는 화면(S3)이 받은 뒤 select 한다. 비어 있으면 S2 그대로.
+var route: Callable
 
 
 func _init() -> void:
@@ -79,6 +82,9 @@ func kind() -> String:
 
 
 func _on_tab(i: int) -> void:
+	if route.is_valid():
+		route.call(i)
+		return
 	select(i)
 	picked.emit(i)
 

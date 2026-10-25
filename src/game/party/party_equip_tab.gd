@@ -203,7 +203,7 @@ func refresh() -> void:
 	_refresh_banner()
 	var base := GrowthRules.profile(defs, menu.member, m)
 	if not list_open:
-		frame.panel.show_member(menu, menu.member, null, cursor)
+		frame.panel.show_member(menu.state, menu.texts, menu.member, null, cursor)
 		var cur: String = m.equip[cursor]
 		var lines: Array[String] = [menu.slot_name(cursor)]
 		if not cur.is_empty():
@@ -213,7 +213,7 @@ func refresh() -> void:
 	_build_rows()
 	# 낄 수 없는 줄이면 견주지 않는다(지금 값만).
 	var blocked := not row_block[list_cursor].is_empty()
-	frame.panel.show_member(menu, menu.member, null if blocked else profile_if(row_items[list_cursor]), cursor)
+	frame.panel.show_member(menu.state, menu.texts, menu.member, null if blocked else profile_if(row_items[list_cursor]), cursor)
 	while rows.size() < row_items.size():
 		var r := PartyButton.new()
 		var j := rows.size()

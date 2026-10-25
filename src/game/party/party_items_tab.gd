@@ -221,7 +221,7 @@ func refresh() -> void:
 	var defs := menu.state.defs
 	frame.show_title(menu.texts.t("camp.cmd.items"))
 	_refresh_banner()
-	frame.panel.show_member(menu, menu.member, null, -1)
+	frame.panel.show_member(menu.state, menu.texts, menu.member, null, -1)
 	var w := list.size.x
 	var y := 0.0
 	supply_button.visible = menu.debug

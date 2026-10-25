@@ -19,7 +19,7 @@ const PORTRAIT_LEFT := 190.0
 
 var top: MemberHeader
 var totals: EquipTotals
-## 마지막으로 그린 값(시험·디버그): name, class, class_color, equip[[칸 이름, 장비 이름, 비었는지]], mark.
+## 마지막으로 그린 값(시험·디버그): name, class, class_color, equip[[칸 이름, 장비 이름, 비었는지]], mark, dim_equip.
 var drawn := {}
 
 
@@ -51,21 +51,24 @@ func next_button() -> PartyButton:
 
 
 ## 대원 i 의 값을 판에 놓는다. after: 견줄 GrowthRules.profile(없으면 null). mark: 노랑 테두리 장비 칸(-1 없음).
-func show_member(menu: PartyMenu, i: int, after: Variant, mark: int) -> void:
-	var defs := menu.state.defs
-	var m := menu.state.party.members[i]
-	top.name_text = menu.member_name(i)
-	top.level_text = menu.texts.t("party.level", {"level": m.level})
-	top.hp_text = menu.texts.t("party.hp", {"hp": m.hp, "max": m.max_hp})
-	top.tp_text = menu.texts.t("party.tp", {"tp": m.tp, "max": m.max_tp})
+## dim_equip: 장비 줄을 흐리게(상점에서 판의 대원이 커서 줄 물건을 못 낄 때, 원작 B). 캠프·상점이 함께 쓴다(화면 노드를 모른다).
+func show_member(state: ExplorationState, texts: TextDb, i: int, after: Variant, mark: int, dim_equip: bool = false) -> void:
+	var defs := state.defs
+	var m := state.party.members[i]
+	top.name_text = PartyNames.member_name(state, texts, i)
+	top.level_text = texts.t("party.level", {"level": m.level})
+	top.hp_text = texts.t("party.hp", {"hp": m.hp, "max": m.max_hp})
+	top.tp_text = texts.t("party.tp", {"tp": m.tp, "max": m.max_tp})
 	top.queue_redraw()
-	totals.show_totals(menu.texts, GrowthRules.profile(defs, i, m), after)
+	totals.show_totals(texts, GrowthRules.profile(defs, i, m), after)
 	var equip := []
 	for slot in BattleLimits.EQUIP_SLOTS:
 		var id: String = m.equip[slot]
-		equip.append([menu.slot_name(slot), menu.texts.t("party.slot.empty") if id.is_empty() else menu.item_name(id), id.is_empty()])
-	drawn = {"name": top.name_text, "class": menu.texts.t(defs.party.class_ids[i]),
-		"class_color": BattleCard.CLASS_COLORS.get(defs.party.class_ids[i], Color(0.7, 0.7, 0.7)), "equip": equip, "mark": mark}
+		equip.append([PartyNames.slot_name(texts, slot), texts.t("party.slot.empty") if id.is_empty() else PartyNames.item_name(state, texts, id),
+			id.is_empty()])
+	drawn = {"name": top.name_text, "class": texts.t(defs.party.class_ids[i]),
+		"class_color": BattleCard.CLASS_COLORS.get(defs.party.class_ids[i], Color(0.7, 0.7, 0.7)), "equip": equip, "mark": mark,
+		"dim_equip": dim_equip}
 	queue_redraw()
 
 
@@ -116,7 +119,8 @@ func _draw() -> void:
 		draw_rect(Rect2(er.position, Vector2(EQUIP_NAME_W, er.size.y)), UiTheme.ST_ROW_NAME)
 		var ty := er.get_center().y + 16 * 0.36
 		_txt(Vector2(er.position.x + 8, ty), equip[slot][0], 14, UiTheme.SUB_TEXT, EQUIP_NAME_W - 12)
-		_txt(Vector2(er.position.x + EQUIP_NAME_W + 10, ty), equip[slot][1], 16, UiTheme.SUB_TEXT if equip[slot][2] else UiTheme.TEXT,
+		var dim: bool = equip[slot][2] or drawn.get("dim_equip", false)
+		_txt(Vector2(er.position.x + EQUIP_NAME_W + 10, ty), equip[slot][1], 16, UiTheme.SUB_TEXT if dim else UiTheme.TEXT,
 			er.size.x - EQUIP_NAME_W - 16)
 		if slot == int(drawn["mark"]):
 			UiTheme.draw_outline(self, er.grow(2.0), UiTheme.BTN_PICK, UiTheme.BTN_PICK_W, 0.0)

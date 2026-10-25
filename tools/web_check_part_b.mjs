@@ -1,7 +1,9 @@
 // web_check 부분 B(전멸·성장): 새 게임을 내보낸 저장을 바탕으로 6) 준비한 저장(전투 중, 넷 쓰러짐, 하나 HP 1 독) → 방어 → 실행 →
 // 전멸 창 7) 성장(전멸 창 「새 게임」 → 캠프(「캠프」 단추 → 명령 줄 → 대원 카드) → grant_exp → 스킬 배분 취소·확정 → supply → 장착 →
-// 새로 고침 → 승리 경로 결과 창). 내보내기·가져오기는 캠프 「기록」 화면에서(M2.7 R2-d).
+// 새로 고침 → 승리 경로 결과 창) 8) 상점(08 §8.12: 고정 저장 tools/web_check_shop_save.json 가져오기 → 디버그 「상점」 → 사기 →
+// 장착 → 「팔기」·여러 개 → 입하 알림 → 닫기, 받아들인 변경마다 IndexedDB = 화면). 내보내기·가져오기는 캠프 「기록」 화면에서(M2.7 R2-d).
 import fs from 'node:fs';
+import path from 'node:path';
 import {
   W, H, outDir, page, log, check, snap, request, waitFor, waitReady, clickButton, waitIdb,
   HIGH_SLASH, LEG_CUTTER, ION_SABER, VICTORY_SAVE, openRecords, closeCamp,
@@ -47,6 +49,7 @@ export async function partB() {
   await page.waitForTimeout(150);
   await page.screenshot({ path: `${outDir}/09_wipe.png` });
   s = await growthChecks(s);
+  s = await shopChecks(s);
   log('부분 B 끝');
 }
 
@@ -200,5 +203,82 @@ async function growthChecks(s) {
   await page.screenshot({ path: `${outDir}/14_after_victory_${tag}.png` });
   idb = await waitIdb(s);
   check(!idb.timeout, '성장 7: 승리 자동 저장이 IndexedDB 에 반영', idb);
+  return s;
+}
+
+// 8) 상점(08 §8.12 S3b). 판매할 소재는 고정 저장(새 게임 시드 7 + 네온 쥐 꼬리 3·드릴 발톱 1, 소지금 200)으로 얻는다:
+// 7) 의 승리 경로는 꼬리 1개만 떨어뜨려 풀림(바이저 = 꼬리 3)에 모자란다. s 는 승리 뒤 캠프 상태 화면.
+const SHOP_SAVE = path.resolve('tools/web_check_shop_save.json');
+const TWIN_EDGE = 'equip.twin_edge';
+const TAIL = 'item.neon_rat_tail';
+async function shopChecks(s) {
+  const tag = `${W}x${H}`;
+  const tailSell = JSON.parse(fs.readFileSync('data/items/materials.json', 'utf8')).materials.find((m) => m.id === TAIL).sell;
+  await clickButton('StatusBack');
+  s = await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');
+  await clickButton('Camp_records');
+  s = await waitFor((x) => x.party_menu?.tab === 'records' && x.modal === '', '기록 화면');
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import', s)]);
+  await chooser.setFiles(SHOP_SAVE);
+  s = await waitFor((x) => !x.party_menu?.open && x.materials?.[TAIL] === 3 && x.money === 200 && !x.busy, '상점 저장 가져오기', 10000);
+  // 1. 디버그 HUD 「상점」 → 뿌리.
+  await clickButton('ShopButton');
+  s = await waitFor((x) => x.shop?.open && x.shop.page === 'root', '상점 뿌리');
+  check(!s.buttons.ShopButton && !s.buttons.CampButton && s.buttons.Root_buy && s.buttons.Root_sell && s.shop.money === 200,
+    '상점 1: 디버그 「상점」 단추 → 상점 뿌리(덮인 탐색 단추는 요약에 없다)', { page: s.shop.page, buttons: Object.keys(s.buttons) });
+  await page.screenshot({ path: `${outDir}/15_shop_root_${tag}.png` });
+  // 2. 「사기」 → 「무기」 → 트윈 엣지 줄 → 확인 창 「예」.
+  await clickButton('Root_buy');
+  s = await waitFor((x) => x.shop?.page === 'branch', '구매 갈래');
+  await clickButton('Branch_weapon');
+  s = await waitFor((x) => x.shop?.page === 'buy' && x.shop.branch === 'weapon', '무기 목록');
+  const twin = s.shop.rows.findIndex((r) => r.name === '트윈 엣지');
+  await clickButton(`Row_${twin}`);
+  s = await waitFor((x) => x.shop?.dialog?.ask === 'buy', '사기 확인 창');
+  let g = s.generation;
+  await clickButton('Yes');
+  s = await waitFor((x) => x.generation > g && x.shop?.dialog?.ask === 'equip', '사기 저장·장착 물음');
+  let idb = await waitIdb(s);
+  check(s.money === 80 && s.gear_bag[TWIN_EDGE] === 1 && s.shop_state.bought.includes(TWIN_EDGE) && !s.shop.rows[twin].new && !idb.timeout,
+    '상점 2: 사기 → 소지금·가방·산 물건, 장착 물음, IndexedDB = 화면', { money: s.money, gear_bag: s.gear_bag, shop_state: s.shop_state, idb });
+  // 3. 장착 물음 「예」 → 무기는 칸 0.
+  g = s.generation;
+  await clickButton('Yes');
+  s = await waitFor((x) => x.generation > g && x.shop?.dialog?.mode === '', '장착 저장');
+  idb = await waitIdb(s);
+  check(s.members[0].equip[0] === TWIN_EDGE && s.gear_bag[TWIN_EDGE] === undefined && s.gear_bag['equip.training_sword'] === 1 && !idb.timeout,
+    '상점 3: 장착 물음 「예」 → 칸 0·옛 무기 가방, IndexedDB = 화면', { equip: s.members[0].equip, gear_bag: s.gear_bag, idb });
+  // 4. 「뒤로」 → 키패드 「취소」 → 「팔기」 → 「여러 개」 → 꼬리 줄 → 「고른 것 팔기」 → 「예」 → 입하 알림.
+  await clickButton('BuyBack');
+  s = await waitFor((x) => x.shop?.page === 'branch', '갈래로');
+  await clickButton('VPad_back');
+  s = await waitFor((x) => x.shop?.page === 'root', '뿌리로');
+  await clickButton('Root_sell');
+  s = await waitFor((x) => x.shop?.page === 'sell' && x.shop.tab === 'material', '판매 목록');
+  await clickButton('MultiButton');
+  s = await waitFor((x) => x.shop?.multi, '여러 개 켬');
+  const tail = s.shop.rows.findIndex((r) => r.name === '네온 쥐 꼬리');
+  await clickButton(`Row_${tail}`);
+  s = await waitFor((x) => x.shop?.rows?.[tail]?.checked, '꼬리 고름');
+  await page.screenshot({ path: `${outDir}/16_shop_sell_multi_${tag}.png` });
+  await clickButton('MultiButton');
+  s = await waitFor((x) => x.shop?.dialog?.ask === 'sell_multi', '고른 것 팔기 확인 창');
+  g = s.generation;
+  await clickButton('Yes');
+  s = await waitFor((x) => x.generation > g && x.shop?.dialog?.mode === 'notice', '판매 저장·입하 알림');
+  idb = await waitIdb(s);
+  check(s.money === 80 + 3 * tailSell && s.materials[TAIL] === undefined && s.shop_state.sold[TAIL] === 3 && !s.shop.multi
+    && s.shop.dialog.item === 'equip.visor' && !idb.timeout,
+  '상점 4: 여러 개로 꼬리 3 팔기 → 소지금·소재·판 수, 바이저 입하 알림, IndexedDB = 화면', { money: s.money, materials: s.materials, shop_state: s.shop_state, dialog: s.shop.dialog, idb });
+  await page.screenshot({ path: `${outDir}/17_shop_notice_${tag}.png` });
+  // 5. 알림 「확인」 → 「뒤로」 → 키패드 「취소」(닫기).
+  await clickButton('Ok');
+  s = await waitFor((x) => x.shop?.dialog?.mode === '' && x.shop.page === 'sell', '알림 닫힘');
+  await clickButton('BuyBack');
+  s = await waitFor((x) => x.shop?.page === 'root', '뿌리로');
+  await clickButton('VPad_back');
+  s = await waitFor((x) => !x.shop?.open, '상점 닫힘');
+  check(!s.shop.open && s.buttons.ShopButton && s.buttons.CampButton && s.generation === g + 1,
+    '상점 5: 알림 닫기 → 「뒤로」 → 「취소」 → 상점 닫힘(탐색 단추 다시), 저장은 받아들인 변경마다 한 번', { generation: s.generation });
   return s;
 }

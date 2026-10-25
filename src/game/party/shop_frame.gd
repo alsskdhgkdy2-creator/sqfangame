@@ -38,6 +38,8 @@ var title_text := ""
 var title_right := false
 var desc_title := ""
 var desc_lines: Array[String] = []
+## 설명 창 머리 오른쪽 끝의 직업 머리글자 칸([글, 낄 수 있는지], 상점 08 §8.5, 원작 B·C). 캠프는 비어 있다.
+var desc_badges: Array = []
 var _has_desc := true
 ## 왼쪽 목록·설명 창의 왼쪽 끝(build 의 left).
 var left := SIDE
@@ -91,6 +93,12 @@ func _deco(n: String, a0: Vector2, a1: Vector2, off: Vector4, painter: Callable)
 	return c
 
 
+## 목록 창 위 끝을 바꾼다(상점: 탭 줄이 있는 갈래 TABS_LIST_TOP ↔ 없는 갈래 LIST_TOP). 줄을 놓는 쪽은 list_anchor() 로 다시 놓는다.
+func set_list_top(top: float) -> void:
+	list_top = top
+	list_window.offset_top = top
+
+
 ## 목록 창 안쪽(줄을 놓는 곳)의 앵커와 여백: [a0, a1, Vector4].
 func list_anchor() -> Array:
 	return [Vector2(0, 0), Vector2(1, 0 if _has_desc else 1),
@@ -126,19 +134,47 @@ const TITLE_FS := 24
 
 
 func _draw_title(c: Control) -> void:
+	paint_title(c, title_text, title_right)
+
+
+## 문패 그림(c 전체): right 이면 글을 오른쪽에 맞춘다. 상점 뿌리의 소지금 문패도 같은 그림을 쓴다(08 §8.3).
+static func paint_title(c: Control, t: String, right: bool) -> void:
 	var r := Rect2(Vector2.ZERO, c.size)
-	if not title_right:
-		UiTheme.draw_plate(c, r, title_text, TITLE_FS)
+	if not right:
+		UiTheme.draw_plate(c, r, t, TITLE_FS)
 		return
 	UiTheme.draw_plate(c, r, "", TITLE_FS)
-	c.draw_string(c.get_theme_default_font(), Vector2(0, r.get_center().y + TITLE_FS * 0.36), title_text, HORIZONTAL_ALIGNMENT_RIGHT,
+	c.draw_string(c.get_theme_default_font(), Vector2(0, r.get_center().y + TITLE_FS * 0.36), t, HORIZONTAL_ALIGNMENT_RIGHT,
 		r.size.x - TITLE_RIGHT_PAD, TITLE_FS, UiTheme.HEAD_TEXT)
 
 
-func show_desc(title: String, lines: Array[String]) -> void:
+## badges: 머리 오른쪽 끝의 직업 머리글자 칸 [[글, 밝은지], …](상점). 캠프는 넘기지 않는다(칸 없음).
+func show_desc(title: String, lines: Array[String], badges: Array = []) -> void:
 	desc_title = title
 	desc_lines = lines
+	desc_badges = badges
 	desc_window.queue_redraw()
+
+
+## 직업 머리글자 칸 한 변·사이·머리 오른쪽 여백.
+const BADGE := 28.0
+const BADGE_GAP := 4.0
+const BADGE_FS := 16
+
+
+## 머리글자 칸 i 의 사각형(설명 창 기준).
+func badge_rect(i: int) -> Rect2:
+	var n := desc_badges.size()
+	var x0 := desc_window.size.x - PAD - 6.0 - n * BADGE - (n - 1) * BADGE_GAP
+	return Rect2(x0 + i * (BADGE + BADGE_GAP), 6.0 + (DESC_HEAD_H - BADGE) / 2.0, BADGE, BADGE)
+
+
+## 머리 이름이 쓸 수 있는 폭(머리글자 칸 앞까지).
+func desc_title_room() -> float:
+	var room := desc_window.size.x - 2.0 * PAD - 12.0
+	if not desc_badges.is_empty():
+		room = badge_rect(0).position.x - 8.0 - (PAD + 6.0)
+	return room
 
 
 ## 설명 줄 i 의 글자 바닥 자리(설명 창 기준).
@@ -155,7 +191,14 @@ func _draw_desc(c: Control) -> void:
 	UiTheme.draw_shop_window(c, Rect2(Vector2.ZERO, c.size), DESC_HEAD_H)
 	var font := c.get_theme_default_font()
 	c.draw_string(font, Vector2(PAD + 6.0, 6.0 + DESC_HEAD_H * 0.5 + 22 * 0.36), desc_title, HORIZONTAL_ALIGNMENT_LEFT,
-		c.size.x - 2.0 * PAD - 12.0, 22, UiTheme.TEXT)
+		desc_title_room(), 22, UiTheme.TEXT)
+	for i in desc_badges.size():
+		var br := badge_rect(i)
+		var on: bool = desc_badges[i][1]
+		c.draw_rect(br, UiTheme.SHOP_BADGE_ON if on else UiTheme.SHOP_BADGE_OFF)
+		UiTheme.draw_outline(c, br, UiTheme.SHOP_ICON_EDGE, 1.0, 0.0)
+		c.draw_string(font, Vector2(br.position.x, br.get_center().y + BADGE_FS * 0.36), str(desc_badges[i][0]), HORIZONTAL_ALIGNMENT_CENTER,
+			br.size.x, BADGE_FS, UiTheme.SHOP_BADGE_ON_TEXT if on else UiTheme.SHOP_BADGE_OFF_TEXT)
 	for i in mini(desc_lines.size(), desc_capacity()):
 		c.draw_string(font, desc_line_pos(i), desc_lines[i], HORIZONTAL_ALIGNMENT_LEFT, c.size.x - 2.0 * PAD - 12.0, DESC_FS,
 			UiTheme.SHOP_SECTION_TEXT if i == 0 else UiTheme.TEXT)
