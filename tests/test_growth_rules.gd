@@ -661,7 +661,7 @@ func test_equip_unknown_member_and_same_item_unchanged() -> void:
 func _stat_defs() -> GameDefs:
 	var files := _quiet_files(Fx.EXACT)
 	files["items/test_equip.json"] = {"equipment": [
-		{"id": "equip.t_lead", "name_key": "equip.t_lead", "kind": "accessory", "atk": 0, "matk": 0, "def": 0, "mdef": 0,
+		{"id": "equip.t_lead", "name_key": "equip.t_lead", "kind": "accessory", "price": 1, "atk": 0, "matk": 0, "def": 0, "mdef": 0,
 			"stats": {"AGI": -99}, "resist": {"fire": 3000}, "ailment_vuln": {}, "bind_vuln": {"leg": -3000}},
 	]}
 	return Fx.defs_from(files)

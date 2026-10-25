@@ -1,5 +1,5 @@
 ## 전투 정의 데이터(data/ 의 rules·classes·skills·enemies·encounters·items) 읽기·검사 → BattleDb (06 §5).
-## 성장 정의(성장 규칙·레벨 표·스킬 트리·패시브·장비, 07 §7)도 여기서 읽는다.
+## 성장 정의(성장 규칙·레벨 표·스킬 트리·패시브·장비, 07 §7)와 상점 정의(값·판매값·진열, 08 §1)도 여기서 읽는다.
 ## 오류는 "파일: 필드 경로: 내용". 오류가 하나라도 있으면 이 정의를 쓰지 않는다(06 §5.6).
 ## 값 범위는 BattleLimits 한 곳에서 온다. 모르는 필드는 거부한다(층 정의와 다르다).
 class_name BattleDb
@@ -7,7 +7,7 @@ extends RefCounted
 
 ## \A·\z: 문자열 전체와 맞춘다($ 는 끝 줄바꿈 앞에서도 맞는다).
 const ID_PATTERN := "\\A[a-z0-9_.]+\\z"
-const KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items"]
+const KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items", "shop"]
 const RULES_FILE := "rules/battle.json"
 const GROWTH_FILE := "rules/growth.json"
 const EFFECTS := ["damage", "ailment", "heal", "cure", "revive", "buff", "debuff", "front_guard", "cover", "charge", "passive"]
@@ -23,7 +23,12 @@ const SKILL_COMMON := ["id", "name_key", "user", "effect", "range", "target", "p
 const PASSIVE_KEYS := ["id", "name_key", "user", "effect", "levels"]
 const CLASS_KEYS := ["id", "name_key", "levels", "attack", "resist", "ailment_vuln", "bind_vuln", "equip_kinds", "tree"]
 const TREE_KEYS := ["skill", "pos", "requires", "min_level"]
-const EQUIP_KEYS := ["id", "name_key", "kind", "atk", "matk", "def", "mdef", "stats", "resist", "ailment_vuln", "bind_vuln"]
+const EQUIP_KEYS := ["id", "name_key", "kind", "price", "atk", "matk", "def", "mdef", "stats", "resist", "ailment_vuln", "bind_vuln"]
+const MATERIAL_KEYS := ["id", "name_key", "sell"]
+## 상점 파일(08 §1.2): 위 단계 키는 모두 필수, 진열 줄은 item 필수·unlock·limited 선택.
+const SHOP_KEYS := ["id", "name_key", "stock"]
+const STOCK_KEYS := ["item"]
+const STOCK_OPTIONAL := ["unlock", "limited"]
 const SKILL_EXTRA := {
 	"damage": ["stat", "element", "can_crit", "sure_hit"], "ailment": ["sure_hit"], "charge": ["charges"],
 }
@@ -179,6 +184,8 @@ class EquipDef:
 	var id := ""
 	var name_key := ""
 	var kind := ""
+	## 구매값(08 §1.1). 판매값은 price ÷ 2(버림, 최소 1).
+	var price := 1
 	## 무기만: 일반 공격 속성.
 	var element := ""
 	## atk·matk·def·mdef
@@ -197,6 +204,23 @@ class EquipDef:
 
 	func fits(c: ClassDef) -> bool:
 		return only_classes.has(c.id) if not only_classes.is_empty() else c.equip_kinds.has(kind)
+
+
+## 상점 하나(08 §1.2). stock 줄은 {item: 장비 ID, unlock: {소재 ID: 수}(처음부터 팔면 빈 사전), limited: 참·거짓}, 진열 차례.
+class ShopDef:
+	extends RefCounted
+	var id := ""
+	var name_key := ""
+	var stock: Array[Dictionary] = []
+	## stock[i] 가 파일의 몇 번째 줄인지(참조 오류의 경로).
+	var stock_at: Array[int] = []
+
+	## 그 장비의 진열 줄. 없으면 빈 사전.
+	func line(item_id: String) -> Dictionary:
+		for x in stock:
+			if x["item"] == item_id:
+				return x
+		return {}
 
 
 class EnemyDef:
@@ -241,6 +265,10 @@ var formations := {}
 var encounters := {}
 ## 소재 ID → name_key
 var materials := {}
+## 소재 ID → 판매값(08 §1.1)
+var material_sell := {}
+## 상점 ID → ShopDef
+var shops := {}
 ## 장비 ID → EquipDef
 var equipment := {}
 ## 읽은 순서의 ID 목록(파일 경로 순 → 파일 안 순서). 순회는 이 배열로 한다.
@@ -251,6 +279,7 @@ var formation_ids: Array[String] = []
 var encounter_ids: Array[String] = []
 var material_ids: Array[String] = []
 var equipment_ids: Array[String] = []
+var shop_ids: Array[String] = []
 var errors: Array[String] = []
 var warnings: Array[String] = []
 
@@ -323,6 +352,8 @@ static func parse(files: Dictionary) -> BattleDb:
 					db._read_list(ck, data, "equipment", db._read_equipment)
 				else:
 					db._read_list(ck, data, "materials", db._read_material)
+			"shop":
+				db._read_shop(ck, data)
 	db._check_refs()
 	return db
 
@@ -345,7 +376,11 @@ func equip(id: String) -> EquipDef:
 	return equipment.get(id)
 
 
-## 모든 name_key(직업·스킬·적·소재·장비). GameDefs 가 ko.json 에 있는지 본다.
+func shop(id: String) -> ShopDef:
+	return shops.get(id)
+
+
+## 모든 name_key(직업·스킬·적·소재·장비·상점). GameDefs 가 ko.json 에 있는지 본다.
 func name_keys() -> Array[String]:
 	var out: Array[String] = []
 	for id in class_ids:
@@ -358,6 +393,8 @@ func name_keys() -> Array[String]:
 		out.append(materials[id])
 	for id in equipment_ids:
 		out.append(equipment[id].name_key)
+	for id in shop_ids:
+		out.append(shops[id].name_key)
 	return out
 
 
@@ -441,13 +478,15 @@ func _read_list(ck: _Ck, d: Dictionary, key: String, reader: Callable) -> void:
 
 
 func _read_material(ck: _Ck, d: Dictionary, path: String) -> void:
-	if not ck.keys(d, path, ["id", "name_key"], []):
+	if not ck.keys(d, path, MATERIAL_KEYS, []):
 		return
 	var id := ck.id_of(d, "id", path, "item.")
 	var nk := ck.str_of(d, "name_key", path)
+	var sell: Variant = ck.int_of(d, "sell", path, "sell")
 	if id.is_empty() or not _claim(ck, id, path):
 		return
 	materials[id] = nk
+	material_sell[id] = sell if sell != null else 1
 	material_ids.append(id)
 
 
@@ -462,6 +501,8 @@ func _read_equipment(ck: _Ck, d: Dictionary, path: String) -> void:
 	e.id = ck.id_of(d, "id", path, "equip.")
 	e.name_key = ck.str_of(d, "name_key", path)
 	e.kind = ck.enum_of(d, "kind", path, BattleLimits.WEAPON_KINDS + BattleLimits.ARMOR_KINDS)
+	var price: Variant = ck.int_of(d, "price", path, "price")
+	e.price = price if price != null else 1
 	if weapon:
 		e.element = ck.enum_of(d, "element", path, BattleLimits.ELEMENTS)
 	for g in BattleLimits.GEAR:
@@ -964,6 +1005,64 @@ func _read_formation(ck: _Ck, v: Variant, path: String) -> FormationDef:
 	return f
 
 
+## 상점 파일(08 §1.2). 장비·소재 참조는 _check_refs 가 본다(파일 경로 순과 무관하게).
+func _read_shop(ck: _Ck, d: Dictionary) -> void:
+	if not ck.keys(d, "", SHOP_KEYS, []):
+		return
+	var sh := ShopDef.new()
+	sh.id = ck.id_of(d, "id", "", "shop.")
+	sh.name_key = ck.str_of(d, "name_key", "")
+	if typeof(d["stock"]) != TYPE_ARRAY or d["stock"].is_empty():
+		ck.err("stock", "줄이 하나 이상인 배열이어야 한다")
+	else:
+		var seen := {}
+		for i in d["stock"].size():
+			var path := "stock[%d]" % i
+			var line := _read_stock_line(ck, d["stock"][i], path)
+			if line.is_empty():
+				continue
+			if seen.has(line["item"]):
+				ck.err(path + ".item", "같은 장비 %s 가 stock[%d] 에도 있다(한 상점에 한 줄)" % [line["item"], seen[line["item"]]])
+				continue
+			seen[line["item"]] = i
+			sh.stock.append(line)
+			sh.stock_at.append(i)
+	if sh.id.is_empty() or not _claim(ck, sh.id, ""):
+		return
+	shops[sh.id] = sh
+	shop_ids.append(sh.id)
+
+
+## 진열 줄 하나. 오류가 있으면 빈 사전(오류는 모두 남긴다).
+func _read_stock_line(ck: _Ck, v: Variant, path: String) -> Dictionary:
+	if typeof(v) != TYPE_DICTIONARY:
+		ck.err(path, "객체여야 한다")
+		return {}
+	if not ck.keys(v, path, STOCK_KEYS, STOCK_OPTIONAL):
+		return {}
+	var before := errors.size()
+	var item := ck.id_of(v, "item", path, "equip.")
+	var unlock := {}
+	if v.has("unlock"):
+		var u: Variant = v["unlock"]
+		if typeof(u) != TYPE_DICTIONARY or u.is_empty():
+			ck.err(path + ".unlock", "소재 ID 와 수(%s)가 하나 이상인 객체여야 한다(처음부터 팔면 필드를 쓰지 않는다)" % BattleLimits.range_text("unlock"))
+		else:
+			for k in u:
+				var id := ck.id_value(k, "%s.unlock.%s" % [path, str(k)], "item.")
+				var n: Variant = ck.int_of(u, k, path + ".unlock", "unlock")
+				if not id.is_empty() and n != null:
+					unlock[id] = n
+	var limited := false
+	if v.has("limited"):
+		limited = ck.bool_of(v, "limited", path)
+		if limited and not v.has("unlock"):
+			ck.err(path + ".limited", "한정 줄은 unlock 이 있어야 한다")
+	if errors.size() != before or item.is_empty():
+		return {}
+	return {"item": item, "unlock": unlock, "limited": limited}
+
+
 # ---- 파일 사이 참조 ----
 
 func _claim(ck: _Ck, id: String, path: String) -> bool:
@@ -992,6 +1091,22 @@ func _check_refs() -> void:
 				ck.err("%s.only_classes[%d]" % [id, i], "없는 직업 %s" % e.only_classes[i])
 		if not class_ids.any(func(cid: String) -> bool: return e.fits(classes[cid])):
 			warnings.append("%s: 어느 직업도 낄 수 없는 장비" % id)
+	var stocked := {}
+	for sid in shop_ids:
+		var sh: ShopDef = shops[sid]
+		var ck := _Ck.new(self, _ids[sid])
+		for i in sh.stock.size():
+			var line: Dictionary = sh.stock[i]
+			var p := "stock[%d]" % sh.stock_at[i]
+			stocked[line["item"]] = true
+			if not equipment.has(line["item"]):
+				ck.err(p + ".item", "없는 장비 %s" % line["item"])
+			for m in line["unlock"]:
+				if not materials.has(m):
+					ck.err("%s.unlock.%s" % [p, m], "없는 소재 %s" % m)
+	for id in equipment_ids:
+		if not stocked.has(id):
+			warnings.append("%s: 어느 상점에도 없는 장비" % id)
 	for eid in enemy_ids:
 		var e: EnemyDef = enemies[eid]
 		var ck := _Ck.new(self, _ids[eid])

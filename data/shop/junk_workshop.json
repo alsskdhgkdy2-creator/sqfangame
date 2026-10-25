@@ -1,0 +1,105 @@
+{
+  "id": "shop.junk_workshop",
+  "name_key": "shop.junk_workshop",
+  "stock": [
+    {
+      "item": "equip.training_sword"
+    },
+    {
+      "item": "equip.twin_edge"
+    },
+    {
+      "item": "equip.ion_saber",
+      "unlock": {
+        "item.cable_scale": 3,
+        "item.glow_scale": 1
+      }
+    },
+    {
+      "item": "equip.nano_rod"
+    },
+    {
+      "item": "equip.glyph_stylus"
+    },
+    {
+      "item": "equip.tactical_baton",
+      "unlock": {
+        "item.drill_claw": 2
+      }
+    },
+    {
+      "item": "equip.focus_staff",
+      "unlock": {
+        "item.spore_pouch": 3,
+        "item.glow_scale": 1
+      }
+    },
+    {
+      "item": "equip.padded_coat"
+    },
+    {
+      "item": "equip.medic_coat"
+    },
+    {
+      "item": "equip.glyph_robe"
+    },
+    {
+      "item": "equip.mesh_armor",
+      "unlock": {
+        "item.coated_scale": 3
+      }
+    },
+    {
+      "item": "equip.training_shield"
+    },
+    {
+      "item": "equip.aegis_plate",
+      "unlock": {
+        "item.beetle_plate": 2,
+        "item.intact_pincer": 1
+      },
+      "limited": true
+    },
+    {
+      "item": "equip.sensor_cap"
+    },
+    {
+      "item": "equip.visor",
+      "unlock": {
+        "item.neon_rat_tail": 3
+      }
+    },
+    {
+      "item": "equip.grip_gloves"
+    },
+    {
+      "item": "equip.servo_gauntlet",
+      "unlock": {
+        "item.intact_pincer": 2
+      }
+    },
+    {
+      "item": "equip.mag_boots",
+      "unlock": {
+        "item.drill_claw": 3
+      }
+    },
+    {
+      "item": "equip.signal_charm"
+    },
+    {
+      "item": "equip.antitox_chip",
+      "unlock": {
+        "item.spore_pouch": 2
+      }
+    },
+    {
+      "item": "equip.thermal_ring",
+      "unlock": {
+        "item.coated_scale": 2,
+        "item.beetle_plate": 1
+      },
+      "limited": true
+    }
+  ]
+}

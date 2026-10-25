@@ -54,6 +54,12 @@ const RANGES := {
 	"equip_stat": [-99, 99],
 	"equip_delta": [-3000, 3000],
 	"bag": [1, 99],
+	# 상점(08 §1·§2·§3). sold 는 누적 판 수와 한정 재고 pool 의 형식 범위(pool 은 관계 검사로 sold 까지).
+	"price": [1, 999999], "sell": [1, 99999],
+	"unlock": [1, 999],
+	"money": [0, 9999999],
+	"sold": [1, 9999999],
+	"buy_qty": [1, 99], "sell_qty": [1, 9999],
 	"battle_turn": [0, TURN_MAX], "battle_seq": [1, SEQ_MAX],
 }
 const MATERIAL_MAX := 9999
@@ -63,6 +69,9 @@ const WEAPON_KINDS := ["sword", "staff"]
 const ARMOR_KINDS := ["shield", "body", "head", "hands", "feet", "accessory"]
 const KIND_LIMIT := {"shield": 1, "body": 1, "head": 1, "hands": 1, "feet": 1, "accessory": 2}
 const BAG_MAX := 99
+## 상점(08 §2): 소지금 상한, 누적 판 수(sold·pool) 상한.
+const MONEY_MAX := 9999999
+const SOLD_MAX := 9999999
 ## 패시브 bonus 키(07 §4.3).
 const PASSIVE_KEYS := ["STR", "INT", "VIT", "WIS", "AGI", "LUC", "max_hp", "max_tp"]
 const PARTY_SIZE := 5

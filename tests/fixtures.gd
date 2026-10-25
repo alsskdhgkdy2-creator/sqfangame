@@ -126,7 +126,7 @@ static func clean_saves() -> void:
 # ---- 전투 시험 도우미 (06 §10.1) ----
 
 const DATA_DIR := "res://data"
-const BATTLE_KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items"]
+const BATTLE_KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items", "shop"]
 ## 난수가 끼지 않는 규칙 상수: 피해·순서 난수 1000 고정, 크리티컬 0, 명중 하한 1000.
 const EXACT := {"damage_roll": [1000, 1000], "speed_roll": [1000, 1000], "crit_base": 0, "crit_luck": 0, "hit_min": 1000}
 

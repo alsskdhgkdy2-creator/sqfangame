@@ -1,5 +1,5 @@
 extends TestCase
-## 저장 3판·이전 시험(07 §10.2).
+## 저장 3판·이전 시험(07 §10.2). 4판(08 §4)부터 3판 문서는 읽을 때 4판으로 옮기므로, 3판 검사는 3판 문서(이전 경로)와 4판 문서 둘 다로 본다.
 ##
 ## 2판 고정 문자열(V2_NORMAL·V2_BATTLE·V2_WIPED)과 그 전투 유닛 입력값(V2_BATTLE_UNITS)은 저장 형식·정의를 바꾸기 전 코드
 ## (커밋 e9dd205 = 코드는 44feefd 그대로, 2026-10-18)로 만들었다(07 §11.3 0단계). 만든 방법: 저장소 밖의 일회용 스크립트를
@@ -71,12 +71,27 @@ func _rich() -> ExplorationState:
 	return s
 
 
+## 4판 문서에서 3판 문서를 만든다(머리 3·"m2g", money·shop 없음). 시작 소지금·빈 상점 상태면 3판 → 4판 이전이 같은 상태를 돌려준다.
+static func as_v3(doc: Dictionary) -> Dictionary:
+	var d := doc.duplicate(true)
+	d.merge({"schema": 3, "rules": "m2g"}, true)
+	d["state"].erase("money")
+	d["state"].erase("shop")
+	return d
+
+
 func test_v3_roundtrip_with_growth_mid_battle() -> void:
 	var s := _rich()
 	var m0 := s.party.members[0]
 	check(m0.level == 3 and m0.skills.get(SHIELD_M) == 2 and m0.equip[1] == "equip.aegis_plate" and s.gear_bag.has("equip.training_shield") and s.battle != null, "준비: 성장 값·전투")
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	check_eq([doc["schema"], doc["rules"]], [3.0, "m2g"], "3판 머리")
+	check_eq([doc["schema"], doc["rules"]], [4.0, "m3s"], "4판 머리")
+	var v3 := SaveCodec.decode(JSON.stringify(as_v3(doc)), _defs())
+	check(v3.ok(), "3판 문서 읽기(4판으로 이전) %s" % v3.error)
+	if v3.ok():
+		check_eq([v3.from_schema, v3.saved_at, v3.generation, v3.state.money, SaveCodec.state_hash(v3.state)], [3, doc["saved_at"], int(doc["generation"]), 200, SaveCodec.state_hash(s)],
+			"3판 이전: from_schema 3·머리 보존·시작 소지금·같은 해시(빈 상점)")
+		check_eq(Fx.battle_hash(v3.state), Fx.battle_hash(s), "3판 이전: 같은 전투 해시")
 	check_eq(doc["state"]["party"]["members"][1]["equip"], ["equip.ion_saber", "equip.padded_coat", "equip.grip_gloves", null], "equip 은 칸 순서 배열(빈 칸 null)")
 	var r := SaveCodec.decode(SaveCodec.encode(s), _defs())
 	check(r.ok(), "읽기 %s" % r.error)
@@ -99,13 +114,16 @@ func test_v3_roundtrip_with_growth_mid_battle() -> void:
 
 # ---- 3판 거부 (07 §8.3 표의 줄마다) ----
 
+## 4판 문서와, 같은 상태의 3판 문서(이전 경로, 「3판 검사 실패」로 이전 전에 거부) 둘 다.
 func _expect_reject(s: ExplorationState, mutate: Callable, needle: String, label: String) -> void:
 	var before := SaveCodec.state_hash(s)
-	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	mutate.call(doc["state"])
-	var r := SaveCodec.decode(JSON.stringify(doc), s.defs)
-	check(not r.ok() and r.state == null, "%s: 거부되어야 한다" % label)
-	check(r.error.contains(needle), "%s: 이유 '%s' 기대, 실제 '%s'" % [label, needle, r.error])
+	var v4: Dictionary = JSON.parse_string(SaveCodec.encode(s))
+	for x in [["4판", v4, ""], ["3판", as_v3(v4), "3판 검사 실패: "]]:
+		var doc: Dictionary = x[1]
+		mutate.call(doc["state"])
+		var r := SaveCodec.decode(JSON.stringify(doc), s.defs)
+		check(not r.ok() and r.state == null, "%s(%s): 거부되어야 한다" % [label, x[0]])
+		check(r.error.begins_with(x[2]) and r.error.contains(needle), "%s(%s): 이유 '%s%s' 기대, 실제 '%s'" % [label, x[0], x[2], needle, r.error])
 	check_eq(SaveCodec.state_hash(s), before, "%s: 지금 상태 불변" % label)
 
 
@@ -195,6 +213,7 @@ func test_v2_migration_keeps_values_and_adds_growth_defaults() -> void:
 			var m := s.party.members[i]
 			check_eq([m.level, m.exp, m.skills, m.equip], [1, 0, defs.party.skills[i], defs.party.equips[i]], "%s: 대원 %d 성장 기본값(시작 배분·장비)" % [label, i])
 		check_eq(s.gear_bag, {}, "%s: gear_bag {}" % label)
+		check_eq([s.money, SaveCodec.state_to_dict(s)["shop"]], [200, {"sold": {}, "pool": {}, "bought": []}], "%s: 시작 소지금·빈 상점(08 §4)" % label)
 		check_eq([r.from_schema, r.saved_at, r.generation, s.generation], [2, orig["saved_at"], int(orig["generation"]), int(orig["generation"])], "%s: 머리 보존·from_schema 2" % label)
 		var again := SaveCodec.decode(x[1], defs)
 		check(again.ok() and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(s), "%s: 두 번 읽어도 같은 해시" % label)
@@ -289,12 +308,12 @@ func test_v2_candidate_recovery_reads_bak() -> void:
 
 func _saves_same(s: ExplorationState, label: String) -> void:
 	var r := SaveCodec.decode(SaveCodec.encode(s), s.defs)
-	check(r.ok() and SaveCodec.state_hash(r.state) == SaveCodec.state_hash(s), "%s: 3판 저장 → 읽기 같은 해시 %s" % [label, r.error])
+	check(r.ok() and SaveCodec.state_hash(r.state) == SaveCodec.state_hash(s), "%s: 4판 저장 → 읽기 같은 해시 %s" % [label, r.error])
 
 
-# ---- 1판 → 3판 ----
+# ---- 1판 → 4판 ----
 
-func test_v1_migrates_straight_to_v3_with_growth_defaults() -> void:
+func test_v1_migrates_straight_to_v4_with_growth_defaults() -> void:
 	var defs := Fx.defs()
 	for x in [[BS.V1_NORMAL, [30, 52, 23, 0, 40]], [BS.V1_PENDING, [60, 52, 52, 42, 1]], [BS.V1_WIPED, [0, 0, 0, 0, 0]]]:
 		var r := SaveCodec.decode(x[0], defs)
@@ -307,7 +326,8 @@ func test_v1_migrates_straight_to_v3_with_growth_defaults() -> void:
 			var m := s.party.members[i]
 			check_eq([m.id, m.level, m.exp, m.skills, m.equip], [defs.party.ids[i], 1, 0, defs.party.skills[i], defs.party.equips[i]], "대원 %d 성장 기본값" % i)
 		check_eq([s.gear_bag, s.materials], [{}, {}], "가방·소재 비어 있음")
-		check_eq(JSON.parse_string(SaveCodec.encode(s))["schema"], 3.0, "3판으로 쓴다")
+		check_eq([s.money, SaveCodec.state_to_dict(s)["shop"]], [200, {"sold": {}, "pool": {}, "bought": []}], "시작 소지금·빈 상점(08 §4)")
+		check_eq(JSON.parse_string(SaveCodec.encode(s))["schema"], 4.0, "4판으로 쓴다")
 		var again := SaveCodec.decode(x[0], defs)
 		check(again.ok() and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(s), "두 번 읽어도 같은 해시")
 

@@ -2,35 +2,43 @@
   "materials": [
     {
       "id": "item.neon_rat_tail",
-      "name_key": "item.neon_rat_tail"
+      "name_key": "item.neon_rat_tail",
+      "sell": 8
     },
     {
       "id": "item.cable_scale",
-      "name_key": "item.cable_scale"
+      "name_key": "item.cable_scale",
+      "sell": 12
     },
     {
       "id": "item.glow_scale",
-      "name_key": "item.glow_scale"
+      "name_key": "item.glow_scale",
+      "sell": 20
     },
     {
       "id": "item.spore_pouch",
-      "name_key": "item.spore_pouch"
+      "name_key": "item.spore_pouch",
+      "sell": 10
     },
     {
       "id": "item.coated_scale",
-      "name_key": "item.coated_scale"
+      "name_key": "item.coated_scale",
+      "sell": 14
     },
     {
       "id": "item.drill_claw",
-      "name_key": "item.drill_claw"
+      "name_key": "item.drill_claw",
+      "sell": 16
     },
     {
       "id": "item.beetle_plate",
-      "name_key": "item.beetle_plate"
+      "name_key": "item.beetle_plate",
+      "sell": 18
     },
     {
       "id": "item.intact_pincer",
-      "name_key": "item.intact_pincer"
+      "name_key": "item.intact_pincer",
+      "sell": 30
     }
   ]
 }

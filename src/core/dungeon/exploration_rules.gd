@@ -16,7 +16,7 @@ const AUTOMAP_FULL := "full"
 const AUTOMAP_MODES := ["off", "floor", "full"]
 
 
-## 새 게임: 시작 칸을 방문·관찰·자동 기록하고 한계값을 처음 뽑는다. 대원은 HP·TP 가득(defs.members()).
+## 새 게임: 시작 칸을 방문·관찰·자동 기록하고 한계값을 처음 뽑는다. 대원은 HP·TP 가득(defs.members()), 시작 소지금, 빈 상점(08 §2).
 ## s.floor_def 는 M1 코드가 쓰므로 defs.floor_def 와 같은 객체로 둔다.
 static func new_game(defs: GameDefs, seed_value: int, automap: String) -> ExplorationState:
 	var s := ExplorationState.new()
@@ -28,6 +28,7 @@ static func new_game(defs: GameDefs, seed_value: int, automap: String) -> Explor
 	s.party.at = floor_def.start_at
 	s.party.facing = floor_def.start_facing
 	s.party.members = defs.members()
+	s.money = ExplorationState.START_MONEY
 	s.encounter.roll_threshold(s.rng, floor_def.threshold_min, floor_def.threshold_max)
 	record_cell(s, floor_def.start_at, automap)
 	return s

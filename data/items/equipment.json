@@ -12,7 +12,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 60
     },
     {
       "id": "equip.twin_edge",
@@ -26,7 +27,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 120
     },
     {
       "id": "equip.nano_rod",
@@ -40,7 +42,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 60
     },
     {
       "id": "equip.glyph_stylus",
@@ -54,7 +57,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 80
     },
     {
       "id": "equip.training_shield",
@@ -67,7 +71,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 50
     },
     {
       "id": "equip.padded_coat",
@@ -80,7 +85,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 60
     },
     {
       "id": "equip.grip_gloves",
@@ -93,7 +99,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 40
     },
     {
       "id": "equip.medic_coat",
@@ -106,7 +113,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 60
     },
     {
       "id": "equip.sensor_cap",
@@ -119,7 +127,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 40
     },
     {
       "id": "equip.glyph_robe",
@@ -132,7 +141,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 60
     },
     {
       "id": "equip.signal_charm",
@@ -145,7 +155,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 80
     },
     {
       "id": "equip.ion_saber",
@@ -159,7 +170,8 @@
       "stats": {},
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 360
     },
     {
       "id": "equip.focus_staff",
@@ -175,7 +187,8 @@
       },
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 300
     },
     {
       "id": "equip.tactical_baton",
@@ -193,7 +206,8 @@
       "only_classes": [
         "class.nano_medic",
         "class.holo_knight"
-      ]
+      ],
+      "price": 220
     },
     {
       "id": "equip.aegis_plate",
@@ -208,7 +222,8 @@
         "fire": -300
       },
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 400
     },
     {
       "id": "equip.mesh_armor",
@@ -227,7 +242,8 @@
       "only_classes": [
         "class.holo_knight",
         "class.blade_duelist"
-      ]
+      ],
+      "price": 280
     },
     {
       "id": "equip.visor",
@@ -242,7 +258,8 @@
       },
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 150
     },
     {
       "id": "equip.servo_gauntlet",
@@ -257,7 +274,8 @@
       },
       "resist": {},
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 240
     },
     {
       "id": "equip.mag_boots",
@@ -274,7 +292,8 @@
       "ailment_vuln": {},
       "bind_vuln": {
         "leg": -500
-      }
+      },
+      "price": 200
     },
     {
       "id": "equip.antitox_chip",
@@ -289,7 +308,8 @@
       "ailment_vuln": {
         "poison": -1000
       },
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 320
     },
     {
       "id": "equip.thermal_ring",
@@ -305,7 +325,8 @@
         "ice": -250
       },
       "ailment_vuln": {},
-      "bind_vuln": {}
+      "bind_vuln": {},
+      "price": 300
     }
   ]
 }
