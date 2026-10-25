@@ -104,9 +104,10 @@ log=$(mktemp /tmp/cloud-test-launch.XXXXXX)
 echo "클라우드 세션을 만드는 중… ($branch @ $short, 일회용 브랜치 $run_branch)"
 (
   answered=0
-  plain() { sed 's/\x1b\[[0-9;?<>=]*[A-Za-z~]//g' "$log" 2>/dev/null; }
+  # CLI 2.1.310(2026-10-25)은 낱말 사이를 공백 대신 커서 이동(ESC[nG·ESC[nC)으로 그린다: 공백으로 바꾼 뒤 나머지 제어 글자를 지운다
+  plain() { sed 's/\x1b\[[0-9]*[CG]/ /g; s/\x1b\[[0-9;?<>=]*[A-Za-z~]//g' "$log" 2>/dev/null | tr -s ' '; }
   for _ in $(seq 1 360); do
-    if [ "$answered" = 0 ] && plain | grep -q "trust this folder"; then
+    if [ "$answered" = 0 ] && plain | grep -qi "trust this folder"; then
       sleep 1; printf '\033[B'; sleep 1; printf '\r'; answered=1
     fi
     plain | grep -qE "Created cloud session|Error:|Script done" && break
@@ -116,7 +117,7 @@ echo "클라우드 세션을 만드는 중… ($branch @ $short, 일회용 브�
 ) | (cd "$wt" && timeout 240 script -qfec "claude --cloud \"\$(cat $prompt_file)\"" "$log") >/dev/null 2>&1 || true
 rm -f "$prompt_file"
 
-clean=$(sed 's/\x1b\[[0-9;?<>=]*[A-Za-z~]//g; s/\x1b[()][A-Za-z0-9]//g' "$log" | tr '\r' '\n')
+clean=$(sed 's/\x1b\[[0-9]*[CG]/ /g; s/\x1b\[[0-9;?<>=]*[A-Za-z~]//g; s/\x1b[()][A-Za-z0-9]//g' "$log" | tr '\r' '\n' | tr -s ' ')
 session=$(printf '%s\n' "$clean" | grep -o 'session_[A-Za-z0-9]*' | head -1 || true)
 if [ -z "$session" ]; then
   echo "클라우드 세션을 만들지 못했습니다. 실행 기록: $log" >&2
