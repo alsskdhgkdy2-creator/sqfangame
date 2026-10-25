@@ -688,6 +688,72 @@ func test_member_pick_keeps_every_command_row_working() -> void:
 
 # ---- 상태 화면 ----
 
+## 상태 화면 층 표(07 §9.9 E2-a, research 08 §3.1, 1280×720 기준. 왼쪽 열은 왼쪽 위, 초상은 가운데, 받는 배율·「내역」·「취소」「선택」은 오른쪽 아래,
+## 방향 십자는 왼쪽 아래 x 456). 겹쳐도 되는 것은 키패드가 초상 앞에 오는 것뿐이다.
+func _check_status_layers(pm: PartyMenu, size: Vector2, tag: String) -> void:
+	var st := pm.status_tab
+	var screen := Rect2(Vector2.ZERO, size)
+	var w := size.x
+	var h := size.y
+	# 왼쪽 열: 원작 자리.
+	check_eq(st.class_rect(), Rect2(92, 190, 318, 45), tag + ": 직업 문패 알약 x 92~410 · y 190~235")
+	var ext := st.class_extent()
+	for pts in SheetParts.leaf_polygons(st.class_rect()):
+		for pt in pts:
+			check(ext.grow(0.01).has_point(pt), "%s: 문패 자리 %s 가 잎 꼭짓점 %s 를 덮는다" % [tag, str(ext), str(pt)])
+	check(ext.encloses(st.class_rect()) and ext.position.x >= 40.0 and ext.end.x <= 462.0 and ext.position.y < 190.0 and ext.end.y > 235.0,
+		tag + ": 잎 장식은 왼쪽 45 근처 ~ 오른쪽 460 근처, 알약보다 위아래로 조금 나온다 %s" % str(ext))
+	for i in 6:
+		check_eq(st.stat_rect(i), Rect2(66, 297 + 33 * i, 319, 28), "%s: 능력치 줄 %d" % [tag, i])
+	var sb := SheetParts.stat_boxes(st.stat_rect(0))
+	check_eq([(sb["name"] as Rect2).end.x, (sb["value"] as Rect2).end.x, (sb["track"] as Rect2).position.x, (sb["track"] as Rect2).end.x],
+		[136.0, 225.0, 236.0, 385.0], tag + ": 능력치 칸 이름 66~136 · 값 136~225 · 막대 236~385")
+	check_eq([st.gear_row_rect(0), st.gear_row_rect(1)], [Rect2(66, 505, 374, 34), Rect2(66, 543, 374, 34)], tag + ": 공격·방어 두 줄 y 505~539 · 543~577, x 66~440")
+	check_eq([st.gear_rect(0).position.y, st.gear_rect(2).position.y, st.gear_rect(1).position.y], [505.0, 505.0, 543.0],
+		tag + ": 첫 줄 = 공격·방어, 둘째 줄 = 마법 공격(·마법 방어)")
+	for i in 4:
+		var er := st.equip_rect(i)
+		check_eq(er, Rect2(80, 590 + 30 * i, 295, 28), "%s: 장비 줄 %d" % [tag, i])
+		var eb := SheetParts.equip_boxes(er)
+		check_eq([(eb["icon"] as Rect2).position.x, (eb["icon"] as Rect2).end.x, (eb["name"] as Rect2).position.x, (eb["name"] as Rect2).end.x],
+			[80.0, 120.0, 123.0, 375.0], "%s: 장비 줄 %d 아이콘 칸 80~120 · 이름 칸 123~375" % [tag, i])
+	# 초상: 가운데(W/2 + 20 ± 240), 위 띠 아래 ~ 아래 끝, 왼쪽 열과 겹치지 않게 왼쪽을 자른다.
+	var pr := st.portrait_rect()
+	var cx := w / 2.0 + 20.0
+	check_eq([pr.position.x, pr.end.x, pr.position.y, pr.end.y], [maxf(cx - 240.0, 464.0), cx + 240.0, 118.0, h], tag + ": 초상 가운데")
+	# 오른쪽: 받는 배율(오른쪽 끝 W − 28, 아래 끝 H − 75, 폭 240, 위 끝 ≥ H − 213), 「내역」, 키패드.
+	var sr := st.side_rect()
+	check_eq([sr.end.x, sr.end.y, sr.size.x], [w - 28.0, h - 75.0, 240.0], tag + ": 받는 배율 문패 오른쪽 아래(원작 LIMIT 자리)")
+	check(sr.position.y >= h - 213.0, "%s: 받는 배율 문패 위 끝 %.0f ≥ 「취소」「선택」 아래 + 8" % [tag, sr.position.y])
+	check_eq(_rect(st.split_button), Rect2(w - 128, h - 72, 120, 64), tag + ": 「내역」 오른쪽 아래(원작 Ⓐ SKILL 자리)")
+	check_eq(_rect(pm.dir_pad), Rect2(456, h - 209, 200, 200), tag + ": 방향 십자 (456, H − 209)")
+	check_eq(_rect(pm.key_pad), Rect2(w - 247, h - 293, 227, 72), tag + ": 「취소」「선택」 (W − 247, H − 293)")
+	# 겹침: 키패드가 초상 앞에 오는 것만 된다.
+	var blocks := {"name": st.name_tab_rect(), "lv": st.lv_band_rect(), "class": st.class_extent(), "side": sr, "split_button": _rect(st.split_button),
+		"split_head": st.split_head_rect(), "dir_pad": _rect(pm.dir_pad), "keys": _rect(pm.key_pad), "portrait": pr}
+	for i in 6:
+		blocks["stat%d" % i] = st.split_row_rect(i)
+	for r in 2:
+		blocks["gear%d" % r] = st.gear_row_rect(r)
+	for i in 4:
+		blocks["equip%d" % i] = st.equip_rect(i)
+	var allowed := [["dir_pad", "portrait"], ["keys", "portrait"]]
+	var keys := blocks.keys()
+	for i in keys.size():
+		var a: Rect2 = blocks[keys[i]]
+		check(screen.encloses(a), "%s: %s %s 화면 안" % [tag, keys[i], str(a)])
+		if not keys[i] in ["name", "lv"]:
+			check(a.position.y >= PartyStatusTab.TOP_H, "%s: %s 는 위 줄 아래" % [tag, keys[i]])
+		for j in range(i + 1, keys.size()):
+			if [keys[i], keys[j]] in allowed or [keys[j], keys[i]] in allowed:
+				continue
+			check(not a.intersects(blocks[keys[j]]), "%s: %s 와 %s 가 겹친다" % [tag, keys[i], keys[j]])
+	check(st.gear_row_rect(0).end.x <= _rect(pm.dir_pad).position.x - 16.0, tag + ": 공격·방어는 방향 십자 왼쪽에서 끝난다")
+	# 트리 순서(층 표): 초상 → 위 띠 → 왼쪽 열 → 받는 배율 → 「내역」 → (캠프) 키패드.
+	check(st.portrait.get_index() < st.top.get_index() and st.top.get_index() < st.left.get_index() and st.left.get_index() < st.side.get_index()
+		and st.side.get_index() < st.split_button.get_index(), tag + ": 그리는 순서 초상 → 위 띠 → 왼쪽 열 → 받는 배율 → 「내역」")
+
+
 func test_status_screen_follows_the_reference_table() -> void:
 	var s := await _open()
 	var pm := s.party_menu
@@ -700,43 +766,18 @@ func test_status_screen_follows_the_reference_table() -> void:
 	var st := pm.status_tab
 	check_eq([pm.page, pm.tab, pm.member], ["sub", 0, 1], "준비: 듀얼리스트 A 상태")
 	var first := {}
-	for px in WINDOWS + [WINDOWS[0]]:
+	for px in WINDOWS + [Vector2(1280, 960), WINDOWS[0]]:
 		var size: Vector2 = await _window(px)
 		var tag := "%s(논리 %s)" % [str(px), str(size)]
 		var screen := Rect2(Vector2.ZERO, size)
 		check_eq(_rect(s.view_container), screen, tag + ": 바탕은 줄지 않는다")
 		for c in [pm.camp_list, pm.ribbon, pm.money_plate, pm.cards]:
 			check(not (c as Control).is_visible_in_tree(), "%s: 캠프 뿌리 부품은 감춘다(%s)" % [tag, c.name])
-		# 초상은 받는 배율 문패 뒤(원작 그림 자리)라 겹침 검사에서 빼고 따로 본다.
-		var blocks := {"name": st.name_tab_rect(), "lv": st.lv_band_rect(), "class": st.class_rect(), "side": st.side_rect(),
-			"split_button": _rect(st.split_button)}
-		for i in PartyStatusTab.STAT_ROWS.size():
-			blocks["stat%d" % i] = st.stat_rect(i)
-		for i in 4:
-			blocks["gear%d" % i] = st.gear_rect(i)
-			blocks["equip%d" % i] = st.equip_rect(i)
-		var keys := blocks.keys()
-		for i in keys.size():
-			var a: Rect2 = blocks[keys[i]]
-			check(screen.encloses(a), "%s: %s %s 화면 안" % [tag, keys[i], str(a)])
-			if keys[i] != "name" and keys[i] != "lv":
-				check(a.position.y >= PartyStatusTab.TOP_H, "%s: %s 는 위 줄 아래" % [tag, keys[i]])
-			for j in range(i + 1, keys.size()):
-				check(not a.intersects(blocks[keys[j]]), "%s: %s 와 %s 가 겹친다" % [tag, keys[i], keys[j]])
+		_check_status_layers(pm, size, tag)
 		check_eq(st.info_rect(), Rect2(0, 64, size.x, 54), tag + ": 정보 띠는 전체 폭")
 		check_eq(st.lv_band_rect().end.x, size.x, tag + ": Lv 띠는 오른쪽 끝까지")
-		var pr := st.portrait_rect()
-		check_eq([pr.position.y, pr.end.y, pr.end.x], [PartyStatusTab.TOP_H, size.y, size.x - PartyStatusTab.PORTRAIT_RIGHT],
-			tag + ": 초상은 오른쪽, 위 띠 아래 ~ 아래 끝(원작 그림 자리)")
-		check(pr.size.x >= 500.0 and pr.position.x >= PartyStatusTab.LEFT_W, tag + ": 초상은 크고 왼쪽 열과 안 겹친다")
-		check(pr.encloses(st.side_rect()) or pr.intersects(st.side_rect()), tag + ": 받는 배율 문패는 초상 위에 얹힌다")
-		check(st.portrait.get_index() < st.side.get_index(), tag + ": 그리는 순서 초상 → 문패(문패가 앞)")
-		check_eq(st.side_rect().end, size - Vector2(PartyStatusTab.SIDE_EDGE, PartyStatusTab.side_bottom()), tag + ": 받는 배율 문패는 「내역」 위")
-		check_eq(_rect(st.split_button), Rect2(size - Vector2(8 + 120, 8 + 64), Vector2(120, 64)), tag + ": 「내역」 오른쪽 아래(원작 Ⓐ SKILL 자리)")
 		check(pm.find_child("StatusBack", true, false) == null and not s.debug_snapshot()["buttons"].has("StatusBack"), tag + ": 「뒤로」 단추 없음(E1 ⑤)")
 		check_eq(PartyStatusTab.STAT_ROWS.size(), 6, tag + ": 능력치 여섯 줄(최대 HP·TP 줄 없음, E1 ④)")
-		check_eq(st.gear_rect(0).position.y, st.stat_rect(5).end.y + 13.0, tag + ": 공격·방어는 능력치 바로 아래로 당긴다")
-		check_eq(st.equip_rect(0).position.y, st.gear_rect(2).end.y + 10.0, tag + ": 장비 줄도 같이 당긴다")
 		check_eq(st.top.drawn["lv"], ["Lv %d" % s.state.party.members[1].level], tag + ": Lv 띠의 글은 「Lv n」뿐(E1 ③)")
 		check_eq([_rect(st.prev_button), _rect(st.next_button)], [Rect2(0, 0, 64, 64), Rect2(266, 0, 64, 64)], tag + ": 앞·다음 대원(원작 L·R 자리)")
 		for d in [st.top, st.left, st.portrait, st.side]:
@@ -773,10 +814,10 @@ func test_status_screen_follows_the_reference_table() -> void:
 	await kit.press_key(KEY_V)
 	check(st.split_view and st.drawn["split_view"] and st.split_button.checked, "V → 내역 보기")
 	for i in PartyStatusTab.STAT_ROWS.size():
-		var r := st.stat_rect(i)
+		var r := st.split_row_rect(i)
 		for c in 3:
-			check(r.encloses(st.split_cell(i, c)), "내역 칸 %d/%d 는 같은 줄 안" % [i, c])
-		check(st.split_cell(i, 0).position.x == st.bar_rect(i).position.x and st.split_cell(i, 2).end.x <= r.end.x, "내역 칸은 막대 자리")
+			check(r.encloses(st.split_cell(i, c)), "내역 칸 %d/%d 는 같은 줄(x 440 까지) 안" % [i, c])
+		check(st.split_cell(i, 0).position.x == st.bar_rect(i).position.x - 4.0 and st.split_cell(i, 2).end.x == 440.0, "내역 칸은 막대 칸 자리 ~ x 440")
 	await kit.press_key(KEY_E)
 	check(st.split_view, "대원을 넘겨도 내역 보기는 남는다")
 	await kit.tap(kit.center_of(st.split_button))
@@ -795,6 +836,155 @@ func test_status_screen_follows_the_reference_table() -> void:
 	await kit.press_key(KEY_2)
 	await kit.press_key(KEY_ENTER)
 	check(pm.page == "sub" and pm.tab == 0 and not st.split_view, "캠프를 다시 열면 막대 보기")
+
+
+## 노랑으로 보이는 색(채움 검사): 색상 0.1~0.19, 채도·밝기 높음.
+static func _is_yellow(c: Color) -> bool:
+	return c.h >= 0.1 and c.h <= 0.19 and c.s >= 0.4 and c.v >= 0.75
+
+
+## SheetParts 그리기 기록(그리는 호출이 남긴 것, 07 §9.9 E2-a 고침): 종류별 항목.
+static func _drawn_entries(ci: CanvasItem, kind: String) -> Array:
+	return SheetParts.record(ci).filter(func(e: Dictionary) -> bool: return e["kind"] == kind)
+
+
+## 자리 r 안에 그린 아이콘 이름들.
+static func _drawn_icons_in(ci: CanvasItem, r: Rect2) -> Array:
+	return _drawn_entries(ci, "icon").filter(func(e: Dictionary) -> bool: return r.encloses(e["rect"])).map(func(e: Dictionary) -> String: return e["name"])
+
+
+## 줄 r 안(글 바닥이 줄 안)에 그린 글들.
+static func _drawn_text_in(ci: CanvasItem, r: Rect2) -> Array:
+	return _drawn_entries(ci, "text").filter(func(e: Dictionary) -> bool:
+		return r.has_point(Vector2(e["rect"].position.x + 1.0, e["rect"].end.y - 6.0))).map(func(e: Dictionary) -> String: return e["text"])
+
+
+## 기록된 채움·다각형에 노랑이 없다(능력치 막대 칸 안의 노란 짧은 막대만 된다).
+func _check_no_yellow_fill(st: PartyStatusTab, tag: String) -> void:
+	var fills := _drawn_entries(st.left, "fill") + _drawn_entries(st.left, "poly")
+	check(fills.size() > 20, "%s: 채움 기록이 있다(%d)" % [tag, fills.size()])
+	for e in fills:
+		if not _is_yellow(e["color"]):
+			continue
+		var in_bar := false
+		for i in 6:
+			if st.bar_rect(i).encloses(e["rect"]):
+				in_bar = true
+		check(in_bar and e["color"] == SheetParts.STAT_BAR and not st.split_view, "%s: 노랑 채움 %s %s 는 막대 보기의 막대 칸 안 짧은 막대뿐" % [tag, e["color"], str(e["rect"])])
+
+
+## 상태 시트(07 §9.9 E2-a): 글이 잘리지 않는다(긴 직업·장비 이름, 「내역」 수, 받는 배율 세 갈래), 장비 줄의 종류 아이콘과 빈 칸,
+## 「내역」 보기가 x 440 안, 노랑 채움 0.
+func test_status_sheet_fits_text_shows_kind_icons_and_has_no_yellow_fill() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var defs := s.state.defs
+	var t := s.texts
+	# 대원 0: 받는 배율 세 갈래가 모두 보통이 아니게 한다(이지스 플레이트 = 열, 해독 칩 = 부식 나노, 마그 부츠 = 이동부, 표시 시험이라 규칙을 거치지 않는다).
+	var m0 := s.state.party.members[0]
+	var gear_ids := ["equip.training_sword", "equip.aegis_plate", "equip.antitox_chip", "equip.mag_boots"]
+	for slot in 4:
+		m0.equip[slot] = gear_ids[slot]
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_ENTER)
+	var st := pm.status_tab
+	await kit.frames(2)
+	check_eq([pm.page, pm.tab, pm.member], ["sub", 0, 0], "준비: 대원 0 상태")
+	var c: Control = st.left
+	# 직업 문패: 가장 긴 직업 이름.
+	var longest_class := ""
+	for id in defs.battle.class_ids:
+		if t.t(id).length() > longest_class.length():
+			longest_class = t.t(id)
+	check(SheetParts.text_width(c, longest_class, SheetParts.CLASS_FS) <= SheetParts.class_text_rect(st.class_rect()).size.x,
+		"가장 긴 직업 이름 「%s」 이 문패에 든다" % longest_class)
+	# 장비 이름: 가장 넓은 것.
+	var widest := ""
+	for id in defs.battle.equipment_ids:
+		if SheetParts.text_width(c, t.t(id), SheetParts.EQUIP_FS) > SheetParts.text_width(c, widest, SheetParts.EQUIP_FS):
+			widest = t.t(id)
+	check(SheetParts.text_width(c, widest, SheetParts.EQUIP_FS) <= SheetParts.equip_text_room(st.equip_rect(0)),
+		"가장 넓은 장비 이름 「%s」 이 장비 줄에 든다" % widest)
+	# 능력치·공격·방어 이름과 값.
+	var sb := SheetParts.stat_boxes(st.stat_rect(0))
+	for k in PartyStatusTab.STAT_ROWS:
+		check(SheetParts.text_width(c, t.t("stat." + k), SheetParts.STAT_NAME_FS) <= (sb["name"] as Rect2).size.x - 2.0 * SheetParts.TEXT_PAD,
+			"능력치 이름 %s 이 든다" % k)
+	check(SheetParts.text_width(c, "999", SheetParts.STAT_VALUE_FS) <= (sb["value"] as Rect2).size.x - 2.0 * SheetParts.TEXT_PAD, "능력치 값 999 가 든다")
+	var gc := SheetParts.gear_cells(st.gear_row_rect(1))
+	for k in BattleLimits.GEAR:
+		check(SheetParts.text_width(c, t.t("stat." + k), SheetParts.GEAR_LABEL_FS) <= (gc[0]["label"] as Rect2).size.x - 2.0 * SheetParts.TEXT_PAD,
+			"공격·방어 이름 %s 이 든다" % k)
+	check(SheetParts.text_width(c, "999", SheetParts.GEAR_VALUE_FS) <= (gc[0]["value"] as Rect2).size.x - 2.0 * SheetParts.TEXT_PAD, "공격·방어 값 999 가 든다")
+	# 장비 줄: 종류 아이콘(상점과 같은 ShopTabs.ICONS), 빈 칸은 빈 아이콘과 흐린 「비어 있음」.
+	for slot in 4:
+		var id: String = m0.equip[slot]
+		var want := str(ShopTabs.ICONS[defs.battle.equip(id).kind])
+		check_eq(st.drawn["equip"][slot], [want, t.t(id), false], "장비 줄 %d = 종류 아이콘 %s + 이름" % [slot, want])
+		check(want in VectorIcons.KIND_ICONS, "아이콘 %s 은 상점 종류 아이콘" % want)
+		check_eq(_drawn_icons_in(st.left, SheetParts.equip_boxes(st.equip_rect(slot))["icon"]), [want], "장비 줄 %d 아이콘 칸에 %s 를 그렸다" % [slot, want])
+		check(_drawn_text_in(st.left, st.equip_rect(slot)) == [t.t(id)], "장비 줄 %d 에 이름을 그렸다" % slot)
+	m0.equip[3] = ""
+	pm.refresh_view()
+	await kit.frames(2)
+	check_eq(st.drawn["equip"][3], ["", t.t("party.slot.empty"), true], "빈 칸: 아이콘 없음 + 「비어 있음」(흐림)")
+	check_eq(_drawn_icons_in(st.left, SheetParts.equip_boxes(st.equip_rect(3))["icon"]), [], "빈 칸 아이콘 칸에는 아이콘을 그리지 않는다")
+	var empty_txt := _drawn_entries(st.left, "text").filter(func(e: Dictionary) -> bool: return e["text"] == t.t("party.slot.empty"))
+	check(empty_txt.size() == 1 and empty_txt[0]["color"] == SheetParts.EQUIP_EMPTY_TEXT and SheetParts.EQUIP_EMPTY_TEXT != SheetParts.STAT_TEXT,
+		"빈 칸 「비어 있음」을 흐린 색으로 그렸다")
+	m0.equip[3] = "equip.mag_boots"
+	pm.refresh_view()
+	await kit.frames(1)
+	# 받는 배율: 실제 세 갈래 + 줄마다 두 값인 긴 경우. 줄이 문패 안에 들고, 문패는 「취소」「선택」 아래 + 8 보다 내려와 있다.
+	var size := pm.size
+	check_eq(st.drawn["received"].size(), 3, "받는 배율 세 갈래: %s" % str(st.drawn["received"]))
+	var long := PartyStatusTab.received_lines(t, {"resist": {"fire": 450, "ice": 750}, "ailment_vuln": {"poison": 0, "paralysis": 1500},
+		"bind_vuln": {"head": 500, "leg": 500}})
+	check_eq(long.size(), 3, "긴 경우도 세 줄")
+	for line in st.drawn["received"] + long:
+		var fs := PartyStatusTab.side_font_size(st.side, line)
+		check(SheetParts.text_width(c, line, fs) <= PartyStatusTab.SIDE_W - 2.0 * PartyStatusTab.SIDE_TEXT_PAD and fs >= PartyStatusTab.SIDE_FS_MIN,
+			"받는 배율 줄 「%s」 이 %dpx 로 든다" % [line, fs])
+	check(PartyStatusTab.side_height(3) <= PartyStatusTab.SIDE_TOP_MIN - PartyStatusTab.SIDE_BOTTOM, "세 줄 문패 높이가 키패드 아래에 든다")
+	check(st.side_rect().position.y >= size.y - 213.0 and is_equal_approx(st.side_rect().size.y, PartyStatusTab.side_height(3)),
+		"그린 문패 %s 는 세 줄 높이, 위 끝 ≥ H − 213" % str(st.side_rect()))
+	# 노랑 채움 0(막대 보기·「내역」 보기), 「내역」 켜짐도 노랑 아님.
+	check_eq(_yellow(pm), [], "상태의 노랑 채움은 0개")
+	_check_no_yellow_fill(st, "막대 보기")
+	for col in [SheetParts.CLASS_FILL, SheetParts.LEAF, SheetParts.STAT_NAME_BOX, SheetParts.STAT_VALUE_BOX, SheetParts.STAT_TRACK,
+			SheetParts.GEAR_LABEL_BOX, SheetParts.GEAR_VALUE_BOX, SheetParts.ICON_BOX, SheetParts.EQUIP_NAME_BOX, UiTheme.ST_SIDE_TOP, UiTheme.ST_SIDE_BOTTOM]:
+		check(not _is_yellow(col), "칸 색 %s 는 노랑 채움이 아니다" % col.to_html(false))
+	await kit.press_key(KEY_V)
+	check(st.split_view and st.split_button.checked, "V → 「내역」 보기")
+	check_eq(_yellow(pm), [], "「내역」 보기도 노랑 채움 0개")
+	await kit.frames(2)
+	_check_no_yellow_fill(st, "「내역」 보기")
+	# 머리 줄 받침: 대비 표가 쓰는 색(SPLIT_HEAD_BOX)으로 머리 줄 자리를 채우고, 머리 글은 그 위에 SPLIT_HEAD_TEXT 로.
+	var head_fills := _drawn_entries(st.left, "fill").filter(func(e: Dictionary) -> bool: return e["rect"] == st.split_head_rect())
+	check(head_fills.size() == 1 and head_fills[0]["color"] == SheetParts.SPLIT_HEAD_BOX, "「내역」 머리 줄 받침을 그렸다: %s" % str(head_fills))
+	var heads := _drawn_entries(st.left, "text").filter(func(e: Dictionary) -> bool:
+		return e["text"] in [t.t("party.col.base"), t.t("party.col.passive"), t.t("party.col.equip")])
+	check_eq(heads.size(), 3, "머리 글 셋을 그렸다")
+	for e in heads:
+		check(e["color"] == SheetParts.SPLIT_HEAD_TEXT and st.split_head_rect().grow(1.0).has_point(Vector2(e["rect"].position.x, e["rect"].end.y - 6.0)),
+			"머리 글 %s 은 받침 위, 대비 표의 글자색" % e["text"])
+	var on_top: Color = UiTheme.look(st.split_button.theme_state())["top"]
+	check(not _is_yellow(on_top), "「내역」 켜짐 모양 %s (%s) 은 노랑 채움이 아니다" % [st.split_button.theme_state(), on_top.to_html(false)])
+	# 「내역」 보기: 세 칸이 줄 안·x 440 안, 머리 줄은 첫 줄 바로 위·문패 아래, 큰 수도 든다.
+	for i in 6:
+		var row := st.split_row_rect(i)
+		check(row.end.x <= 440.0 and row.end.x < pm.dir_pad.get_global_rect().position.x, "내역 줄 %d 은 x 440 안" % i)
+		for k in 3:
+			check(row.encloses(st.split_cell(i, k)), "내역 칸 %d/%d 은 줄 안" % [i, k])
+		check(st.split_cell(i, 0).position.x == st.bar_rect(i).position.x - 4.0, "내역 칸은 막대 칸 자리부터")
+	var hr := st.split_head_rect()
+	check(hr.end.y == st.stat_rect(0).position.y and hr.position.y >= st.class_extent().end.y, "머리 줄 %s 은 첫 줄 바로 위, 문패 아래" % str(hr))
+	var cw := st.split_cell(0, 0).size.x - SheetParts.TEXT_PAD
+	for v in ["999", "+99", "-99"]:
+		check(SheetParts.text_width(c, v, SheetParts.SPLIT_FS) <= cw, "내역 수 %s 가 칸에 든다" % v)
+	for hk in ["party.col.base", "party.col.passive", "party.col.equip"]:
+		check(SheetParts.text_width(c, t.t(hk), SheetParts.SPLIT_HEAD_FS) <= cw, "내역 머리 %s 가 칸에 든다" % hk)
 
 
 # ---- 스킬 트리 화면(R2-b, 원작 jp_guide2_img3·img2) ----
@@ -1410,6 +1600,17 @@ func test_camp_and_status_colours_meet_contrast() -> void:
 		["정보 띠 TP·안내", MemberHeader.STRIP_ACCENT, [UiTheme.MEMBER_STRIP_TOP, UiTheme.MEMBER_STRIP_BOTTOM]],
 		["정보 띠 이름표", MemberHeader.STRIP_LABEL, [UiTheme.MEMBER_STRIP_TOP, UiTheme.MEMBER_STRIP_BOTTOM]],
 		["직업 문패", UiTheme.TEXT, [UiTheme.ST_CLASS_PLATE]],
+		# 상태 시트 부품(07 §9.9 E2-a, SheetParts): 잎 문패, 능력치 줄, 「내역」, 공격·방어, 장비 줄, 받는 배율.
+		["시트 직업 문패", SheetParts.CLASS_TEXT, [SheetParts.CLASS_FILL]],
+		["시트 능력치 이름·값", SheetParts.STAT_TEXT, [SheetParts.STAT_NAME_BOX, SheetParts.STAT_VALUE_BOX]],
+		["시트 내역 값", SheetParts.STAT_TEXT, [SheetParts.STAT_TRACK]],
+		["시트 내역 기본", UiTheme.ST_LV_TEXT, [SheetParts.STAT_TRACK]],
+		["시트 내역 머리", SheetParts.SPLIT_HEAD_TEXT, [SheetParts.SPLIT_HEAD_BOX]],
+		["시트 공격·방어", SheetParts.STAT_TEXT, [SheetParts.GEAR_LABEL_BOX, SheetParts.GEAR_VALUE_BOX]],
+		["시트 장비 이름", SheetParts.STAT_TEXT, [SheetParts.EQUIP_NAME_BOX]],
+		["시트 빈 장비", SheetParts.EQUIP_EMPTY_TEXT, [SheetParts.EQUIP_NAME_BOX]],
+		["시트 바꾸면 오름", SheetParts.UP_COLOR, [SheetParts.STAT_VALUE_BOX, SheetParts.GEAR_VALUE_BOX]],
+		["시트 바꾸면 내림", SheetParts.DOWN_COLOR, [SheetParts.STAT_VALUE_BOX, SheetParts.GEAR_VALUE_BOX]],
 		["능력치 이름", UiTheme.TEXT, [UiTheme.ST_ROW_NAME, UiTheme.ST_ROW]],
 		["공격·방어", UiTheme.TEXT, [UiTheme.ST_GEAR_LABEL, UiTheme.ST_GEAR_VALUE]],
 		["장비 줄", UiTheme.TEXT, [UiTheme.ST_EQUIP_ROW]],
@@ -1534,3 +1735,89 @@ func test_records_strip_follows_direct_tab_changes() -> void:
 	await kit.press_key(KEY_ESCAPE)
 	await kit.frames(1)
 	check_eq([pm.page, pm.notice_line.is_visible_in_tree(), pm.ribbon.is_visible_in_tree()], ["root", false, true], "뿌리: 알림 줄 없음, 장소 띠 보임")
+
+
+## 「바꾸면」 값(장비 화면 E2-c 가 쓸 SheetParts API, research 08 §5.1 「攻撃 ↑ 23」): 값 칸에 새 값만 오른쪽 맞춤, 왼쪽에 ↑·↓(모양 높이 14 이상),
+## 「999」가 화살표 옆에 든다. 능력치 줄과 공격·방어 칸, dir −1 · 0 · +1. 그리는 호출의 기록을 본다.
+func test_sheet_after_values_show_the_new_value_beside_a_readable_arrow() -> void:
+	kit = Kit.new(tree)
+	var host := Control.new()
+	host.size = Vector2(500, 200)
+	tree.root.add_child(host)
+	var stat_r := Rect2(66, 20, 319, 28)
+	var gear_r := Rect2(66, 80, 374, 34)
+	var cases := [[0, "18", "", "18"], [1, "25", "28", "28"], [-1, "10", "8", "8"], [1, "99", "999", "999"], [-1, "999", "998", "998"]]
+	for cs in cases:
+		var dir: int = cs[0]
+		host.draw.connect(func() -> void:
+			SheetParts.begin(host)
+			SheetParts.draw_stat_row(host, stat_r, "힘", cs[1], 0.5, cs[2], dir)
+			SheetParts.draw_gear_row(host, gear_r, [["공격", cs[1], cs[2] if not str(cs[2]).is_empty() else null, dir], ["방어", "5"]]),
+			CONNECT_ONE_SHOT)
+		host.queue_redraw()
+		await kit.frames(2)
+		var tag := "dir %d, %s → %s" % [dir, cs[1], cs[2]]
+		var col := SheetParts.STAT_TEXT if dir == 0 else (SheetParts.UP_COLOR if dir > 0 else SheetParts.DOWN_COLOR)
+		var boxes := [[SheetParts.stat_boxes(stat_r)["value"], SheetParts.STAT_VALUE_FS, "능력치"],
+			[SheetParts.gear_cells(gear_r)[0]["value"], SheetParts.GEAR_VALUE_FS, "공격"]]
+		for bx in boxes:
+			var vb: Rect2 = bx[0]
+			var fs: int = bx[1]
+			var texts := _drawn_entries(host, "text").filter(func(e: Dictionary) -> bool: return vb.grow(0.5).has_point(e["rect"].position + Vector2(1, fs * 0.8)))
+			check_eq(texts.map(func(e: Dictionary) -> String: return e["text"]), [cs[3]], "%s %s: 값 칸에는 새 값만" % [tag, bx[2]])
+			if texts.size() != 1:
+				continue
+			var tx: Dictionary = texts[0]
+			check_eq(tx["color"], col, "%s %s: 값 색" % [tag, bx[2]])
+			check(is_equal_approx(tx["rect"].end.x, vb.end.x - SheetParts.TEXT_PAD), "%s %s: 오른쪽 맞춤(값 칸 오른쪽 − 8)" % [tag, bx[2]])
+			var room := SheetParts.value_room(vb, dir)
+			check(is_equal_approx(tx["rect"].size.x, room) and SheetParts.text_width(host, "999", fs) <= room,
+				"%s %s: 「999」(%.0f) 가 화살표 옆 자리 %.0f 에 든다" % [tag, bx[2], SheetParts.text_width(host, "999", fs), room])
+			var icons := _drawn_entries(host, "icon").filter(func(e: Dictionary) -> bool: return vb.encloses(e["rect"]))
+			if dir == 0:
+				check_eq(icons.size(), 0, "%s %s: 화살표 없음" % [tag, bx[2]])
+				continue
+			check(icons.size() == 1 and icons[0]["name"] == ("up" if dir > 0 else "down") and icons[0]["color"] == col, "%s %s: 화살표 %s" % [tag, bx[2], str(icons)])
+			if icons.size() != 1:
+				continue
+			var ar: Rect2 = icons[0]["rect"]
+			check(ar.size.y * SheetParts.ARROW_GLYPH >= 14.0, "%s %s: 화살 모양 높이 %.1f ≥ 14" % [tag, bx[2], ar.size.y * SheetParts.ARROW_GLYPH])
+			check(ar.position.x < vb.position.x + 10.0 and ar.end.x <= tx["rect"].position.x + 0.5, "%s %s: 화살표는 값 칸 왼쪽, 값 글 자리 앞" % [tag, bx[2]])
+	host.queue_free()
+	await kit.frames(1)
+
+
+## 받는 배율 줄이 앞으로 자료가 바뀌어도 잘리지 않는다(07 §9.9 E2-a 고침, 조정자 결정): 갈래마다 자료(직업 기본값·장비 보정)에서 보통이 아닐 수 있는
+## 항목 수 n 과 가장 넓은 항목 글(값 범위 끝 −100%·+200%)로, n × 가장 넓은 것 + (n − 1) × 사이 가 12px 로 문패 안 폭에 든다.
+func test_received_lines_fit_for_any_data_combination() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var defs := s.state.defs
+	var t := s.texts
+	var c: Control = pm.status_tab.left
+	var room := PartyStatusTab.SIDE_W - 2.0 * PartyStatusTab.SIDE_TEXT_PAD
+	var lo := (BattleLimits.RANGES["resist"][0] - 1000) / 10
+	var hi := (BattleLimits.RANGES["resist"][1] - 1000) / 10
+	for pair in PartyStatusTab.RECEIVED:
+		var cat: String = pair[0]
+		var keys := {}
+		for cid in defs.battle.class_ids:
+			var cl: BattleDb.ClassDef = defs.battle.classes[cid]
+			var base: Dictionary = cl.get(cat)
+			for k in base:
+				if int(base[k]) != 1000:
+					keys[k] = true
+		for id in defs.battle.equipment_ids:
+			var e := defs.battle.equip(id)
+			var d: Dictionary = e.get(cat)
+			for k in d:
+				if int(d[k]) != 0:
+					keys[k] = true
+		var widest := 0.0
+		for k in keys:
+			for pct in [lo, hi]:
+				var entry := t.t("party.mult", {"name": t.t(pair[1] + k), "pct": PartyMenu.signed(pct)})
+				widest = maxf(widest, SheetParts.text_width(c, entry, PartyStatusTab.SIDE_FS_MIN))
+		var n := keys.size()
+		var bound := n * widest + maxi(0, n - 1) * SheetParts.text_width(c, "  ", PartyStatusTab.SIDE_FS_MIN)
+		check(bound <= room, "%s: 항목 %d 개(%s), 가장 넓은 %.0f → 최악 폭 %.0f ≤ %.0f(12px)" % [cat, n, str(keys.keys()), widest, bound, room])
