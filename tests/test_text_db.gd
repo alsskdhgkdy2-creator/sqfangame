@@ -74,7 +74,7 @@ func test_real_texts_only_battle_lines_change() -> void:
 				if tpl.contains("{%s}%s" % [name, p]):
 					has_pattern = true
 		if has_pattern:
-			check(str(key).begins_with("battle."), "조사 고르기는 전투 문구에만: " + str(key))
+			check(str(key).begins_with("battle.") or str(key).begins_with("shop."), "조사 고르기는 전투·상점 문구에만(08 §7.6 shop.confirm.buy_unfit): " + str(key))
 			for p in PATTERNS:
 				check(not db.t(key, args).contains(p), "%s: 묶음이 남지 않는다 (%s)" % [key, db.t(key, args)])
 		elif not args.is_empty():

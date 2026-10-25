@@ -16,6 +16,8 @@ const PAD_SIDE := 232.0
 ## 왼쪽 창과 인물 판 사이.
 const GAP := 24.0
 const LIST_TOP := 172.0
+## 상점(08 §7.1): 문패 아래에 종류 탭 줄(y 166~230)이 있으면 목록 창 위 끝.
+const TABS_LIST_TOP := 236.0
 const LIST_BOTTOM := 500.0
 const DESC_TOP := 510.0
 const BOTTOM := 8.0
@@ -32,11 +34,15 @@ var list_window: Control
 var desc_window: Control
 var panel: CharPanel
 var title_text := ""
+## 문패 글을 오른쪽에 맞춘다(상점 소지금 「1,480엔」, 08 §7.1). 캠프 화면 이름은 가운데.
+var title_right := false
 var desc_title := ""
 var desc_lines: Array[String] = []
 var _has_desc := true
 ## 왼쪽 목록·설명 창의 왼쪽 끝(build 의 left).
 var left := SIDE
+## 목록 창 위 끝(build 의 list_top).
+var list_top := LIST_TOP
 
 
 func _init() -> void:
@@ -46,17 +52,19 @@ func _init() -> void:
 
 ## prefix: 단추 이름 앞(「Equip」→ EquipBack·EquipPrev·EquipNext). with_desc: 설명 창이 있는지(없으면 목록 창이 아래까지).
 ## left_x: 왼쪽 목록·설명 창의 왼쪽 끝(캠프는 PAD_SIDE, 가상 키패드 자리를 비운다).
-func build(prefix: String, back_label: String, with_desc: bool, left_x: float = SIDE) -> void:
+## top: 목록 창 위 끝(캠프는 LIST_TOP, 상점에 종류 탭 줄이 있으면 TABS_LIST_TOP).
+func build(prefix: String, back_label: String, with_desc: bool, left_x: float = SIDE, top: float = LIST_TOP) -> void:
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	_has_desc = with_desc
 	left = left_x
+	list_top = top
 	list_window = _deco(prefix + "ListWindow", Vector2(0, 0), Vector2(1, 0 if with_desc else 1),
-		Vector4(left, LIST_TOP, -CharPanel.W - GAP, LIST_BOTTOM if with_desc else -BOTTOM),
+		Vector4(left, list_top, -CharPanel.W - GAP, LIST_BOTTOM if with_desc else -BOTTOM),
 		func(c: Control) -> void: UiTheme.draw_shop_window(c, Rect2(Vector2.ZERO, c.size)))
 	desc_window = _deco(prefix + "DescWindow", Vector2(0, 0), Vector2(1, 1), Vector4(left, DESC_TOP, -CharPanel.W - GAP, -BOTTOM), _draw_desc)
 	desc_window.visible = with_desc
 	title_plate = _deco(prefix + "Title", Vector2.ZERO, Vector2.ZERO, Vector4(TITLE.position.x, TITLE.position.y, TITLE.end.x, TITLE.end.y),
-		func(c: Control) -> void: UiTheme.draw_plate(c, Rect2(Vector2.ZERO, c.size), title_text, 24))
+		_draw_title)
 	banner = FacilityBanner.new()
 	banner.name = prefix + "Banner"
 	add_child(banner)
@@ -86,7 +94,7 @@ func _deco(n: String, a0: Vector2, a1: Vector2, off: Vector4, painter: Callable)
 ## 목록 창 안쪽(줄을 놓는 곳)의 앵커와 여백: [a0, a1, Vector4].
 func list_anchor() -> Array:
 	return [Vector2(0, 0), Vector2(1, 0 if _has_desc else 1),
-		Vector4(left + PAD, LIST_TOP + PAD * 0.75, -CharPanel.W - GAP - PAD, (LIST_BOTTOM if _has_desc else -BOTTOM) - PAD * 0.75)]
+		Vector4(left + PAD, list_top + PAD * 0.75, -CharPanel.W - GAP - PAD, (LIST_BOTTOM if _has_desc else -BOTTOM) - PAD * 0.75)]
 
 
 func list_window_rect() -> Rect2:
@@ -105,10 +113,26 @@ func title_rect() -> Rect2:
 	return title_plate.get_rect()
 
 
-func show_title(t: String) -> void:
-	if t != title_text:
+func show_title(t: String, right: bool = false) -> void:
+	if t != title_text or right != title_right:
 		title_text = t
+		title_right = right
 		title_plate.queue_redraw()
+
+
+## 오른쪽 맞춤 문패 글의 오른쪽 끝 여백(기울기 + 안쪽 선 안).
+const TITLE_RIGHT_PAD := 28.0
+const TITLE_FS := 24
+
+
+func _draw_title(c: Control) -> void:
+	var r := Rect2(Vector2.ZERO, c.size)
+	if not title_right:
+		UiTheme.draw_plate(c, r, title_text, TITLE_FS)
+		return
+	UiTheme.draw_plate(c, r, "", TITLE_FS)
+	c.draw_string(c.get_theme_default_font(), Vector2(0, r.get_center().y + TITLE_FS * 0.36), title_text, HORIZONTAL_ALIGNMENT_RIGHT,
+		r.size.x - TITLE_RIGHT_PAD, TITLE_FS, UiTheme.HEAD_TEXT)
 
 
 func show_desc(title: String, lines: Array[String]) -> void:

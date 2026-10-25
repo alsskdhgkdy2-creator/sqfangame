@@ -99,7 +99,8 @@ const SKIN_LOOKS := ["tool:normal", "tool:pressed", "pill:normal", "pill:pressed
 	"hint:normal", "hint:pressed", "cmd:chosen",
 	"skill:normal", "skill:pressed", "skill:selected", "skill:selected_pressed", "skill:disabled", "skill:disabled_selected",
 	"fac:normal", "fac:pressed", "fac:selected", "fac:selected_pressed", "fac:disabled", "fac:disabled_selected", "fac:chosen",
-	"tree:normal", "tree:pressed", "tree:selected", "tree:selected_pressed", "tree:disabled", "tree:disabled_selected"]
+	"tree:normal", "tree:pressed", "tree:selected", "tree:selected_pressed", "tree:disabled", "tree:disabled_selected",
+	"shoptab:normal", "shoptab:pressed"]
 ## 전투 명령 목록(원작 HD 1868180_0e36b17e): 줄은 청록, 커서 줄은 노랑 + 어두운 글자, 못 고르는 줄은 어두운 초록 + 회색 글자.
 const CMD_TOP := Color("00644c")
 const CMD_BOTTOM := Color("00573f")
@@ -202,6 +203,22 @@ const SHOP_PANEL_TOP := Color(0.05, 0.33, 0.37, 0.86)
 const SHOP_PANEL_BOTTOM := Color(0.03, 0.22, 0.26, 0.9)
 const SHOP_PANEL_GRID := Color(0.45, 0.95, 1.0, 0.1)
 const SHOP_SECTION_TEXT := Color("6ff3db")
+## 상점 부품(08 §7, 원작 HD 상점 jp_guide3_img1·2): 종류 탭(고르지 않은 칸은 어두운 남색, 고른 칸은 공용 checked 하늘색),
+## 줄 왼쪽 아이콘 칸·빈 칸(어두운 남색), 「NEW」 주황 알약, 입하 알림 초록 창과 주황 물건 이름.
+const SHOP_TAB := Color("0a1f4a")
+const SHOP_TAB_PRESSED := Color("16357a")
+const SHOP_TAB_EDGE := Color("3a5fa8")
+const SHOP_TAB_TEXT := Color("d8e8ff")
+const SHOP_ICON_CELL := Color("0a1838")
+const SHOP_ICON_EDGE := Color("2a4f9a")
+const SHOP_ICON := Color("cfe6ff")
+const SHOP_EMPTY_ROW := Color(0.02, 0.06, 0.13, 0.85)
+const SHOP_NEW_PILL := Color("c03c0c")
+const SHOP_NEW_TEXT := Color(1, 1, 1)
+const SHOP_NOTICE_TOP := Color("0a4c39")
+const SHOP_NOTICE_BOTTOM := Color("083e2f")
+const SHOP_NOTICE_EDGE := Color("8fe0c8")
+const SHOP_NOTICE_ITEM := Color("ffa04a")
 ## 스킬 트리 화면(원작 HD jp_guide2_img2·img3, gw_14): 파랑 계열. 위 줄(이름 칸·Lv 띠·SKILL POINT 띠), 직업 폴더 탭,
 ## 반투명 파랑 창(트리·아래 설명 띠·확인 창), 노드 알약(짙은 파랑 + 밝은 글자, 커서는 밝은 하늘색 + 짙은 글자, 오른쪽 Lv 상자),
 ## 설명 띠의 레벨 칸(배운 레벨 시안·초안 노랑·남은 칸 짙은 파랑).
@@ -358,6 +375,11 @@ static func _build_looks() -> Dictionary:
 	d["tree:pressed"]["muted"] = TREE_PRESSED_MUTED  # 누른 채움이 밝아 공용 흐린 글자는 4.5:1 미만
 	for k in ["tree:normal", "tree:pressed", "tree:selected", "tree:selected_pressed", "tree:disabled", "tree:disabled_selected"]:
 		d[k]["chamfer"] = 20.0
+	# 상점 종류 탭(「shoptab:*」): 어두운 남색 칸. 고른 칸은 공용 checked(하늘색), 노랑 커서는 쓰지 않는다(08 §7.3).
+	d["shoptab:normal"] = _plain(_btn(SHOP_TAB, SHOP_TAB, CMD_EDGE, BTN_OUTER_W, SHOP_TAB_EDGE, 1.0, none, SHOP_TAB_TEXT, SHOP_TAB_TEXT,
+		SHOP_TAB_TEXT))
+	d["shoptab:pressed"] = _plain(_btn(SHOP_TAB_PRESSED, SHOP_TAB_PRESSED, CMD_EDGE, BTN_OUTER_W, SHOP_TAB_TEXT, 1.0, none, SHOP_TAB_TEXT,
+		SHOP_TAB_TEXT, SHOP_TAB_TEXT))
 	d["skill:disabled"] = d["cmd:disabled"]
 	d["skill:disabled_selected"] = d["cmd:disabled_selected"]
 	d["hint:normal"] = _plain(_btn(HINT_PILL, HINT_PILL, HINT_EDGE, BTN_OUTER_W, HINT_PILL, 1.0, none, BATTLE_BANNER_TEXT, BATTLE_BANNER_TEXT,
