@@ -1,5 +1,5 @@
 ## 캠프 장비·소지품의 오른쪽 인물 판(M2.7 R2-c, 원작 상점 화면 jp_guide3_img1~3 의 인물 판): 화면 오른쪽에 붙는다(폭 W, 전체 높이).
-## 위 줄(MemberHeader: 이름 칸 + 앞·다음 대원 단추 = 원작 L·R, Lv 띠, HP·TP 띠, 「뒤로」 없음), 직업 문패, 큰 초상 자리표시(M3 전까지),
+## 위 줄(MemberHeader: 이름 칸 + 앞·다음 대원 단추 = 원작 L·R, Lv 띠, HP·TP 띠, 대원 띠 한 벌 색), 직업 문패, 큰 초상 자리표시(M3 전까지),
 ## 능력치 묶음(EquipTotals: 힘~행운 열 + 공격·방어 2×2), 아래 장비 넷 줄(읽기만, mark 칸은 노랑 테두리).
 ## 장식은 그리기만 하고, 누르는 것은 위 줄의 대원 단추 둘뿐이다(step 신호).
 class_name CharPanel
@@ -33,7 +33,7 @@ func build(prefix: String) -> void:
 	top = MemberHeader.new()
 	top.name = prefix + "Top"
 	add_child(top)
-	top.build(prefix, "")
+	top.build(prefix)
 	top.step.connect(func(d: int) -> void: step.emit(d))
 	totals = EquipTotals.new()
 	totals.name = prefix + "Totals"

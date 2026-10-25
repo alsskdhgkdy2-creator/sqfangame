@@ -1,17 +1,16 @@
-## 캠프 「상태」 화면(07 §9.2, M2.7 R2, 읽기만): 원작 HD 상태 화면(gs2_653218·653223·653241)을 어둡게 한 화면 전체 3D 시야 위에 옮긴다.
-## 위 줄: 이름 칸(밝은 판, 양 끝 앞·다음 대원 단추 = 원작 L·R) + Lv 띠(Lv·누적 경험치·남은 SP) + 정보 띠(HP·TP, 다음 레벨까지 + 막대).
-## 왼쪽 열: 직업 문패, 능력치 8줄(이름 상자 + 합계 + 노랑 막대), 공격·방어 넷(판 둘씩 두 줄), 장비 4칸.
+## 캠프 「상태」 화면(07 §9.2, M2.7 R2, 읽기만): 원작 HD 상태 화면(gs2_653218·653223·653241)을 캠프 무늬 판(CampBackdrop) 위에 옮긴다.
+## 위 줄: 이름 칸(밝은 판, 양 끝 앞·다음 대원 단추 = 원작 L·R) + Lv 띠(「Lv n」만) + 정보 띠(HP·TP, 다음 레벨까지 + 막대).
+## 왼쪽 열: 직업 문패, 능력치 6줄(힘~행운, 이름 상자 + 합계 + 노랑 막대), 공격·방어 넷(판 둘씩 두 줄), 장비 4칸.
 ## 원작에 자리가 없는 「기본 / 패시브 / 장비」 나눔(GrowthRules.profile 의 breakdown)은 오른쪽 아래 「내역」 단추(원작 「Ⓐ SKILL」 안내 자리,
 ## 키 V)로 같은 능력치 줄의 막대 칸을 세 값으로 바꿔 보인다(다시 누르면 막대). 고른 보기는 대원을 넘겨도 남고 캠프를 다시 열면 막대로.
 ## 오른쪽 큰 초상(원작 그림 자리: 위 띠 아래 ~ 화면 아래 끝, 받는 배율 문패 뒤. 자리표시는 직업색 모양 + 첫 글자, 그림은 M3),
 ## 오른쪽 아래 문패(원작 FORCE·LIMIT 자리)에 받는 배율(1000 이 아닌 것만).
-## 자리는 모두 앵커: 왼쪽 묶음은 왼쪽 위, 초상·받는 배율 문패·「내역」은 오른쪽, 「뒤로」는 오른쪽 위.
+## 자리는 모두 앵커: 왼쪽 묶음은 왼쪽 위, 초상·받는 배율 문패·「내역」은 오른쪽. 「뒤로」 단추는 없다(키패드 「취소」·Esc·P, 07 §9.9 E1 ⑤).
 class_name PartyStatusTab
 extends Control
 
-const STAT_ROWS := ["max_hp", "max_tp", "STR", "INT", "VIT", "WIS", "AGI", "LUC"]
-## 직업 레벨 표의 키(막대 끝 = 상한 레벨의 기본값).
-const LEVEL_KEYS := {"max_hp": "hp", "max_tp": "tp"}
+## 능력치 여섯 줄(07 §9.9 E1 ④: 최대 HP·TP 줄은 없다, HP·TP 는 위 띠에). 막대 끝 = 상한 레벨의 기본값.
+const STAT_ROWS := ["STR", "INT", "VIT", "WIS", "AGI", "LUC"]
 const RECEIVED := [["resist", "element."], ["ailment_vuln", "ailment."], ["bind_vuln", "bind."]]
 ## 위 줄(원작 y 0~118): 이름 칸, Lv 띠, 정보 띠(MemberHeader).
 const TOP_H := MemberHeader.H
@@ -23,19 +22,20 @@ const STAT_H := 28.0
 const STAT_X := 40.0
 const STAT_W := 380.0
 const NAME_BOX_W := 100.0
-const GEAR_Y := 448.0
+## 공격·방어·장비는 능력치 여섯 줄 바로 아래로 당긴다(E1 ④, 원작 자리 맞춤은 E2): 마지막 줄 끝 + 10.
+const GEAR_Y := 386.0
 const GEAR_H := 34.0
 const GEAR_W := 186.0
 const GEAR_GAP := 8.0
 const GEAR_LABEL_W := 92.0
-const EQUIP_Y := 532.0
+const EQUIP_Y := 470.0
 const EQUIP_PITCH := 38.0
 const EQUIP_H := 34.0
 const LEFT_W := 440.0
 ## 나눔 보기(막대 칸을 세 값으로): 칸 폭, 머리 글자 줄(직업 문패와 첫 능력치 줄 사이).
 const SPLIT_COL := 60.0
 const SPLIT_HEAD_Y := 187.0
-## 초상(오른쪽, 위 띠 아래 ~ 아래 끝)·받는 배율 문패(「내역」 위)·「내역」(오른쪽 아래)·「뒤로」.
+## 초상(오른쪽, 위 띠 아래 ~ 아래 끝)·받는 배율 문패(「내역」 위)·「내역」(오른쪽 아래).
 const PORTRAIT_W := 540.0
 const PORTRAIT_RIGHT := 16.0
 const SIDE_W := 240.0
@@ -47,7 +47,6 @@ const HINT_EDGE := 8.0
 var menu: PartyMenu
 var prev_button: PartyButton
 var next_button: PartyButton
-var back_button: PartyButton
 ## 「내역」(나눔 보기 켜고 끄기).
 var split_button: PartyButton
 ## 막대 칸 대신 기본·패시브·장비를 보이는지(대원을 넘겨도 남고 reset 으로 끈다).
@@ -57,7 +56,7 @@ var top: MemberHeader
 var left: Control
 var portrait: Control
 var side: Control
-## 마지막으로 그린 값(시험·디버그): name, class, level, exp, sp, hp, tp, next, next_ratio, stats{키: [합계, 기본, 패시브, 장비, 막대 비율]},
+## 마지막으로 그린 값(시험·디버그): name, class, level, hp, tp, next, next_ratio, stats{키: [합계, 기본, 패시브, 장비, 막대 비율]},
 ## gear{키: 값}, equip[[칸 이름, 장비 이름]], received[글].
 var drawn := {}
 
@@ -69,12 +68,10 @@ func setup(m: PartyMenu) -> void:
 	top = MemberHeader.new()
 	top.name = "StatusTop"
 	add_child(top)
-	top.build("Status", menu.texts.t("camp.back"))
+	top.build("Status")
 	top.step.connect(func(d: int) -> void: menu.handle("member_step", d))
-	top.back.connect(func() -> void: menu.handle("back"))
 	prev_button = top.prev_button
 	next_button = top.next_button
-	back_button = top.back_button
 	left = _deco("StatusLeft", Vector2.ZERO, Vector2.ZERO, Vector4(0, 0, LEFT_W, 720), _draw_left)
 	# 초상은 받는 배율 문패 앞(트리 순서 = 그리는 순서: 문패가 초상 위).
 	portrait = _deco("StatusPortrait", Vector2(1, 0), Vector2(1, 1), Vector4(-PORTRAIT_RIGHT - PORTRAIT_W, TOP_H, -PORTRAIT_RIGHT, 0), _draw_portrait)
@@ -196,7 +193,7 @@ func refresh() -> void:
 	var cap_row: Dictionary = c.levels.get(g.level_cap, c.levels.get(m.level, {}))
 	for k in STAT_ROWS:
 		var b: Dictionary = p["breakdown"][k]
-		var top_v := maxf(1.0, float(cap_row.get(LEVEL_KEYS.get(k, k), b["total"])))
+		var top_v := maxf(1.0, float(cap_row.get(k, b["total"])))
 		stats[k] = [int(b["total"]), int(b["base"]), int(b["passive"]), int(b["equip"]), clampf(float(b["total"]) / top_v, 0.0, 1.0)]
 	var gear := {}
 	for k in BattleLimits.GEAR:
@@ -217,8 +214,7 @@ func refresh() -> void:
 	drawn = {
 		"name": menu.member_name(i), "class": t.t(defs.party.class_ids[i]),
 		"class_color": BattleCard.CLASS_COLORS.get(defs.party.class_ids[i], Color(0.7, 0.7, 0.7)),
-		"level": t.t("party.level", {"level": m.level}), "exp": t.t("party.exp", {"exp": m.exp}),
-		"sp": t.t("party.sp_left", {"sp": GrowthRules.sp_left(defs, m)}),
+		"level": t.t("party.level", {"level": m.level}),
 		"hp": t.t("party.hp", {"hp": m.hp, "max": m.max_hp}), "tp": t.t("party.tp", {"tp": m.tp, "max": m.max_tp}),
 		"next": t.t("party.exp_max") if at_cap else t.t("party.exp_next", {"n": next_n}),
 		"next_ratio": 1.0 if at_cap else clampf(float(m.exp - g.cum(m.level)) / span, 0.0, 1.0),
@@ -227,7 +223,6 @@ func refresh() -> void:
 	drawn["split_view"] = split_view
 	top.name_text = drawn["name"]
 	top.level_text = drawn["level"]
-	top.level_extra = "%s    %s" % [drawn["exp"], drawn["sp"]]
 	top.hp_text = drawn["hp"]
 	top.tp_text = drawn["tp"]
 	top.right_text = drawn["next"]

@@ -1,8 +1,10 @@
 ## 캠프 기록 화면(07 §9.1·§9.2, M2.7 R2-d: 원작 HD 불러오기 화면 gs2_653240 짜임, 1280×720 기준 실측):
-## 왼쪽 위 이름 문패(원작 「Load Game」 x 0~272 · y 38~92), 오른쪽 위 「뒤로」(원작 「Ⓧ DELETE」 안내 자리),
+## 맨 위는 캠프 뿌리의 띠 그대로(걸음 문패·장소 띠·소지금, 알림 줄 자리에 「기록」: PartyMenu 가 그린다, 07 §9.9 E1 ⑥). 「뒤로」 단추는 없다.
 ## 가운데 슬롯 창(원작 x 170~1110 · y 105~690, 짙은 남색 창 안에 슬롯 카드 셋: 번호 칸 + 대표 이름·Lv 띠 + 줄 둘) →
-## 우리 x 가운데 ±430 · y 100~594(P3: 940 → 860, 좁은 화면에서는 왼쪽 아래 방향 십자를 비켜 x 224 부터), 카드 150 높이(번호 칸, 「대표 대원 Lv n」, 「층 · 걸음」, 저장 시각, 오른쪽에 「저장」「불러오기」).
-## 아래 띠(원작에 없음): 「내보내기」「가져오기」, 「자동 지도」 끔·바닥만·바닥+벽, 「새 게임」(확인 창).
+## 우리 x 가운데 ±430 · y 116~598(알림 줄 y 108 아래 + 8. P3: 940 → 860, 좁은 화면에서는 왼쪽 아래 방향 십자를 비켜 x 224 부터),
+## 카드 150 높이·간격 6(번호 칸, 「대표 대원 Lv n」, 「층 · 걸음」, 저장 시각, 오른쪽에 「저장」「불러오기」).
+## 아래 띠(원작에 없음, y 604~712): 「내보내기」「가져오기」, 「자동 지도」 끔·바닥만·바닥+벽, 「새 게임」(확인 창).
+## 노랑 채움은 커서 단추 하나다(E1 ⑦): 커서 카드의 번호 칸은 밝은 하늘색(cmd:chosen 과 같은 색), 카드는 노란 테두리(표지).
 ## 값·일은 바깥(탐색 화면)이 menu.records 갈고리로 준다: slots·save·load·export·import·automap·set_automap·new_game.
 ## 키보드: ↑↓ 줄(카드 셋 + 아래 띠), ←→ 줄 안, Enter 누름. 단추를 누르면(포인터) 커서도 그 단추로.
 class_name PartyRecordsTab
@@ -13,27 +15,23 @@ const WIN_W := 860.0
 const LEFT_MIN := 224.0
 ## 아래 띠가 슬롯 창보다 양옆으로 나온 폭(띠 880).
 const BAND_OUT := 10.0
-const WIN_TOP := 100.0
-const PAD := 14.0
+const WIN_TOP := 116.0
+const PAD := 10.0
 const CARD_H := 150.0
-const CARD_PITCH := 158.0
+const CARD_PITCH := 156.0
 const NUM_W := 58.0
 const SLOT_BUTTON := Vector2(150, 64)
-const BAND_TOP := 602.0
-const BAND_BUTTON_Y := 636.0
+const BAND_TOP := 604.0
+const BAND_BUTTON_Y := 638.0
 const WIDE_BUTTON := Vector2(150, 64)
 const AUTO_BUTTON := Vector2(120, 64)
 ## 아래 띠 단추 사이.
 const BAND_GAP := 8.0
-const TITLE := Rect2(0, 36, 272, 56)
-const BACK_SIZE := Vector2(120, 64)
 
 var menu: PartyMenu
 ## 커서(줄, 칸): 줄 0~2 = 카드(0 저장·1 불러오기), 줄 3 = 아래 띠(내보내기·가져오기·자동 지도 셋·새 게임).
 var cur_row := 0
 var cur_col := 0
-var back_button: PartyButton
-var title_plate: Control
 var window: Control
 var band: Control
 var save_buttons: Array[PartyButton] = []
@@ -52,8 +50,6 @@ func setup(m: PartyMenu) -> void:
 	menu = m
 	mouse_filter = MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	title_plate = _deco("RecordsTitle", Vector2.ZERO, Vector2.ZERO, Vector4(TITLE.position.x, TITLE.position.y, TITLE.end.x, TITLE.end.y),
-		func(c: Control) -> void: UiTheme.draw_plate(c, Rect2(Vector2.ZERO, c.size), menu.texts.t("camp.cmd.records"), 26))
 	var win_bottom := WIN_TOP + 2.0 * PAD + 2.0 * CARD_PITCH + CARD_H
 	window = _deco("RecordsWindow", Vector2(0.5, 0), Vector2(0.5, 0), Vector4(-WIN_W / 2.0, WIN_TOP, WIN_W / 2.0, win_bottom), _draw_window)
 	band = _deco("RecordsBand", Vector2(0.5, 0), Vector2(0.5, 0),
@@ -79,12 +75,6 @@ func setup(m: PartyMenu) -> void:
 		x += AUTO_BUTTON.x + BAND_GAP
 	band_buttons.append(_button("NewGame", menu.texts.t("menu.new_game"), "record_new_game", null,
 		Vector4(WIN_W / 2.0 - WIDE_BUTTON.x, by, WIN_W / 2.0, by + 64)))
-	back_button = PartyButton.new()
-	back_button.name = "RecordsBack"
-	back_button.text = menu.texts.t("camp.back")
-	add_child(back_button)
-	PartyMenu.place(back_button, Vector2(1, 0), Vector2(1, 0), Vector4(-8 - BACK_SIZE.x, 18, -8, 18 + BACK_SIZE.y))
-	back_button.activated.connect(func() -> void: menu.handle("back"))
 
 
 ## 슬롯 i 의 저장 이름(SaveStore 수동 슬롯).
@@ -243,7 +233,6 @@ func refresh() -> void:
 		(b as PartyButton).selected = b == cb
 		(b as PartyButton).queue_redraw()
 	window.queue_redraw()
-	title_plate.queue_redraw()
 
 
 ## 카드 i 의 사각형(슬롯 창 기준).
@@ -259,8 +248,13 @@ func band_rect() -> Rect2:
 	return band.get_rect()
 
 
-func title_rect() -> Rect2:
-	return title_plate.get_rect()
+## 카드 i 의 번호 칸 채움: 커서 카드는 밝은 하늘색(노랑 채움은 커서 단추 하나, 07 §9.9 E1 ⑦), 다른 카드는 창 마개 색.
+func num_fill(i: int) -> Color:
+	return UiTheme.CMD_CHOSEN if cur_row == i else UiTheme.SHOP_WIN_CAP
+
+
+func num_text_color(i: int) -> Color:
+	return UiTheme.CMD_CHOSEN_TEXT if cur_row == i else UiTheme.TEXT
 
 
 ## 카드 줄 글(시험·디버그): [머리, 둘째 줄, 셋째 줄].
@@ -282,9 +276,8 @@ func _draw_window(c: Control) -> void:
 		var on := cur_row == i
 		c.draw_rect(r, UiTheme.SHOP_DESC_HEAD)
 		var num := Rect2(r.position, Vector2(NUM_W, r.size.y))
-		c.draw_rect(num, UiTheme.BTN_PICK if on else UiTheme.SHOP_WIN_CAP)
-		_txt(c, Vector2(num.position.x, num.get_center().y + 30 * 0.36), str(i + 1), 30, UiTheme.BTN_PICK_TEXT if on else UiTheme.TEXT,
-			NUM_W, HORIZONTAL_ALIGNMENT_CENTER)
+		c.draw_rect(num, num_fill(i))
+		_txt(c, Vector2(num.position.x, num.get_center().y + 30 * 0.36), str(i + 1), 30, num_text_color(i), NUM_W, HORIZONTAL_ALIGNMENT_CENTER)
 		var lines := card_lines(i)
 		var x := r.position.x + NUM_W + 16.0
 		var w := r.size.x - NUM_W - 16.0 - SLOT_BUTTON.x - 28.0

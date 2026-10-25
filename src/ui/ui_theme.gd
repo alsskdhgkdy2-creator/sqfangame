@@ -178,14 +178,17 @@ const RIBBON_TEXT := Color("0a323a")
 const RIBBON_EDGE := Color("1f6d63")
 ## 캠프 알림 줄 바탕(장소 띠 아래, 거의 불투명한 짙은 청록: 안내 글자 BATTLE_BANNER_NOTICE 대비 4.5:1 이상).
 const CAMP_NOTICE_BG := Color(0.02, 0.1, 0.11, 0.92)
-## 상태 화면(원작 HD gs2_653218·653223·653241): 위 이름 칸(밝은 판 + 짙은 글자), Lv 띠(짙은 초록), 정보 띠(청록, 흰 글자 대비로 원작
-## #1d8761 보다 어둡게), 직업 문패, 능력치 줄(이름 상자 + 값 + 노랑 막대), 공격·방어 판, 장비 줄, 오른쪽 아래 문패(원작 FORCE 자리).
-const ST_NAME_TAB := Color("e1ffef")
-const ST_NAME_TEXT := Color("0a3b26")
-const ST_LV_BAND := Color("0a3b26")
+## 상태 화면(원작 HD gs2_653218·653223·653241): 위 줄은 대원 띠 한 벌(MEMBER_*, Lv·TP 글자 ST_LV_TEXT), 직업 문패,
+## 능력치 줄(이름 상자 + 값 + 노랑 막대), 공격·방어 판, 장비 줄, 오른쪽 아래 문패(원작 FORCE 자리). ST_INFO_TOP 은 기록 카드의 이름 띠.
 const ST_LV_TEXT := Color("fff0a0")
+## 대원 띠 한 벌(07 §9.9 E1 ②, research 08 §3.1 III HD 상태 잼): 상태·스킬의 MemberHeader 와 장비·상점 인물 판의 띠가 같이 쓴다.
+## 이름 탭 #9CEDDB(남색 이름), Lv 띠 #1F2861, 띠는 원작 #127FAD 를 10% 어둡게(흰 글자·노란 TP 대비 4.5:1, 원작 그대로는 4.0).
+const MEMBER_NAME_TAB := Color("9ceddb")
+const MEMBER_NAME_TEXT := Color("1f2861")
+const MEMBER_LV_BAND := Color("1f2861")
+const MEMBER_STRIP_TOP := Color("10729c")
+const MEMBER_STRIP_BOTTOM := Color("0f6c93")
 const ST_INFO_TOP := Color("1f6352")
-const ST_INFO_BOTTOM := Color("17604f")
 const ST_CLASS_PLATE := Color("1f6352")
 const ST_CLASS_EDGE := Color("8fe0c8")
 const ST_ROW := Color("0b3a2e")
@@ -230,14 +233,9 @@ const SHOP_BADGE_ON := Color("7fe3f0")
 const SHOP_BADGE_ON_TEXT := Color("06142a")
 const SHOP_BADGE_OFF := Color("0a1838")
 const SHOP_BADGE_OFF_TEXT := Color("5a6f90")
-## 스킬 트리 화면(원작 HD jp_guide2_img2·img3, gw_14): 파랑 계열. 위 줄(이름 칸·Lv 띠·SKILL POINT 띠), 직업 폴더 탭,
+## 스킬 트리 화면(원작 HD jp_guide2_img2·img3, gw_14): 파랑 계열. 위 줄은 대원 띠 한 벌(MEMBER_*), 직업 폴더 탭,
 ## 반투명 파랑 창(트리·아래 설명 띠·확인 창), 노드 알약(짙은 파랑 + 밝은 글자, 커서는 밝은 하늘색 + 짙은 글자, 오른쪽 Lv 상자),
 ## 설명 띠의 레벨 칸(배운 레벨 시안·초안 노랑·남은 칸 짙은 파랑).
-const TREE_NAME_TAB := Color("e3f4ff")
-const TREE_NAME_TEXT := Color("0b2a4a")
-const TREE_LV_BAND := Color("12364e")
-const TREE_INFO_TOP := Color("05599f")
-const TREE_INFO_BOTTOM := Color("044a86")
 const TREE_TAB := Color("0f3f54")
 const TREE_WIN_TOP := Color(0.03, 0.27, 0.5, 0.9)
 const TREE_WIN_BOTTOM := Color(0.02, 0.18, 0.37, 0.92)

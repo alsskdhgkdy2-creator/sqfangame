@@ -1,6 +1,6 @@
 ## 캠프(M2.7 R2, 07 §9, research 05 §2.2): 미궁 화면 위에 덮는 전체 화면 층. 열린 동안 탐색 화면은 HUD 를 감추고
-## 3D 시야만 화면 전체로 두며(DungeonScreen._hud_hidden), 캠프 뿌리·대원 고르기는 그 위에 원작의 무늬 판(그림 창으로 시야가 비친다,
-## CampBackdrop)을, 하위 화면은 어둡게(CAMP_DIM) 깐다(07 §9.8 ④).
+## 3D 시야만 화면 전체로 두며(DungeonScreen._hud_hidden), 캠프의 모든 화면(뿌리·대원 고르기·하위 화면·확인 창)은 그 위에 원작의 무늬 판
+## (그림 창으로 시야가 비친다, CampBackdrop)을 깐다(07 §9.8 ④, §9.9 E1). 확인 창은 바로 뒤에 화면 전체를 어둡게 하는 층을 둔다.
 ## 뿌리는 원작 HD 캠프 실물에 맞췄다(research 07 §2, 07 §9.8 D26): 왼쪽 위 걸음 문패(원작 시계 다이얼 자리), 위 장소 띠(PlaceRibbon),
 ## 오른쪽 위 소지금, 장소 띠 아래 알림 줄(알림이 있을 때만), 왼쪽 명령 목록(FacilityList), 아래 파티 카드 두 줄(PartyCards).
 ## 쪽(page): root(캠프 뿌리: 명령 목록) → pick(상태·스킬·장비: 파티 카드에서 대원 고르기) → sub(그 대원의 하위 화면).
@@ -46,6 +46,8 @@ signal changed(events: Array)
 const NOTICE_TEXT := Color(1.0, 0.85, 0.55)
 const DIALOG_SIZE := Vector2(560, 240)
 const DIALOG_BUTTON := Vector2(200, 64)
+## 확인 창 바로 뒤에서 화면 전체를 어둡게 하는 판 색(dialog_dim).
+const DIALOG_DIM := Color(0, 0, 0, 0.6)
 const NOTICE_SEC := 2.5
 const TAB_KEYS := ["status", "skills", "equip", "items", "records"]
 ## 가상 키패드 단추 → 같은 일을 하는 물리 키(키 표 key_action 을 같이 써서 키패드 = 키).
@@ -96,7 +98,7 @@ var accepted_inputs := 0
 
 # ---- 부품 ----
 ## 캠프 뿌리·대원 고르기(07 §9.8): 걸음 문패·장소 띠·소지금·알림 줄·명령 목록·파티 카드(전투와 같은 부품, 값은 탐색 상태의 파티).
-## 뿌리·고르기의 바탕(07 §9.8 ④): 무늬 판 + 그림 창. 하위 화면은 판 대신 CAMP_DIM.
+## 캠프 바탕(07 §9.8 ④, §9.9 E1): 무늬 판 + 그림 창. 하위 화면도 같은 판이다(CAMP_DIM 없음).
 var backdrop_board: CampBackdrop
 var camp_plate: FacilityPlate
 var ribbon: PlaceRibbon
@@ -111,7 +113,10 @@ var equip_tab: PartyEquipTab
 var items_tab: PartyItemsTab
 var records_tab: PartyRecordsTab
 var tabs: Array[Control] = []
+## 확인 창 층(떠 있을 때만 보인다): 어둡게 하는 판(dialog_dim, 화면 전체) → 창(dialog_panel) → 글 → 단추 둘.
 var dialog_layer: Control
+var dialog_dim: ColorRect
+var dialog_panel: Control
 var dialog_buttons: Array[PartyButton] = []
 ## 가상 키패드(P3, 전투와 같은 부품 VirtualPad): 방향 십자, 「취소」「선택」 가로 한 쌍과 세로 한 쌍(쪽·화면마다 하나만 보인다).
 ## 확인 창 층 뒤(트리 순서 = 그리는·누르는 순서)라 확인 창에서도 누를 수 있고, 층 3 창보다는 아래다.
@@ -126,7 +131,7 @@ var _built := false
 var _open := false
 var _input_frame := -1
 var _context := ""
-## 마지막 _draw 가 CAMP_DIM 을 그렸는지(시험).
+## 마지막 _draw 가 CAMP_DIM 을 그렸는지(시험). 캠프는 그리지 않는다(07 §9.9 E1).
 var drawn_dim := false
 
 
@@ -290,8 +295,20 @@ func _build_dialog() -> void:
 	dialog_layer.name = "Dialog"
 	dialog_layer.mouse_filter = MOUSE_FILTER_STOP  # 떠 있는 동안 뒤 화면은 포인터를 받지 않는다
 	dialog_layer.visible = false
-	dialog_layer.draw.connect(_draw_dialog)
 	add_child(dialog_layer)
+	# 창 바로 뒤에서 창 아래 화면 전체를 어둡게 하고 누르기를 막는다(07 §9.9 E1 ①, 원작 알림 띠도 뒤를 어둡게 한다: research 08 §6.1).
+	dialog_dim = ColorRect.new()
+	dialog_dim.name = "DialogDim"
+	dialog_dim.color = DIALOG_DIM
+	dialog_dim.mouse_filter = MOUSE_FILTER_STOP
+	dialog_layer.add_child(dialog_dim)
+	dialog_dim.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	dialog_panel = Control.new()
+	dialog_panel.name = "DialogPanel"
+	dialog_panel.mouse_filter = MOUSE_FILTER_IGNORE
+	# 확인 창은 뒤 노드가 비치지 않게 불투명.
+	dialog_panel.draw.connect(func() -> void: UiTheme.draw_tree_window(dialog_panel, Rect2(Vector2.ZERO, dialog_panel.size), true))
+	dialog_layer.add_child(dialog_panel)
 	_dialog_text.add_theme_font_size_override("font_size", 22)
 	_dialog_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_dialog_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -889,20 +906,37 @@ func _refresh() -> void:
 		(tabs[i] as Control).visible = sub and i == tab
 	if sub:
 		tabs[tab].call("refresh")
-	for c in [backdrop_board, camp_plate, ribbon, money_plate, camp_list, cards]:
+	# 기록은 뿌리의 맨 위 띠(걸음 문패·장소 띠·소지금)를 그대로 두고, 알림 줄 자리에 「기록」을 쓴다(07 §9.9 E1 ⑥).
+	var top_band := not sub or records_top()
+	for c in [camp_plate, ribbon, money_plate]:
+		(c as Control).visible = top_band
+	for c in [camp_list, cards]:
 		(c as Control).visible = not sub
+	if top_band:
+		_refresh_top()
 	if not sub:
 		_refresh_camp()
+	# 안내 자리(알림 줄·하위 화면의 띠)는 쪽·화면이 바뀔 때마다 다시 정한다(숫자 키로 바로 바꿔도). 안내 글·남은 시간은 건드리지 않는다.
+	_refresh_notice()
 	_refresh_dialog()
 	_refresh_pad()
 	queue_redraw()
 
 
-func _refresh_camp() -> void:
+## 하위 화면이 기록이라 맨 위 띠를 두는지(07 §9.9 E1 ⑥).
+func records_top() -> bool:
+	return page == "sub" and tab == 4
+
+
+## 맨 위 띠: 걸음 문패·장소 띠·소지금(뿌리·고르기·기록).
+func _refresh_top() -> void:
 	camp_plate.show_lines(texts.t("hud.steps", {"steps": state.steps}), "")
 	# 층 번호·계층 자료가 생기면(M3) 원작처럼 「계층 / B1F」로 넓힌다(07 §9.8 ③).
 	ribbon.show_text(texts.t(state.floor_def.name_key))
 	money_plate.queue_redraw()
+
+
+func _refresh_camp() -> void:
 	var pick := page == "pick"
 	var live := []
 	for i in CAMP_ROWS:
@@ -919,21 +953,23 @@ func _refresh_camp() -> void:
 		if not pick:
 			c.cancel()
 		c.queue_redraw()
-	_refresh_notice()
 
 
-## 안내(거부 이유·성장 결과 등): 뿌리·고르기는 알림 줄(있을 때만 보인다), 하위 화면은 제 자리(스킬 = 정보 띠, 장비·소지품 = 설명 띠).
+## 안내(거부 이유·성장 결과 등): 뿌리·고르기는 알림 줄(있을 때만 보인다), 기록은 알림 줄(늘 보이고 안내가 없으면 「기록」),
+## 다른 하위 화면은 제 자리(스킬 = 정보 띠, 장비·소지품 = 설명 띠).
 func _refresh_notice() -> void:
 	if notice_line == null or state == null:
 		return
-	notice_line.visible = page != "sub" and not notice.is_empty()
+	notice_line.visible = records_top() or (page != "sub" and not notice.is_empty())
 	notice_line.queue_redraw()
 	if page == "sub" and (tabs[tab] as Object).has_method("notice_changed"):
 		tabs[tab].call("notice_changed")
 
 
-## 알림 줄에 쓰는 글(여러 줄 안내는 한 줄로 잇는다).
+## 알림 줄에 쓰는 글(여러 줄 안내는 한 줄로 잇는다). 기록에서 안내가 없으면 화면 이름 「기록」.
 func notice_line_text() -> String:
+	if notice.is_empty() and records_top():
+		return texts.t("camp.cmd.records")
 	return "   ".join(notice.split("\n", false))
 
 
@@ -965,7 +1001,7 @@ func _refresh_dialog() -> void:
 	for i in 2:
 		dialog_buttons[i].selected = i == dialog_pick
 		dialog_buttons[i].queue_redraw()
-	dialog_layer.queue_redraw()
+	dialog_panel.queue_redraw()
 
 
 func dialog_rect() -> Rect2:
@@ -983,6 +1019,8 @@ func _layout() -> void:
 	dialog_layer.position = Vector2.ZERO
 	dialog_layer.size = s
 	var dr := Rect2(((s - DIALOG_SIZE) / 2.0).round(), DIALOG_SIZE)
+	dialog_panel.position = dr.position
+	dialog_panel.size = dr.size
 	_dialog_text.position = dr.position + Vector2(24, 20)
 	_dialog_text.size = Vector2(DIALOG_SIZE.x - 48, DIALOG_SIZE.y - DIALOG_BUTTON.y - 56)
 	var by := dr.end.y - DIALOG_BUTTON.y - 24
@@ -992,20 +1030,15 @@ func _layout() -> void:
 	queue_redraw()
 
 
-## 바탕(07 §9.8 ④): 뿌리·대원 고르기 = "board"(무늬 판과 그림 창, CampBackdrop), 하위 화면 = "dim"(3D 시야를 CAMP_DIM 으로 어둡게).
+## 바탕(07 §9.8 ④, §9.9 E1): 캠프의 모든 화면이 "board"(무늬 판과 그림 창, CampBackdrop)다. 확인 창은 그 위에 어둡게 하는 판(dialog_dim)을 둔다.
 func backdrop() -> String:
-	return "dim" if page == "sub" else "board"
+	return "board"
 
 
 func _draw() -> void:
 	drawn_dim = backdrop() == "dim"
 	if drawn_dim:
 		draw_rect(Rect2(Vector2.ZERO, size), UiTheme.CAMP_DIM)
-
-
-func _draw_dialog() -> void:
-	dialog_layer.draw_rect(Rect2(Vector2.ZERO, dialog_layer.size), Color(0, 0, 0, 0.6))
-	UiTheme.draw_tree_window(dialog_layer, dialog_rect(), true)  # 확인 창은 뒤 노드가 비치지 않게 불투명
 
 
 # ---- 시험·디버그 읽기 ----
@@ -1073,11 +1106,11 @@ func debug_info(css: Callable) -> Dictionary:
 	return {
 		"open": true, "page": page, "tab": TAB_KEYS[tab] if page == "sub" else "", "member": member,
 		"camp_cursor": camp_cursor, "pick": TAB_KEYS[pick_cmd] if page == "pick" else "", "pick_cursor": pick_cursor,
-		"backdrop": backdrop(), "ribbon": ribbon.text if page != "sub" else "", "money": money_text() if page != "sub" else "", "draft": skill_tab.draft.duplicate(),
+		"backdrop": backdrop(), "ribbon": ribbon.text if ribbon.visible else "", "money": money_text() if money_plate.visible else "", "draft": skill_tab.draft.duplicate(),
 		"cursor": {"skill": skill_tab.cursor_skill(), "slot": equip_tab.cursor, "list_open": equip_tab.list_open,
 			"list_row": equip_tab.list_cursor if equip_tab.list_open else -1, "items": items_tab.cursor},
 		"dialog": dialog_kind, "dialog_pick": dialog_pick, "sp_line": skill_tab._sp_label.text if tab == 1 else "",
-		"notice": notice, "debug": debug, "supply_open": items_tab.supply_open, "equip_rows": rows,
+		"notice": notice, "strip": notice_line_text() if notice_line.visible else "", "debug": debug, "supply_open": items_tab.supply_open, "equip_rows": rows,
 		"records": {"cursor": [records_tab.cur_row, records_tab.cur_col], "cards": [0, 1, 2].map(records_tab.card_lines)} if tab == 4 else {},
 		"buttons": buttons, "nodes": nodes, "pad": pad_state(),
 	}

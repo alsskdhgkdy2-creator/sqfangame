@@ -38,8 +38,7 @@ func setup(m: PartyMenu) -> void:
 	frame = ShopFrame.new()
 	frame.name = "EquipFrame"
 	add_child(frame)
-	frame.build("Equip", menu.texts.t("camp.back"), true, ShopFrame.PAD_SIDE)
-	frame.back.connect(func() -> void: menu.handle("back"))
+	frame.build("Equip", "", true, ShopFrame.PAD_SIDE)  # 「뒤로」 없음(07 §9.9 E1 ⑤)
 	frame.panel.step.connect(func(d: int) -> void: menu.handle("member_step", d))
 	totals = frame.panel.totals
 	var la: Array = frame.list_anchor()

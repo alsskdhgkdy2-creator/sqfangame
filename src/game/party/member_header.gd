@@ -1,13 +1,12 @@
 ## 캠프 하위 화면의 위 줄(M2.7 R2, 원작 HD 상태·스킬 화면 gs2_653218·jp_guide2_img1~3): 화면 위 가장자리에 붙는다(앵커 위 넓게, 높이 H).
 ## 이름 칸(밝은 판, x 0~330·y 0~64, 양 끝에 앞·다음 대원 단추 = 원작 L·R) + Lv 띠(이름 칸 오른쪽 ~ 오른쪽 끝, y 18~64:
-## 「Lv n」과 덧붙인 글) + 정보 띠(전체 폭, y 64~118: 왼쪽 HP·TP, 오른쪽 글과 막대). 오른쪽 위 「뒤로」.
-## 띠는 장식(그리기만), 단추는 자식 PartyButton. 색은 palette(상태 = 청록 "status", 스킬 트리 = 파랑 "tree").
-## 누르기는 step(±1)·back 신호로 내보낸다(놓는 하위 화면이 메뉴의 입력 입구로 보낸다).
+## 「Lv n」) + 정보 띠(전체 폭, y 64~118: 왼쪽 HP·TP(show_vitals), 오른쪽 글과 막대). 「뒤로」 단추는 없다(07 §9.9 E1 ⑤).
+## 띠는 장식(그리기만), 단추는 자식 PartyButton. 색은 원작 III 근사 한 벌(UiTheme.MEMBER_*, 07 §9.9 E1 ②): 상태·스킬·인물 판이 같다.
+## 누르기는 step(±1) 신호로 내보낸다(놓는 하위 화면이 메뉴의 입력 입구로 보낸다).
 class_name MemberHeader
 extends Control
 
 signal step(dir: int)
-signal back
 
 const H := 118.0
 const NAME_TAB := Rect2(0, 0, 330, 64)
@@ -15,13 +14,15 @@ const LV_BAND_Y := 18.0
 const INFO_Y := 64.0
 const INFO_H := 54.0
 const SWITCH_SIZE := Vector2(64, 64)
-const BACK_SIZE := Vector2(120, 64)
+## 정보 띠 글자(흰 글자, 이름표, 노란 TP·안내): 띠 두 끝 색에 대비 4.5:1 이상(시험).
+const STRIP_TEXT := UiTheme.TEXT
+const STRIP_LABEL := UiTheme.TEXT
+const STRIP_ACCENT := UiTheme.ST_LV_TEXT
 
-var palette := "status"
 var name_text := ""
 var level_text := ""
-## Lv 띠의 덧붙인 글(누적 경험치·남은 SP 등).
-var level_extra := ""
+## 정보 띠 왼쪽 HP·TP 를 그리는지(스킬 화면은 남은 SP 만 둔다, 07 §9.9 E1 ③).
+var show_vitals := true
 var hp_text := ""
 var tp_text := ""
 ## 정보 띠 오른쪽 글과 막대 비율(0 미만이면 막대 없음).
@@ -29,7 +30,8 @@ var right_text := ""
 var right_ratio := -1.0
 var prev_button: PartyButton
 var next_button: PartyButton
-var back_button: PartyButton
+## 마지막으로 그린 글(시험): lv(Lv 띠의 글), strip(정보 띠의 글, 왼쪽 → 오른쪽), colors.
+var drawn := {}
 
 
 func _init() -> void:
@@ -37,17 +39,13 @@ func _init() -> void:
 	focus_mode = FOCUS_NONE
 
 
-## 단추를 만들고 위 가장자리에 붙인다. prefix: 단추 이름 앞(「Status」→ StatusPrev·StatusNext·StatusBack). back_label 이 비면 「뒤로」 없음.
-func build(prefix: String, back_label: String) -> void:
+## 단추를 만들고 위 가장자리에 붙인다. prefix: 단추 이름 앞(「Status」→ StatusPrev·StatusNext).
+func build(prefix: String) -> void:
 	PartyMenu.place(self, Vector2(0, 0), Vector2(1, 0), Vector4(0, 0, 0, H))
 	prev_button = _button(prefix + "Prev", "left", "", Vector2.ZERO, Vector4(0, 0, SWITCH_SIZE.x, SWITCH_SIZE.y))
 	prev_button.activated.connect(func() -> void: step.emit(-1))
 	next_button = _button(prefix + "Next", "right", "", Vector2.ZERO, Vector4(NAME_TAB.end.x - SWITCH_SIZE.x, 0, NAME_TAB.end.x, SWITCH_SIZE.y))
 	next_button.activated.connect(func() -> void: step.emit(1))
-	if back_label.is_empty():  # 상점 짜임의 인물 판: 「뒤로」는 화면 왼쪽 위(ShopFrame)
-		return
-	back_button = _button(prefix + "Back", "", back_label, Vector2(1, 0), Vector4(-8 - BACK_SIZE.x, 0, -8, BACK_SIZE.y))
-	back_button.activated.connect(func() -> void: back.emit())
 
 
 func _button(n: String, icon_name: String, label: String, a: Vector2, off: Vector4) -> PartyButton:
@@ -73,10 +71,8 @@ func info_rect() -> Rect2:
 
 
 ## [이름 칸, 이름 글자, Lv 띠, 정보 띠 위, 정보 띠 아래].
-func colors() -> Array[Color]:
-	if palette == "tree":
-		return [UiTheme.TREE_NAME_TAB, UiTheme.TREE_NAME_TEXT, UiTheme.TREE_LV_BAND, UiTheme.TREE_INFO_TOP, UiTheme.TREE_INFO_BOTTOM]
-	return [UiTheme.ST_NAME_TAB, UiTheme.ST_NAME_TEXT, UiTheme.ST_LV_BAND, UiTheme.ST_INFO_TOP, UiTheme.ST_INFO_BOTTOM]
+static func colors() -> Array[Color]:
+	return [UiTheme.MEMBER_NAME_TAB, UiTheme.MEMBER_NAME_TEXT, UiTheme.MEMBER_LV_BAND, UiTheme.MEMBER_STRIP_TOP, UiTheme.MEMBER_STRIP_BOTTOM]
 
 
 func _txt(pos: Vector2, s: String, fs: int, col: Color, w: float = -1.0, align: int = HORIZONTAL_ALIGNMENT_LEFT) -> void:
@@ -98,14 +94,17 @@ func _draw() -> void:
 	_txt(Vector2(SWITCH_SIZE.x, 42), name_text, 28, c[1], nt.size.x - 2.0 * SWITCH_SIZE.x, HORIZONTAL_ALIGNMENT_CENTER)
 	var lx := lv.position.x + 28.0
 	_txt(Vector2(lx, 56), level_text, 30, UiTheme.ST_LV_TEXT)
-	var back_w := BACK_SIZE.x + 24 if back_button != null else 16.0
-	_txt(Vector2(lx + 130, 54), level_extra, 20, UiTheme.TEXT, maxf(40.0, w - back_w - lx - 130))
 	var by := info.position.y + 36.0
-	_txt(Vector2(20, by), "HP", 16, UiTheme.CARD_LABEL)
-	_txt(Vector2(52, by), hp_text, 22, UiTheme.TEXT)
-	_txt(Vector2(215, by), "TP", 16, UiTheme.CARD_LABEL)
-	_txt(Vector2(247, by), tp_text, 22, UiTheme.ST_LV_TEXT)
+	var strip: Array[String] = []
+	if show_vitals:
+		strip.append_array(["HP", hp_text, "TP", tp_text])
+		_txt(Vector2(20, by), "HP", 16, STRIP_LABEL)
+		_txt(Vector2(52, by), hp_text, 22, STRIP_TEXT)
+		_txt(Vector2(215, by), "TP", 16, STRIP_LABEL)
+		_txt(Vector2(247, by), tp_text, 22, STRIP_ACCENT)
 	if right_ratio >= 0.0:
 		var bar := Rect2(w - 175, info.position.y + 21, 155, 12)
-		_txt(Vector2(bar.position.x - 400, by), right_text, 20, UiTheme.TEXT, 388, HORIZONTAL_ALIGNMENT_RIGHT)
+		_txt(Vector2(bar.position.x - 400, by), right_text, 20, STRIP_TEXT, 388, HORIZONTAL_ALIGNMENT_RIGHT)
 		UiTheme.draw_gauge(self, bar, right_ratio, UiTheme.CARD_TP, UiTheme.ST_BAR_FILL, c[2])
+		strip.append(right_text)
+	drawn = {"lv": [level_text], "strip": strip, "colors": c}

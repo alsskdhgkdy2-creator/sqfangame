@@ -594,6 +594,21 @@ func test_shop_frame_defaults_keep_the_camp_look() -> void:
 	check(not f.title_right, "캠프 문패는 가운데")
 
 
+## 「뒤로」는 상점만(07 §9.9 E1 ⑤): 글을 비우면 단추를 만들지 않는다(캠프 장비·소지품), 글이 있으면 원작 다이얼 자리.
+func test_shop_frame_back_button_only_with_a_label() -> void:
+	await _compose("")
+	var camp := ShopFrame.new()
+	host.add_child(camp)
+	camp.build("Camp", "", true, ShopFrame.PAD_SIDE)
+	var shop := ShopFrame.new()
+	host.add_child(shop)
+	shop.build("Shop", texts.t("camp.back"), true, ShopFrame.PAD_SIDE, ShopFrame.TABS_LIST_TOP)
+	await kit.frames(1)
+	check(camp.back_button == null and camp.find_child("CampBack", true, false) == null, "글이 없으면 「뒤로」 없음")
+	check(shop.back_button != null and shop.back_button.text == texts.t("camp.back"), "상점의 「뒤로」는 그대로")
+	check_eq(shop.back_button.get_rect(), ShopFrame.BACK, "상점 「뒤로」 자리 = 원작 다이얼 자리")
+
+
 func test_money_and_numbers_use_grouped_digits() -> void:
 	_kit()
 	check_eq([ShopRow.grouped(0), ShopRow.grouped(999), ShopRow.grouped(1000), ShopRow.grouped(1480), ShopRow.grouped(9999999), ShopRow.grouped(-1234)],

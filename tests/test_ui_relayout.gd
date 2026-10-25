@@ -332,7 +332,7 @@ func test_overlapping_taps_reach_the_visible_top_element_in_menus() -> void:
 		var lw := _rect(f.list_window)
 		var spots := [
 			["칸 0", _rect(et.slot_rows[0]).get_center(), et.slot_rows[0]],
-			["뒤로", _rect(f.back_button).get_center(), f.back_button],
+			["키패드 「취소」", _rect(pm.key_pad_stacked.buttons["back"]).get_center(), pm.key_pad_stacked.buttons["back"]],
 			["앞 대원", _rect(f.panel.prev_button()).get_center(), f.panel.prev_button()],
 			["다음 대원", _rect(f.panel.next_button()).get_center(), f.panel.next_button()],
 			["목록 창 빈 곳", Vector2(lw.get_center().x, lw.end.y - 8.0), pm],

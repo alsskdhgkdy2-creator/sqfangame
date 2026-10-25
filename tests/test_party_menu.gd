@@ -389,8 +389,8 @@ func test_draft_then_member_tab_or_close_asks_to_discard() -> void:
 	check_eq(kit.hash_now(), h, "상태 해시 그대로")
 	await kit.press_key(KEY_4)
 	await kit.tap(kit.center_of(st.plus_button))
-	await kit.tap(kit.center_of(st.top.back_button))
-	check_eq(pm.dialog_kind, "discard", "「뒤로」 → 확인 창")
+	await kit.tap(kit.center_of(pm.key_pad.buttons["back"]))
+	check_eq(pm.dialog_kind, "discard", "키패드 「취소」 → 확인 창")
 	await kit.tap(kit.center_of(pm.dialog_buttons[1]))
 	check(pm.is_open() and pm.page == "root", "「버리기」 → 캠프 뿌리")
 	check_eq(kit.hash_now(), h, "버린 뒤 상태 해시 그대로")
@@ -409,7 +409,7 @@ func test_presses_behind_dialog_do_nothing() -> void:
 	# 확인 창 사각형 밖에 보이는 뒤 화면의 것만 누른다(시험 창은 1280×1280 으로 늘어나 창이 조작 줄 위에 올 수 있다).
 	var panel := Rect2(pm.get_global_transform_with_canvas() * pm.dialog_rect().position, pm.dialog_rect().size)
 	var behind := 0
-	for c in [st.nodes[1], st.top.prev_button, st.top.next_button, st.top.back_button, st.plus_button, st.revert_button, st.commit_button]:
+	for c in [st.nodes[1], st.top.prev_button, st.top.next_button, st.plus_button, st.revert_button, st.commit_button]:
 		if panel.has_point((c as Control).get_global_rect().get_center()):
 			continue
 		behind += 1
@@ -627,8 +627,8 @@ func test_unequippable_rows_are_dimmed_with_reason_and_cannot_be_chosen() -> voi
 	check_eq(kit.hash_now(), h, "상태 그대로")
 	check_eq(s.autosave_count, n, "자동 저장 없음")
 	# 칸과 목록은 한 목록 창을 나눠 쓴다(원작 상점 목록 하나): 다른 칸은 목록을 닫고(뒤로·Esc) 고른다.
-	await kit.tap(kit.center_of(et.frame.back_button))
-	check(not et.list_open and et.slot_rows[3].is_visible_in_tree(), "「뒤로」 → 목록 닫힘, 칸 줄이 다시 보인다")
+	await kit.tap(kit.center_of(pm.key_pad_stacked.buttons["back"]))
+	check(not et.list_open and et.slot_rows[3].is_visible_in_tree(), "키패드 「취소」 → 목록 닫힘, 칸 줄이 다시 보인다")
 	await kit.tap(kit.center_of(et.slot_rows[3]))
 	check_eq(et.row_items, ["", "equip.medic_coat"], "칸 3: 몸 장비는 같은 종류 제한")
 	check_eq(et.row_block, ["unchanged", "kind_limit"], "빈 칸 빼기·같은 종류")
@@ -1026,8 +1026,8 @@ func test_context_change_cancels_pressed_pointer() -> void:
 	await kit.frames(3)
 	check_eq(s.state.party.members[DUELIST_A].equip[0], TWIN_EDGE, "장착 없음")
 	check_eq(s.autosave_count, n, "자동 저장 없음")
-	# 하위 화면을 떠날 때도: 「뒤로」를 누른 채 Esc 로 캠프 뿌리로 가고 뗀 뒤 아무것도 눌려 있지 않다
-	var back_b := et.frame.back_button
+	# 하위 화면을 떠날 때도: 키패드 「취소」(장비는 세로 묶음)를 누른 채 Esc 로 캠프 뿌리로 가고 뗀 뒤 아무것도 눌려 있지 않다
+	var back_b := pm.key_pad_stacked.button("back")
 	var close := kit.center_of(back_b)
 	kit.touch(0, close, true)
 	await kit.frames(2)

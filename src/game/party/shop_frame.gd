@@ -3,6 +3,7 @@
 ## 돈 문패 자리(x 0~340, y 140~190) → 화면 이름 문패 x 0~340 · y 112~162, 목록 창 x 16(캠프는 232, P3 키패드 자리) → 판 왼쪽 − 24 · y 172~500(원작 30~710 · 240~505),
 ## 설명 창 같은 폭 · y 510 → 아래 − 8(원작 15~730 · 520~710), 인물 판 오른쪽 W(원작 765~1280). 앵커로 붙여 넓은 창에서는 왼쪽이 넓어진다.
 ## 장식(띠·문패·창)은 그리기만, 누르는 것은 「뒤로」와 판의 대원 단추. 목록 줄은 놓는 하위 화면이 list_offsets() 자리에 둔다.
+## 「뒤로」는 상점만 둔다(08 §8). 캠프 장비·소지품은 back_label 을 비워 단추를 만들지 않는다(07 §9.9 E1 ⑤, 뒤로 = 키패드 「취소」·Esc·P).
 class_name ShopFrame
 extends Control
 
@@ -52,7 +53,8 @@ func _init() -> void:
 	focus_mode = FOCUS_NONE
 
 
-## prefix: 단추 이름 앞(「Equip」→ EquipBack·EquipPrev·EquipNext). with_desc: 설명 창이 있는지(없으면 목록 창이 아래까지).
+## prefix: 단추 이름 앞(「Equip」→ EquipBack·EquipPrev·EquipNext). back_label 이 비면 「뒤로」 없음(back_button = null).
+## with_desc: 설명 창이 있는지(없으면 목록 창이 아래까지).
 ## left_x: 왼쪽 목록·설명 창의 왼쪽 끝(캠프는 PAD_SIDE, 가상 키패드 자리를 비운다).
 ## top: 목록 창 위 끝(캠프는 LIST_TOP, 상점에 종류 탭 줄이 있으면 TABS_LIST_TOP).
 func build(prefix: String, back_label: String, with_desc: bool, left_x: float = SIDE, top: float = LIST_TOP) -> void:
@@ -75,6 +77,8 @@ func build(prefix: String, back_label: String, with_desc: bool, left_x: float = 
 	panel.name = prefix + "Panel"
 	add_child(panel)
 	panel.build(prefix)
+	if back_label.is_empty():
+		return
 	back_button = PartyButton.new()
 	back_button.name = prefix + "Back"
 	back_button.text = back_label

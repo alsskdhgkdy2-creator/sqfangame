@@ -1,5 +1,5 @@
-## 캠프 「스킬」 화면(07 §9.2, §4.6, M2.7 R2: 원작 HD 스킬 트리 jp_guide2_img2·img3, gw_14). 어둡게 한 화면 전체 3D 시야 위에:
-## 위 줄(MemberHeader 파랑: 이름 칸 + 앞·다음 대원, Lv 띠, 정보 띠 = HP·TP 와 오른쪽 「남은 SP」(원작 SKILL POINT 자리)),
+## 캠프 「스킬」 화면(07 §9.2, §4.6, M2.7 R2: 원작 HD 스킬 트리 jp_guide2_img2·img3, gw_14). 캠프 무늬 판(CampBackdrop) 위에:
+## 위 줄(MemberHeader: 이름 칸 + 앞·다음 대원, Lv 띠, 정보 띠 = 오른쪽 「남은 SP」(원작 SKILL POINT 자리)와 안내),
 ## 직업 폴더 탭(장식), 화면 폭 거의 전체 반투명 파랑 트리 창(자르기, 넘치면 세로로 끌어 내림, 노드는 알약 + Lv 상자, 직각 연결선),
 ## 아래 설명 띠(스킬 이름 + 레벨 칸 1~최대(배운 레벨 시안·초안 노랑), 종류·TP 줄과 다음 레벨 값·선행 줄을 세로 다섯 줄씩 칸으로,
 ## 오른쪽에 「−」「+」와 「되돌리기」「확정」, 그 왼쪽에 캠프의 가상 키패드 「취소」「선택」). P3(사용자 결정 2026-10-25): 왼쪽 아래
@@ -76,11 +76,10 @@ func setup(m: PartyMenu) -> void:
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	top = MemberHeader.new()
 	top.name = "SkillTop"
-	top.palette = "tree"
+	top.show_vitals = false  # 띠에는 남은 SP 만(07 §9.9 E1 ③)
 	add_child(top)
-	top.build("Skill", menu.texts.t("camp.back"))
+	top.build("Skill")
 	top.step.connect(func(d: int) -> void: menu.handle("member_step", d))
-	top.back.connect(func() -> void: menu.handle("back"))
 	tree_window = Control.new()
 	tree_window.name = "TreeWindow"
 	tree_window.mouse_filter = MOUSE_FILTER_IGNORE
@@ -124,7 +123,7 @@ func setup(m: PartyMenu) -> void:
 	commit_button = _button("SkillCommit", menu.texts.t("party.commit"), "commit", desc, Vector4(-DESC_PAD - COMMIT_SIZE.x, by, -DESC_PAD, by + COMMIT_SIZE.y))
 	revert_button = _button("SkillRevert", menu.texts.t("party.revert"), "revert", desc,
 		Vector4(-DESC_PAD - BUTTONS_W, by, -DESC_PAD - COMMIT_SIZE.x - 8, by + REVERT_SIZE.y))
-	# 「남은 SP」는 정보 띠 오른쪽(원작 SKILL POINT 자리), 확정 안내는 그 왼쪽.
+	# 「남은 SP」는 정보 띠 오른쪽(원작 SKILL POINT 자리), 안내(거부 이유 등)는 그 왼쪽. 확정 안내는 확정 창 글에 있다(07 §9.9 E1 ③).
 	_sp_label.name = "SpLine"
 	_sp_label.add_theme_font_size_override("font_size", 22)
 	_sp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -133,12 +132,11 @@ func setup(m: PartyMenu) -> void:
 	add_child(_sp_label)
 	PartyMenu.place(_sp_label, Vector2(1, 0), Vector2(1, 0), Vector4(-420, MemberHeader.INFO_Y, -20, MemberHeader.INFO_Y + MemberHeader.INFO_H))
 	_note_label.name = "CommitNote"
-	_note_label.add_theme_font_size_override("font_size", 16)
-	_note_label.add_theme_color_override("font_color", UiTheme.ST_LV_TEXT)
+	_note_label.add_theme_font_size_override("font_size", 18)
+	_note_label.add_theme_color_override("font_color", MemberHeader.STRIP_ACCENT)
 	_note_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_note_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_note_label.clip_text = true
-	_note_label.text = menu.texts.t("party.commit_note")
 	_note_label.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(_note_label)
 	PartyMenu.place(_note_label, Vector2(0, 0), Vector2(1, 0), Vector4(400, MemberHeader.INFO_Y, -440, MemberHeader.INFO_Y + MemberHeader.INFO_H))
@@ -178,12 +176,9 @@ func clear_draft() -> void:
 	draft.clear()
 
 
-## 정보 띠 가운데: 안내(거부 이유 등)가 있으면 그것을 따뜻한 색으로, 없으면 확정 안내.
+## 정보 띠 가운데: 안내(거부 이유 등)가 있을 때만 노란 글자로(띠 대비 4.5:1). 없으면 비운다.
 func notice_changed() -> void:
-	var has := not menu.notice.is_empty()
-	_note_label.text = menu.notice if has else menu.texts.t("party.commit_note")
-	_note_label.add_theme_color_override("font_color", PartyMenu.NOTICE_TEXT if has else UiTheme.ST_LV_TEXT)
-	_note_label.add_theme_font_size_override("font_size", 18 if has else 16)
+	_note_label.text = menu.notice
 
 
 ## 초안이 쓰는 SP.
@@ -423,9 +418,6 @@ func refresh() -> void:
 	class_tab.queue_redraw()
 	top.name_text = menu.member_name(i)
 	top.level_text = menu.texts.t("party.level", {"level": m.level})
-	top.level_extra = ""
-	top.hp_text = menu.texts.t("party.hp", {"hp": m.hp, "max": m.max_hp})
-	top.tp_text = menu.texts.t("party.tp", {"tp": m.tp, "max": m.max_tp})
 	top.queue_redraw()
 	tree_area.content.queue_redraw()
 	_refresh_desc()

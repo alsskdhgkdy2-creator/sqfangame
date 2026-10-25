@@ -42,8 +42,7 @@ func setup(m: PartyMenu) -> void:
 	frame = ShopFrame.new()
 	frame.name = "ItemsFrame"
 	add_child(frame)
-	frame.build("Items", menu.texts.t("camp.back"), false, ShopFrame.PAD_SIDE)
-	frame.back.connect(func() -> void: menu.handle("back"))
+	frame.build("Items", "", false, ShopFrame.PAD_SIDE)  # 「뒤로」 없음(07 §9.9 E1 ⑤)
 	frame.panel.step.connect(func(d: int) -> void: menu.handle("member_step", d))
 	list = PartyScroll.new()
 	list.name = "ItemsList"

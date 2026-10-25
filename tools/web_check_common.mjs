@@ -76,9 +76,9 @@ export async function openRecords() {
   await clickButton('Camp_records');
   return waitFor((x) => x.party_menu?.page === 'sub' && x.party_menu.tab === 'records' && x.modal === '', '기록 화면');
 }
-// 기록 화면 「뒤로」 → 캠프 뿌리 가상 키패드 「취소」 → 탐색(P3: 「닫기」 줄 대신).
+// 기록 화면 가상 키패드 「취소」 → 캠프 뿌리 「취소」 → 탐색(P3: 「닫기」 줄 대신, E1: 하위 화면 「뒤로」 단추 없음).
 export async function closeCamp() {
-  await clickButton('RecordsBack');
+  await clickButton('VPad_back');
   await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');
   await clickButton('VPad_back');
   return waitFor((x) => !x.party_menu?.open && x.modal === '', '캠프 닫힘');

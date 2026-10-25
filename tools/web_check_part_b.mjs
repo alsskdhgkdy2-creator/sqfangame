@@ -85,8 +85,10 @@ async function growthChecks(s) {
     '성장 1: 고르기 중 「장비」·「상태」 줄 → 고른 명령이 바뀐다', { picks: [equipPick, [s.party_menu.page, s.party_menu.pick]] });
   await clickButton('Member_0');
   s = await waitFor((x) => x.party_menu?.page === 'sub', '상태 화면');
-  check(s.party_menu.tab === 'status' && s.party_menu.member === 0 && s.buttons.StatusNext && s.buttons.StatusBack && s.party_menu.backdrop === 'dim',
-    '성장 1: 「상태」 → 카드 0 → 상태 화면·칸 0(바탕 = 어둡게)', { tab: s.party_menu.tab, member: s.party_menu.member, backdrop: s.party_menu.backdrop });
+  check(s.party_menu.tab === 'status' && s.party_menu.member === 0 && s.buttons.StatusNext && !s.buttons.StatusBack && s.buttons.VPad_back
+    && s.party_menu.backdrop === 'board',
+    '성장 1: 「상태」 → 카드 0 → 상태 화면·칸 0(바탕 = 무늬 판, 「뒤로」 없음 = 키패드 「취소」)',
+    { tab: s.party_menu.tab, member: s.party_menu.member, backdrop: s.party_menu.backdrop, buttons: Object.keys(s.buttons) });
   await page.screenshot({ path: `${outDir}/10_party_status_${tag}.png` });
   // 1b. 캠프 가상 키패드(P3): 상태에서 ←→ = 앞·다음 대원(↑↓ 흐림), 실제 누르기.
   const padState = s.party_menu.pad;
@@ -102,8 +104,8 @@ async function growthChecks(s) {
   s = await waitFor((x) => x.generation > g, 'grant_exp 저장');
   check(r.ok && s.members[1].level === 3 && s.members[1].sp_left === 2, '성장 2: grant_exp → Lv3·남은 SP 2', { r: r.ok ?? r, level: s.members[1].level, sp_left: s.members[1].sp_left });
   const base = { hash: s.hash, generation: s.generation };
-  // 3. 취소 먼저: 초안 → 「뒤로」 → 버리기 확인 창 → 「버리기」.
-  await clickButton('StatusBack');
+  // 3. 취소 먼저: 초안 → 키패드 「취소」 → 버리기 확인 창 → 「버리기」.
+  await clickButton('VPad_back');
   s = await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');
   await clickButton('Camp_skills');
   s = await waitFor((x) => x.party_menu?.page === 'pick', '대원 고르기');
@@ -113,9 +115,10 @@ async function growthChecks(s) {
   await clickButton('SkillPlus');
   s = await waitFor((x) => x.party_menu?.draft?.[HIGH_SLASH] === 1, '초안 +1');
   check(s.party_menu.sp_line === '남은 SP 2 → 1' && s.hash === base.hash, '성장 3: 「+」 → 초안만(남은 SP 줄)', { sp_line: s.party_menu.sp_line });
-  await clickButton('SkillBack');
+  await clickButton('VPad_back');
   s = await waitFor((x) => x.party_menu?.dialog === 'discard', '버리기 확인 창');
-  check(s.party_menu.dialog_pick === 0 && s.buttons.DialogOk && !s.buttons.SkillPlus && !s.buttons.SkillBack, '성장 3: 버리기 확인 창(처음 고른 쪽 「돌아가기」, 뒤 단추는 요약에 없다)');
+  check(s.party_menu.dialog_pick === 0 && s.buttons.DialogOk && !s.buttons.SkillPlus && s.party_menu.backdrop === 'board',
+    '성장 3: 버리기 확인 창(처음 고른 쪽 「돌아가기」, 뒤 단추는 요약에 없다, 바탕 = 무늬 판)');
   await clickButton('DialogOk');
   s = await waitFor((x) => x.party_menu?.open && x.party_menu.page === 'root' && x.party_menu.dialog === '', '버린 뒤 캠프 뿌리');
   check(s.hash === base.hash && s.generation === base.generation && s.members[1].sp_left === 2, '성장 3: 「버리기」 → 상태·세대 그대로', { generation: s.generation });
@@ -143,13 +146,13 @@ async function growthChecks(s) {
     '성장 4: 「확정」 → 스킬 바뀜·남은 SP 0', { skills: sk, sp_left: s.members[1].sp_left });
   let idb = await waitIdb(s);
   check(!idb.timeout, '성장 4: 배분 확정 자동 저장이 IndexedDB 에 반영', idb);
-  // 5. supply → 「뒤로」 → 「장비」 줄 → 카드 1 → 칸 0 → 이온 세이버 줄.
+  // 5. supply → 키패드 「취소」 → 「장비」 줄 → 카드 1 → 칸 0 → 이온 세이버 줄.
   g = s.generation;
   r = await request({ op: 'supply', item: ION_SABER, n: 1 });
   s = await waitFor((x) => x.generation > g, 'supply 저장');
   check(r.ok && s.gear_bag[ION_SABER] === 1, '성장 5: supply → 가방', { gear_bag: s.gear_bag });
   const atk0 = s.members[1].gear.atk;
-  await clickButton('SkillBack');
+  await clickButton('VPad_back');
   s = await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');
   await clickButton('Camp_equip');
   s = await waitFor((x) => x.party_menu?.page === 'pick', '대원 고르기');
@@ -223,7 +226,7 @@ const TAIL = 'item.neon_rat_tail';
 async function shopChecks(s) {
   const tag = `${W}x${H}`;
   const tailSell = JSON.parse(fs.readFileSync('data/items/materials.json', 'utf8')).materials.find((m) => m.id === TAIL).sell;
-  await clickButton('StatusBack');
+  await clickButton('VPad_back');
   s = await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');
   await clickButton('Camp_records');
   s = await waitFor((x) => x.party_menu?.tab === 'records' && x.modal === '', '기록 화면');

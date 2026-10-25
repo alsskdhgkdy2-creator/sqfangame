@@ -466,7 +466,6 @@
   "party.field.sub": "{name} {field}",
   "party.revert": "되돌리기",
   "party.commit": "확정",
-  "party.commit_note": "확정하면 되돌릴 수 없다",
   "party.dialog.back": "돌아가기",
   "party.dialog.discard": "버리기",
   "party.dialog.commit": "확정",
