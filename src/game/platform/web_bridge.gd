@@ -1,4 +1,5 @@
-## 웹(브라우저)과의 연결: 메모 입력 창(window.prompt), 저장 내려받기, 파일 가져오기, 디버그 주소(?debug=1)의 window.sqfDebug.
+## 웹(브라우저)과의 연결: 메모 입력 창(window.prompt), 저장 내려받기, 파일 가져오기, 디버그 주소(?debug=1)의 window.sqfDebug,
+## 저장 반영 확인(IndexedDB 읽기, 05 §8.3).
 ## 디버그 주소에서만 &seed=N(0 이상의 정수)으로 새 게임 시드를 고정한다(웹 확인 도구의 재현용).
 ## 웹이 아니면 is_web() 이 false 이고 다른 함수는 부르지 않는다(화면이 PC 경로를 쓴다).
 ## JavaScriptBridge 콜백 객체는 멤버로 잡아 둔다(지역 변수면 풀려서 콜백이 오지 않을 수 있다, 05 §8.5).
@@ -16,6 +17,10 @@ var on_import: Callable
 var on_debug_request: Callable
 
 var _import_cb: JavaScriptObject
+var _idb_cb: JavaScriptObject
+## IndexedDB 읽기 요청 번호 → 결과를 받을 Callable.
+var _idb_done := {}
+var _idb_next := 0
 var _debug_cb: JavaScriptObject
 var _debug: JavaScriptObject
 var _forced := ""
@@ -172,7 +177,8 @@ func _on_debug_js(args: Array) -> void:
 func dispose() -> void:
 	on_import = Callable()
 	on_debug_request = Callable()
-	if OS.has_feature("web") and (_import_cb != null or _debug != null):
+	_idb_done.clear()
+	if OS.has_feature("web") and (_import_cb != null or _debug != null or _idb_cb != null):
 		var code := """
 (function(){
 	var me = %s;
@@ -183,17 +189,104 @@ func dispose() -> void:
 		delete window.sqfImportResult; delete window.sqfImportOwner;
 	}
 	if (window.sqfDebug && window.sqfDebug.owner === me) { delete window.sqfDebug; }
+	if (window.sqfIdbOwners) { delete window.sqfIdbOwners[me]; }  // 읽는 중인 IndexedDB 결과는 버린다
 })();
 """ % JSON.stringify(_owner)
 		JavaScriptBridge.eval(code, true)
 	_import_cb = null
+	_idb_cb = null
 	_debug_cb = null
 	_debug = null
 
 
 ## 시험용: 걸어 둔 콜백이 남아 있는지.
 func has_callbacks() -> bool:
-	return _import_cb != null or _debug_cb != null or _debug != null or not on_import.is_null() or not on_debug_request.is_null()
+	return _import_cb != null or _debug_cb != null or _debug != null or _idb_cb != null or not on_import.is_null() \
+		or not on_debug_request.is_null() or not _idb_done.is_empty()
+
+
+## 저장 반영 확인(IndexedDB 읽기)을 쓸 수 있는지: 진짜 웹 빌드이고 user:// 가 IndexedDB 에 이어져 있을 때만.
+func can_read_idb() -> bool:
+	return is_web() and OS.has_feature("web") and OS.is_userfs_persistent()
+
+
+## Godot 의 IndexedDB(DB /userfs, 저장소 FILE_DATA, 열쇠 = 전역 경로)에서 파일 글을 읽는다(web_check 의 idbAuto 와 같은 길).
+## 결과는 나중에 done.call(경로 → 바이트(PackedByteArray), 열쇠가 없으면 null, 기록은 있는데 내용을 읽을 수 없으면 false) 로 온다.
+## 읽기가 실패하면 빈 사전. 화면이 사라진 뒤의 결과는 버린다.
+## DB 가 없으면 만들지 않는다(버전 올림을 취소). 읽은 뒤 연결을 닫는다(Godot 의 동기화를 막지 않게).
+func read_idb_files(paths: PackedStringArray, done: Callable) -> void:
+	if not OS.has_feature("web"):
+		return
+	if _idb_cb == null:
+		_idb_cb = JavaScriptBridge.create_callback(_on_idb_js)
+	_idb_next += 1
+	for id in _idb_done.keys():
+		if int(id) < _idb_next - 8:
+			_idb_done.erase(id)  # 오지 않은 낡은 결과(SavePending 이 시간 초과로 버렸다)
+	_idb_done[_idb_next] = done
+	var code := """
+(function(){
+	var owners = window.sqfIdbOwners || (window.sqfIdbOwners = {});
+	if (window.sqfIdbRead) return;
+	window.sqfIdbRead = function(owner, id, keysJson, cb) {
+		owners[owner] = cb;
+		var keys = JSON.parse(keysJson), out = {}, sent = false;
+		function fin(err) {
+			if (sent) return; sent = true;
+			if (owners[owner] !== cb) return;  // 화면이 사라졌거나 다른 연결이 덮어씀
+			try { cb(id, err ? '{}' : JSON.stringify(out), err || ''); } catch (e) {}
+		}
+		var req;
+		try { req = indexedDB.open('/userfs'); } catch (e) { fin('open'); return; }
+		req.onupgradeneeded = function(){ req.transaction.abort(); };
+		req.onerror = function(){ fin('open'); };
+		req.onsuccess = function(){
+			var db = req.result;
+			try {
+				var tx = db.transaction('FILE_DATA', 'readonly'), st = tx.objectStore('FILE_DATA');
+				keys.forEach(function(k){
+					var g = st.get(k);
+					g.onsuccess = function(){
+						var r = g.result;
+						if (r === undefined) { out[k] = null; return; }  // 정말 없는 열쇠만 null
+						out[k] = false;  // 있는데 내용을 읽을 수 없는 기록: 어떤 파일과도 같지 않다
+						var c = r && r.contents;
+						if (c instanceof ArrayBuffer || ArrayBuffer.isView(c)) {  // Emscripten 은 형식 배열(종류는 판마다 다르다)로 둔다
+							try {
+								var u = ArrayBuffer.isView(c) ? new Uint8Array(c.buffer, c.byteOffset, c.byteLength) : new Uint8Array(c), bin = '';
+								for (var i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+								out[k] = btoa(bin);  // 바이트 그대로(base64)
+							} catch (e) {}
+						}
+					};
+				});
+				tx.oncomplete = function(){ db.close(); fin(''); };
+				tx.onerror = tx.onabort = function(){ db.close(); fin('read'); };
+			} catch (e) { db.close(); fin('read'); }
+		};
+	};
+})();
+"""
+	JavaScriptBridge.eval(code, true)
+	JavaScriptBridge.get_interface("window").sqfIdbRead(_owner, _idb_next, JSON.stringify(paths), _idb_cb)
+
+
+func _on_idb_js(args: Array) -> void:
+	if args.size() < 3:
+		return
+	var done: Variant = _idb_done.get(int(args[0]))
+	_idb_done.erase(int(args[0]))
+	if not (done is Callable) or not (done as Callable).is_valid():
+		return
+	var parsed: Variant = JSON.parse_string(str(args[1]))
+	if not (parsed is Dictionary) or not str(args[2]).is_empty():
+		(done as Callable).call({})
+		return
+	var out := {}
+	for k in parsed:
+		var v: Variant = parsed[k]
+		out[k] = Marshalls.base64_to_raw(v) if typeof(v) == TYPE_STRING else v  # null = 없음, false = 읽을 수 없음
+	(done as Callable).call(out)
 
 
 func device_pixel_ratio() -> float:

@@ -69,6 +69,12 @@ func main_path(slot: String) -> String:
 	return "%s/%s.json" % [dir_path, slot]
 
 
+## 슬롯의 후보 파일 경로: 본 파일·.tmp·.bak(읽기 순서).
+func candidate_paths(slot: String) -> PackedStringArray:
+	var main := main_path(slot)
+	return PackedStringArray([main, main.get_basename() + ".tmp", main.get_basename() + ".bak"])
+
+
 ## 상태를 슬롯에 쓴다. 성공하면 "" 이고 상태의 generation 이 1 오른다. 실패하면 이유를 돌려주고 generation 은 그대로.
 func save(slot: String, s: ExplorationState, saved_at: String = "") -> String:
 	if s.generation < 0 or s.generation >= SaveCodec.MAX_GENERATION:

@@ -37,7 +37,8 @@ static func is_scene_dir(path: String) -> bool:
 
 
 ## 화면을 만들어 트리에 넣는다. 시드는 고정, 연출은 즉시, 플랫폼은 PC 로 본다. query 는 주소 인자 글(예 "debug=1").
-func open(platform: String = "native", seed_value: int = 7, query: String = "") -> DungeonScreen:
+## prepare 가 있으면 트리에 넣기 직전에 화면을 넘겨 부른다(시험용 값을 더 바꿀 때).
+func open(platform: String = "native", seed_value: int = 7, query: String = "", prepare: Callable = Callable()) -> DungeonScreen:
 	screen = SCREEN.instantiate()
 	screen.save_dir = dir + "/saves"
 	screen.settings_path = dir + "/settings.json"
@@ -45,6 +46,8 @@ func open(platform: String = "native", seed_value: int = 7, query: String = "") 
 	screen.seed_override = seed_value
 	screen.anim_speed = 0.0
 	screen.url_query = query
+	if prepare.is_valid():
+		prepare.call(screen)
 	tree.root.add_child(screen)
 	await frames(2)
 	return screen

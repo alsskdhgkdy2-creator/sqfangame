@@ -51,6 +51,10 @@ const LAYER_WINDOWS := 2
 const LAYER_MODAL := 3
 const LAYER_TOAST := 4
 const PROMPT_BLOCKED_MS := 40
+## 「저장 중」 표시의 글자 크기·높이와 화면 위 가장자리 여백.
+const SAVE_CHIP_FONT := 15
+const SAVE_CHIP_H := 26.0
+const SAVE_CHIP_TOP := 4.0
 ## 누르고 있기 반복은 누른 지 이만큼 지나야 시작한다(연출이 없는 행동 뒤 짧은 누르기가 두 번 되지 않게).
 const HOLD_REPEAT_MS := 220
 
@@ -67,6 +71,10 @@ var settings_path := GameSettings.PATH
 var platform := ""
 ## 0 이상이면 새 게임 시드로 쓴다(디버그 주소의 &seed=N 도 여기에 들어간다).
 var seed_override := -1
+## 시험용 저장 반영 읽기(SavePending.reader 꼴). 비어 있지 않으면 웹 연결 대신 이것을 쓴다.
+var save_reader: Callable
+## 시험용: -1 = 실제(OS.is_userfs_persistent), 0·1 = user:// 가 IndexedDB 에 이어져 있지 않음·있음으로 본다.
+var userfs_persistent := -1
 ## 시험용 주소 인자 글("debug=1&seed=5"): 비어 있지 않으면 브라우저 주소 대신 이것을 본다.
 var url_query := ""
 var anim_speed := 1.0
@@ -81,6 +89,8 @@ var texts: TextDb
 var settings: GameSettings
 var store: SaveStore
 var bridge: WebBridge
+## 웹 저장의 IndexedDB 반영 기다림(05 §8.3). 기다리는 동안 「저장 중」 표시.
+var save_pending := SavePending.new()
 ## 자동 저장에 성공한 횟수와 마지막 실패 이유(시험·디버그용).
 var autosave_count := 0
 var last_autosave_error := ""
@@ -119,6 +129,8 @@ var _floor_label := Label.new()
 var _steps_label := Label.new()
 var _toast := Label.new()
 var _toast_left := 0.0
+## 「저장 중」 표시(층 4, 화면 위 가운데). 대기가 있으면 보이고 없으면 바로 감춘다(나타날 때만 짧게 밝아진다).
+var save_chip := Control.new()
 var _flash := ColorRect.new()
 
 var _queued := -1
@@ -172,6 +184,7 @@ func _ready() -> void:
 	store = SaveStore.new(dr.defs, save_dir)
 	bridge = WebBridge.new(platform, url_query)
 	bridge.on_import = _on_import_result
+	_setup_save_pending()
 	_build_ui()
 	# 디버그 주소는 시작(저장 복구·새 게임) 전에 본다: 복구된 전투 층도 판정 상세를 쓰고, &seed=N 이면 새 게임 시드가 N.
 	if bridge.debug_requested():
@@ -453,6 +466,7 @@ func _autosave(quiet: bool = false) -> bool:
 		return true
 	_autosave_pending = false
 	var why := store.save(SaveStore.AUTO, state)
+	_note_save(SaveStore.AUTO, why.is_empty())
 	_debug_dirty = true
 	if why.is_empty():
 		autosave_count += 1
@@ -480,12 +494,66 @@ func _load_slot(slot: String) -> void:
 
 func _save_slot(slot: String) -> void:
 	var why := store.save(slot, state)
+	_note_save(slot, why.is_empty())
 	if why.is_empty():
 		_show_toast(texts.t("msg.saved"))
 	else:
 		_alert(texts.t("msg.save_failed", {"reason": why}))
 		return
 	party_menu.refresh_view()
+
+
+## 저장 반영 기다림을 켠다: 진짜 웹이고 user:// 가 IndexedDB 에 이어져 있을 때만(시험은 save_reader·userfs_persistent).
+func _setup_save_pending() -> void:
+	var persistent := OS.is_userfs_persistent() if userfs_persistent < 0 else userfs_persistent == 1
+	if save_reader.is_valid():
+		save_pending.reader = save_reader
+		save_pending.enabled = persistent
+	else:
+		save_pending.reader = bridge.read_idb_files
+		save_pending.enabled = persistent and bridge.can_read_idb()
+	save_pending.changed.connect(_refresh_save_chip)
+	# 메모리에 이미 있는 슬롯도 올린다: 화면을 다시 만들었으면 앞 화면의 저장이 아직 IndexedDB 에 없을 수 있다.
+	# 보통의 페이지 열기라면 그 파일은 IndexedDB 에서 온 것이라 첫 읽기에서 내린다(시작할 때 잠깐 보일 수 있다).
+	if save_pending.enabled:
+		for slot in [SaveStore.AUTO] + SaveStore.MANUAL_SLOTS:
+			var files := _slot_files(slot)
+			if files.values().any(func(t: Variant) -> bool: return t != null):
+				save_pending.note(slot, _file_generation(files[ProjectSettings.globalize_path(store.main_path(slot))]), files)
+
+
+## 상태 요약에 낼 본 파일의 generation(검사 전 바이트). 없거나 읽을 수 없거나 정수가 아니면 -1(깨진 파일도 묶음은 올린다).
+static func _file_generation(bytes: Variant) -> int:
+	if typeof(bytes) != TYPE_PACKED_BYTE_ARRAY:
+		return -1
+	var json := JSON.new()
+	if json.parse((bytes as PackedByteArray).get_string_from_utf8()) != OK or not (json.data is Dictionary):
+		return -1
+	var g: Variant = SaveCodec.to_int((json.data as Dictionary).get("generation"))
+	return g if g != null else -1
+
+
+## 저장을 시도한 뒤(성공·실패 모두) 부른다: 그 슬롯의 메모리 파일 묶음(본 파일·.tmp·.bak)을 반영 대기에 올린다.
+## 쓰기와 같은 프레임이라 쓴 바이트 그대로다. generation 은 이번 저장이 쓴(실패면 쓰려던) 값.
+func _note_save(slot: String, ok: bool) -> void:
+	if save_pending.enabled:
+		save_pending.note(slot, state.generation if ok else state.generation + 1, _slot_files(slot))
+
+
+## 슬롯의 후보 파일(본 파일·.tmp·.bak): IndexedDB 열쇠(전역 경로) → 바이트(없으면 null).
+func _slot_files(slot: String) -> Dictionary:
+	var out := {}
+	for path in store.candidate_paths(slot):
+		out[ProjectSettings.globalize_path(path)] = FileAccess.get_file_as_bytes(path) if FileAccess.file_exists(path) else null
+	return out
+
+
+func _refresh_save_chip() -> void:
+	var on := save_pending.is_pending()
+	if on and not save_chip.visible:
+		save_chip.modulate.a = 0.0
+	save_chip.visible = on
+	_debug_dirty = true
 
 
 func _start_new_game() -> void:
@@ -986,7 +1054,36 @@ func _build_ui() -> void:
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.mouse_filter = MOUSE_FILTER_IGNORE
 	toast_area.add_child(_toast)
+	_build_save_chip(toast_root)
 	_layout()
+
+
+## 「저장 중」 표시(05 §8.3, 원작에 없음): 화면 위 가운데 가장자리. 어느 화면(탐색·지도·전투·캠프·창)에서도 그 자리에는
+## 누르는 것이 없다(위쪽은 층 문패·전투 머리 띠·캠프 안내 띠 같은 장식, 단추는 양 끝). 높이 32 이하, 누르기를 받지 않는다.
+func _build_save_chip(toast_root: Control) -> void:
+	save_chip.name = "SaveChip"
+	save_chip.mouse_filter = MOUSE_FILTER_IGNORE
+	save_chip.visible = save_pending.is_pending()  # 시작할 때 올린 슬롯(_setup_save_pending)
+	toast_root.add_child(save_chip)
+	var label := Label.new()
+	label.name = "SaveChipText"
+	label.text = texts.t("hud.saving")
+	label.mouse_filter = MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("font_size", SAVE_CHIP_FONT)
+	label.add_theme_color_override("font_color", UiTheme.TEXT)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	save_chip.add_child(label)
+	var w := ceilf(label.get_minimum_size().x) + 24.0
+	save_chip.set_anchors_preset(PRESET_CENTER_TOP)
+	save_chip.offset_left = -w / 2.0
+	save_chip.offset_right = w / 2.0
+	save_chip.offset_top = SAVE_CHIP_TOP
+	save_chip.offset_bottom = SAVE_CHIP_TOP + SAVE_CHIP_H
+	# 지도 판 남색 바탕(반투명)에 판 테두리 색 얇은 선.
+	save_chip.draw.connect(func() -> void:
+		UiTheme.fill_round(save_chip, Rect2(Vector2.ZERO, save_chip.size), Color(MapPanel.BG, 0.82), 6, MapWindow.EDGE, 1))
 
 
 ## CanvasLayer 하나와 그 화면 전체 뿌리 Control(IGNORE: 빈 곳 누르기는 아래 층으로 간다). 테마는 층을 건너 이어지지 않아 다시 준다.
@@ -1211,6 +1308,9 @@ func _process(delta: float) -> void:
 	if _toast_left > 0.0:
 		_toast_left -= delta
 		_toast.modulate.a = clampf(_toast_left / 0.5, 0.0, 1.0)
+	save_pending.tick(delta)
+	if save_chip.visible and save_chip.modulate.a < 1.0:
+		save_chip.modulate.a = minf(1.0, save_chip.modulate.a + delta / 0.15)
 	if _flash.color.a > 0.0:
 		_flash.color.a = maxf(0.0, _flash.color.a - delta * 1.2)
 	if _debug:
@@ -1303,6 +1403,9 @@ func debug_snapshot() -> Dictionary:
 		"plan_ms_total_max": view.max_anim_plan_ms, "plan_count_max": view.max_anim_plan_count,
 		# 성장(07 §8.6): 대원마다 레벨·경험치·남은 SP·스킬·장비와 §6 묶음의 능력치·공격·방어, 가방, 파티 메뉴.
 		"members": _debug_members(), "gear_bag": state.gear_bag.duplicate(), "party_menu": party,
+		# 웹 저장 반영(05 §8.3): IndexedDB 에 아직 없는 저장(슬롯 → generation)과 「저장 중」 표시.
+		"save_pending": save_pending.is_pending(), "save_pending_gens": save_pending.generations(),
+		"save_watch": save_pending.enabled, "save_reads": save_pending.reads, "save_chip": save_chip.is_visible_in_tree(),
 	}
 
 
@@ -1400,7 +1503,7 @@ static func finish_battle(s: ExplorationState) -> bool:
 ## 정의 데이터를 읽지 못했다: 빈 화면 대신 오류 목록을 보인다(게임은 시작하지 않는다).
 func _show_start_error(errors: Array) -> void:
 	# 화면을 만들지 않으므로 미리 만든 부품(트리에 넣지 않음)을 치운다.
-	for n in [_floor_label, _steps_label, _toast, _flash]:
+	for n in [_floor_label, _steps_label, _toast, _flash, save_chip]:
 		(n as Node).free()
 	set_process(false)
 	set_process_unhandled_input(false)

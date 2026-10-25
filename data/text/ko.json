@@ -24,6 +24,7 @@
   "msg.load_failed": "불러오지 못했다: {reason}",
   "msg.auto_broken": "자동 저장이 모두 깨져 새 게임으로 시작한다",
   "hud.steps": "걸음 {steps}",
+  "hud.saving": "저장 중",
   "wipe.title": "전멸",
   "wipe.load_manual": "마지막 수동 저장 불러오기",
   "wipe.new_game": "층 처음부터",
