@@ -1,8 +1,9 @@
 ## 캠프(M2.7 R2, 07 §9, research 05 §2.2): 미궁 화면 위에 덮는 전체 화면 층. 열린 동안 탐색 화면은 HUD 를 감추고
-## 3D 시야만 화면 전체로 두며(DungeonScreen._hud_hidden), 캠프는 그것을 어둡게(CAMP_DIM) 하고 그 위에 원작 시설 화면의 짜임
-## (gs2_653222·653235·jp_facility_img1, 원작 캠프 화면은 찾지 못해 시설 짜임으로 추정 — 사용자 결정)을 띄운다:
-## 왼쪽 위 문패(층 이름·걸음, 원작 다이얼 자리), 위 설명 띠(FacilityBanner), 왼쪽 명령 목록(FacilityList), 아래 파티 카드 두 줄(PartyCards).
-## 쪽(page): root(캠프 뿌리: 명령 목록) → pick(상태·스킬·장비: 파티 카드에서 대원 고르기, 추정) → sub(그 대원의 하위 화면).
+## 3D 시야만 화면 전체로 두며(DungeonScreen._hud_hidden), 캠프 뿌리·대원 고르기는 그 위에 원작의 무늬 판(그림 창으로 시야가 비친다,
+## CampBackdrop)을, 하위 화면은 어둡게(CAMP_DIM) 깐다(07 §9.8 ④).
+## 뿌리는 원작 HD 캠프 실물에 맞췄다(research 07 §2, 07 §9.8 D26): 왼쪽 위 걸음 문패(원작 시계 다이얼 자리), 위 장소 띠(PlaceRibbon),
+## 오른쪽 위 소지금, 장소 띠 아래 알림 줄(알림이 있을 때만), 왼쪽 명령 목록(FacilityList), 아래 파티 카드 두 줄(PartyCards).
+## 쪽(page): root(캠프 뿌리: 명령 목록) → pick(상태·스킬·장비: 파티 카드에서 대원 고르기) → sub(그 대원의 하위 화면).
 ## 소지품·기록은 파티 전체 것이라 고르기 없이 바로, 닫기는 탐색으로. Esc·P 는 한 단계 뒤로(하위 화면 → 뿌리 → 닫힘).
 ## 하위 화면은 원작 화면을 옮긴 것: 상태(PartyStatusTab, 상태 화면), 스킬(PartySkillTab, 스킬 트리), 장비·소지품(PartyEquipTab·
 ## PartyItemsTab, 상점 화면 짜임 ShopFrame), 기록(PartyRecordsTab, 불러오기 화면의 슬롯 카드). 기록의 일(저장·불러오기·내보내기·
@@ -19,12 +20,25 @@ extends Control
 
 signal opened
 signal closed
-## 캠프 명령(목록 순서). 숫자 키 1~6. 목록 줄은 앞 다섯(CAMP_ROWS)이고 「6 닫기」(고르기 중 「뒤로」)는 줄 없이 키 `6`과
-## 키패드 「취소」(= Esc·P)만 한다(P3, 사용자 결정 2026-10-25: 방향 십자를 왼쪽 아래 전투 자리에 두려고 줄을 뺐다).
-const CAMP_KEYS := ["status", "skills", "equip", "items", "records", "close"]
+## 캠프 명령(목록 순서, 07 §9.8 ②: 원작 ITEM · STATUS · EQUIP · CUSTOM 차례 + 원작에 없는 기록). 숫자 키 1~6. 목록 줄은 앞 다섯
+## (CAMP_ROWS)이고 「6 닫기」(고르기 중 「뒤로」)는 줄 없이 키 `6`과 키패드 「취소」(= Esc·P)만 한다(P3, 사용자 결정 2026-10-25:
+## 방향 십자를 왼쪽 아래 전투 자리에 두려고 줄을 뺐다). 하위 화면 번호(tab, TAB_KEYS)는 이 차례와 따로다: camp_tab·camp_index 로 잇는다(숫자 키는 어디서나 이 차례).
+const CAMP_KEYS := ["items", "status", "equip", "skills", "records", "close"]
 const CAMP_ROWS := 5
-## 명령 목록 위(설명 띠 아래 16). 원작은 소지금 문패 아래(y 약 195)지만 소지금이 없어(M3) 위로 올렸다.
+## 명령 목록 위(알림 줄 아래 8). 원작 III 은 y 164 지만 64 줄 다섯이 카드 위에 들게 지금 자리를 둔다(07 §9.8 층 표).
 const CAMP_TOP := 116.0
+## 맨 위 띠(07 §9.8 ③, 1280×720 기준. 오른쪽 것은 오른쪽 끝 기준): 걸음 문패(원작 시계 다이얼 자리), 장소 띠(x 176 → 소지금 왼쪽 끝),
+## 소지금(W − 328, 16, 328×50, 상점 소지금 문패와 같은 그림), 알림 줄(x 176 → W − 16, y 70~108, 알림이 있을 때만).
+const STEP_PLATE := Rect2(0, 0, 176, 66)
+const RIBBON_X := 176.0
+const RIBBON_H := 66.0
+const MONEY_W := 328.0
+const MONEY_TOP := 16.0
+const MONEY_H := 50.0
+const NOTICE_TOP := 70.0
+const NOTICE_BOTTOM := 108.0
+const NOTICE_RIGHT := 16.0
+const NOTICE_FS := 20
 ## 규칙 함수가 상태를 바꿨다(저장 갈고리 뒤). 탐색 화면이 상태 칸을 새로 그린다.
 signal changed(events: Array)
 
@@ -65,7 +79,7 @@ var state: ExplorationState
 var texts: TextDb
 ## root · pick · sub
 var page := "root"
-## 캠프 명령 목록 커서, 대원 고르기의 명령(0 상태·1 스킬·2 장비)과 커서(대원 칸).
+## 캠프 명령 목록 커서(CAMP_KEYS 차례), 대원 고르기의 명령(하위 화면 번호: 0 상태·1 스킬·2 장비)과 커서(대원 칸).
 var camp_cursor := 0
 var pick_cmd := 0
 var pick_cursor := 0
@@ -81,9 +95,13 @@ var notice := ""
 var accepted_inputs := 0
 
 # ---- 부품 ----
-## 캠프 뿌리·대원 고르기(시설 짜임): 문패·설명 띠·명령 목록·파티 카드(전투와 같은 부품, 값은 탐색 상태의 파티).
+## 캠프 뿌리·대원 고르기(07 §9.8): 걸음 문패·장소 띠·소지금·알림 줄·명령 목록·파티 카드(전투와 같은 부품, 값은 탐색 상태의 파티).
+## 뿌리·고르기의 바탕(07 §9.8 ④): 무늬 판 + 그림 창. 하위 화면은 판 대신 CAMP_DIM.
+var backdrop_board: CampBackdrop
 var camp_plate: FacilityPlate
-var banner: FacilityBanner
+var ribbon: PlaceRibbon
+var money_plate: Control
+var notice_line: Control
 var camp_list: FacilityList
 var cards: PartyCards
 var display: BattleDisplay
@@ -108,6 +126,8 @@ var _built := false
 var _open := false
 var _input_frame := -1
 var _context := ""
+## 마지막 _draw 가 CAMP_DIM 을 그렸는지(시험).
+var drawn_dim := false
 
 
 func _init() -> void:
@@ -139,8 +159,12 @@ func build(text_db: TextDb) -> void:
 	_layout()
 
 
-## 캠프 뿌리 부품(앵커로 붙인다). 트리 순서 = 그리는·누르는 순서: 카드 → 문패·띠(장식) → 명령 목록.
+## 캠프 뿌리 부품(앵커로 붙인다, 07 §9.8 층 표). 트리 순서 = 그리는·누르는 순서: 무늬 판 → 카드 → 걸음 문패 → 장소 띠 → 소지금 →
+## 알림 줄(판·문패·띠·소지금·알림 줄은 장식) → 명령 목록.
 func _build_camp() -> void:
+	backdrop_board = CampBackdrop.new()
+	backdrop_board.name = "CampBackdrop"
+	add_child(backdrop_board)
 	cards = PartyCards.new()
 	cards.name = "CampCards"
 	add_child(cards)
@@ -148,10 +172,15 @@ func _build_camp() -> void:
 	camp_plate = FacilityPlate.new()
 	camp_plate.name = "CampPlate"
 	add_child(camp_plate)
-	banner = FacilityBanner.new()
-	banner.name = "CampBanner"
-	add_child(banner)
-	banner.place()
+	place(camp_plate, Vector2.ZERO, Vector2.ZERO, Vector4(STEP_PLATE.position.x, STEP_PLATE.position.y, STEP_PLATE.end.x, STEP_PLATE.end.y))
+	ribbon = PlaceRibbon.new()
+	ribbon.name = "CampRibbon"
+	add_child(ribbon)
+	place(ribbon, Vector2.ZERO, Vector2(1, 0), Vector4(RIBBON_X, 0, -MONEY_W, RIBBON_H))
+	money_plate = _deco("CampMoney", Vector2(1, 0), Vector2(1, 0), Vector4(-MONEY_W, MONEY_TOP, 0, MONEY_TOP + MONEY_H))
+	money_plate.draw.connect(func() -> void: ShopFrame.paint_title(money_plate, money_text(), true))
+	notice_line = _deco("CampNotice", Vector2.ZERO, Vector2(1, 0), Vector4(RIBBON_X, NOTICE_TOP, -NOTICE_RIGHT, NOTICE_BOTTOM))
+	notice_line.draw.connect(_draw_notice_line)
 	camp_list = FacilityList.new()
 	camp_list.name = "CampList"
 	add_child(camp_list)
@@ -164,9 +193,35 @@ func _build_camp() -> void:
 	camp_list.pressed.connect(func(i: int) -> void: handle("camp", i))
 
 
-## 명령 줄 글: 「1  상태」(숫자 키).
+## 명령 줄 글: 「1  소지품」(숫자 키).
 func camp_label(i: int) -> String:
 	return "%d  %s" % [i + 1, texts.t("camp.cmd." + CAMP_KEYS[i])]
+
+
+## 명령 줄 i 가 여는 하위 화면 번호(TAB_KEYS), 닫기는 -1.
+static func camp_tab(i: int) -> int:
+	return TAB_KEYS.find(CAMP_KEYS[i]) if i >= 0 and i < CAMP_KEYS.size() else -1
+
+
+## 하위 화면 번호 t 의 명령 줄(CAMP_KEYS 차례).
+static func camp_index(t: int) -> int:
+	return CAMP_KEYS.find(TAB_KEYS[t]) if t >= 0 and t < TAB_KEYS.size() else -1
+
+
+## 소지금 글(상점 소지금 문패와 같다).
+func money_text() -> String:
+	return texts.t("shop.money", {"money": ShopRow.grouped(state.money if state != null else 0)})
+
+
+## 누르기를 받지 않는 장식 컨트롤(그림은 draw 신호로).
+func _deco(n: String, a0: Vector2, a1: Vector2, off: Vector4) -> Control:
+	var c := Control.new()
+	c.name = n
+	c.mouse_filter = MOUSE_FILTER_IGNORE
+	c.focus_mode = FOCUS_NONE
+	add_child(c)
+	place(c, a0, a1, off)
+	return c
 
 
 ## 앵커(왼쪽 위·오른쪽 아래 비율)와 여백(left, top, right, bottom).
@@ -346,8 +401,8 @@ func _setup_cards() -> void:
 # ---- 입력 입구 ----
 
 ## 모든 입력이 여기로 온다. 받아들였으면 true. 한 프레임에 하나만. 캠프 위에 바깥 창이 떠 있으면(blocked_hook) 아무것도 받지 않는다.
-## 캠프 뿌리: camp(명령 0~5)·camp_cursor(±1)·confirm·back·close. 대원 고르기: member(칸)·pick_move(Vector2i)·confirm·
-##       camp(0~2 고르기 바꾸기, 3·4 바로 열기, 5 = 뒤로)·back·close.
+## 캠프 뿌리: camp(명령 줄 0~5, CAMP_KEYS 차례)·camp_cursor(±1)·confirm·back·close. 대원 고르기: member(칸)·pick_move(Vector2i)·
+##       confirm·camp(상태·장비·스킬 줄 = 고르기 바꾸기, 소지품·기록 줄 = 바로 열기, 5 = 뒤로)·back·close.
 ## 하위 화면: tab(0~3)·member(칸)·member_step(±1)·back(한 단계 뒤로)·to_root(캠프 뿌리로)·close(캠프 닫기)·
 ##       dialog_move(±1)·dialog_pick(0·1)·dialog_ok·dialog_back·
 ##       스킬 탭 node(트리 칸)·node_dir(Vector2i)·plus·minus·revert·commit·
@@ -444,15 +499,13 @@ func _run_camp(i: int) -> bool:
 	match CAMP_KEYS[i]:
 		"status", "skills", "equip":
 			page = "pick"
-			pick_cmd = i
+			pick_cmd = camp_tab(i)
 			pick_cursor = member
 			_clear_notice()
-		"items":
-			_open_sub(3)
-		"records":
-			_open_sub(4)
 		"close":
 			close_menu()
+		_:
+			_open_sub(camp_tab(i))  # 소지품·기록
 	return true
 
 
@@ -480,21 +533,23 @@ func _dispatch_pick(kind: String, arg: Variant) -> bool:
 			# 고르기 중에도 명령 줄은 모두 일한다: `6`(줄 없음, = 「취소」)은 고르기 취소, 상태·스킬·장비는 그 명령으로 고르기를
 			# 바꾸고(커서 대원 그대로, 지금 명령이면 아무 일 없음), 소지품·기록은 바로 연다.
 			var i := int(arg) if arg != null else -1
-			if i < 0 or i >= CAMP_KEYS.size() or i == pick_cmd:
+			if i < 0 or i >= CAMP_KEYS.size() or i == camp_index(pick_cmd):
 				return false
-			camp_cursor = i
-			if i == CAMP_KEYS.size() - 1:
-				page = "root"
-				camp_cursor = pick_cmd
-				return true
-			if i < 3:
-				pick_cmd = i
-				_clear_notice()
-				return true
-			return _run_camp(i)
+			match CAMP_KEYS[i]:
+				"close":
+					page = "root"
+					camp_cursor = camp_index(pick_cmd)
+				"status", "skills", "equip":
+					camp_cursor = i
+					pick_cmd = camp_tab(i)
+					_clear_notice()
+				_:
+					camp_cursor = i
+					return _run_camp(i)
+			return true
 		"back":
 			page = "root"
-			camp_cursor = pick_cmd
+			camp_cursor = camp_index(pick_cmd)
 			return true
 		"close":
 			close_menu()
@@ -549,7 +604,7 @@ func _open_sub(t: int) -> void:
 ## 하위 화면에서 캠프 뿌리로(커서는 그 명령 줄).
 func _to_root() -> void:
 	page = "root"
-	camp_cursor = tab
+	camp_cursor = camp_index(tab)
 	equip_tab.close_list()
 	_layout()
 
@@ -638,14 +693,14 @@ func key_action(code: int) -> Array:
 	var num := _number(code)
 	if page != "sub":
 		if num >= 0 and num < CAMP_KEYS.size():
-			return ["camp", num]  # 뿌리: 그 명령. 고르기: 1~3 고르기 바꾸기, 4·5 바로 열기, 6 「뒤로」
+			return ["camp", num]  # 뿌리: 그 명령. 고르기: 2~4 고르기 바꾸기, 1·5 바로 열기, 6 「뒤로」
 		if enter:
 			return ["confirm", null]
 		if page == "pick":
 			return ["pick_move", dir] if dir != Vector2i.ZERO else []
 		return ["camp_cursor", dir.y] if dir.y != 0 else []
-	if num >= 0 and num < TAB_KEYS.size():
-		return ["tab", num]
+	if num >= 0 and num < CAMP_ROWS:
+		return ["tab", camp_tab(num)]  # 하위 화면도 명령 줄 차례(07 §9.8: 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록)
 	match code:
 		KEY_Q:
 			return ["member_step", -1]
@@ -800,7 +855,7 @@ func item_name(id: String) -> String:
 func show_notice(t: String) -> void:
 	notice = t
 	_notice_left = NOTICE_SEC
-	_refresh_banner()
+	_refresh_notice()
 	queue_redraw()
 
 
@@ -808,7 +863,7 @@ func show_notice(t: String) -> void:
 func _clear_notice() -> void:
 	notice = ""
 	_notice_left = 0.0
-	_refresh_banner()
+	_refresh_notice()
 	queue_redraw()
 
 
@@ -834,7 +889,7 @@ func _refresh() -> void:
 		(tabs[i] as Control).visible = sub and i == tab
 	if sub:
 		tabs[tab].call("refresh")
-	for c in [camp_plate, banner, camp_list, cards]:
+	for c in [backdrop_board, camp_plate, ribbon, money_plate, camp_list, cards]:
 		(c as Control).visible = not sub
 	if not sub:
 		_refresh_camp()
@@ -844,35 +899,52 @@ func _refresh() -> void:
 
 
 func _refresh_camp() -> void:
-	camp_plate.show_lines(texts.t(state.floor_def.name_key), texts.t("hud.steps", {"steps": state.steps}))
+	camp_plate.show_lines(texts.t("hud.steps", {"steps": state.steps}), "")
+	# 층 번호·계층 자료가 생기면(M3) 원작처럼 「계층 / B1F」로 넓힌다(07 §9.8 ③).
+	ribbon.show_text(texts.t(state.floor_def.name_key))
+	money_plate.queue_redraw()
 	var pick := page == "pick"
 	var live := []
 	for i in CAMP_ROWS:
 		camp_list.set_row_text(i, camp_label(i))
 		live.append(true)  # 고르기 중에도 모든 줄을 누를 수 있다(고른 줄은 눌러도 아무 일 없음)
-	camp_list.show_rows(-1 if pick else camp_cursor, pick_cmd if pick else -1, live)
+	camp_list.show_rows(-1 if pick else camp_cursor, camp_index(pick_cmd) if pick else -1, live)
 	display.sync_party(state)
-	# 고르기: 전투 아군 대상 고르기 표시(누를 수 있는 카드 모두 노랑 테두리, 커서 카드는 흰 안쪽 선).
+	# 고르기(원작 research 07 §2.3): 커서 카드 하나만 노란 테두리(표지 "pick", 채움 아님). 다른 카드는 표지 없음.
 	for c in cards.cards:
-		c.target_mark = "valid" if pick else ""
-		c.cursor = pick and c == cards.card(pick_cursor)
+		c.target_mark = "pick" if pick and c == cards.card(pick_cursor) else ""
+		c.cursor = false
 		c.current = false
 		c.mouse_filter = MOUSE_FILTER_STOP if pick else MOUSE_FILTER_IGNORE
 		if not pick:
 			c.cancel()
 		c.queue_redraw()
-	_refresh_banner()
+	_refresh_notice()
 
 
-## 설명 띠: 뿌리 = 커서 명령의 설명, 고르기 = 물음. 안내(거부 이유 등)가 있으면 둘째 줄.
-func _refresh_banner() -> void:
-	if banner == null or state == null:
+## 안내(거부 이유·성장 결과 등): 뿌리·고르기는 알림 줄(있을 때만 보인다), 하위 화면은 제 자리(스킬 = 정보 띠, 장비·소지품 = 설명 띠).
+func _refresh_notice() -> void:
+	if notice_line == null or state == null:
 		return
-	var head := texts.t(("camp.pick." if page == "pick" else "camp.desc.") + CAMP_KEYS[pick_cmd if page == "pick" else camp_cursor])
-	banner.show_lines(head, notice, not notice.is_empty())
-	# 하위 화면은 제 자리에 안내를 보인다(스킬 = 정보 띠, 장비·소지품 = 설명 띠).
+	notice_line.visible = page != "sub" and not notice.is_empty()
+	notice_line.queue_redraw()
 	if page == "sub" and (tabs[tab] as Object).has_method("notice_changed"):
 		tabs[tab].call("notice_changed")
+
+
+## 알림 줄에 쓰는 글(여러 줄 안내는 한 줄로 잇는다).
+func notice_line_text() -> String:
+	return "   ".join(notice.split("\n", false))
+
+
+## 알림 줄: 장소 띠 아래 어두운 띠에 따뜻한 안내 글자(글자 대비 4.5:1 이상, 시험).
+func _draw_notice_line() -> void:
+	var r := Rect2(Vector2.ZERO, notice_line.size)
+	notice_line.draw_rect(r, UiTheme.CAMP_NOTICE_BG)
+	notice_line.draw_rect(Rect2(0, r.end.y - 2.0, r.size.x, 2.0), UiTheme.FAC_PLATE_EDGE)
+	var font := notice_line.get_theme_default_font()
+	notice_line.draw_string(font, Vector2(PlaceRibbon.PAD, r.get_center().y + NOTICE_FS * 0.36), notice_line_text(),
+		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 2.0 * PlaceRibbon.PAD, NOTICE_FS, UiTheme.BATTLE_BANNER_NOTICE)
 
 
 func _refresh_dialog() -> void:
@@ -920,8 +992,15 @@ func _layout() -> void:
 	queue_redraw()
 
 
+## 바탕(07 §9.8 ④): 뿌리·대원 고르기 = "board"(무늬 판과 그림 창, CampBackdrop), 하위 화면 = "dim"(3D 시야를 CAMP_DIM 으로 어둡게).
+func backdrop() -> String:
+	return "dim" if page == "sub" else "board"
+
+
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), UiTheme.CAMP_DIM)
+	drawn_dim = backdrop() == "dim"
+	if drawn_dim:
+		draw_rect(Rect2(Vector2.ZERO, size), UiTheme.CAMP_DIM)
 
 
 func _draw_dialog() -> void:
@@ -993,8 +1072,8 @@ func debug_info(css: Callable) -> Dictionary:
 			rows.append({"item": equip_tab.row_items[j], "block": equip_tab.row_block[j], "button": equip_tab.rows[j].name})
 	return {
 		"open": true, "page": page, "tab": TAB_KEYS[tab] if page == "sub" else "", "member": member,
-		"camp_cursor": camp_cursor, "pick": CAMP_KEYS[pick_cmd] if page == "pick" else "", "pick_cursor": pick_cursor,
-		"banner": banner.lines().slice(0, 2) if page != "sub" else [], "draft": skill_tab.draft.duplicate(),
+		"camp_cursor": camp_cursor, "pick": TAB_KEYS[pick_cmd] if page == "pick" else "", "pick_cursor": pick_cursor,
+		"backdrop": backdrop(), "ribbon": ribbon.text if page != "sub" else "", "money": money_text() if page != "sub" else "", "draft": skill_tab.draft.duplicate(),
 		"cursor": {"skill": skill_tab.cursor_skill(), "slot": equip_tab.cursor, "list_open": equip_tab.list_open,
 			"list_row": equip_tab.list_cursor if equip_tab.list_open else -1, "items": items_tab.cursor},
 		"dialog": dialog_kind, "dialog_pick": dialog_pick, "sp_line": skill_tab._sp_label.text if tab == 1 else "",

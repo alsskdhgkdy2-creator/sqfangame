@@ -874,7 +874,7 @@ func test_new_part_arguments_keep_the_camp_defaults() -> void:
 	var s := await kit.open("native", 7, "debug=1")
 	var pm := s.party_menu
 	await kit.press_key(KEY_P)
-	pm.handle("camp", 2)
+	pm.handle("camp", PartyMenu.camp_index(2))
 	await kit.frames(1)
 	pm.handle("member", 1)
 	await kit.frames(1)

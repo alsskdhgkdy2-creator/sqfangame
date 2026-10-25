@@ -12,20 +12,26 @@ const FINGER := 3
 const DUELIST_A := 1
 const ION_SABER := "equip.ion_saber"
 const PAD_NAMES := ["up", "down", "left", "right", "ok", "back"]
+## 명령 줄 번호(07 §9.8 ②, PartyMenu.CAMP_KEYS 차례: 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록). 숫자 키는 줄 번호 + 1.
+const ITEMS := 0
+const STATUS := 1
+const EQUIP := 2
+const SKILLS := 3
+const RECORDS := 4
 ## 화면 → 준비 입력(캠프 뿌리에서).
 const SCREENS := {
 	"root": [],
-	"pick": [["camp", 0]],
-	"status": [["camp", 0], ["member", 1]],
-	"status_split": [["camp", 0], ["member", 1], ["split"]],
-	"skills": [["camp", 1], ["member", 1]],
-	"skills_commit": [["camp", 1], ["member", 1], ["plus"], ["commit"]],
-	"equip": [["camp", 2], ["member", 1]],
-	"equip_list": [["camp", 2], ["member", 1], ["confirm"]],
-	"items": [["camp", 3]],
-	"items_supply": [["camp", 3], ["supply_toggle"]],
-	"records": [["camp", 4]],
-	"records_new_game": [["camp", 4], ["record_new_game"]],
+	"pick": [["camp", STATUS]],
+	"status": [["camp", STATUS], ["member", 1]],
+	"status_split": [["camp", STATUS], ["member", 1], ["split"]],
+	"skills": [["camp", SKILLS], ["member", 1]],
+	"skills_commit": [["camp", SKILLS], ["member", 1], ["plus"], ["commit"]],
+	"equip": [["camp", EQUIP], ["member", 1]],
+	"equip_list": [["camp", EQUIP], ["member", 1], ["confirm"]],
+	"items": [["camp", ITEMS]],
+	"items_supply": [["camp", ITEMS], ["supply_toggle"]],
+	"records": [["camp", RECORDS]],
+	"records_new_game": [["camp", RECORDS], ["record_new_game"]],
 }
 
 var kit: Kit
@@ -454,18 +460,18 @@ func test_camp_pad_matches_keys_on_root_pick_and_status() -> void:
 		["뿌리 ↑", false, [], "up", true, false], ["뿌리 ↓", false, [], "down", true, false],
 		["뿌리 ←", false, [], "left", false, false], ["뿌리 →", false, [], "right", false, false],
 		["뿌리 선택", false, [], "ok", true, false], ["뿌리 취소", false, [], "back", true, false],
-		["고르기 ↑", false, [["camp", 1]] + down, "up", true, false], ["고르기 ↓", false, [["camp", 1]], "down", true, false],
-		["고르기 ←", false, [["camp", 1]], "left", true, false], ["고르기 →", false, [["camp", 1]], "right", true, false],
-		["고르기 선택", false, [["camp", 1]], "ok", true, false], ["고르기 취소", false, [["camp", 1]], "back", true, false],
-		["고르기 윗줄 ↑(가장자리)", false, [["camp", 1]], "up", true, true],
-		["상태 ↑", false, [["camp", 0], ["member", 1]], "up", false, false], ["상태 ↓", false, [["camp", 0], ["member", 1]], "down", false, false],
-		["상태 ←", false, [["camp", 0], ["member", 1]], "left", true, false], ["상태 →", false, [["camp", 0], ["member", 1]], "right", true, false],
-		["상태 선택", false, [["camp", 0], ["member", 1]], "ok", true, false], ["상태 취소", false, [["camp", 0], ["member", 1]], "back", true, false],
+		["고르기 ↑", false, [["camp", SKILLS]] + down, "up", true, false], ["고르기 ↓", false, [["camp", SKILLS]], "down", true, false],
+		["고르기 ←", false, [["camp", SKILLS]], "left", true, false], ["고르기 →", false, [["camp", SKILLS]], "right", true, false],
+		["고르기 선택", false, [["camp", SKILLS]], "ok", true, false], ["고르기 취소", false, [["camp", SKILLS]], "back", true, false],
+		["고르기 윗줄 ↑(가장자리)", false, [["camp", SKILLS]], "up", true, true],
+		["상태 ↑", false, [["camp", STATUS], ["member", 1]], "up", false, false], ["상태 ↓", false, [["camp", STATUS], ["member", 1]], "down", false, false],
+		["상태 ←", false, [["camp", STATUS], ["member", 1]], "left", true, false], ["상태 →", false, [["camp", STATUS], ["member", 1]], "right", true, false],
+		["상태 선택", false, [["camp", STATUS], ["member", 1]], "ok", true, false], ["상태 취소", false, [["camp", STATUS], ["member", 1]], "back", true, false],
 	])
 
 
 func test_camp_pad_matches_keys_on_skills_and_its_dialogs() -> void:
-	var sk := [["camp", 1], ["member", 1]]
+	var sk := [["camp", SKILLS], ["member", 1]]
 	var dlg := sk + [["plus"], ["commit"]]
 	await _parity([
 		["스킬 ↑", false, sk + [["node_dir", Vector2i(0, 1)]], "up", true, false],
@@ -483,9 +489,9 @@ func test_camp_pad_matches_keys_on_skills_and_its_dialogs() -> void:
 
 
 func test_camp_pad_matches_keys_on_equip_and_items() -> void:
-	var eq := [["camp", 2], ["member", 1]]
+	var eq := [["camp", EQUIP], ["member", 1]]
 	var lst := eq + [["confirm"]]
-	var it := [["camp", 3], ["supply_toggle"]]
+	var it := [["camp", ITEMS], ["supply_toggle"]]
 	await _parity([
 		["장비 ↑", false, eq + [["cursor", 1]], "up", true, false],
 		["장비 첫 칸 ↑(가장자리)", false, eq, "up", true, true],
@@ -498,13 +504,13 @@ func test_camp_pad_matches_keys_on_equip_and_items() -> void:
 		["소지품 ↑", true, it + [["cursor", 1]], "up", true, false], ["소지품 ↓", true, it, "down", true, false],
 		["소지품 ←", true, it, "left", true, false], ["소지품 →", true, it, "right", true, false],
 		["소지품 선택(보급 줄)", true, it, "ok", true, false], ["소지품 취소", true, it, "back", true, false],
-		["소지품(디버그 아님) 선택", false, [["camp", 3]], "ok", false, false],
-		["소지품(디버그 아님, 넘치지 않음) ↓(가장자리)", false, [["camp", 3]], "down", true, true],
+		["소지품(디버그 아님) 선택", false, [["camp", ITEMS]], "ok", false, false],
+		["소지품(디버그 아님, 넘치지 않음) ↓(가장자리)", false, [["camp", ITEMS]], "down", true, true],
 	])
 
 
 func test_camp_pad_matches_keys_on_records_and_new_game() -> void:
-	var rc := [["camp", 4]]
+	var rc := [["camp", RECORDS]]
 	var ng := rc + [["record_new_game"]]
 	await _parity([
 		["기록 ↑", false, rc + [["cursor", 1]], "up", true, false], ["기록 ↓", false, rc, "down", true, false],
@@ -519,11 +525,58 @@ func test_camp_pad_matches_keys_on_records_and_new_game() -> void:
 	])
 
 
+## 숫자 키 차례(07 §9.8 ②): 키 표 하나(key_action)가 뿌리·고르기의 1~6(윗줄·키패드 숫자)을 명령 줄 0~5 로 보내고, 줄의 일은 새 차례
+## (1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록 · 6 닫기). 고르기 중 2·3·4 는 고르기 바꾸기(지금 명령이면 아무 일 없음), 1·5 는 바로 열기,
+## 6 은 뒤로. 키패드 「선택」은 열 때 커서 0(소지품). 하위 화면의 숫자 키도 같은 차례다(1 소지품 … 5 기록).
+func test_number_keys_follow_the_command_order() -> void:
+	var pm := await _fresh()
+	check_eq(PartyMenu.CAMP_KEYS, ["items", "status", "equip", "skills", "records", "close"], "명령 차례")
+	for i in 6:
+		check_eq([pm.key_action(KEY_1 + i), pm.key_action(KEY_KP_1 + i)], [["camp", i], ["camp", i]], "뿌리 %d → 명령 줄 %d" % [i + 1, i])
+	# 뿌리: 키 → [쪽, 하위 화면 번호 또는 고르기 명령(0 상태·1 스킬·2 장비), 명령 커서]
+	var root_want := {KEY_1: ["sub", 3, ITEMS], KEY_2: ["pick", 0, STATUS], KEY_3: ["pick", 2, EQUIP], KEY_4: ["pick", 1, SKILLS],
+		KEY_5: ["sub", 4, RECORDS]}
+	for k in root_want:
+		pm = await _fresh()
+		await kit.press_key(k)
+		check_eq([pm.page, pm.tab if pm.page == "sub" else pm.pick_cmd, pm.camp_cursor], root_want[k], "뿌리 %s" % OS.get_keycode_string(k))
+	pm = await _fresh()
+	await kit.press_key(KEY_6)
+	check(not pm.is_open(), "뿌리 6 → 닫기")
+	pm = await _fresh()
+	await kit.tap(kit.center_of(pm.key_pad.button("ok")), FINGER)
+	check_eq([pm.page, pm.tab], ["sub", 3], "열자마자 키패드 「선택」 → 커서 0 = 소지품")
+	# 상태 고르기 중
+	var pick_want := {KEY_1: ["sub", 3, ITEMS], KEY_3: ["pick", 2, EQUIP], KEY_4: ["pick", 1, SKILLS], KEY_5: ["sub", 4, RECORDS],
+		KEY_6: ["root", 0, STATUS]}
+	for k in pick_want:
+		pm = await _fresh()
+		await _step(pm, "camp", STATUS)
+		await kit.press_key(k)
+		check_eq([pm.page, pm.tab if pm.page == "sub" else pm.pick_cmd, pm.camp_cursor], pick_want[k], "상태 고르기 중 %s" % OS.get_keycode_string(k))
+	pm = await _fresh()
+	await _step(pm, "camp", STATUS)
+	var pre := _sig(pm)
+	await kit.press_key(KEY_2)
+	check_eq(_sig(pm), pre, "상태 고르기 중 2(지금 명령) → 아무 일 없음")
+	# 하위 화면(C1 뒤 조정자 결정): 같은 숫자 = 같은 명령. 키 → 하위 화면 번호(0 상태·1 스킬·2 장비·3 소지품·4 기록).
+	pm = await _fresh()
+	await _step(pm, "camp", RECORDS)
+	for i in 5:
+		check_eq(pm.key_action(KEY_1 + i), ["tab", PartyMenu.camp_tab(i)], "하위 화면 %d → %s" % [i + 1, PartyMenu.CAMP_KEYS[i]])
+	var sub_want := [[KEY_1, 3], [KEY_2, 0], [KEY_3, 2], [KEY_4, 1], [KEY_5, 4]]
+	for w in sub_want:
+		await kit.press_key(w[0])
+		check_eq([pm.page, pm.tab], ["sub", w[1]], "하위 화면 %s → %s" % [OS.get_keycode_string(w[0]), PartyMenu.TAB_KEYS[w[1]]])
+	await kit.press_key(KEY_6)
+	check_eq([pm.page, pm.tab], ["sub", 4], "하위 화면 6 → 아무 일 없음")
+
+
 ## 새 키 뜻(사용자 결정): 상태·장비 칸·소지품의 ←→ = 앞·다음 대원(= Q/E, 물리 화살표도), 상태의 선택(Enter) = 「내역」(= V).
 ## 장비 목록이 열려 있으면 ←→ 는 아무 일 없음, 기록은 ←→ 가 줄 안 그대로. 키 6 은 줄이 없어도 닫기·뒤로.
 func test_new_key_meanings_for_member_switch_and_split() -> void:
 	var pm := await _fresh()
-	await _step(pm, "camp", 0)
+	await _step(pm, "camp", STATUS)
 	await _step(pm, "member", 1)
 	await kit.press_key(KEY_RIGHT)
 	check_eq(pm.member, 2, "상태 → = 다음 대원")
@@ -547,14 +600,14 @@ func test_new_key_meanings_for_member_switch_and_split() -> void:
 	check_eq([pm.member, pm.equip_tab.list_open, pm.accepted_inputs], [0, true, n], "목록이 열려 있으면 ←→ 는 아무 일 없음")
 	await kit.press_key(KEY_ESCAPE)
 	check(not pm.equip_tab.list_open and pm.page == "sub", "Esc 한 번 = 목록만 닫음")
-	await kit.press_key(KEY_4)
+	await kit.press_key(KEY_1)
 	await kit.press_key(KEY_LEFT)
 	check_eq([pm.tab, pm.member], [3, 4], "소지품 ← = 앞 대원")
 	await kit.press_key(KEY_5)
 	await kit.press_key(KEY_RIGHT)
 	check_eq([pm.tab, pm.member, pm.records_tab.cur_col], [4, 4, 1], "기록 → = 줄 안(대원 그대로)")
 	await kit.press_key(KEY_ESCAPE)
-	await kit.press_key(KEY_1)
+	await kit.press_key(KEY_2)
 	await kit.press_key(KEY_6)
 	check_eq([pm.is_open(), pm.page], [true, "root"], "고르기 중 6 = 뒤로")
 	await kit.press_key(KEY_6)
@@ -567,7 +620,7 @@ func test_new_key_meanings_for_member_switch_and_split() -> void:
 ## 스킬에서 「선택」(= 「+」)을 누른 채 F(확정 창) → 뗌 → 「+」도 창 단추도 아니다. 흐린 단추를 눌러도 아무 일 없다.
 func test_camp_pad_press_is_cancelled_by_a_context_change() -> void:
 	var pm := await _fresh()
-	await _step(pm, "camp", 2)
+	await _step(pm, "camp", EQUIP)
 	await _step(pm, "member", 1)
 	var ok := pm.active_key_pad().button("ok")
 	var p := kit.center_of(ok)
@@ -581,7 +634,7 @@ func test_camp_pad_press_is_cancelled_by_a_context_change() -> void:
 	await kit.frames(3)
 	check_eq(_sig(pm), pre, "뗄 때 목록 줄을 고르지 않는다(장착·저장 없음)")
 	pm = await _fresh()
-	await _step(pm, "camp", 1)
+	await _step(pm, "camp", SKILLS)
 	await _step(pm, "member", 1)
 	await _step(pm, "plus")
 	ok = pm.key_pad.button("ok")

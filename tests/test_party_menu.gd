@@ -56,10 +56,10 @@ func _prep_duelist(s: DungeonScreen, bag: Dictionary = {}) -> void:
 		GrowthRules.supply(s.state, id, bag[id])
 
 
-## 캠프(M2.7 R2): P → 2(스킬) → Enter(대원 고르기 커서 = 칸 0) → E(다음 대원).
+## 캠프(M2.7 R2): P → 4(스킬, 07 §9.8 차례) → Enter(대원 고르기 커서 = 칸 0) → E(다음 대원).
 func _skill_tab_on_duelist(s: DungeonScreen) -> PartyMenu:
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_4)
 	await kit.press_key(KEY_ENTER)
 	await kit.press_key(KEY_E)
 	var pm := s.party_menu
@@ -136,7 +136,7 @@ func _host_menu(defs: GameDefs, sz: Vector2, debug: bool = false, bag: Dictionar
 	pm.open(st)
 	await kit.frames(1)
 	# 캠프 뿌리 → 상태 → 칸 0 대원(M2.7 R2): 하위 화면(상태 탭)에서 시작한다.
-	pm.handle("camp", 0)
+	pm.handle("camp", PartyMenu.camp_index(0))
 	await kit.frames(1)
 	pm.handle("member", 0)
 	await kit.frames(2)
@@ -165,7 +165,7 @@ func test_opens_by_button_and_key_on_status_tab_member_0() -> void:
 	check(not pm.is_open(), "키패드 「취소」로 닫힘(P3: 「닫기」 줄 없음)")
 	await kit.press_key(KEY_P)
 	check(pm.is_open(), "P 로 열림")
-	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_4)
 	await kit.press_key(KEY_ENTER)
 	await kit.press_key(KEY_E)
 	await kit.press_key(KEY_RIGHT)
@@ -381,13 +381,13 @@ func test_draft_then_member_tab_or_close_asks_to_discard() -> void:
 	check_eq(pm.dialog_kind, "discard", "다음 대원 단추 누르기도 확인 창")
 	await kit.press_key(KEY_ESCAPE)
 	check_eq([pm.dialog_kind, pm.member, st.draft], ["", DUELIST_A, {HIGH_SLASH: 1}], "확인 창 Esc = 「돌아가기」")
-	await kit.press_key(KEY_1)
+	await kit.press_key(KEY_2)
 	check_eq(pm.dialog_kind, "discard", "탭 바꾸기 → 확인 창")
 	await kit.press_key(KEY_RIGHT)
 	await kit.press_key(KEY_ENTER)
 	check_eq([pm.dialog_kind, pm.tab, st.draft], ["", 0, {}], "「버리기」 → 초안이 사라지고 탭이 바뀐다")
 	check_eq(kit.hash_now(), h, "상태 해시 그대로")
-	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_4)
 	await kit.tap(kit.center_of(st.plus_button))
 	await kit.tap(kit.center_of(st.top.back_button))
 	check_eq(pm.dialog_kind, "discard", "「뒤로」 → 확인 창")
@@ -454,7 +454,7 @@ func test_skill_preview_shows_tp_change_only_and_increase() -> void:
 	check(ev.is_empty() or ev[0]["type"] != "rejected", "준비: 리프레시 패치 Lv2 (%s)" % str(ev))
 	check(GrowthRules.sp_left(defs, m) > 0, "준비: 남은 SP 있음")
 	pm.refresh_view()
-	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_4)
 	await _step(pm, "member", medic)
 	var st := pm.skill_tab
 	await kit.tap(kit.center_of(st.nodes[defs.class_of(medic).tree_index[refresh]]))
@@ -480,7 +480,7 @@ func test_notice_does_not_survive_close_and_reopen() -> void:
 	var s := await _open()
 	var pm := s.party_menu
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_4)
 	await kit.press_key(KEY_ENTER)
 	check_eq(GrowthRules.sp_left(s.state.defs, s.state.party.members[pm.member]), 0, "준비: 남은 SP 0")
 	await kit.press_key(KEY_ENTER)
@@ -491,10 +491,10 @@ func test_notice_does_not_survive_close_and_reopen() -> void:
 	check(not pm.is_open(), "닫힘(하위 화면 → 뿌리 → 닫힘)")
 	await kit.press_key(KEY_P)
 	check(pm.is_open() and pm.page == "root", "곧바로 다시 열림(캠프 뿌리)")
-	check_eq([pm.notice, pm.banner.body], ["", ""], "앞 알림이 남지 않는다")
+	check(pm.notice.is_empty() and not pm.notice_line.visible, "앞 알림이 남지 않는다(알림 줄 감춤)")
 	await _wait_sec(0.3)
-	check_eq(pm.banner.body, "", "조금 지나도 비어 있다")
-	await kit.press_key(KEY_2)
+	check(pm.notice.is_empty() and not pm.notice_line.visible, "조금 지나도 비어 있다")
+	await kit.press_key(KEY_4)
 	await kit.press_key(KEY_ENTER)
 	await kit.press_key(KEY_ENTER)
 	check_eq(pm.skill_tab._note_label.text, "SP가 부족하다", "새 알림은 그대로 뜬다")
@@ -642,7 +642,7 @@ func test_unequippable_rows_are_dimmed_with_reason_and_cannot_be_chosen() -> voi
 func test_supply_is_hidden_in_a_normal_run() -> void:
 	var s := await _open()
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_4)
+	await kit.press_key(KEY_1)
 	var pm := s.party_menu
 	var it := pm.items_tab
 	check_eq(pm.tab, 3, "준비: 소지품 탭")
@@ -655,7 +655,7 @@ func test_supply_is_hidden_in_a_normal_run() -> void:
 func test_supply_and_exp_buttons_with_debug_flag() -> void:
 	var s := await _open("debug=1")
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_4)
+	await kit.press_key(KEY_1)
 	var pm := s.party_menu
 	var it := pm.items_tab
 	check(pm.debug and it.supply_button.is_visible_in_tree(), "디버그 주소 → 「임시 보급(시험용)」")
@@ -689,7 +689,7 @@ func test_supply_and_exp_buttons_with_debug_flag() -> void:
 func test_native_debug_build_shows_supply() -> void:
 	var s := await _open("", true)
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_4)
+	await kit.press_key(KEY_1)
 	check(s.party_menu.debug and s.party_menu.items_tab.supply_button.is_visible_in_tree(), "네이티브 디버그 실행 → 보급 단추")
 
 
@@ -702,7 +702,7 @@ func _full_bag_items_tab(debug: bool) -> PartyMenu:
 	for id in ["item.neon_rat_tail", "item.cable_scale", "item.glow_scale", "item.spore_pouch"]:
 		pm.state.materials[id] = 2
 	pm.refresh_view()
-	await kit.press_key(KEY_4)
+	await kit.press_key(KEY_1)
 	check_eq(pm.tab, 3, "준비: 소지품 탭")
 	check(pm.items_tab.list.max_scroll() > 200.0, "준비: 소지품이 넘친다(%.0f)" % pm.items_tab.list.max_scroll())
 	return pm
@@ -758,7 +758,7 @@ func test_items_keyboard_scrolls_without_debug() -> void:
 func test_items_click_moves_cursor_so_enter_repeats_that_button() -> void:
 	var s := await _open("debug=1")
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_4)
+	await kit.press_key(KEY_1)
 	var pm := s.party_menu
 	var it := pm.items_tab
 	await kit.tap(kit.center_of(it.supply_button))
@@ -801,7 +801,7 @@ func test_keyboard_only_full_path() -> void:
 	var n0 := s.autosave_count
 	await kit.press_key(KEY_P)
 	check(pm.is_open(), "P 열기")
-	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_4)
 	await kit.press_key(KEY_RIGHT)  # 대원 고르기: 윗줄 다음 카드(듀얼리스트 A)
 	await kit.press_key(KEY_ENTER)
 	check_eq([pm.tab, pm.member, st.cursor_skill()], [1, DUELIST_A, HIGH_SLASH], "스킬 탭·듀얼리스트 A·커서는 트리 첫 항목")
@@ -837,7 +837,7 @@ func test_keyboard_only_full_path() -> void:
 	check_eq([pm.dialog_kind, pm.dialog_pick], ["discard", 0], "Esc → 버리기 확인 창")
 	await kit.press_key(KEY_RIGHT)
 	await kit.press_key(KEY_ENTER)
-	check(pm.is_open() and pm.page == "root" and pm.camp_cursor == 1, "→ Enter → 캠프 뿌리(커서 스킬)")
+	check(pm.is_open() and pm.page == "root" and pm.camp_cursor == PartyMenu.camp_index(1), "→ Enter → 캠프 뿌리(커서 스킬)")
 	check_eq(kit.hash_now(), h1, "상태 해시가 확정 직후와 같다")
 	await kit.press_key(KEY_3)
 	check_eq([pm.page, pm.pick_cursor], ["pick", DUELIST_A], "3 → 장비 대원 고르기, 커서는 지난 대원")
@@ -881,7 +881,7 @@ func test_keys_do_not_leak_behind_menu() -> void:
 	var facing := s.state.party.facing
 	var n := s.autosave_count
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_1)
+	await kit.press_key(KEY_2)
 	await kit.press_key(KEY_ENTER)
 	check(pm.is_open() and pm.page == "sub", "준비: 캠프 → 상태(칸 0)")
 	for k in [KEY_M, KEY_R, KEY_SPACE, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_A, KEY_S, KEY_D]:
@@ -922,7 +922,7 @@ func test_keys_do_not_leak_behind_menu() -> void:
 func test_drag_from_list_released_on_tab_changes_nothing() -> void:
 	var s := await _open("debug=1")
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_4)
+	await kit.press_key(KEY_1)
 	var pm := s.party_menu
 	var it := pm.items_tab
 	await kit.tap(kit.center_of(it.supply_button))

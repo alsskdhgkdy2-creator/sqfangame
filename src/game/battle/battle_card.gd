@@ -50,7 +50,8 @@ const REASON_TEXT := Color(1.0, 0.7, 0.55)
 var display: BattleDisplay
 var unit_ref := {}
 var class_id := ""
-## 대상 고르기 표시: "" (평소) / "valid" / "invalid"(흐리게 + reason) / "lit"(줄 대상 강조).
+## 대상 고르기 표시: "" (평소) / "valid" / "invalid"(흐리게 + reason) / "lit"(줄 대상 강조) /
+## "pick"(캠프 대원 고르기의 커서 카드: 노란 테두리 4px 하나뿐, 원작 research 07 §2.3. 아군 카드만).
 var target_mark := "":
 	set(v):
 		target_mark = v
@@ -293,8 +294,8 @@ func _draw_member(u: BattleDisplay.DUnit) -> void:
 		draw_rect(r.grow(-1.5), UiTheme.CARD_ACTIVE, false, 3.0)
 	if held:
 		draw_rect(r.grow(-5.0), UiTheme.BTN_HELD_BORDER, false, 2.0)
-	if target_mark == "valid" or target_mark == "lit":
-		var tw := 4.0 if target_mark == "lit" or cursor else 3.0
+	if target_mark == "valid" or target_mark == "lit" or target_mark == "pick":
+		var tw := 4.0 if target_mark != "valid" or cursor else 3.0
 		draw_rect(r.grow(-tw * 0.5), Color(1.0, 0.95, 0.55), false, tw)
 	if cursor and target_mark != "invalid":
 		draw_rect(r.grow(-6.0), Color(1, 1, 1, 0.9), false, 2.0)

@@ -484,7 +484,7 @@ func test_saving_chip_spot_is_free_on_every_screen() -> void:
 	await kit.press_key(KEY_P)
 	check(pm.is_open() and pm.page == "root", "캠프 뿌리")
 	await _check_spot(s, "캠프 뿌리")
-	pm.handle("camp", 0)
+	pm.handle("camp", PartyMenu.camp_index(0))
 	await kit.frames(3)
 	check_eq(pm.page, "pick", "대원 고르기")
 	await _check_spot(s, "캠프 대원 고르기")

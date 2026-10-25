@@ -172,6 +172,12 @@ const FAC_TEXT := Color("6ff3db")
 const FAC_PLATE_EDGE := Color("1f6d63")
 ## 캠프 뒤 3D 시야를 어둡게(전투와 같게).
 const CAMP_DIM := BATTLE_DIM
+## 캠프 맨 위 장소 띠(07 §9.8 ③, 원작 HD III 「第1階層 / B1F」 띠): 밝은 하늘색 판에 남색 글자(원작 근사, 대비 11:1 남짓), 아래 가는 선.
+const RIBBON_FILL := Color("a8f6fa")
+const RIBBON_TEXT := Color("0a323a")
+const RIBBON_EDGE := Color("1f6d63")
+## 캠프 알림 줄 바탕(장소 띠 아래, 거의 불투명한 짙은 청록: 안내 글자 BATTLE_BANNER_NOTICE 대비 4.5:1 이상).
+const CAMP_NOTICE_BG := Color(0.02, 0.1, 0.11, 0.92)
 ## 상태 화면(원작 HD gs2_653218·653223·653241): 위 이름 칸(밝은 판 + 짙은 글자), Lv 띠(짙은 초록), 정보 띠(청록, 흰 글자 대비로 원작
 ## #1d8761 보다 어둡게), 직업 문패, 능력치 줄(이름 상자 + 값 + 노랑 막대), 공격·방어 판, 장비 줄, 오른쪽 아래 문패(원작 FORCE 자리).
 const ST_NAME_TAB := Color("e1ffef")

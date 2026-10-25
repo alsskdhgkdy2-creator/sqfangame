@@ -311,7 +311,7 @@ func refresh() -> void:
 
 ## 설명 띠: 화면 설명 + 안내(경험치 최대 등).
 func _refresh_banner() -> void:
-	frame.banner.show_lines(menu.texts.t("camp.desc.items"), menu.notice, not menu.notice.is_empty())
+	frame.banner.show_lines(menu.texts.t("camp.items.desc"), menu.notice, not menu.notice.is_empty())
 
 
 func notice_changed() -> void:

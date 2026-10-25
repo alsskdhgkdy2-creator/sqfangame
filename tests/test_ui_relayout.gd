@@ -346,7 +346,7 @@ func test_overlapping_taps_reach_the_visible_top_element_in_menus() -> void:
 			var got := await _receiver_at(sp[1])
 			check(got == sp[2], "%s 장비: %s → %s, 실제 %s" % [tag, sp[0], _name_of(sp[2]), _name_of(got)])
 		await kit.press_key(KEY_ESCAPE)
-		await kit.press_key(KEY_4)
+		await kit.press_key(KEY_1)
 		check(pm.tab == 3, tag + ": 소지품 화면")
 		var it := pm.items_tab
 		var iw := _rect(it.frame.list_window)
@@ -488,7 +488,7 @@ func test_touch_targets_stay_at_least_64() -> void:
 		await kit.press_key(KEY_P)
 		var pm := s.party_menu
 		_check_targets(pm.visible_buttons(), "%s 캠프 뿌리" % tag)
-		pm.handle("camp", 0)
+		pm.handle("camp", PartyMenu.camp_index(0))
 		await kit.frames(2)
 		_check_targets(pm.visible_buttons(), "%s 대원 고르기" % tag)
 		pm.handle("member", 0)

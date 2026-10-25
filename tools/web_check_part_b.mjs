@@ -63,21 +63,30 @@ async function growthChecks(s) {
   s = await waitFor((x) => x.party_menu?.open && x.party_menu.page === 'root', '캠프');
   check(!s.buttons.Pad_forward && !s.buttons.CampButton && s.buttons.Camp_status && s.buttons.Camp_records,
     '성장 1: 「캠프」 단추 → 캠프 뿌리(명령 줄), 덮인 탐색 단추는 요약에 없다', { page: s.party_menu.page });
+  // 07 §9.8: 명령 차례 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록(줄 가운데 y 가 차례대로), 열 때 커서 0, 맨 위 띠는 장소 띠·소지금.
+  const order = ['Camp_items', 'Camp_status', 'Camp_equip', 'Camp_skills', 'Camp_records'];
+  const ys = order.map((n) => s.buttons[n]?.[1]);
+  check(ys.every((y, i) => typeof y === 'number' && (i === 0 || y > ys[i - 1])) && s.party_menu.camp_cursor === 0
+    && !('banner' in s.party_menu) && s.party_menu.ribbon !== '' && /엔$/.test(s.party_menu.money) && s.party_menu.notice === ''
+    && s.party_menu.backdrop === 'board',
+    '성장 1: 캠프 뿌리 명령 차례(소지품·상태·장비·스킬·기록)와 장소 띠·소지금(설명 띠 없음), 바탕 = 무늬 판',
+    { ys, camp_cursor: s.party_menu.camp_cursor, ribbon: s.party_menu.ribbon, money: s.party_menu.money, banner: s.party_menu.banner,
+      backdrop: s.party_menu.backdrop });
   await clickButton('Camp_status');
   s = await waitFor((x) => x.party_menu?.page === 'pick', '대원 고르기');
   // 고르기 중에도 명령 줄이 일한다(휴대폰 확인 2026-10-25): 「장비」 줄 → 장비 고르기, 「상태」 줄 → 다시 상태 고르기.
   check(s.buttons.Camp_equip && s.buttons.Camp_items && s.buttons.VPad_back && !s.buttons.Camp_close, '성장 1: 고르기 중에도 명령 줄을 누를 수 있다(뒤로 = 키패드 「취소」)', { buttons: Object.keys(s.buttons) });
   await clickButton('Camp_equip');
   s = await waitFor((x) => x.party_menu?.pick === 'equip', '장비 고르기로 바꿈');
-  const equipBanner = s.party_menu.banner[0];
+  const equipPick = [s.party_menu.page, s.party_menu.pick];
   await clickButton('Camp_status');
   s = await waitFor((x) => x.party_menu?.pick === 'status', '상태 고르기로 돌아옴');
-  check(s.party_menu.page === 'pick' && equipBanner !== s.party_menu.banner[0], '성장 1: 고르기 중 「장비」·「상태」 줄 → 고르기와 물음이 바뀐다',
-    { pick: s.party_menu.pick, banner: [equipBanner, s.party_menu.banner[0]] });
+  check(equipPick[0] === 'pick' && equipPick[1] === 'equip' && s.party_menu.page === 'pick' && s.party_menu.pick === 'status',
+    '성장 1: 고르기 중 「장비」·「상태」 줄 → 고른 명령이 바뀐다', { picks: [equipPick, [s.party_menu.page, s.party_menu.pick]] });
   await clickButton('Member_0');
   s = await waitFor((x) => x.party_menu?.page === 'sub', '상태 화면');
-  check(s.party_menu.tab === 'status' && s.party_menu.member === 0 && s.buttons.StatusNext && s.buttons.StatusBack,
-    '성장 1: 「상태」 → 카드 0 → 상태 화면·칸 0', { tab: s.party_menu.tab, member: s.party_menu.member });
+  check(s.party_menu.tab === 'status' && s.party_menu.member === 0 && s.buttons.StatusNext && s.buttons.StatusBack && s.party_menu.backdrop === 'dim',
+    '성장 1: 「상태」 → 카드 0 → 상태 화면·칸 0(바탕 = 어둡게)', { tab: s.party_menu.tab, member: s.party_menu.member, backdrop: s.party_menu.backdrop });
   await page.screenshot({ path: `${outDir}/10_party_status_${tag}.png` });
   // 1b. 캠프 가상 키패드(P3): 상태에서 ←→ = 앞·다음 대원(↑↓ 흐림), 실제 누르기.
   const padState = s.party_menu.pad;
