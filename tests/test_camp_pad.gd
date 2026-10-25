@@ -344,9 +344,10 @@ func test_narrow_lists_show_every_row_text_unclipped_at_both_sizes() -> void:
 		# 소지품: 보급 줄을 연다.
 		await _go(s, "items_supply")
 		var it := pm.items_tab
-		var lines := it._rows.filter(func(r: PartyButton) -> bool: return r.visible)
-		var buttons: Array = ([it.supply_button] + it.plus_buttons + it.exp_buttons + it.next_buttons).filter(func(b: PartyButton) -> bool: return b.visible)
-		check(lines.size() >= 10 and buttons.size() >= 1 + 5 * 2, "%s 소지품: 줄 %d·단추 %d 를 본다" % [tag, lines.size(), buttons.size()])
+		var lines := it.rows.filter(func(r: PartyButton) -> bool: return r.visible)
+		var buttons: Array = (it.plus_buttons + it.exp_buttons + it.next_buttons).filter(func(b: PartyButton) -> bool: return b.visible)
+		check(lines.size() >= 10 and buttons.size() >= 5 * 2, "%s 소지품: 줄 %d·단추 %d 를 본다" % [tag, lines.size(), buttons.size()])
+		check(it.supply_button.clipped_parts().is_empty() and it.supply_button.size == Vector2(240, 64), "%s 소지품: 알약 글자가 잘리지 않는다" % tag)
 		var w := it.list.size.x
 		for r in lines + buttons:
 			var b := r as PartyButton
@@ -357,8 +358,9 @@ func test_narrow_lists_show_every_row_text_unclipped_at_both_sizes() -> void:
 			for r in lines:
 				check(not Rect2(r.position, r.size).intersects(Rect2(b.position, b.size)), "%s 소지품: 줄 「%s」 이 단추 %s 밑에 깔린다" % [tag, r.text, b.name])
 		for k in s.state.party.members.size():
-			var row: PartyButton = lines.filter(func(r: PartyButton) -> bool: return r.text == pm.member_name(k))[0]
-			check(row.right.begins_with("Lv") and row.note.contains(str(s.state.party.members[k].exp)), "%s 대원 줄 %d: 이름·Lv·경험치 %s" % [tag, k, [row.text, row.right, row.note]])
+			var row: ListButton = it.member_rows[k]
+			check(row.text == pm.member_name(k) and row.right.begins_with("Lv") and row.right.contains(str(s.state.party.members[k].exp)),
+				"%s 대원 줄 %d: 이름·Lv·경험치 %s" % [tag, k, [row.text, row.right]])
 		# 장비: 대원마다 칸 넷, 칸마다 열린 목록.
 		await _go(s, "equip")
 		var et := pm.equip_tab
@@ -384,7 +386,7 @@ func test_supply_cursor_keeps_the_member_label_in_view_both_ways() -> void:
 		var size: Vector2 = await _window(px)
 		await _go(s, "items_supply")
 		var it := pm.items_tab
-		var acts := it.actionable()
+		var acts := it.stops()
 		var last := acts.size() - 1
 		check(last >= 1 + 5 * 2, "%s: 누를 단추 %d" % [str(size), acts.size()])
 		var seen_members := {}
@@ -403,15 +405,17 @@ func test_supply_cursor_keeps_the_member_label_in_view_both_ways() -> void:
 				if it.cursor == at:
 					continue  # ↑ 가 먼저 목록만 올린 걸음(커서 그대로)
 				steps += 1
-				var b := it.actionable()[it.cursor]
+				var b: PartyButton = it.stops()[it.cursor]
 				var tag := "%s %s 커서 %d %s" % [str(size), "↓" if dir > 0 else "↑", it.cursor, b.name]
 				check(b.selected, tag + ": 고른 모양")
+				if b == it.supply_button:
+					continue  # 알약은 목록 밖
 				check(it.list.shows(Rect2(b.position, b.size)), "%s: 단추 %s 가 보이는 곳 안(내림 %s)" % [tag, str(Rect2(b.position, b.size)), it.list.scroll])
 				var k := it.exp_buttons.find(b)
 				if k < 0:
 					k = it.next_buttons.find(b)
 				if k >= 0:
-					var label: PartyButton = it._rows.filter(func(r: PartyButton) -> bool: return r.visible and r.text == pm.member_name(k))[0]
+					var label: ListButton = it.member_rows[k]
 					check(it.list.shows(Rect2(label.position, label.size)), "%s: 대원 %d 이름 줄 %s 이 보이는 곳 안(내림 %s, 높이 %s)" % [tag, k, str(Rect2(label.position, label.size)), it.list.scroll, it.list.size.y])
 					check(label.position.y + label.size.y <= b.position.y, tag + ": 이름 줄은 단추 위")
 					seen_members[[dir, k]] = true
@@ -502,9 +506,15 @@ func test_camp_pad_matches_keys_on_equip_and_items() -> void:
 		["장비 목록 ←", false, lst, "left", false, false], ["장비 목록 →", false, lst, "right", false, false],
 		["장비 목록 선택(빼기)", false, lst, "ok", true, false], ["장비 목록 취소(닫기)", false, lst, "back", true, false],
 		["소지품 ↑", true, it + [["cursor", 1]], "up", true, false], ["소지품 ↓", true, it, "down", true, false],
-		["소지품 ←", true, it, "left", true, false], ["소지품 →", true, it, "right", true, false],
+		["소지품 ←(대원 없음)", true, it, "left", false, false], ["소지품 →(대원 없음)", true, it, "right", false, false],
 		["소지품 선택(보급 줄)", true, it, "ok", true, false], ["소지품 취소", true, it, "back", true, false],
 		["소지품(디버그 아님) 선택", false, [["camp", ITEMS]], "ok", false, false],
+		["소지품(디버그) 가방 줄 선택", true, [["camp", ITEMS]], "ok", false, false],
+		["소지품(디버그) 가방 줄 ↑ → 알약", true, [["camp", ITEMS]], "up", true, false],
+		["소지품(디버그) 알약 선택 → 보급 줄", true, [["camp", ITEMS], ["cursor", -1]], "ok", true, false],
+		["소지품(디버그) 알약 ↑(가장자리)", true, [["camp", ITEMS], ["cursor", -1]], "up", true, true],
+		["소지품(디버그 아님) ←", false, [["camp", ITEMS]], "left", false, false],
+		["소지품(디버그 아님) 첫 줄 ↑(가장자리)", false, [["camp", ITEMS]], "up", true, true],
 		["소지품(디버그 아님, 넘치지 않음) ↓(가장자리)", false, [["camp", ITEMS]], "down", true, true],
 	])
 
@@ -601,11 +611,13 @@ func test_new_key_meanings_for_member_switch_and_split() -> void:
 	await kit.press_key(KEY_ESCAPE)
 	check(not pm.equip_tab.list_open and pm.page == "sub", "Esc 한 번 = 목록만 닫음")
 	await kit.press_key(KEY_1)
-	await kit.press_key(KEY_LEFT)
-	check_eq([pm.tab, pm.member], [3, 4], "소지품 ← = 앞 대원")
+	n = pm.accepted_inputs
+	for k in [KEY_LEFT, KEY_RIGHT, KEY_Q, KEY_E]:
+		await kit.press_key(k)
+	check_eq([pm.tab, pm.member, pm.accepted_inputs], [3, 0, n], "소지품 ←→·Q·E = 아무 일 없음(대원이 없다, E2-b)")
 	await kit.press_key(KEY_5)
 	await kit.press_key(KEY_RIGHT)
-	check_eq([pm.tab, pm.member, pm.records_tab.cur_col], [4, 4, 1], "기록 → = 줄 안(대원 그대로)")
+	check_eq([pm.tab, pm.member, pm.records_tab.cur_col], [4, 0, 1], "기록 → = 줄 안(대원 그대로)")
 	await kit.press_key(KEY_ESCAPE)
 	await kit.press_key(KEY_2)
 	await kit.press_key(KEY_6)

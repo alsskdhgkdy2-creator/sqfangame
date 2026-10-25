@@ -708,51 +708,54 @@ func _full_bag_items_tab(debug: bool) -> PartyMenu:
 	return pm
 
 
-func test_items_keyboard_reaches_read_only_inventory_in_debug() -> void:
+## 소지품 커서(07 §9.9 E2-b): 디버그면 알약이 칸 0, 첫 가방 줄에서 시작한다. ↓ 로 마지막 줄까지(목록이 따라 내린다), 끝에서는 아무 일 없음,
+## ↑ 로 알약까지(돌지 않음). 알약에서 Enter → 보급 줄(커서는 알약), ↓ 로 마지막 보급 단추까지, 끝에서는 아무 일 없음.
+func test_items_keyboard_walks_every_row_in_debug() -> void:
 	var pm := await _full_bag_items_tab(true)
 	var it := pm.items_tab
 	var list := it.list
-	check_eq(it.actionable(), [it.supply_button] as Array[PartyButton], "보급을 닫으면 누를 단추는 「임시 보급」 하나")
-	await kit.press_key(KEY_DOWN)
-	check(list.scroll > 0.0, "마지막 단추에서 ↓ → 목록을 내린다")
-	check_eq(it.cursor, 0, "커서는 그대로")
-	for k in 40:
+	var st := it.stops()
+	check_eq([st[0], it.cursor, it.cursor_stop()], [it.supply_button, 1, it.rows[0]], "디버그: 칸 0 = 알약, 커서는 첫 가방 줄")
+	check_eq(st.size(), 1 + it.row_items.size(), "칸 = 알약 + 가방 줄")
+	for k in st.size() - 2:
 		await kit.press_key(KEY_DOWN)
-	check_eq(list.scroll, list.max_scroll(), "↓ 를 이어 누르면 소지품 끝까지")
-	for k in 40:
+		var row := it.cursor_stop()
+		check(list.shows(Rect2(row.position, row.size)), "↓ %d: 커서 줄이 다 보인다(내림 %.0f)" % [k, list.scroll])
+	check_eq(it.cursor, st.size() - 1, "↓ 로 마지막 줄까지")
+	check_eq(list.scroll, list.max_scroll(), "목록 끝까지 내렸다")
+	var n := pm.accepted_inputs
+	await kit.press_key(KEY_DOWN)
+	check_eq([it.cursor, pm.accepted_inputs], [st.size() - 1, n], "끝에서 ↓ → 아무 일 없음(돌지 않음)")
+	for k in st.size() - 1:
 		await kit.press_key(KEY_UP)
-	check_eq(list.scroll, 0.0, "↑ 로 맨 위까지 돌아온다")
+	check_eq([it.cursor, list.scroll], [0, 0.0], "↑ 로 알약까지, 목록은 맨 위")
+	await kit.press_key(KEY_UP)
+	check_eq(it.cursor, 0, "알약에서 ↑ → 아무 일 없음")
 	await kit.press_key(KEY_ENTER)
-	check(it.supply_open, "Enter → 보급 줄 열림")
-	var acts := it.actionable()
+	check(it.supply_open and it.cursor == 0, "Enter → 보급 줄 열림, 커서는 알약")
+	var acts := it.stops()
 	for k in acts.size() - 1:
 		await kit.press_key(KEY_DOWN)
 	check_eq(it.cursor, acts.size() - 1, "↓ 로 마지막 보급 단추까지")
 	var last := acts[acts.size() - 1]
-	check(list.shows(Rect2(last.position, last.size)), "마지막 단추가 보인다")
-	var before := list.scroll
-	for k in 40:
-		await kit.press_key(KEY_DOWN)
-	check(list.scroll > before and list.scroll == list.max_scroll(), "보급 단추 뒤 ↓ → 읽기만 하는 소지품까지 내린다")
-	check_eq(it.cursor, acts.size() - 1, "커서는 마지막 단추 그대로")
-	var ups := 0
-	while it.cursor == acts.size() - 1 and ups < 40:
-		await kit.press_key(KEY_UP)
-		ups += 1
-	check(ups > 1, "↑ 는 먼저 목록을 올린다(%d번)" % ups)
-	check_eq(it.cursor, acts.size() - 2, "커서 단추가 다시 보인 뒤 ↑ → 앞 단추")
-	var cur := acts[it.cursor]
-	check(list.shows(Rect2(cur.position, cur.size)), "커서 단추가 보인다")
+	check(list.shows(Rect2(last.position, last.size)) and list.scroll == list.max_scroll(), "마지막 단추가 보인다")
+	await kit.press_key(KEY_DOWN)
+	check_eq(it.cursor, acts.size() - 1, "끝에서 ↓ → 그대로")
 
 
-func test_items_keyboard_scrolls_without_debug() -> void:
+func test_items_keyboard_walks_rows_without_debug() -> void:
 	var pm := await _full_bag_items_tab(false)
 	var it := pm.items_tab
-	check(it.actionable().is_empty(), "일반 실행: 누를 단추 없음")
-	await kit.press_key(KEY_DOWN)
-	check(it.list.scroll > 0.0, "↓ → 내린다")
+	check(not it.supply_button.visible and it.stops()[0] == it.rows[0] and it.cursor == 0, "일반 실행: 알약 없음, 커서는 첫 줄")
+	check(not pm.pad_state()["ok"], "가방 줄에서 「선택」 흐림")
 	await kit.press_key(KEY_UP)
-	check_eq(it.list.scroll, 0.0, "↑ → 올린다")
+	check_eq(it.cursor, 0, "첫 줄에서 ↑ → 그대로")
+	for k in 8:
+		await kit.press_key(KEY_DOWN)
+	check(it.list.scroll > 0.0 and it.cursor == 8, "↓ → 커서가 내려가고 목록이 따라 내린다")
+	for k in 8:
+		await kit.press_key(KEY_UP)
+	check_eq([it.cursor, it.list.scroll], [0, 0.0], "↑ → 다시 맨 위")
 
 
 func test_items_click_moves_cursor_so_enter_repeats_that_button() -> void:
@@ -767,7 +770,7 @@ func test_items_click_moves_cursor_so_enter_repeats_that_button() -> void:
 	var b := it.plus_buttons[0]
 	await kit.tap(kit.center_of(b))
 	check_eq(int(s.state.gear_bag.get(first, 0)), 1, "첫 「+1」 누르기 → 가방 1")
-	check_eq(it.cursor, it.actionable().find(b), "커서가 누른 단추로")
+	check_eq(it.cursor, it.stops().find(b), "커서가 누른 단추로")
 	check(b.selected, "누른 단추에 커서 테두리")
 	await kit.press_key(KEY_ENTER)
 	check_eq(int(s.state.gear_bag.get(first, 0)), 2, "Enter → 같은 「+1」 한 번 더")
@@ -783,7 +786,7 @@ func test_items_click_moves_cursor_so_enter_repeats_that_button() -> void:
 	var nx := it.next_buttons[KNIGHT]
 	await kit.tap(kit.center_of(nx))
 	var lv := m.level
-	check_eq(it.cursor, it.actionable().find(nx), "「다음 레벨까지」 누르기 → 커서도 그 단추")
+	check_eq(it.cursor, it.stops().find(nx), "「다음 레벨까지」 누르기 → 커서도 그 단추")
 	await kit.press_key(KEY_ENTER)
 	check_eq(m.level, lv + 1, "Enter → 「다음 레벨까지」 한 번 더")
 	check(it.supply_open, "보급 줄은 열린 채")
@@ -929,15 +932,15 @@ func test_drag_from_list_released_on_tab_changes_nothing() -> void:
 	check(it.supply_open and it.list.max_scroll() > 0.0, "준비: 넘치는 보급 목록")
 	var bag := s.state.gear_bag.duplicate()
 	var n := s.autosave_count
-	var from := kit.center_of(it.plus_buttons[0])
-	var to := kit.center_of(it.frame.panel.next_button())
+	var from := kit.center_of(it.plus_buttons[3])  # 넷째 줄(y 약 428)에서 위의 알약(y 278~342)으로: 위로 끌기 = 내리기
+	var to := kit.center_of(it.supply_button)
 	kit.touch(0, from, true)
 	await kit.frames(1)
 	kit.drag(0, from, to)
 	await kit.frames(1)
 	kit.touch(0, to, false)
 	await kit.frames(3)
-	check_eq([pm.tab, pm.member], [3, 0], "목록에서 끌다가 판의 「다음 대원」 위에서 떼도 화면·대원 그대로")
+	check_eq([pm.tab, pm.member, it.supply_open], [3, 0, true], "목록에서 끌다가 「임시 보급」 알약 위에서 떼도 화면·보급 줄 그대로")
 	check_eq(s.state.gear_bag, bag, "끌기는 「+1」 누르기가 아니다")
 	check_eq(s.autosave_count, n, "자동 저장 없음")
 	check(it.list.scroll > 0.0, "끌기가 목록을 내렸다 (%s)" % it.list.scroll)
@@ -1122,8 +1125,9 @@ func test_layout_no_overlap_and_min_size_per_tab() -> void:
 		_check_layout(pm, sz, tag + " 소지품")
 		await _step(pm, "supply_toggle")
 		_check_layout(pm, sz, tag + " 임시 보급")
-		await _step(pm, "member", 4)
-		check_eq([pm.member, pm.items_tab.frame.panel.drawn["name"]], [4, pm.member_name(4)], tag + ": 마지막 대원도 인물 판에")
+		var mb := pm.member
+		check(not pm.handle("member", 4), tag + ": 소지품에는 대원이 없다(대원 바꾸기를 받지 않는다)")
+		check_eq(pm.member, mb, tag + ": 대원 그대로")
 		await _step(pm, "tab", 4)
 		_check_layout(pm, sz, tag + " 기록")
 

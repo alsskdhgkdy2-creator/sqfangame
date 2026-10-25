@@ -349,11 +349,16 @@ func test_overlapping_taps_reach_the_visible_top_element_in_menus() -> void:
 		await kit.press_key(KEY_1)
 		check(pm.tab == 3, tag + ": 소지품 화면")
 		var it := pm.items_tab
-		var iw := _rect(it.frame.list_window)
+		var iw := _rect(it.window)
 		var on_list := await _receiver_at(Vector2(iw.get_center().x, iw.position.y + 60.0))
-		check(_under(it.list, on_list), "%s 소지품: 읽기만 하는 줄 → 목록(끌어 내리기), 실제 %s" % [tag, _name_of(on_list)])
-		var on_panel := await _receiver_at(_rect(it.frame.panel).position + Vector2(400.0, 500.0))
-		check(on_panel == pm, "%s 소지품: 인물 판 → 캠프, 실제 %s" % [tag, _name_of(on_panel)])
+		check(_under(it.list, on_list), "%s 소지품: 목록 창 줄 → 목록(끌어 내리기), 실제 %s" % [tag, _name_of(on_list)])
+		var on_frame := await _receiver_at(Vector2(iw.position.x + 8.0, iw.get_center().y))
+		check(on_frame == pm, "%s 소지품: 목록 창 굽은 끝(장식) → 캠프, 실제 %s" % [tag, _name_of(on_frame)])
+		var on_desc := await _receiver_at(_rect(it.desc).get_center())
+		check(on_desc == pm, "%s 소지품: 설명 상자(장식) → 캠프, 실제 %s" % [tag, _name_of(on_desc)])
+		if it.supply_button.is_visible_in_tree():
+			var on_pill := await _receiver_at(_rect(it.supply_button).get_center())
+			check(on_pill == it.supply_button, "%s 소지품: 「임시 보급」 → 그 알약, 실제 %s" % [tag, _name_of(on_pill)])
 		for k in 3:
 			if pm.is_open():
 				await kit.press_key(KEY_ESCAPE)
@@ -503,7 +508,7 @@ func test_touch_targets_stay_at_least_64() -> void:
 		pm.handle("dialog_back")
 		await kit.frames(2)
 		check_eq(PartySkillTab.STEP_BUTTON, Vector2(96, 64), "스킬 +/- 단추")
-		check_eq([PartyItemsTab.ROW_H, PartyEquipTab.ROW_H], [64.0, 64.0], "목록 줄 높이")
+		check_eq([ListParts.ROW_H, PartyEquipTab.ROW_H], [64.0, 64.0], "목록 줄 높이")
 		for k in 3:
 			if pm.is_open():
 				await kit.press_key(KEY_ESCAPE)

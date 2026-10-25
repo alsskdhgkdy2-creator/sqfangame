@@ -1184,33 +1184,702 @@ func test_equip_screen_follows_the_shop_table() -> void:
 	check_eq([pm.page, pm.camp_cursor], ["root", EQUIP], "키패드 「취소」 → 캠프 뿌리(커서 장비)")
 
 
-func test_items_screen_follows_the_shop_table() -> void:
+# ---- 소지품(07 §9.9 E2-b, research 08 §4.1: 원작 III HD 소지품 yt_eo3hd_05) ----
+
+## 소지품 화면 준비: 가방에 장비 모두(bag 개씩)와 소재(mat 개씩, ids 가 비면 정의의 소재 모두).
+static func _fill_bag(s: DungeonScreen, bag: int, mat: int, mat_ids: Array = []) -> void:
+	for id in s.state.defs.battle.equipment_ids:
+		s.state.gear_bag[id] = bag
+	for id in (mat_ids if not mat_ids.is_empty() else Array(s.state.defs.battle.material_ids)):
+		s.state.materials[id] = mat
+
+
+## 일반 실행(디버그 주소 아님, 네이티브 디버그 끔).
+func _open_plain() -> DungeonScreen:
+	timeout_sec = 90.0
+	kit = Kit.new(tree)
+	var s := await kit.open("native", 7, "")
+	s.native_debug = false
+	return s
+
+
+## 소지품 층 표(1280×720 기준, 넓은 화면은 왼쪽 앵커, 높은 화면은 목록 창이 줄 단위로 늘고 설명 상자·키패드는 아래):
+## 띠 x 176~W−16 · y 70~108, 목록 창 x 135~642 · y 178~(설명 상자 위 − 62 안에서 줄 단위), 알약 x 735~975 · y 278~342(디버그),
+## 설명 상자 x 288~990 · y H−190~H−8, 방향 십자 (8, H−209), 세로 「취소」「선택」 (W−118, H−172).
+func _check_items_layers(pm: PartyMenu, size: Vector2, debug: bool, tag: String) -> void:
+	var it := pm.items_tab
+	var want_rows := 4 if size.y < 960.0 else 7
+	var lw := _rect(it.window)
+	check_eq(lw, Rect2(135, 178, 507, ListParts.list_height(want_rows)), tag + ": 목록 창 x 135~642, 줄 %d 높이" % want_rows)
+	check_eq(it.list.size.y, ListWindow.content_height(want_rows), tag + ": 줄 %d 개가 꼭 다 보인다" % want_rows)
+	var desc := _rect(it.desc)
+	check_eq(desc, Rect2(288, size.y - 190, 702, 182), tag + ": 설명 상자 x 288~990 · 아래 끝 H − 8")
+	check(desc.position.y - lw.end.y >= 62.0 - 0.5, "%s: 목록 창 아래 끝 %.0f 은 설명 상자 위 %.0f 에서 62 이상 떨어진다" % [tag, lw.end.y, desc.position.y])
+	check(desc.position.y - lw.end.y < 62.0 + ListParts.ROW_H + ListParts.ROW_GAP, tag + ": 한 줄 더 들어갈 자리는 남기지 않는다(줄 단위로 늘어난다)")
+	check(lw.encloses(Rect2(it.list.get_global_position(), it.list.size)), tag + ": 줄 자리는 목록 창 안")
+	var sb := ListParts.scroll_rect(Rect2(Vector2.ZERO, lw.size))
+	sb.position += lw.position
+	check(lw.encloses(sb) and sb.position.x >= it.list.get_global_position().x + it.list.size.x, tag + ": 스크롤 막대는 창 안 오른쪽, 줄 자리 오른쪽")
+	check_eq(it.supply_button.is_visible_in_tree(), debug, tag + ": 「임시 보급」은 디버그만")
+	if debug:
+		check_eq(_rect(it.supply_button), Rect2(735, 278, 240, 64), tag + ": 알약 x 735~975 · y 278~342")
+	check(pm.notice_line.is_visible_in_tree(), tag + ": 띠(알림 줄 자리)가 보인다")
+	check_eq(_rect(pm.notice_line), Rect2(176, 70, size.x - 16 - 176, 38), tag + ": 띠 x 176~W−16 · y 70~108")
+	check([pm.camp_plate, pm.ribbon, pm.money_plate].all(func(c: Control) -> bool: return c.is_visible_in_tree()), tag + ": 뿌리의 맨 위 띠(걸음·장소·소지금)")
+	check_eq(_rect(pm.dir_pad), Rect2(Vector2(8, size.y - 209), VirtualPad.dirs_size()), tag + ": 방향 십자 (8, H − 209)")
+	check_eq(_rect(pm.key_pad_stacked), Rect2(Vector2(size.x - 118, size.y - 172), VirtualPad.keys_size(true)), tag + ": 세로 「취소」「선택」 (W − 118, H − 172)")
+	var parts := {"plate": _rect(pm.camp_plate), "ribbon": _rect(pm.ribbon), "money": _rect(pm.money_plate), "strip": _rect(pm.notice_line),
+		"list": lw, "desc": desc, "dir": _rect(pm.dir_pad), "keys": _rect(pm.key_pad_stacked)}
+	if debug:
+		parts["pill"] = _rect(it.supply_button)
+	var keys := parts.keys()
+	for i in keys.size():
+		check(Rect2(Vector2.ZERO, size).encloses(parts[keys[i]]), "%s: %s %s 화면 안" % [tag, keys[i], str(parts[keys[i]])])
+		for j in range(i + 1, keys.size()):
+			var a: Rect2 = parts[keys[i]]
+			check(not a.intersects(parts[keys[j]]), "%s: %s %s 와 %s %s 가 겹친다" % [tag, keys[i], str(a), keys[j], str(parts[keys[j]])])
+	check(it.window.get_index() < it.supply_button.get_index() and it.supply_button.get_index() < it.desc.get_index(),
+		tag + ": 트리 차례 목록 창 → 알약 → 설명 상자")
+	check(pm.notice_line.get_index() < it.get_index() and it.get_index() < pm.dir_pad.get_index(), tag + ": 띠 → 소지품 → 키패드")
+	check(it.find_children("*", "CharPanel", true, false).is_empty() and it.find_children("*", "ShopFrame", true, false).is_empty(),
+		tag + ": 대원 판·상점 틀 없음")
+	for d in [it.window, it.desc]:
+		check_eq((d as Control).mouse_filter, Control.MOUSE_FILTER_IGNORE, "%s: %s 는 장식" % [tag, d.name])
+	for ci in _items_canvases(it):
+		_check_drawn_text(ci, tag)
+	_check_targets(pm, size, tag)
+
+
+## 소지품이 그린 캔버스(목록 창·보이는 줄·알약·설명 상자).
+static func _items_canvases(it: PartyItemsTab) -> Array:
+	var out: Array = [it.window, it.desc]
+	if it.supply_button.is_visible_in_tree():
+		out.append(it.supply_button)
+	for r in it.rows:
+		if r.is_visible_in_tree():
+			out.append(r)
+	return out
+
+
+## 노랑 채움(그린 기록의 채움·다각형, 테마로 그린 보급 단추는 그 모양의 채움 색): 캔버스 이름 목록.
+static func _items_yellow(it: PartyItemsTab) -> Array:
+	var out := []
+	for ci in _items_canvases(it):
+		for e in SheetParts.record(ci):
+			if (e["kind"] == "fill" or e["kind"] == "poly") and _is_yellow(e["color"]):
+				out.append(str((ci as Node).name))
+	for b in it.plus_buttons + it.exp_buttons + it.next_buttons:
+		if b.is_visible_in_tree():
+			var lk := UiTheme.look(b.theme_state())
+			if lk["fill"] and (_is_yellow(lk["top"]) or _is_yellow(lk["bottom"])):
+				out.append(str(b.name))
+	return out
+
+
+## 그린 글마다: 글 자리(왼쪽·가운데·오른쪽)의 밑에 그 글보다 먼저 그린 마지막 채움과 4.5:1 이상, 그린 크기에서 그린 폭 안에 든다.
+func _check_drawn_text(ci: Control, tag: String) -> int:
+	var rec := SheetParts.record(ci)
+	var n := 0
+	for i in rec.size():
+		var e: Dictionary = rec[i]
+		if e["kind"] != "text" or str(e["text"]).is_empty():
+			continue
+		n += 1
+		var r: Rect2 = e["rect"]
+		var fs := int(e["fs"])
+		check(SheetParts.text_width(ci, e["text"], fs) <= r.size.x + 0.5, "%s %s: 「%s」 %dpx 폭 %.0f ≤ %.0f" % [tag, ci.name, e["text"], fs,
+			SheetParts.text_width(ci, e["text"], fs), r.size.x])
+		for x in [r.position.x + 1.0, r.get_center().x, r.end.x - 1.0]:
+			var p := Vector2(x, r.position.y + fs * 0.6)
+			var under: Variant = null
+			for j in range(i - 1, -1, -1):
+				var f: Dictionary = rec[j]
+				if (f["kind"] == "fill" or f["kind"] == "poly") and (f["rect"] as Rect2).has_point(p):
+					under = f["color"]
+					break
+			check(under != null, "%s %s: 「%s」 밑에 그린 채움이 있다(%s)" % [tag, ci.name, e["text"], str(p)])
+			if under != null:
+				var c := contrast(e["color"], under)
+				check(c >= 4.5, "%s %s: 「%s」 %s on %s = %.2f ≥ 4.5" % [tag, ci.name, e["text"], (e["color"] as Color).to_html(false),
+					(under as Color).to_html(false), c])
+	return n
+
+
+func test_items_screen_follows_the_reference_table() -> void:
 	var s := await _open()
 	var pm := s.party_menu
-	GrowthRules.supply(s.state, "equip.ion_saber", 2)
-	s.state.materials["item.neon_rat_tail"] = 3
+	_fill_bag(s, 1, 2)
 	await kit.press_key(KEY_P)
 	await kit.press_key(KEY_1)
 	var it := pm.items_tab
-	var f := it.frame
 	check_eq([pm.page, pm.tab], ["sub", 3], "준비: 소지품(대원 고르기 없음)")
-	for px in WINDOWS:
+	var first := {}
+	for px in WINDOWS + [Vector2(1280, 960), WINDOWS[0]]:
 		var size: Vector2 = await _window(px)
 		var tag := "%s(논리 %s) 소지품" % [str(px), str(size)]
-		_check_shop_frame(pm, f, size, false, tag)
-		check(_rect(f.list_window).encloses(_rect(it.list)), tag + ": 목록은 목록 창 안")
-		check(_rect(it.list).encloses(_rect(it.supply_button)), tag + ": 「임시 보급」(디버그)은 목록 안")
-	check_eq([f.banner.head, f.title_text], [s.texts.t("camp.items.desc"), s.texts.t("camp.cmd.items")], "띠·문패")
-	var texts_shown := it._rows.filter(func(r: PartyButton) -> bool: return r.visible).map(func(r: PartyButton) -> String: return r.text)
-	check(texts_shown.has(pm.item_name("equip.ion_saber")) and texts_shown.has(s.texts.t("item.neon_rat_tail")), "장비·소재 줄: %s" % str(texts_shown))
-	for r in it._rows:
-		if r.visible:
-			check(r.skin == "fac" and r.mouse_filter == Control.MOUSE_FILTER_IGNORE, "%s: 시설 모양, 읽기만" % r.name)
-	check_eq(f.panel.drawn["name"], pm.member_name(pm.member), "판 = 지금 대원")
-	await kit.press_key(KEY_E)
-	check_eq(f.panel.drawn["name"], pm.member_name(1), "E → 판의 대원이 바뀐다")
+		_check_items_layers(pm, size, true, tag)
+		var snap := [_rect(it.window), _rect(it.supply_button), _rect(it.desc)]
+		if first.has(px):
+			check_eq(snap, first[px], tag + ": 크기를 바꿨다 돌아와도 같은 자리(앵커)")
+		first[px] = snap
+	# 띠: 「소지품   장비 n · 소재 n」(가진 종류 수), 알림이 뜨면 알림이 대신하고 지나면 돌아온다. 스냅숏 strip 도 같다.
+	var n_gear := s.state.defs.battle.equipment_ids.size()
+	var n_mat := s.state.defs.battle.material_ids.size()
+	var caption := s.texts.t("party.items.strip", {"gear": n_gear, "materials": n_mat})
+	check_eq([pm.notice_line_text(), s.debug_snapshot()["party_menu"]["strip"]], [caption, caption], "띠 글 = 종류 수")
+	s.state.gear_bag[s.state.defs.battle.equipment_ids[0]] = 0
+	s.state.materials[s.state.defs.battle.material_ids[0]] = 0
+	pm.refresh_view()
+	caption = s.texts.t("party.items.strip", {"gear": n_gear - 1, "materials": n_mat - 1})
+	check_eq(s.debug_snapshot()["party_menu"]["strip"], caption, "개수 0 은 세지 않는다")
+	pm.show_notice("시험 안내 B")
+	await kit.frames(1)
+	check_eq(s.debug_snapshot()["party_menu"]["strip"], "시험 안내 B", "알림이 띠를 대신한다")
+	pm._clear_notice()
+	await kit.frames(1)
+	check_eq(s.debug_snapshot()["party_menu"]["strip"], caption, "알림이 지나면 띠 글이 돌아온다")
+	# 대원이 없다: ←→ 흐림, Q·E·member 는 아무 일 없음.
+	var pad := pm.pad_state()
+	check(not pad["left"] and not pad["right"], "←→ 흐림")
+	var mb := pm.member
+	for k in [KEY_Q, KEY_E, KEY_LEFT, KEY_RIGHT]:
+		await kit.press_key(k)
+	check(not pm.handle("member", 2) and not pm.handle("member_step", 1), "member·member_step 을 받지 않는다")
+	check_eq([pm.member, pm.tab], [mb, 3], "Q·E·←→ 뒤에도 대원·화면 그대로")
 	await kit.tap(kit.center_of(pm.key_pad_stacked.buttons["back"]))
 	check_eq([pm.page, pm.camp_cursor], ["root", ITEMS], "키패드 「취소」 → 캠프 뿌리(커서 소지품)")
+
+
+func test_items_rows_show_kind_icons_and_fit_with_the_largest_counts() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	_fill_bag(s, BattleLimits.BAG_MAX, BattleLimits.MATERIAL_MAX)
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	var it := pm.items_tab
+	var defs := s.state.defs
+	var want_ids: Array[String] = []
+	want_ids.append_array(defs.battle.equipment_ids)
+	var mats: Array = Array(defs.battle.material_ids)
+	mats.sort()
+	for id in mats:
+		want_ids.append(str(id))
+	check_eq(it.row_items, want_ids, "장비(자료 차례) 다음 소재(ID 차례), 묶음 머리 줄 없음")
+	for px in WINDOWS:
+		var size: Vector2 = await _window(px)
+		var tag := "%s(논리 %s)" % [str(px), str(size)]
+		var seen := 0
+		for k in it.row_items.size():
+			var r := it.rows[k]
+			it.list.ensure_visible(r.position.y, r.position.y + r.size.y)
+			await kit.frames(1)
+			var id := it.row_items[k]
+			var want_icon := SheetParts.kind_icon(defs, id) if defs.battle.equip(id) != null else "kind_material"
+			var box: Rect2 = ListParts.row_boxes(Rect2(Vector2.ZERO, r.size))["icon"]
+			var icons := _drawn_icons_in(r, box)
+			check_eq(icons, [want_icon], "%s 줄 %d %s: 아이콘 칸에 종류 아이콘을 그렸다" % [tag, k, id])
+			var texts := _drawn_entries(r, "text").map(func(e: Dictionary) -> String: return e["text"])
+			check(texts.has(pm.item_name(id)) and texts.has(s.texts.t("party.count", {"n": it.item_count(id)})), "%s 줄 %d: 이름·개수 %s" % [tag, k, str(texts)])
+			seen += _check_drawn_text(r, "%s 줄 %d" % [tag, k])
+			check(r.clipped_parts().is_empty(), "%s 줄 %d 「%s」: 잘림 %s" % [tag, k, r.text, str(r.clipped_parts())])
+		check(seen >= 2 * want_ids.size(), "%s: 글 %d 개를 봤다" % [tag, seen])
+	# 보급 줄(디버그): 장비 줄은 「+1」 자리만큼 좁다. 가장 긴 이름 + 「99개」가 든다.
+	await _window(WINDOWS[0])
+	await kit.press_key(KEY_UP)
+	await kit.press_key(KEY_ENTER)
+	check(it.supply_open, "준비: 보급 줄")
+	await kit.frames(1)
+	for r in it.rows:
+		if r.is_visible_in_tree():
+			_check_drawn_text(r, "보급 줄 " + r.text)
+			check(r.clipped_parts().is_empty(), "보급 줄 「%s」 잘림 %s" % [r.text, str(r.clipped_parts())])
+
+
+func test_items_empty_bag_shows_one_dim_none_row() -> void:
+	var s := await _open_plain()
+	var pm := s.party_menu
+	s.state.gear_bag.clear()
+	s.state.materials.clear()
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	await kit.frames(1)
+	var it := pm.items_tab
+	check(not pm.debug, "준비: 일반 실행")
+	_check_items_layers(pm, await _window(WINDOWS[0]), false, "빈 가방")
+	var vis := it.rows.filter(func(r: ListButton) -> bool: return r.is_visible_in_tree())
+	check_eq(vis.size(), 1, "줄 하나")
+	var row: ListButton = vis[0]
+	check_eq([row.text, row.dimmed, row.mouse_filter, it.row_items], [s.texts.t("party.items.none"), true, Control.MOUSE_FILTER_IGNORE, [] as Array[String]],
+		"흐린 「없음」 줄(커서 칸 아님)")
+	var fills := _drawn_entries(row, "fill").map(func(e: Dictionary) -> Color: return e["color"])
+	check(fills.has(ListParts.ROW_DIM) and not fills.has(ListParts.ROW_BODY), "흐린 줄 색으로 그렸다: %s" % str(fills))
+	_check_drawn_text(row, "없음 줄")
+	check_eq([it.cursor, it.stops().size(), _items_yellow(it), _yellow(pm)], [-1, 0, [], []], "커서 없음, 노랑 채움 없음")
+	var heads := _drawn_entries(it.desc, "text")
+	check(heads.is_empty(), "설명 상자는 비었다: %s" % str(heads))
+	var pad := pm.pad_state()
+	check(not pad["up"] and not pad["down"] and not pad["ok"], "칸이 없어 ↑↓·선택 흐림")
+	var n := pm.accepted_inputs
+	await kit.press_key(KEY_DOWN)
+	await kit.press_key(KEY_ENTER)
+	check_eq([pm.accepted_inputs, it.cursor], [n, -1], "↑↓·Enter 아무 일 없음")
+
+
+func test_items_cursor_walks_scrolls_taps_and_drags() -> void:
+	var s := await _open_plain()
+	var pm := s.party_menu
+	_fill_bag(s, 2, 3)
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	var it := pm.items_tab
+	var list := it.list
+	for px in WINDOWS:
+		var size: Vector2 = await _window(px)
+		var tag := "%s(논리 %s)" % [str(px), str(size)]
+		await kit.press_key(KEY_ESCAPE)
+		await kit.press_key(KEY_1)
+		await kit.frames(1)
+		var last := it.row_items.size() - 1
+		check(last > 8 and list.max_scroll() > 0.0, tag + ": 준비: 넘치는 가방(%d 줄)" % (last + 1))
+		check_eq([it.cursor, list.scroll], [0, 0.0], tag + ": 들어오면 커서는 첫 줄, 맨 위")
+		check(not pm.pad_state()["ok"], tag + ": 가방 줄에서 「선택」 흐림")
+		for k in last:
+			await kit.press_key(KEY_DOWN)
+			await kit.frames(1)
+			var r := it.rows[it.cursor]
+			check(list.shows(Rect2(r.position, r.size)), "%s ↓ %d: 커서 줄이 다 보인다" % [tag, it.cursor])
+			check_eq(_items_yellow(it), [str(r.name)], "%s ↓ %d: 노랑 채움은 커서 줄 하나" % [tag, it.cursor])
+		check_eq([it.cursor, list.scroll], [last, list.max_scroll()], tag + ": 마지막 줄, 목록 끝")
+		var n := pm.accepted_inputs
+		await kit.press_key(KEY_DOWN)
+		check_eq([it.cursor, pm.accepted_inputs, pm.pad_state()["down"]], [last, n, true], tag + ": 끝에서 ↓ → 아무 일 없음(키는 켜진 채)")
+		for k in last:
+			await kit.press_key(KEY_UP)
+			var r := it.rows[it.cursor]
+			check(list.shows(Rect2(r.position, r.size)), "%s ↑ %d: 커서 줄이 다 보인다" % [tag, it.cursor])
+		check_eq([it.cursor, list.scroll], [0, 0.0], tag + ": ↑ 로 첫 줄, 맨 위")
+		await kit.press_key(KEY_UP)
+		check_eq(it.cursor, 0, tag + ": 첫 줄에서 ↑ → 그대로(돌지 않음)")
+		# 누르기: 커서가 그 줄로(다른 일 없음). 끌기: 내리기만, 커서 그대로.
+		var h := SaveCodec.state_hash(s.state)
+		await kit.tap(kit.center_of(it.rows[2]))
+		check_eq(it.cursor, 2, tag + ": 줄 누르기 → 커서가 그 줄로")
+		check_eq(SaveCodec.state_hash(s.state), h, tag + ": 상태는 그대로")
+		await kit.frames(1)
+		check_eq(_items_yellow(it), [str(it.rows[2].name)], tag + ": 노랑은 누른 줄 하나")
+		var from := kit.center_of(it.rows[1])
+		var to := from - Vector2(0, 150)
+		kit.touch(FINGER, from, true)
+		await kit.frames(1)
+		kit.drag(FINGER, from, to)
+		await kit.frames(1)
+		kit.touch(FINGER, to, false)
+		await kit.frames(2)
+		check(list.scroll > 0.0, tag + ": 줄 위 끌기 → 목록을 내린다(%.0f)" % list.scroll)
+		check_eq(it.cursor, 2, tag + ": 끌기는 커서를 옮기지 않는다")
+		list.scroll_to(0.0)
+
+
+func test_items_description_box_shows_the_cursor_item() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var defs := s.state.defs
+	_fill_bag(s, 1, 1)
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	await kit.frames(1)
+	var it := pm.items_tab
+	var t := s.texts
+	# 장비: 머리 = 이름 + 종류 아이콘, 몸 = 값 · 받는 배율 · 낄 수 있는 직업 · 판매값(빈 줄 없음).
+	var gear := "equip.aegis_plate"
+	var k := it.row_items.find(gear)
+	for j in k:
+		await kit.press_key(KEY_DOWN)
+	await kit.frames(1)
+	check_eq(it.cursor_stop(), it.rows[k], "준비: 커서 = 이지스 플레이트")
+	var lines := it.item_lines(gear)
+	var want: Array[String] = [PartyNames.values_text(s.state, t, gear), PartyNames.received_text(s.state, t, gear)]
+	check(not want[0].is_empty() and not want[1].is_empty(), "준비: 값과 받는 배율이 있는 장비 %s" % str(want))
+	check(lines.slice(0, 2) == want and lines[2].begins_with(t.t("party.items.fits", {"classes": ""})) and
+		lines[3] == t.t("party.items.sell", {"money": ShopRules.sell_price(defs, gear)}), "장비 설명 줄 %s" % str(lines))
+	check_eq(lines[1], PartyStatusTab.received_lines(t, {"resist": _received_of(defs, gear, "resist"), "ailment_vuln": _received_of(defs, gear, "ailment_vuln"),
+		"bind_vuln": _received_of(defs, gear, "bind_vuln")}).filter(func(l: String) -> bool: return l != t.t("party.received_none")).reduce(
+		func(a: String, b: String) -> String: return b if a.is_empty() else a + "  " + b, ""), "받는 배율 줄 = 상태 화면과 같은 글")
+	_check_desc(it, pm.item_name(gear), SheetParts.kind_icon(defs, gear), lines, "장비")
+	# 소재: 「소재」 · 판매값. 상점에서 무엇을 푸는지는 쓰지 않는다.
+	var mat: String = it.row_items[it.row_items.size() - 1]
+	for j in it.row_items.size():
+		await kit.press_key(KEY_DOWN)
+	await kit.frames(1)
+	check_eq(it.cursor_stop(), it.rows[it.row_items.size() - 1], "준비: 커서 = 마지막 소재")
+	var mlines := it.item_lines(mat)
+	check_eq(mlines, [t.t("party.items.materials"), t.t("party.items.sell", {"money": ShopRules.sell_price(defs, mat)})] as Array[String], "소재 설명 줄")
+	_check_desc(it, t.t(mat), "kind_material", mlines, "소재")
+	check(_items_yellow(it).size() == 1 and _yellow(pm) == [str(it.rows[it.row_items.size() - 1].name)], "노랑은 커서 줄 하나")
+	# 디버그 보급: 알약 = 보급 설명 한 줄, 「+1」 = 그 장비, 대원 단추 = 이름·Lv·경험치·다음 레벨까지.
+	for j in it.row_items.size() + 1:
+		await kit.press_key(KEY_UP)
+	await kit.frames(1)
+	check_eq(it.cursor_stop(), it.supply_button, "준비: 커서 = 알약")
+	_check_desc(it, t.t("party.supply"), "", [t.t("party.supply.desc")], "알약")
+	check_eq(_items_yellow(it), ["SupplyToggle"], "알약이 노랑 하나")
+	await kit.press_key(KEY_ENTER)
+	await kit.press_key(KEY_DOWN)
+	await kit.frames(1)
+	var first: String = defs.battle.equipment_ids[0]
+	check_eq(it.cursor_stop(), it.plus_buttons[0], "준비: 커서 = 첫 「+1」")
+	_check_desc(it, pm.item_name(first), SheetParts.kind_icon(defs, first), it.item_lines(first), "보급 「+1」")
+	check(_items_yellow(it) == ["Supply_0"] and it.supply_button.checked, "노랑은 「+1」 하나, 알약은 켜짐(하늘색)")
+	var pill_fill := _drawn_entries(it.supply_button, "fill")
+	check(pill_fill.size() == 1 and pill_fill[0]["color"] == ListParts.PILL_ON, "켜진 알약은 하늘색으로 그렸다: %s" % str(pill_fill))
+	var e := it.exp_buttons[2]
+	it.list.ensure_visible(it.group_top(e), e.position.y + e.size.y)
+	await kit.frames(1)
+	await kit.tap(kit.center_of(e))
+	await kit.frames(1)
+	check_eq(it.cursor_stop(), e, "준비: 커서 = 대원 2 「경험치 +100」")
+	_check_desc(it, pm.member_name(2), "", it.member_lines(2), "대원 단추")
+	var m := s.state.party.members[2]
+	check_eq(it.member_lines(2), [t.t("party.level", {"level": m.level}), t.t("party.exp", {"exp": m.exp}),
+		t.t("party.exp_next", {"n": defs.battle.growth.cum(m.level + 1) - m.exp})] as Array[String], "대원 줄: Lv·경험치·다음 레벨까지")
+
+
+## 장비 item 의 받는 배율 표(키 → 1000 + 보정, 상태 화면 표 꼴).
+static func _received_of(defs: GameDefs, item: String, key: String) -> Dictionary:
+	var out := {}
+	var table: Dictionary = defs.battle.equip(item).get(key)
+	for k in table:
+		out[k] = 1000 + int(table[k])
+	return out
+
+
+## 설명 상자가 그린 것: 머리 채움(DESC_HEAD, head_rect)·몸 채움, 머리 글 = title, 아이콘 = icon(머리 안), 몸 줄 = lines(그 차례), 글은 폭 안·대비.
+func _check_desc(it: PartyItemsTab, title: String, icon: String, lines: Array, tag: String) -> void:
+	var d := it.desc
+	var r := Rect2(Vector2.ZERO, d.size)
+	var fills := _drawn_entries(d, "fill")
+	check(fills.any(func(e: Dictionary) -> bool: return e["rect"] == ListParts.head_rect(r) and e["color"] == ListParts.DESC_HEAD), tag + ": 머리를 #001F37 로 채웠다")
+	check(fills.any(func(e: Dictionary) -> bool: return e["rect"] == ListParts.body_rect(r) and e["color"] == ListParts.DESC_BODY), tag + ": 몸을 #006797 로 채웠다")
+	var texts := _drawn_entries(d, "text")
+	var head := texts.filter(func(e: Dictionary) -> bool: return ListParts.head_rect(r).has_point((e["rect"] as Rect2).position + Vector2(1, int(e["fs"]) * 0.6)))
+	var body := texts.filter(func(e: Dictionary) -> bool: return ListParts.body_rect(r).has_point((e["rect"] as Rect2).position + Vector2(1, int(e["fs"]) * 0.6)))
+	check_eq(head.map(func(e: Dictionary) -> String: return e["text"]), [title], tag + ": 머리 글")
+	check_eq(body.map(func(e: Dictionary) -> String: return e["text"]), lines, tag + ": 몸 줄")
+	check(body.all(func(e: Dictionary) -> bool: return int(e["fs"]) >= ListParts.DESC_FS_MIN), tag + ": 줄 글자 12px 이상")
+	check_eq(_drawn_icons_in(d, ListParts.head_rect(r)), [icon] if not icon.is_empty() else [], tag + ": 머리 아이콘")
+	_check_drawn_text(d, tag + " 설명 상자")
+
+
+## 가장 긴 실제 내용: 모든 장비·소재의 설명 줄이 몸 폭에 12px 이상으로 들고, 이름이 머리에 든다(그리는 함수와 같은 폭·크기).
+func test_items_longest_description_content_fits() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	_fill_bag(s, 1, 1)
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	await kit.frames(1)
+	var it := pm.items_tab
+	var r := Rect2(Vector2.ZERO, it.desc.size)
+	var room := ListParts.line_room(r)
+	var widest := 0.0
+	var most := 0
+	for id in it.row_items:
+		var lines := it.item_lines(id)
+		most = maxi(most, lines.size())
+		check(lines.size() <= ListParts.DESC_LINES, "%s: 줄 %d ≤ 4" % [id, lines.size()])
+		for l in lines:
+			var fs := ListParts.line_fs(it.desc, l, room)
+			widest = maxf(widest, SheetParts.text_width(it.desc, l, ListParts.DESC_FS))
+			check(fs >= ListParts.DESC_FS_MIN and SheetParts.text_width(it.desc, l, fs) <= room, "%s: 「%s」 %dpx 가 %.0f 안" % [id, l, fs, room])
+		check(SheetParts.text_width(it.desc, it.item_label(id), ListParts.HEAD_FS) <= ListParts.head_room(r, 0), "%s: 이름이 머리에 든다" % id)
+	check(most == 4, "네 줄인 장비가 있다(%d)" % most)
+	# 실제로 그려 본다: 가장 긴 줄의 장비.
+	var best := ""
+	var bw := 0.0
+	for id in it.row_items:
+		for l in it.item_lines(id):
+			var w := SheetParts.text_width(it.desc, l, ListParts.DESC_FS)
+			if w > bw:
+				bw = w
+				best = id
+	it.desc.show_desc(it.item_label(best), it.item_icon(best), it.item_lines(best))
+	await kit.frames(1)
+	check(_check_drawn_text(it.desc, "가장 긴 설명 " + best) >= 3, "가장 긴 설명 글을 그렸다")
+	# 직업 표(장비 화면 E2-c 용): 머리 오른쪽 칸, 이름 자리를 줄인다. 그린 칸 색과 글 대비.
+	it.desc.show_desc(it.item_label(best), it.item_icon(best), it.item_lines(best), [["홀로", true], ["듀얼", false], ["메딕", true], ["위저드", false]])
+	await kit.frames(1)
+	var cells := ListParts.table_rects(r, 4)
+	var fills := _drawn_entries(it.desc, "fill").filter(func(e: Dictionary) -> bool: return cells.has(e["rect"]))
+	check_eq(fills.map(func(e: Dictionary) -> Color: return e["color"]), [ListParts.TABLE_ON, ListParts.TABLE_OFF, ListParts.TABLE_ON, ListParts.TABLE_OFF],
+		"직업 표 칸 넷")
+	check(cells[0].position.x > ListParts.head_rect(r).position.x + ListParts.DESC_TEXT_PAD + ListParts.head_room(r, 4), "표는 이름 자리 오른쪽")
+	_check_drawn_text(it.desc, "직업 표")
+	_check_drawn_text(it.window, "목록 창")
+
+
+## 목록 줄의 장비 화면 선택지(E2-c 가 쓴다): 「E」 표(어두운 칸, 노랑 아님)·흐린 줄·빈 아이콘 줄(빼기)을 그려 본다.
+func test_list_rows_draw_equipped_mark_dim_and_remove_rows() -> void:
+	kit = Kit.new(tree)
+	var host := Control.new()
+	host.size = Vector2(437, 64)
+	tree.root.add_child(host)
+	var row := ListButton.new()
+	row.size = Vector2(437, 64)
+	host.add_child(row)
+	# [아이콘, 이름, 개수, 흐림, 「E」, 커서]
+	for c in [["kind_sword", "트윈 엣지", "1개", false, true, false], ["kind_body", "패딩 코트", "", true, false, false],
+			["", "빼기", "", false, false, false], ["kind_sword", "트윈 엣지", "99개", false, true, true]]:
+		row.icon_name = c[0]
+		row.show_row(c[1], c[2], "", c[3])
+		row.equipped = c[4]
+		row.selected = c[5]
+		await kit.frames(1)
+		var tag := "줄 %s" % str(c)
+		var fills := _drawn_entries(row, "fill")
+		var marks := fills.filter(func(e: Dictionary) -> bool: return e["color"] == ListParts.EQUIP_MARK)
+		check_eq(marks.size(), 1 if c[4] else 0, tag + ": 「E」 칸")
+		if c[4]:
+			check(_drawn_entries(row, "text").any(func(e: Dictionary) -> bool: return e["text"] == "E"), tag + ": 「E」 글")
+		check(fills.any(func(e: Dictionary) -> bool: return e["color"] == (ListParts.CURSOR if row.selected else (ListParts.ROW_DIM if c[3] else ListParts.ROW_BODY))), tag + ": 몸 색")
+		check_eq(_drawn_icons_in(row, ListParts.row_boxes(Rect2(Vector2.ZERO, row.size))["icon"]), [c[0]] if not c[0].is_empty() else [], tag + ": 아이콘")
+		check_eq(fills.filter(func(e: Dictionary) -> bool: return _is_yellow(e["color"])).size(), 1 if row.selected else 0, tag + ": 노랑은 커서일 때만")
+		_check_drawn_text(row, tag)
+	tree.root.remove_child(host)
+	host.free()
+
+
+# ---- 소지품 고침(E2-b 독립 검토 M1·M2·M3) ----
+
+## 커서 칸이 노랑을 어떻게 보이는지 경우마다 밝힌다(07 §9.9 E2-b 메모, 조정자 결정 M3): 보통 칸이면 노랑 채움이 그 칸 하나,
+## 흐린 칸(최대 레벨의 「다음 레벨까지」)이면 노랑 채움 0 개이고 그 칸은 흐린 커서 모양(disabled_selected: 어두운 채움 + 노란 테).
+func _check_cursor_yellow(it: PartyItemsTab, tag: String) -> void:
+	var c := it.cursor_stop() as PartyButton
+	check(c != null, tag + ": 커서 칸이 있다")
+	if c == null:
+		return
+	var ys := _items_yellow(it)
+	if c.dimmed:
+		var lk := UiTheme.look(c.theme_state())
+		check_eq([c.theme_state(), ys], ["disabled_selected", []], tag + ": 흐린 커서 칸 → 흐린 커서 모양, 노랑 채움 0개")
+		check(not _is_yellow(lk["top"]) and not _is_yellow(lk["bottom"]) and _is_yellow(lk["outer"]) and float(lk["outer_w"]) > 0.0,
+			tag + ": 흐린 커서 모양 = 어두운 채움 + 노란 테")
+	else:
+		check_eq(ys, [str(c.name)], tag + ": 노랑 채움은 커서 칸 하나")
+
+
+## M1: 높은 화면(목록 일곱 줄)에서 마지막 줄에 커서를 두고 낮은 화면(넷)으로 바꾸면 커서 줄이 다시 보인다. 대원 보급 단추면 이름 줄까지.
+func test_items_cursor_stays_in_view_after_a_tall_to_short_resize() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	_fill_bag(s, 1, 2)
+	await _window(Vector2(1280, 960))
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	var it := pm.items_tab
+	var last := it.stops().size() - 1
+	while it.cursor < last:
+		await kit.press_key(KEY_DOWN)
+	var row := it.cursor_stop()
+	check(it.list.size.y > 400.0 and it.shown(row) and it.list.scroll > 0.0, "준비: 960 에서 마지막 줄, 내림 %.0f" % it.list.scroll)
+	await _window(Vector2(1280, 720))
+	await kit.frames(2)
+	check(it.list.size.y < 300.0, "준비: 목록이 넷으로 줄었다")
+	check_eq(it.cursor_stop(), row, "커서는 그대로")
+	check(it.list.shows(Rect2(row.position, row.size)), "줄어든 뒤에도 커서 줄이 다 보인다(내림 %.0f, 줄 %s)" % [it.list.scroll, str(Rect2(row.position, row.size))])
+	_check_cursor_yellow(it, "줄어든 뒤")
+	var n := pm.accepted_inputs
+	await kit.press_key(KEY_DOWN)
+	check_eq([it.cursor, pm.accepted_inputs], [last, n], "끝에서 ↓ 는 그대로(다 보이니 아무 일 없음)")
+	# 보급 줄: 마지막 대원의 「경험치 +100」 → 줄이고 나서 이름 줄과 단추가 함께 보인다.
+	await _window(Vector2(1280, 960))
+	await kit.frames(2)
+	await kit.press_key(KEY_ESCAPE)
+	await kit.press_key(KEY_1)
+	await kit.press_key(KEY_UP)
+	await kit.press_key(KEY_ENTER)
+	check(it.supply_open, "준비: 보급 줄")
+	var k := s.state.party.members.size() - 1
+	var e := it.exp_buttons[k]
+	while it.cursor_stop() != e and it.cursor < it.stops().size() - 1:
+		await kit.press_key(KEY_DOWN)
+	check(it.cursor_stop() == e and it.shown(e), "준비: 960 에서 마지막 대원 「경험치 +100」")
+	await _window(Vector2(1280, 720))
+	await kit.frames(2)
+	var label := it.member_rows[k]
+	check(it.list.shows(Rect2(label.position, label.size)) and it.list.shows(Rect2(e.position, e.size)),
+		"줄어든 뒤 대원 %d 이름 줄과 단추가 보인다(내림 %.0f)" % [k, it.list.scroll])
+	_check_cursor_yellow(it, "보급 줄어든 뒤")
+
+
+## M1: 손으로 끌어 커서 칸을 가린 뒤, 끝에서 ↓(↑) 는 커서를 옮기지 않고 커서 칸을 다시 보이게 한다. 보통 refresh(보급 누르기·다시 그리기)는
+## 커서 칸이 보이는 한 손으로 내린 자리를 그대로 둔다.
+func test_items_end_key_reveals_the_cursor_and_refresh_keeps_manual_scroll() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	_fill_bag(s, 1, 2)
+	await _window(Vector2(1280, 720))
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	var it := pm.items_tab
+	var last := it.stops().size() - 1
+	while it.cursor < last:
+		await kit.press_key(KEY_DOWN)
+	var row := it.cursor_stop()
+	var from := kit.center_of(it.list) - Vector2(0, 80)
+	kit.touch(FINGER, from, true)
+	await kit.frames(1)
+	kit.drag(FINGER, from, from + Vector2(0, 400))
+	await kit.frames(1)
+	kit.touch(FINGER, from + Vector2(0, 400), false)
+	await kit.frames(2)
+	check(not it.shown(row) and it.cursor == last, "준비: 끌어 내려 마지막 줄을 가렸다(내림 %.0f), 커서 그대로" % it.list.scroll)
+	var n := pm.accepted_inputs
+	await kit.press_key(KEY_DOWN)
+	check_eq(it.cursor, last, "끝에서 ↓ → 커서는 그대로")
+	check(it.shown(row) and pm.accepted_inputs == n + 1, "끝에서 ↓ → 가려진 커서 줄을 다시 보인다(입력 하나)")
+	n = pm.accepted_inputs
+	await kit.press_key(KEY_DOWN)
+	check_eq(pm.accepted_inputs, n, "다 보이면 끝에서 ↓ 는 아무 일 없음")
+	# 보통 refresh 는 손으로 내린 자리를 그대로: 보급 「+1」(커서 칸)이 보이는 채 조금 내린 뒤 누르기·Enter·다시 그리기.
+	while it.cursor > 0:
+		await kit.press_key(KEY_UP)
+	await kit.press_key(KEY_ENTER)
+	check(it.supply_open, "준비: 보급 줄")
+	for j in 4:
+		await kit.press_key(KEY_DOWN)
+	var b := it.cursor_stop()
+	check(b == it.plus_buttons[3], "준비: 커서 = 넷째 「+1」")
+	it.list.scroll_to(it.list.scroll + 20.0 if b.position.y - it.list.scroll > 40.0 else it.list.scroll - 20.0)
+	await kit.frames(1)
+	var keep := it.list.scroll
+	check(it.shown(b), "준비: 손으로 조금 내렸고 커서 칸은 보인다(내림 %.0f)" % keep)
+	var id: String = s.state.defs.battle.equipment_ids[3]
+	var bag := int(s.state.gear_bag.get(id, 0))
+	await kit.press_key(KEY_ENTER)
+	await kit.tap(kit.center_of(b))
+	pm.refresh_view()
+	await kit.frames(1)
+	check_eq(int(s.state.gear_bag.get(id, 0)), mini(bag + 2, BattleLimits.BAG_MAX), "Enter·누르기 → 「+1」 두 번")
+	check_eq(it.list.scroll, keep, "보급 누르기·다시 그리기 뒤에도 손으로 내린 자리 그대로")
+
+
+## M1: 일반 실행에서 첫 칸(첫 가방 줄)에서 ↑ 도 같다: 손으로 내려 가린 뒤 ↑ → 커서 그대로, 다시 보인다.
+func test_items_first_row_up_reveals_the_cursor_in_a_normal_build() -> void:
+	var s := await _open_plain()
+	var pm := s.party_menu
+	_fill_bag(s, 1, 2)
+	await _window(Vector2(1280, 720))
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	var it := pm.items_tab
+	check_eq([it.cursor, it.cursor_stop(), pm.debug], [0, it.rows[0], false], "준비: 일반 실행, 커서 = 첫 줄")
+	it.list.scroll_to(it.list.max_scroll())
+	await kit.frames(1)
+	check(not it.shown(it.cursor_stop()), "준비: 첫 줄을 가렸다")
+	var n := pm.accepted_inputs
+	await kit.press_key(KEY_UP)
+	check(it.cursor == 0 and it.shown(it.cursor_stop()) and pm.accepted_inputs == n + 1, "첫 칸에서 ↑ → 커서 그대로, 다시 보인다")
+	await kit.press_key(KEY_UP)
+	check_eq(pm.accepted_inputs, n + 1, "다 보이면 첫 칸 ↑ 는 아무 일 없음")
+	_check_cursor_yellow(it, "첫 줄")
+
+
+## 검토 2차 R2-1: 일반 실행에서 가방 줄은 「선택」이 흐리다. 커서 줄을 손으로 내려 가린 뒤 Enter·Space·키패드 「선택」은 모두 아무 일도
+## 하지 않는다(내림·커서·상태 그대로, 받은 입력 없음: 키패드 = 키).
+func test_items_dimmed_confirm_on_a_bag_row_changes_nothing() -> void:
+	var s := await _open_plain()
+	var pm := s.party_menu
+	_fill_bag(s, 1, 2)
+	await _window(Vector2(1280, 720))
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	var it := pm.items_tab
+	check_eq([pm.debug, it.cursor_stop(), pm.pad_state()["ok"]], [false, it.rows[0], false], "준비: 일반 실행, 커서 = 첫 가방 줄, 「선택」 흐림")
+	it.list.scroll_to(it.list.max_scroll())
+	await kit.frames(1)
+	var scroll := it.list.scroll
+	check(scroll > 0.0 and not it.shown(it.cursor_stop()), "준비: 커서 줄을 손으로 가렸다(내림 %.0f)" % scroll)
+	var h := SaveCodec.state_hash(s.state)
+	var n := pm.accepted_inputs
+	for k in [KEY_ENTER, KEY_SPACE]:
+		await kit.press_key(k)
+		check_eq([it.list.scroll, it.cursor, SaveCodec.state_hash(s.state), pm.accepted_inputs], [scroll, 0, h, n], "%s: 아무 일 없음" % OS.get_keycode_string(k))
+	var ok := pm.key_pad_stacked.button("ok")
+	check(ok.is_visible_in_tree() and ok.disabled, "키패드 「선택」은 흐림")
+	await kit.tap(kit.center_of(ok))
+	check_eq([it.list.scroll, it.cursor, SaveCodec.state_hash(s.state), pm.accepted_inputs], [scroll, 0, h, n], "키패드 「선택」: 아무 일 없음")
+
+
+## M2: 보급 대원 단추를 누르거나 Enter 로 누르면 그 대원 이름 줄과 단추가 함께 보인다(끌기만으로는 커서도 일도 없다).
+func test_supply_click_and_confirm_show_the_member_group() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	await _window(Vector2(1280, 720))
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	var it := pm.items_tab
+	await kit.tap(kit.center_of(it.supply_button))
+	check(it.supply_open, "준비: 보급 줄")
+	var e := it.exp_buttons[0]
+	var label := it.member_rows[0]
+	it.list.scroll_to(e.position.y)
+	await kit.frames(1)
+	check(it.list.shows(Rect2(e.position, e.size)) and not it.list.shows(Rect2(label.position, label.size)), "준비: 단추는 보이고 이름 줄은 위로 가려졌다")
+	var m := s.state.party.members[0]
+	var exp0 := m.exp
+	await kit.tap(kit.center_of(e))
+	check_eq([it.cursor_stop(), m.exp], [e, exp0 + 100], "누르기 → 커서가 그 단추로, 경험치 +100")
+	check(it.list.shows(Rect2(label.position, label.size)) and it.list.shows(Rect2(e.position, e.size)), "누른 뒤 이름 줄과 단추가 함께 보인다(내림 %.0f)" % it.list.scroll)
+	it.list.scroll_to(it.list.max_scroll())
+	await kit.frames(1)
+	check(not it.list.shows(Rect2(e.position, e.size)), "준비: 손으로 내려 단추를 가렸다")
+	await kit.press_key(KEY_ENTER)
+	check_eq(m.exp, exp0 + 200, "Enter → 같은 단추 한 번 더")
+	check(it.list.shows(Rect2(label.position, label.size)) and it.list.shows(Rect2(e.position, e.size)), "Enter 뒤 이름 줄과 단추가 다시 보인다(내림 %.0f)" % it.list.scroll)
+	_check_cursor_yellow(it, "Enter 뒤")
+
+
+## M3(조정자 결정): 최대 레벨의 「다음 레벨까지」도 커서 칸이다. 그 칸에 커서가 있으면 흐린 커서 모양(어두운 채움 + 노란 테)이고 노랑 채움은 없다.
+## Lv 29 → 누르기 → Lv 30(커서 그대로, 모양이 바뀐다) → Enter 는 최대 안내만. 이미 최대인 대원의 단추로 ↓ 로 가도 같다.
+func test_capped_next_level_cursor_shows_the_dimmed_cursor_look() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var g := s.state.defs.battle.growth
+	var k := 1
+	GrowthRules.grant_exp(s.state, k, g.cum(g.level_cap - 1))
+	GrowthRules.grant_exp(s.state, 3, g.cum(g.level_cap))
+	var m := s.state.party.members[k]
+	check_eq([m.level, s.state.party.members[3].level], [g.level_cap - 1, g.level_cap], "준비: 대원 %d Lv %d, 대원 3 최대" % [k, g.level_cap - 1])
+	await _window(Vector2(1280, 720))
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	var it := pm.items_tab
+	await kit.press_key(KEY_UP)
+	await kit.press_key(KEY_ENTER)
+	var nx := it.next_buttons[k]
+	while it.cursor_stop() != nx and it.cursor < it.stops().size() - 1:
+		await kit.press_key(KEY_DOWN)
+	await kit.frames(1)
+	check(it.cursor_stop() == nx and not nx.dimmed, "준비: 커서 = 대원 %d 「다음 레벨까지」(아직 최대 아님)" % k)
+	_check_cursor_yellow(it, "Lv 29 커서")
+	await kit.press_key(KEY_ENTER)
+	await kit.frames(1)
+	check_eq([m.level, it.cursor_stop(), nx.dimmed], [g.level_cap, nx, true], "Enter → 최대 레벨, 커서 그대로, 칸은 흐림")
+	_check_cursor_yellow(it, "Lv 30 이 된 칸")
+	var h := SaveCodec.state_hash(s.state)
+	var saves := s.autosave_count
+	await kit.press_key(KEY_ENTER)
+	check_eq([pm.notice, SaveCodec.state_hash(s.state), s.autosave_count], [s.texts.t("party.exp_max"), h, saves], "다시 Enter → 최대 안내만(상태·저장 그대로)")
+	var capped := it.next_buttons[3]
+	while it.cursor_stop() != capped and it.cursor < it.stops().size() - 1:
+		await kit.press_key(KEY_DOWN)
+	await kit.frames(1)
+	check(it.cursor_stop() == capped and capped.dimmed, "↓ 로 이미 최대인 대원 3 「다음 레벨까지」")
+	_check_cursor_yellow(it, "이미 최대인 칸")
+	await kit.press_key(KEY_UP)
+	await kit.frames(1)
+	check(it.cursor_stop() == it.exp_buttons[3] and not it.exp_buttons[3].dimmed, "↑ → 대원 3 「경험치 +100」(흐리지 않음)")
+	_check_cursor_yellow(it, "흐리지 않은 칸으로 돌아옴")
 
 
 # ---- 기록(R2-d, 원작 불러오기 화면 gs2_653240) ----
@@ -1635,6 +2304,20 @@ func test_camp_and_status_colours_meet_contrast() -> void:
 		["능력치 내림", EquipTotals.DOWN_COLOR, [UiTheme.ST_ROW, UiTheme.ST_GEAR_VALUE]],
 		["판 장비 줄", UiTheme.TEXT, [UiTheme.ST_EQUIP_ROW]],
 		["판 빈 장비", UiTheme.SUB_TEXT, [UiTheme.ST_EQUIP_ROW, UiTheme.ST_ROW_NAME]],
+		# 소지품(07 §9.9 E2-b, ListParts 부품 H·I·J): 목록 줄·흐린 줄·커서 줄·「E」 표, 설명 머리·몸·직업 표, 알약(보통·누름·켜짐·커서),
+		# 띠 글(「소지품   장비 n · 소재 n」은 알림 줄 글자색).
+		["목록 줄", ListParts.ROW_TEXT, [ListParts.ROW_BODY]],
+		["목록 흐린 줄", ListParts.ROW_DIM_TEXT, [ListParts.ROW_DIM]],
+		["목록 커서 줄", ListParts.CURSOR_TEXT, [ListParts.CURSOR]],
+		["목록 「E」 표", ListParts.EQUIP_MARK_TEXT, [ListParts.EQUIP_MARK]],
+		["설명 머리", ListParts.DESC_TEXT, [ListParts.DESC_HEAD]],
+		["설명 몸", ListParts.DESC_TEXT, [ListParts.DESC_BODY]],
+		["설명 직업 표", ListParts.TABLE_ON_TEXT, [ListParts.TABLE_ON]],
+		["설명 직업 표(못 낌)", ListParts.TABLE_OFF_TEXT, [ListParts.TABLE_OFF]],
+		["알약", ListParts.PILL_TEXT, [ListParts.PILL, ListParts.PILL_PRESSED]],
+		["알약 켜짐", ListParts.PILL_ON_TEXT, [ListParts.PILL_ON, ListParts.PILL_ON_PRESSED]],
+		["알약 커서", ListParts.CURSOR_TEXT, [ListParts.CURSOR]],
+		["소지품 띠", UiTheme.BATTLE_BANNER_NOTICE, [Color(UiTheme.CAMP_NOTICE_BG, 1.0)]],
 	]
 	for p in pairs:
 		for bg in p[2]:
@@ -1672,7 +2355,12 @@ func test_member_bands_share_one_iii_palette() -> void:
 	check_eq(pm.skill_tab._note_label.get_theme_color("font_color"), MemberHeader.STRIP_ACCENT, "스킬 띠 안내 글자 = 띠 노랑(대비 4.5:1)")
 
 
-## 기록의 띠(07 §9.9 E1 ⑥)가 숫자 키로 바로 바꾼 화면에서도 맞다: 기록에서는 늘 보이고(알림 또는 「기록」), 다른 하위 화면에서는 감춘다.
+## 하위 화면 tab 의 띠 글(알림이 없을 때): 소지품은 「소지품   장비 n · 소재 n」(E2-b), 기록이 아닌 다른 화면은 없음("").
+static func _strip_of(s: DungeonScreen, t: int) -> String:
+	return s.party_menu.items_tab.caption() if t == 3 else ""
+
+
+## 기록의 띠(07 §9.9 E1 ⑥)가 숫자 키로 바로 바꾼 화면에서도 맞다: 기록·소지품에서는 늘 보이고(알림 또는 화면 글), 다른 하위 화면에서는 감춘다.
 func _check_strip(s: DungeonScreen, want: String, tag: String) -> void:
 	var pm := s.party_menu
 	await kit.frames(1)
@@ -1695,7 +2383,7 @@ func test_records_strip_follows_direct_tab_changes() -> void:
 	for k in [[KEY_2, 0, "상태"], [KEY_4, 1, "스킬"], [KEY_3, 2, "장비"], [KEY_1, 3, "소지품"]]:
 		await kit.press_key(k[0])
 		check_eq([pm.page, pm.tab], ["sub", k[1]], "%s 화면" % k[2])
-		await _check_strip(s, "", "기록 → %s" % k[2])
+		await _check_strip(s, _strip_of(s, k[1]), "기록 → %s" % k[2])
 		await kit.press_key(KEY_5)
 		check_eq(pm.tab, 4, "%s → 5 → 기록" % k[2])
 		await _check_strip(s, caption, "%s → 기록" % k[2])
@@ -1707,7 +2395,7 @@ func test_records_strip_follows_direct_tab_changes() -> void:
 		await _check_strip(s, caption, "뿌리 → 기록")
 		await kit.press_key(k[0])
 		check_eq(pm.tab, k[1], "기록 → %s" % k[2])
-		await _check_strip(s, "", "뿌리에서 연 기록 → %s" % k[2])
+		await _check_strip(s, _strip_of(s, k[1]), "뿌리에서 연 기록 → %s" % k[2])
 	# 살아 있는 알림은 화면을 바꿔도 지우지 않는다(알림 규칙 그대로): 상태에서 뜬 알림이 기록 띠에, 기록에서 뜬 알림은 상태에서 감춰졌다가 돌아오면 다시.
 	await kit.press_key(KEY_2)
 	pm.show_notice("시험 안내 A")

@@ -5,8 +5,8 @@
 ## 오른쪽 위 소지금, 장소 띠 아래 알림 줄(알림이 있을 때만), 왼쪽 명령 목록(FacilityList), 아래 파티 카드 두 줄(PartyCards).
 ## 쪽(page): root(캠프 뿌리: 명령 목록) → pick(상태·스킬·장비: 파티 카드에서 대원 고르기) → sub(그 대원의 하위 화면).
 ## 소지품·기록은 파티 전체 것이라 고르기 없이 바로, 닫기는 탐색으로. Esc·P 는 한 단계 뒤로(하위 화면 → 뿌리 → 닫힘).
-## 하위 화면은 원작 화면을 옮긴 것: 상태(PartyStatusTab, 상태 화면), 스킬(PartySkillTab, 스킬 트리), 장비·소지품(PartyEquipTab·
-## PartyItemsTab, 상점 화면 짜임 ShopFrame), 기록(PartyRecordsTab, 불러오기 화면의 슬롯 카드). 기록의 일(저장·불러오기·내보내기·
+## 하위 화면은 원작 화면을 옮긴 것: 상태(PartyStatusTab, 상태 화면), 스킬(PartySkillTab, 스킬 트리), 장비(PartyEquipTab,
+## 상점 화면 짜임 ShopFrame), 소지품(PartyItemsTab, 원작 소지품 목록 창·설명 상자), 기록(PartyRecordsTab, 불러오기 화면의 슬롯 카드). 기록의 일(저장·불러오기·내보내기·
 ## 가져오기·자동 지도·새 게임)은 탐색 화면이 records 갈고리로 준다.
 ## 값은 규칙의 읽기 함수(GrowthRules.profile·learn_block·equip_block·sp_left 등)에서 읽고 화면이 다시 계산하지 않는다(07 §11.4).
 ## 상태는 규칙 함수(allocate·equip·supply·grant_exp)로만 바꾸고, 받아들여지면 save_hook(자동 저장, 07 §8.5) 뒤 changed 를 낸다.
@@ -424,7 +424,8 @@ func _setup_cards() -> void:
 ##       dialog_move(±1)·dialog_pick(0·1)·dialog_ok·dialog_back·
 ##       스킬 탭 node(트리 칸)·node_dir(Vector2i)·plus·minus·revert·commit·
 ##       장비 탭 slot(0~3)·row(목록 줄)·cursor(±1)·confirm·unequip·
-##       상태·소지품 탭 cursor(±1)·confirm, 상태 split(「내역」), 소지품 supply_toggle·supply(장비 ID)·exp_100(대원)·exp_next(대원)
+##       상태·소지품 탭 cursor(±1)·confirm, 상태 split(「내역」), 소지품 item_row(줄: 커서만 옮김)·supply_toggle·supply(장비 ID)·
+##       exp_100(대원)·exp_next(대원)
 func handle(kind: String, arg: Variant = null) -> bool:
 	if not _open:
 		return false
@@ -467,13 +468,13 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 			return true
 		"member":
 			var i := int(arg) if arg != null else -1
-			if i < 0 or i >= state.party.members.size() or i == member or tab == 4:
+			if i < 0 or i >= state.party.members.size() or i == member or tab == 3 or tab == 4:
 				return false
 			_guard(func() -> void: _set_member(i))
 			return true
 		"member_step":
-			if tab == 4:
-				return false  # 기록은 대원과 상관없다
+			if tab == 3 or tab == 4:
+				return false  # 소지품·기록은 대원과 상관없다(E2-b: 소지품에는 대원 판이 없다)
 			var n := state.party.members.size()
 			var to := wrapi(member + (int(arg) if arg != null else 1), 0, n)
 			_guard(func() -> void: _set_member(to))
@@ -612,6 +613,8 @@ func _open_sub(t: int) -> void:
 	page = "sub"
 	tab = t
 	equip_tab.close_list()
+	if t == 3:
+		items_tab.enter()
 	for tb in tabs:
 		tb.call("member_changed")
 	_clear_notice()
@@ -637,6 +640,8 @@ func _guard(action: Callable) -> void:
 func _set_tab(t: int) -> void:
 	tab = t
 	equip_tab.close_list()  # 다른 탭에서 돌아오면 칸 줄부터
+	if t == 3:
+		items_tab.enter()  # 소지품은 들어올 때마다 첫 가방 줄부터(보급 줄 닫힘)
 	_layout()
 
 
@@ -718,6 +723,8 @@ func key_action(code: int) -> Array:
 		return ["camp_cursor", dir.y] if dir.y != 0 else []
 	if num >= 0 and num < CAMP_ROWS:
 		return ["tab", camp_tab(num)]  # 하위 화면도 명령 줄 차례(07 §9.8: 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록)
+	if tab == 3 and (code == KEY_Q or code == KEY_E):
+		return []  # 소지품에는 대원이 없다(E2-b)
 	match code:
 		KEY_Q:
 			return ["member_step", -1]
@@ -745,8 +752,8 @@ func key_action(code: int) -> Array:
 	if dir.y != 0:
 		return ["cursor", dir.y]
 	if dir.x != 0:
-		# 장비 칸·소지품: ←→ 앞·다음 대원(= Q/E). 장비 목록이 열려 있으면 없다(칸 바꾸기는 목록을 닫고, 07 §9.7)
-		return [] if tab == 2 and equip_tab.list_open else ["member_step", dir.x]
+		# 장비 칸: ←→ 앞·다음 대원(= Q/E). 장비 목록이 열려 있으면 없다(칸 바꾸기는 목록을 닫고, 07 §9.7). 소지품은 대원이 없어 없다(E2-b)
+		return [] if tab == 3 or (tab == 2 and equip_tab.list_open) else ["member_step", dir.x]
 	if code == KEY_BACKSPACE:
 		return ["unequip", null] if tab == 2 else []
 	return ["confirm", null] if enter else []
@@ -793,7 +800,7 @@ func _on_vpad(kind: String, arg: Variant) -> void:
 
 
 ## 키패드 단추마다 켤지(이름 → 참). 그 단추의 키가 지금 아무 일도 하지 않으면 흐림: 키 표에 없거나(예: 뿌리 ←→, 확인 창 ↑↓,
-## 장비 목록 ←→), 그 쪽·화면에서 늘 거부되는 것(소지품 선택에 누를 단추가 없음 = 디버그 아님, 기록 선택의 커서 단추가 흐림).
+## 장비 목록·소지품 ←→), 그 쪽·화면에서 늘 거부되는 것(소지품 선택이 가방 줄 위·소지품 ↑↓ 에 커서 칸이 없음, 기록 선택의 커서 단추가 흐림).
 func pad_state() -> Dictionary:
 	var out := {}
 	for k in PAD_KEYS:
@@ -803,10 +810,12 @@ func pad_state() -> Dictionary:
 
 
 func _may_accept(a: Array) -> bool:
+	if page == "sub" and dialog_kind.is_empty() and tab == 3 and a[0] == "cursor":
+		return items_tab.can_move()  # 소지품: 커서 칸이 없으면(디버그 아님, 빈 가방) ↑↓ 흐림. 끝에서는 켜 둔다
 	if page == "sub" and dialog_kind.is_empty() and a[0] == "confirm":
 		match tab:
 			3:
-				return not items_tab.actionable().is_empty()
+				return items_tab.can_confirm()
 			4:
 				return not records_tab.cursor_button().disabled
 	return true
@@ -906,8 +915,8 @@ func _refresh() -> void:
 		(tabs[i] as Control).visible = sub and i == tab
 	if sub:
 		tabs[tab].call("refresh")
-	# 기록은 뿌리의 맨 위 띠(걸음 문패·장소 띠·소지금)를 그대로 두고, 알림 줄 자리에 「기록」을 쓴다(07 §9.9 E1 ⑥).
-	var top_band := not sub or records_top()
+	# 기록·소지품은 뿌리의 맨 위 띠(걸음 문패·장소 띠·소지금)를 그대로 두고, 알림 줄 자리에 화면 이름을 쓴다(07 §9.9 E1 ⑥, E2-b).
+	var top_band := not sub or root_band()
 	for c in [camp_plate, ribbon, money_plate]:
 		(c as Control).visible = top_band
 	for c in [camp_list, cards]:
@@ -923,9 +932,9 @@ func _refresh() -> void:
 	queue_redraw()
 
 
-## 하위 화면이 기록이라 맨 위 띠를 두는지(07 §9.9 E1 ⑥).
-func records_top() -> bool:
-	return page == "sub" and tab == 4
+## 하위 화면이 뿌리의 맨 위 띠와 띠(알림 줄 자리)를 두는지: 기록(07 §9.9 E1 ⑥)·소지품(E2-b).
+func root_band() -> bool:
+	return page == "sub" and (tab == 4 or tab == 3)
 
 
 ## 맨 위 띠: 걸음 문패·장소 띠·소지금(뿌리·고르기·기록).
@@ -956,20 +965,20 @@ func _refresh_camp() -> void:
 
 
 ## 안내(거부 이유·성장 결과 등): 뿌리·고르기는 알림 줄(있을 때만 보인다), 기록은 알림 줄(늘 보이고 안내가 없으면 「기록」),
-## 다른 하위 화면은 제 자리(스킬 = 정보 띠, 장비·소지품 = 설명 띠).
+## 소지품도 알림 줄(늘 보이고 안내가 없으면 「소지품   장비 n · 소재 n」), 다른 하위 화면은 제 자리(스킬 = 정보 띠, 장비 = 설명 띠).
 func _refresh_notice() -> void:
 	if notice_line == null or state == null:
 		return
-	notice_line.visible = records_top() or (page != "sub" and not notice.is_empty())
+	notice_line.visible = root_band() or (page != "sub" and not notice.is_empty())
 	notice_line.queue_redraw()
 	if page == "sub" and (tabs[tab] as Object).has_method("notice_changed"):
 		tabs[tab].call("notice_changed")
 
 
-## 알림 줄에 쓰는 글(여러 줄 안내는 한 줄로 잇는다). 기록에서 안내가 없으면 화면 이름 「기록」.
+## 알림 줄에 쓰는 글(여러 줄 안내는 한 줄로 잇는다). 안내가 없으면 기록은 「기록」, 소지품은 「소지품   장비 n · 소재 n」.
 func notice_line_text() -> String:
-	if notice.is_empty() and records_top():
-		return texts.t("camp.cmd.records")
+	if notice.is_empty() and root_band():
+		return items_tab.caption() if tab == 3 else texts.t("camp.cmd.records")
 	return "   ".join(notice.split("\n", false))
 
 

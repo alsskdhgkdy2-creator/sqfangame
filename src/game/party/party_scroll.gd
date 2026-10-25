@@ -6,6 +6,9 @@ extends Control
 
 const WHEEL_STEP := 64.0
 
+## 내린 양이나 내용 높이가 바뀌었다(스크롤 막대를 다시 그린다).
+signal scrolled
+
 ## 내용(이 컨트롤 기준 위치에 줄을 둔다). 자신은 포인터를 받지 않는다(빈 곳은 이 영역이 받는다).
 var content := Control.new()
 var content_height := 0.0
@@ -30,6 +33,7 @@ func scroll_to(y: float) -> void:
 	scroll = clampf(y, 0.0, max_scroll())
 	content.position = Vector2(0, -roundf(scroll))
 	content.size = Vector2(size.x, maxf(content_height, size.y))
+	scrolled.emit()
 
 
 func scroll_by(dy: float) -> void:

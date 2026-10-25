@@ -791,19 +791,7 @@ func change_text(base: Dictionary, after: Dictionary) -> String:
 
 ## 장비 값 줄 「공격 +8 · 베기」(설명 창 본문, 캠프 장비 목록의 바뀌는 값과 같은 꼴).
 func values_text(item: String) -> String:
-	var e := state.defs.battle.equip(item)
-	if e == null:
-		return ""
-	var parts: Array[String] = []
-	for g in BattleLimits.GEAR:
-		if int(e.gear[g]) != 0:
-			parts.append(texts.t("party.delta", {"name": texts.t("stat." + g), "value": PartyNames.signed(int(e.gear[g]))}))
-	for k in BattleLimits.STATS:
-		if e.stats.has(k):
-			parts.append(texts.t("party.delta", {"name": texts.t("stat." + k), "value": PartyNames.signed(int(e.stats[k]))}))
-	if e.weapon() and not e.element.is_empty():
-		parts.append(texts.t("element." + e.element))
-	return " · ".join(parts)
+	return PartyNames.values_text(state, texts, item)
 
 
 # ---- 줄 자료 ----

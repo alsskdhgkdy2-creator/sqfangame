@@ -23,3 +23,35 @@ static func item_name(state: ExplorationState, texts: TextDb, id: String) -> Str
 ## 부호 붙은 수(글꼴 부분 집합에 U+2212 가 없어 ASCII 「-」를 쓴다).
 static func signed(v: int) -> String:
 	return ("+%d" % v) if v > 0 else str(v)
+
+
+## 장비 값 줄(상점 설명 창·캠프 소지품 설명 상자가 같이 쓴다): 공격·방어 값, 능력치 보정, 무기 속성. 모르는 ID 는 "".
+static func values_text(state: ExplorationState, texts: TextDb, item: String) -> String:
+	var e := state.defs.battle.equip(item)
+	if e == null:
+		return ""
+	var parts: Array[String] = []
+	for g in BattleLimits.GEAR:
+		if int(e.gear[g]) != 0:
+			parts.append(texts.t("party.delta", {"name": texts.t("stat." + g), "value": signed(int(e.gear[g]))}))
+	for k in BattleLimits.STATS:
+		if e.stats.has(k):
+			parts.append(texts.t("party.delta", {"name": texts.t("stat." + k), "value": signed(int(e.stats[k]))}))
+	if e.weapon() and not e.element.is_empty():
+		parts.append(texts.t("element." + e.element))
+	return " · ".join(parts)
+
+
+## 장비의 받는 배율 보정 줄: 상태 화면 받는 배율 줄과 같은 글(「이름 ±n%」, 두 칸 띄어 잇는다), 갈래(속성·상태 이상·결박) 차례.
+## 보정이 없으면 "".
+static func received_text(state: ExplorationState, texts: TextDb, item: String) -> String:
+	var e := state.defs.battle.equip(item)
+	if e == null:
+		return ""
+	var parts: Array[String] = []
+	for pair in [[e.resist, "element."], [e.ailment_vuln, "ailment."], [e.bind_vuln, "bind."]]:
+		var table: Dictionary = pair[0]
+		for k in table:
+			if int(table[k]) != 0:
+				parts.append(texts.t("party.mult", {"name": texts.t(str(pair[1]) + str(k)), "pct": signed(int(table[k]) / 10)}))
+	return "  ".join(parts)
