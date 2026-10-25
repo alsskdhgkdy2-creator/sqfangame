@@ -174,111 +174,48 @@ func _profile_with(s: DungeonScreen, i: int, slot: int, item: String) -> Diction
 	return GrowthRules.profile(s.state.defs, i, copy)
 
 
-func _check_totals(t: EquipTotals, now: Dictionary, after: Variant, tag: String) -> void:
-	check_eq(t.lines.size(), BattleLimits.GEAR.size() + BattleLimits.STATS.size(), tag + ": 줄 수")
-	check_eq(t.comparing, after != null, tag + ": 견주는지")
+## 왼쪽 열(07 §9.9 E2-c)이 그린 값이 profile 과 같다: 지금 값, 바꾸면 값(after 가 없으면 지금 값과 같다).
+func _check_sheet(et: PartyEquipTab, now: Dictionary, after: Variant, tag: String) -> void:
+	check_eq(et.drawn["preview"], after != null, tag + ": 바꾸면 값을 보이는지")
+	var then: Dictionary = after if after != null else now
+	for k in PartyStatusTab.STAT_ROWS:
+		check_eq(et.drawn["stats"][k].slice(0, 2), [now["stats"][k], then["stats"][k]], "%s %s: 지금·바꾸면" % [tag, k])
 	for g in BattleLimits.GEAR:
-		var l := t.line_of(g)
-		check_eq(l["name"], texts.t("stat." + g), "%s %s: 이름" % [tag, g])
-		check_eq(l["now"], now["gear"][g], "%s %s: 지금" % [tag, g])
-		check_eq(l["after"], after["gear"][g] if after != null else null, "%s %s: 바꾸면" % [tag, g])
-	for k in BattleLimits.STATS:
-		var l := t.line_of(k)
-		check_eq(l["now"], now["stats"][k], "%s %s: 지금" % [tag, k])
-		check_eq(l["after"], after["stats"][k] if after != null else null, "%s %s: 바꾸면" % [tag, k])
-	for l in t.lines:
-		var d: int = int(l["after"]) - int(l["now"]) if l["after"] != null else 0
-		var dt := EquipTotals.delta_text(l)
-		if d > 0:
-			check(dt == "+%d" % d and EquipTotals.delta_color(l) == EquipTotals.UP_COLOR, "%s %s: 오름 = 「+」 + 색" % [tag, l["key"]])
-		elif d < 0:
-			check(dt == "-%d" % -d and EquipTotals.delta_color(l) == EquipTotals.DOWN_COLOR, "%s %s: 내림 = 「-」 + 색" % [tag, l["key"]])
-		else:
-			check(dt.is_empty() and EquipTotals.delta_color(l) == EquipTotals.VALUE_COLOR, "%s %s: 같음 = 표시 없음" % [tag, l["key"]])
+		check_eq(et.drawn["gear"][g], [now["gear"][g], then["gear"][g]], "%s %s: 지금·바꾸면" % [tag, g])
 
 
-func test_equip_totals_show_profile_and_compare_the_highlighted_row() -> void:
+func test_equip_sheet_shows_profile_and_previews_the_cursor_row() -> void:
 	_kit()
 	var s := await kit.open("native", 7, "debug=1")
 	var et := await _equip_tab(s)
 	var pm := s.party_menu
 	var i := pm.member
-	var t := et.totals
-	check(et.is_visible_in_tree() and t.is_visible_in_tree(), "준비: 장비 탭과 합계 표")
+	check(et.is_visible_in_tree() and et.left.is_visible_in_tree(), "준비: 장비 탭과 왼쪽 열")
 	var now := GrowthRules.profile(s.state.defs, i, s.state.party.members[i])
-	_check_totals(t, now, null, "목록 닫힘")
+	_check_sheet(et, now, null, "칸 고르기")
 	await kit.press_key(KEY_ENTER)
-	check(et.list_open and et.row_items[0] == "" and et.row_block[0].is_empty(), "준비: 무기 칸 목록, 맨 위 「빼기」")
-	_check_totals(t, now, _profile_with(s, i, 0, ""), "빼기 줄")
-	check(t.line_of("atk")["after"] < t.line_of("atk")["now"], "무기를 빼면 공격이 준다")
+	check(et.list_open and et.list_cursor == et.equipped_row and et.equipped_row == 0, "준비: 무기 칸 목록, 커서는 「E」 줄")
+	_check_sheet(et, now, null, "「E」 줄(바꾸지 않음)")
 	await kit.press_key(KEY_DOWN)
 	check_eq(et.row_items[et.list_cursor], "equip.ion_saber", "준비: 이온 세이버 줄")
 	var after := _profile_with(s, i, 0, "equip.ion_saber")
-	_check_totals(t, now, after, "이온 세이버 줄")
-	# 목록 줄의 바뀌는 값과 표가 같은 도움 함수에서 나온다
-	var note := et.rows[et.list_cursor].note
-	var changed := 0
-	for l in t.lines:
-		var dt := EquipTotals.delta_text(l)
-		if not dt.is_empty():
-			changed += 1
-			check(note.contains("%s %s" % [l["name"], dt]), "줄 글 「%s」에 %s %s" % [note, l["name"], dt])
-	check(changed > 0, "바뀌는 값이 있다(%d)" % changed)
-	check_eq(note, et.change_text(now, "equip.ion_saber"), "줄 글 = change_text")
+	_check_sheet(et, now, after, "이온 세이버 줄")
+	check(after["gear"]["atk"] > now["gear"]["atk"], "이온 세이버는 공격이 오른다")
+	await kit.press_key(KEY_DOWN)
+	check_eq(et.row_items[et.list_cursor], "", "준비: 「빼기」 줄")
+	_check_sheet(et, now, _profile_with(s, i, 0, ""), "빼기 줄")
+	check(et.drawn["gear"]["atk"][1] < now["gear"]["atk"], "무기를 빼면 공격이 준다")
 	check_eq(FileAccess.get_file_as_string((PartyEquipTab as Script).resource_path).count("PartyState.Member.new("), 1, "사본 만드는 곳은 한 군데")
 	check_eq(s.state.party.members[i].equip[0], now["weapon"], "견주기만 했고 장비는 그대로")
 	await kit.press_key(KEY_ESCAPE)
 	check(not et.list_open, "목록 닫음")
-	_check_totals(t, now, null, "다시 닫힘")
+	_check_sheet(et, now, null, "다시 칸 고르기")
 	# 빈 칸(방어구 3)의 「빼기」는 못 고르는 줄: 견주지 않는다
 	for k in 3:
 		await kit.press_key(KEY_DOWN)
 	await kit.press_key(KEY_ENTER)
-	check(et.list_open and et.cursor == 3 and not et.row_block[0].is_empty(), "준비: 빈 칸 목록의 못 고르는 「빼기」")
-	_check_totals(t, now, null, "못 고르는 줄")
-
-
-## 인물 판의 능력치 묶음(원작 상점 인물 판의 STR~LUC 열 + 攻撃·防御 판): 두 크기에서 판 안, 다른 판 부품·목록과 겹치지 않고, 글자가 칸에 든다.
-func test_equip_totals_fit_in_the_character_panel_at_both_sizes() -> void:
-	_kit()
-	var s := await kit.open("native", 7, "debug=1")
-	var et := await _equip_tab(s)
-	await kit.press_key(KEY_ENTER)
-	await kit.press_key(KEY_DOWN)
-	var t := et.totals
-	var panel := et.frame.panel
-	var font := t.get_theme_default_font()
-	for sz in SIZES:
-		await _resize(s, sz)
-		var tag := "%dx%d" % [sz.x, sz.y]
-		check(t.comparing, tag + ": 준비: 견주는 중")
-		var tr := t.get_global_rect()
-		var pr := panel.get_global_rect()
-		check(_inside(tr, pr) and _inside(pr, et.menu.get_global_rect()), "%s: 판 안·캠프 안 %s %s" % [tag, str(tr), str(pr)])
-		check_eq(t.size, EquipTotals.needed_size(), tag + ": 줄이 다 들어가는 크기")
-		var cp := Rect2(pr.position + panel.class_rect().position, panel.class_rect().size)
-		check(tr.position.y >= cp.end.y and tr.end.y <= pr.position.y + panel.equip_rect(0).position.y, tag + ": 직업 문패와 장비 줄 사이")
-		check(not et.list.get_global_rect().intersects(tr), tag + ": 목록과 겹치지 않는다")
-		for j in t.lines.size():
-			var l := t.lines[j]
-			var c := t.line_layout(j)
-			var who := "%s %s" % [tag, l["key"]]
-			check(_inside(c["line"], Rect2(Vector2.ZERO, t.size)), who + ": 묶음 안")
-			for k in ["box", "name", "now", "arrow", "after", "delta"]:
-				check(_inside(c[k], c["line"]), "%s: %s 이 줄 안" % [who, k])
-			var order := ["name", "now", "arrow", "after", "delta"]
-			for q in order.size() - 1:
-				check((c[order[q]] as Rect2).end.x <= (c[order[q + 1]] as Rect2).position.x + 0.01, "%s: %s 다음 %s" % [who, order[q], order[q + 1]])
-			check(font.get_string_size(l["name"], HORIZONTAL_ALIGNMENT_LEFT, -1, EquipTotals.NAME_FS).x <= (c["name"] as Rect2).size.x + 0.5, who + ": 이름")
-			check(font.get_string_size(str(l["after"]), HORIZONTAL_ALIGNMENT_LEFT, -1, EquipTotals.VALUE_FS).x <= (c["after"] as Rect2).size.x + 0.5, who + ": 바꾸면 값")
-			check(font.get_string_size(EquipTotals.delta_text(l), HORIZONTAL_ALIGNMENT_LEFT, -1, EquipTotals.VALUE_FS).x <= (c["delta"] as Rect2).size.x + 0.5, who + ": 차이")
-			for q in range(j + 1, t.lines.size()):
-				check(not (c["line"] as Rect2).intersects(t.line_layout(q)["line"]), "%s: %s 와 겹치지 않는다" % [who, t.lines[q]["key"]])
-		# 원작 짜임: 능력치(힘~행운)가 한 열로 위, 공격·방어 판이 그 아래 2×2.
-		var last_stat: Rect2 = t.line_layout(t.lines.size() - 1)["line"]
-		for g in BattleLimits.GEAR.size():
-			check((t.line_layout(g)["line"] as Rect2).position.y >= last_stat.end.y, tag + ": 공격·방어 판은 능력치 열 아래")
-		check((t.line_layout(0)["line"] as Rect2).end.x <= (t.line_layout(1)["line"] as Rect2).position.x, tag + ": 공격 | 마법 공격 나란히")
+	check(et.list_open and et.cursor == 3 and et.row_items[et.list_cursor] == "" and not et.row_block[et.list_cursor].is_empty(), "준비: 빈 칸 목록의 못 고르는 「빼기」")
+	_check_sheet(et, now, null, "못 고르는 줄")
 
 
 # ---- U7 지도 모눈·구역 자 (M2.7 R1: 원작 HD 처럼 자는 층 전체 보기에만, 5×5 칸 구역마다 하나) ----
@@ -435,20 +372,26 @@ func test_widgets_use_theme_states() -> void:
 	var wall: TouchButton = s.toolbar.buttons["wall"]
 	check(wall != null and wall.theme_state() == "selected", "고른 벽 도구: selected")
 	check(sw.theme_state() == "normal", "고르지 않은 견본: normal")
-	# 캠프 장비(상점 짜임, 시설 「fac:*」 모양): 칸 커서 = 고름, 목록이 열린 칸 = 인물 판 장비 줄 노랑 테두리, 목록 커서 = 고름
+	# 캠프 장비(07 §9.9 E2-c, 목록 창 줄 ListButton): 칸 커서 = 노랑 줄, 목록이 열린 칸 = 왼쪽 열 장비 줄 노랑 테두리, 목록 커서 = 노랑 줄,
+	# 못 고르는 줄에 커서 = 흐린 커서 모양(흐린 몸 + 노란 테, 채움 없음)
 	var et := await _equip_tab(s)
 	var pm := s.party_menu
-	check_eq(et.slot_rows[0].theme_state(), "fac:selected", "목록 닫힘: 칸 커서")
-	check_eq(et.slot_rows[1].theme_state(), "fac:normal", "목록 닫힘: 다른 칸")
+	check(et.slot_rows[0].selected and not et.slot_rows[1].selected, "목록 닫힘: 칸 커서만 고름")
 	await kit.press_key(KEY_ENTER)
-	check_eq(et.frame.panel.drawn["mark"], 0, "목록이 열린 칸 = 판의 장비 줄 표시")
-	check_eq(et.rows[0].theme_state(), "fac:selected", "목록 커서 줄")
+	check_eq(et.drawn["mark"], 0, "목록이 열린 칸 = 왼쪽 열 장비 줄 표시")
+	check(et.rows[0].selected and not et.rows[0].dimmed, "목록 커서 줄")
 	await kit.press_key(KEY_ESCAPE)
 	for k in 3:
 		await kit.press_key(KEY_DOWN)
 	await kit.press_key(KEY_ENTER)
-	check(not et.row_block[0].is_empty(), "준비: 못 고르는 줄")
-	check_eq(et.rows[0].theme_state(), "fac:disabled_selected", "못 고르는 줄에 커서")
+	await kit.frames(1)
+	check(not et.row_block[et.list_cursor].is_empty(), "준비: 못 고르는 줄")
+	var row := et.rows[et.list_cursor]
+	var rec := SheetParts.record(row)
+	check(row.selected and row.dimmed, "못 고르는 줄에 커서")
+	check(rec.any(func(e: Dictionary) -> bool: return e["kind"] == "fill" and e["color"] == ListParts.ROW_DIM)
+		and not rec.any(func(e: Dictionary) -> bool: return e["kind"] == "fill" and e["color"] == ListParts.CURSOR)
+		and rec.any(func(e: Dictionary) -> bool: return e["kind"] == "outline" and e["color"] == ListParts.CURSOR_EDGE), "흐린 커서 모양: 흐린 몸 + 노란 테")
 	for k in 3:
 		if pm.is_open():
 			await kit.press_key(KEY_ESCAPE)

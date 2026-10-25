@@ -1,5 +1,5 @@
 ## 캠프 가상 키패드 시험(P3, 사용자 결정 2026-10-25, 07 §9.7): 전투와 같은 부품(VirtualPad)을 캠프 화면마다 정한 자리에 둔다.
-## 배치 표(1280×720·1728×720, 앵커): 방향 십자 왼쪽 아래 (8, 511)(상태만 (456, 511)), 「취소」「선택」 가로 (W − 247, 427)
+## 배치 표(1280×720·1728×720, 앵커): 방향 십자 왼쪽 아래 (8, 511)(상태·장비는 (456, 511), E2-c), 「취소」「선택」 가로 (W − 247, 427)
 ## (스킬은 설명 띠 안 「되돌리기」 왼쪽 (W − 567, 632), 조정자 결정), 장비·소지품 세로 (W − 118, 548), 기록 세로 (W − 118, 420). 누를 것과 겹치지 않고 64 이상.
 ## 트리 순서: 확인 창 층 뒤(창이 떠 있어도 누를 수 있다). 키패드 = 키(같은 키 표 key_action), 흐린 단추는 아무 일 없음,
 ## 문맥이 바뀌면·바깥 창(층 3)이 뜨면 눌림을 버린다. 저장은 장면 시험 임시 폴더에만(메뉴만 띄우는 시험은 저장 갈고리를 센다).
@@ -182,7 +182,7 @@ func _receiver_at(p: Vector2) -> Control:
 ## 화면마다 기대 자리: [십자 Rect2, 선택·취소 Rect2, 세로인지].
 static func _expected(name: String, size: Vector2) -> Array:
 	var screen := name.get_slice("_", 0)
-	var dir := Rect2(Vector2(456 if screen == "status" else 8, 511), VirtualPad.dirs_size())
+	var dir := Rect2(Vector2(456 if screen in ["status", "equip"] else 8, 511), VirtualPad.dirs_size())
 	match screen:
 		"skills":
 			return [dir, Rect2(Vector2(size.x - 567, 632), VirtualPad.keys_size()), false]
@@ -504,7 +504,8 @@ func test_camp_pad_matches_keys_on_equip_and_items() -> void:
 		["장비 선택(목록)", false, eq, "ok", true, false], ["장비 취소", false, eq, "back", true, false],
 		["장비 목록 ↑", false, lst + [["cursor", 1]], "up", true, false], ["장비 목록 ↓", false, lst, "down", true, false],
 		["장비 목록 ←", false, lst, "left", false, false], ["장비 목록 →", false, lst, "right", false, false],
-		["장비 목록 선택(빼기)", false, lst, "ok", true, false], ["장비 목록 취소(닫기)", false, lst, "back", true, false],
+		["장비 목록 선택(「E」 줄 → 닫기)", false, lst, "ok", true, false], ["장비 목록 선택(빼기)", false, lst + [["cursor", 1]], "ok", true, false],
+		["장비 목록 취소(닫기)", false, lst, "back", true, false],
 		["소지품 ↑", true, it + [["cursor", 1]], "up", true, false], ["소지품 ↓", true, it, "down", true, false],
 		["소지품 ←(대원 없음)", true, it, "left", false, false], ["소지품 →(대원 없음)", true, it, "right", false, false],
 		["소지품 선택(보급 줄)", true, it, "ok", true, false], ["소지품 취소", true, it, "back", true, false],
@@ -605,9 +606,10 @@ func test_new_key_meanings_for_member_switch_and_split() -> void:
 	await kit.press_key(KEY_ENTER)
 	check(pm.equip_tab.list_open, "준비: 목록 열림")
 	var n := pm.accepted_inputs
-	await kit.press_key(KEY_RIGHT)
-	await kit.press_key(KEY_LEFT)
-	check_eq([pm.member, pm.equip_tab.list_open, pm.accepted_inputs], [0, true, n], "목록이 열려 있으면 ←→ 는 아무 일 없음")
+	for k in [KEY_RIGHT, KEY_LEFT, KEY_Q, KEY_E]:
+		await kit.press_key(k)
+	check_eq([pm.member, pm.equip_tab.list_open, pm.accepted_inputs], [0, true, n], "목록이 열려 있으면 ←→·Q·E 는 아무 일 없음(E2-c)")
+	check(not pm.handle("member_step", 1) and pm.member == 0, "목록이 열려 있으면 띠 단추(member_step)도 받지 않는다")
 	await kit.press_key(KEY_ESCAPE)
 	check(not pm.equip_tab.list_open and pm.page == "sub", "Esc 한 번 = 목록만 닫음")
 	await kit.press_key(KEY_1)

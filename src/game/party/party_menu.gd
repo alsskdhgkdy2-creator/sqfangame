@@ -6,7 +6,7 @@
 ## 쪽(page): root(캠프 뿌리: 명령 목록) → pick(상태·스킬·장비: 파티 카드에서 대원 고르기) → sub(그 대원의 하위 화면).
 ## 소지품·기록은 파티 전체 것이라 고르기 없이 바로, 닫기는 탐색으로. Esc·P 는 한 단계 뒤로(하위 화면 → 뿌리 → 닫힘).
 ## 하위 화면은 원작 화면을 옮긴 것: 상태(PartyStatusTab, 상태 화면), 스킬(PartySkillTab, 스킬 트리), 장비(PartyEquipTab,
-## 상점 화면 짜임 ShopFrame), 소지품(PartyItemsTab, 원작 소지품 목록 창·설명 상자), 기록(PartyRecordsTab, 불러오기 화면의 슬롯 카드). 기록의 일(저장·불러오기·내보내기·
+## 원작 I HD 장비 시트: 왼쪽 상태 시트·오른쪽 목록 창·설명 상자), 소지품(PartyItemsTab, 원작 소지품 목록 창·설명 상자), 기록(PartyRecordsTab, 불러오기 화면의 슬롯 카드). 기록의 일(저장·불러오기·내보내기·
 ## 가져오기·자동 지도·새 게임)은 탐색 화면이 records 갈고리로 준다.
 ## 값은 규칙의 읽기 함수(GrowthRules.profile·learn_block·equip_block·sp_left 등)에서 읽고 화면이 다시 계산하지 않는다(07 §11.4).
 ## 상태는 규칙 함수(allocate·equip·supply·grant_exp)로만 바꾸고, 받아들여지면 save_hook(자동 저장, 07 §8.5) 뒤 changed 를 낸다.
@@ -52,7 +52,8 @@ const NOTICE_SEC := 2.5
 const TAB_KEYS := ["status", "skills", "equip", "items", "records"]
 ## 가상 키패드 단추 → 같은 일을 하는 물리 키(키 표 key_action 을 같이 써서 키패드 = 키).
 const PAD_KEYS := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "ok": KEY_ENTER, "back": KEY_ESCAPE}
-## 방향 십자 자리(왼쪽 아래 앵커: 왼쪽에서 x, 아래에서 y) — 전투와 같은 엄지 자리(06 §9.10). 상태 화면만 가운데 빈 곳(x 456).
+## 방향 십자 자리(왼쪽 아래 앵커: 왼쪽에서 x, 아래에서 y) — 전투와 같은 엄지 자리(06 §9.10). 상태·장비 화면은 왼쪽 열(장비 줄)을
+## 덮지 않게 가운데 빈 곳(x 456, 07 §9.9 E2-c).
 const PAD_DIR := Vector2(8, -209)
 const PAD_DIR_STATUS := Vector2(456, -209)
 ## 「취소」「선택」 자리(오른쪽 아래 앵커: 왼쪽 위 모서리). 가로 = 전투와 같은 자리(W − 247, 427), 스킬은 설명 띠 안 「되돌리기」 왼쪽
@@ -265,7 +266,9 @@ func pad_spot() -> Dictionary:
 			return {"dir": PAD_DIR_STATUS, "keys": PAD_KEYS_AT, "stacked": false}
 		"skills":
 			return {"dir": PAD_DIR, "keys": PAD_KEYS_SKILLS, "stacked": false}
-		"equip", "items":
+		"equip":
+			return {"dir": PAD_DIR_STATUS, "keys": PAD_KEYS_SHOP, "stacked": true}
+		"items":
 			return {"dir": PAD_DIR, "keys": PAD_KEYS_SHOP, "stacked": true}
 		"records":
 			return {"dir": PAD_DIR, "keys": PAD_KEYS_RECORDS, "stacked": true}
@@ -475,6 +478,8 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 		"member_step":
 			if tab == 3 or tab == 4:
 				return false  # 소지품·기록은 대원과 상관없다(E2-b: 소지품에는 대원 판이 없다)
+			if tab == 2 and equip_tab.list_open:
+				return false  # 장비 목록이 열려 있으면 대원을 넘기지 않는다(띠 단추·←→·Q/E, 07 §9.9 E2-c)
 			var n := state.party.members.size()
 			var to := wrapi(member + (int(arg) if arg != null else 1), 0, n)
 			_guard(func() -> void: _set_member(to))
@@ -723,8 +728,8 @@ func key_action(code: int) -> Array:
 		return ["camp_cursor", dir.y] if dir.y != 0 else []
 	if num >= 0 and num < CAMP_ROWS:
 		return ["tab", camp_tab(num)]  # 하위 화면도 명령 줄 차례(07 §9.8: 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록)
-	if tab == 3 and (code == KEY_Q or code == KEY_E):
-		return []  # 소지품에는 대원이 없다(E2-b)
+	if (tab == 3 or (tab == 2 and equip_tab.list_open)) and (code == KEY_Q or code == KEY_E):
+		return []  # 소지품에는 대원이 없다(E2-b). 장비 목록이 열려 있으면 대원을 넘기지 않는다(E2-c)
 	match code:
 		KEY_Q:
 			return ["member_step", -1]
@@ -965,7 +970,7 @@ func _refresh_camp() -> void:
 
 
 ## 안내(거부 이유·성장 결과 등): 뿌리·고르기는 알림 줄(있을 때만 보인다), 기록은 알림 줄(늘 보이고 안내가 없으면 「기록」),
-## 소지품도 알림 줄(늘 보이고 안내가 없으면 「소지품   장비 n · 소재 n」), 다른 하위 화면은 제 자리(스킬 = 정보 띠, 장비 = 설명 띠).
+## 소지품도 알림 줄(늘 보이고 안내가 없으면 「소지품   장비 n · 소재 n」), 다른 하위 화면은 제 자리(스킬·장비 = 위 정보 띠).
 func _refresh_notice() -> void:
 	if notice_line == null or state == null:
 		return
@@ -1111,7 +1116,8 @@ func debug_info(css: Callable) -> Dictionary:
 	var rows := []
 	if tab == 2 and equip_tab.list_open:
 		for j in equip_tab.row_items.size():
-			rows.append({"item": equip_tab.row_items[j], "block": equip_tab.row_block[j], "button": equip_tab.rows[j].name})
+			rows.append({"item": equip_tab.row_items[j], "block": equip_tab.row_block[j], "button": equip_tab.rows[j].name,
+				"equipped": j == equip_tab.equipped_row})
 	return {
 		"open": true, "page": page, "tab": TAB_KEYS[tab] if page == "sub" else "", "member": member,
 		"camp_cursor": camp_cursor, "pick": TAB_KEYS[pick_cmd] if page == "pick" else "", "pick_cursor": pick_cursor,

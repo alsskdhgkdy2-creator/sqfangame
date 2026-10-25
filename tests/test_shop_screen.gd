@@ -454,6 +454,153 @@ func test_best_slot_follows_the_candidate_order_and_never_mutates_state() -> voi
 	check_eq(sc.frame.desc_lines, [sc.values_text("equip.signal_charm")] as Array[String], "낄 수 있으면 설명은 값 줄 하나(바뀌는 값은 판만)")
 
 
+# ---- 인물 판 합계 표(EquipTotals, 마을 상점이 쓴다: 옛 캠프 장비 U8 시험을 상점 비교로 옮김, 07 §9.9 E2-c 고침) ----
+
+## 시험이 따로 만든 사본으로 읽은 GrowthRules.profile(화면 도움 함수와 견준다).
+static func _profile_with(s: ExplorationState, i: int, slot: int, item: String) -> Dictionary:
+	var m := s.party.members[i]
+	var copy := PartyState.Member.new(m.id, m.max_hp, m.hp, m.max_tp, m.tp)
+	copy.level = m.level
+	copy.exp = m.exp
+	copy.skills = m.skills.duplicate()
+	copy.equip = m.equip.duplicate()
+	copy.equip[slot] = item
+	return GrowthRules.profile(s.defs, i, copy)
+
+
+static func _inside(inner: Rect2, outer: Rect2) -> bool:
+	return outer.grow(0.01).encloses(inner)
+
+
+## 목록 커서를 item 줄로(키 입력 cursor 로 한 칸씩).
+func _cursor_to(sc: ShopScreen, item: String) -> void:
+	var row := _row_of(sc, item)
+	check(row >= 0, "준비: %s 줄이 있다" % item)
+	var guard := 0
+	while sc.buy_list.cursor != row and guard < 40:
+		guard += 1
+		await _step(sc, "cursor", 1 if sc.buy_list.cursor < row else -1)
+
+
+## 합계 표의 값(지금·바꾸면)과 차이 글·색: 오르면 「+n」 + UP_COLOR, 내리면 「-n」 + DOWN_COLOR, 같으면 표시 없음 + VALUE_COLOR.
+## 돌려주는 값: [오른 줄 수, 내린 줄 수].
+func _check_totals(t: EquipTotals, now: Dictionary, after: Variant, tag: String) -> Array:
+	check_eq(t.lines.size(), BattleLimits.GEAR.size() + BattleLimits.STATS.size(), tag + ": 줄 수")
+	check_eq(t.comparing, after != null, tag + ": 견주는지")
+	for g in BattleLimits.GEAR:
+		var l := t.line_of(g)
+		check_eq(l["name"], texts.t("stat." + g), "%s %s: 이름" % [tag, g])
+		check_eq(l["now"], now["gear"][g], "%s %s: 지금" % [tag, g])
+		check_eq(l["after"], after["gear"][g] if after != null else null, "%s %s: 바꾸면" % [tag, g])
+	for k in BattleLimits.STATS:
+		var l := t.line_of(k)
+		check_eq(l["name"], texts.t("stat." + k), "%s %s: 이름" % [tag, k])
+		check_eq(l["now"], now["stats"][k], "%s %s: 지금" % [tag, k])
+		check_eq(l["after"], after["stats"][k] if after != null else null, "%s %s: 바꾸면" % [tag, k])
+	var ups := 0
+	var downs := 0
+	for l in t.lines:
+		var d: int = int(l["after"]) - int(l["now"]) if l["after"] != null else 0
+		var dt := EquipTotals.delta_text(l)
+		var dc := EquipTotals.delta_color(l)
+		if d > 0:
+			ups += 1
+			check(dt == "+%d" % d and dc == EquipTotals.UP_COLOR, "%s %s: 오름 = 「+%d」 + 오름 색 (%s, %s)" % [tag, l["key"], d, dt, dc])
+		elif d < 0:
+			downs += 1
+			check(dt == "-%d" % -d and dc == EquipTotals.DOWN_COLOR, "%s %s: 내림 = 「-%d」 + 내림 색 (%s, %s)" % [tag, l["key"], -d, dt, dc])
+		else:
+			check(dt.is_empty() and dc == EquipTotals.VALUE_COLOR, "%s %s: 같음 = 표시 없음 + 값 색 (%s, %s)" % [tag, l["key"], dt, dc])
+	return [ups, downs]
+
+
+## 상점 비교로 합계 표를 본다(듀얼리스트 A, 칸 0 트윈 엣지): 이온 세이버(오름), 훈련용 홀로 블레이드(내림), 트윈 엣지(지금 것: 낄 칸이 없어 견주지 않음),
+## 나노 로드(못 낌: 견주지 않음), 방어구 메시 아머(민첩 내림·방어 오름이 한 줄에 섞임). 비교가 상태를 바꾸지 않는다.
+func test_totals_show_profile_and_compare_the_cursor_candidate() -> void:
+	_kit()
+	var s := _sold_state()
+	s.money = 5000
+	s.materials["item.coated_scale"] = 3
+	ShopRules.sell(s, JUNK, [{"item": "item.coated_scale", "qty": 3}])
+	var sc := await _fresh(s)
+	await _to_list(sc, 0, 0, DUELIST)
+	var t := sc.frame.panel.totals
+	var now := GrowthRules.profile(s.defs, DUELIST, s.party.members[DUELIST])
+	var h := SaveCodec.state_hash(s)
+	check(t.is_visible_in_tree(), "준비: 판의 합계 표가 보인다")
+	var cases := [["equip.ion_saber", "오름", true], ["equip.training_sword", "내림", true], ["equip.twin_edge", "같은 장비", false], ["equip.nano_rod", "못 낌", false]]
+	var seen := {}
+	for c in cases:
+		await _cursor_to(sc, c[0])
+		var b := sc.best_slot(c[0], DUELIST, sc.preview_bag(c[0]))
+		var after: Variant = _profile_with(s, DUELIST, b, c[0]) if c[2] else null
+		check_eq([sc.frame.panel.drawn["mark"], b >= 0], [b if c[2] else -1, c[2]], "%s: 견주는 칸" % c[1])
+		seen[c[1]] = _check_totals(t, now, after, c[1])
+	check(seen["오름"][0] > 0 and seen["오름"][1] == 0, "이온 세이버: 오르기만 %s" % str(seen["오름"]))
+	check(seen["내림"][1] > 0 and seen["내림"][0] == 0, "훈련용 홀로 블레이드: 내리기만 %s" % str(seen["내림"]))
+	check_eq([seen["같은 장비"], seen["못 낌"]], [[0, 0], [0, 0]], "트윈 엣지(지금 것, 낄 칸 없음)·나노 로드(못 낌): 견주지 않고 차이 표시 없음")
+	check(seen["오름"][0] + seen["오름"][1] < t.lines.size(), "오름 후보에도 같은 값 줄(표시 없음·값 색)이 있다")
+	# 방어구: 메시 아머(몸 칸)는 오름·내림이 섞인다.
+	sc = await _fresh(s)
+	await _to_list(sc, 1, 1, DUELIST)
+	t = sc.frame.panel.totals
+	await _cursor_to(sc, "equip.mesh_armor")
+	var mb := sc.best_slot("equip.mesh_armor", DUELIST, sc.preview_bag("equip.mesh_armor"))
+	var mixed := _check_totals(t, now, _profile_with(s, DUELIST, mb, "equip.mesh_armor"), "메시 아머")
+	check(mixed[0] > 0 and mixed[1] > 0, "메시 아머: 오름·내림이 섞인다 %s" % str(mixed))
+	check_eq(SaveCodec.state_hash(s), h, "견주기만 했고 상태는 그대로")
+
+
+## 인물 판의 능력치 묶음(원작 상점 인물 판의 STR~LUC 열 + 攻撃·防御 판): 두 크기에서 판 안, 직업 문패와 장비 줄 사이, 목록과 겹치지 않고,
+## 칸 차례·줄 안·글자 맞춤(오름·내림 둘 다 견주는 중).
+func test_totals_fit_in_the_character_panel_at_both_sizes() -> void:
+	_kit()
+	var s := _sold_state()
+	s.money = 5000
+	for c in [["equip.training_sword", "내림"], ["equip.ion_saber", "오름"]]:
+		for px in WINDOWS:
+			var sc := await _fresh(s, px)
+			var size := sc.get_global_rect().size
+			await _to_list(sc, 0, 0, DUELIST)
+			await _cursor_to(sc, c[0])
+			var t := sc.frame.panel.totals
+			var panel := sc.frame.panel
+			var font := t.get_theme_default_font()
+			var tag := "%s %s(논리 %s)" % [c[1], str(px), str(size)]
+			check(t.comparing, tag + ": 준비: 견주는 중")
+			var tr := t.get_global_rect()
+			var pr := panel.get_global_rect()
+			check(_inside(tr, pr) and _inside(pr, sc.get_global_rect()), "%s: 판 안·화면 안 %s %s" % [tag, str(tr), str(pr)])
+			check_eq(t.size, EquipTotals.needed_size(), tag + ": 줄이 다 들어가는 크기")
+			var cp := Rect2(pr.position + panel.class_rect().position, panel.class_rect().size)
+			check(tr.position.y >= cp.end.y and tr.end.y <= pr.position.y + panel.equip_rect(0).position.y, tag + ": 직업 문패와 장비 줄 사이")
+			for k in BattleLimits.EQUIP_SLOTS:
+				var er := Rect2(pr.position + panel.equip_rect(k).position, panel.equip_rect(k).size)
+				check(_inside(er, pr) and not er.intersects(tr), "%s: 장비 줄 %d 는 판 안·합계 표 밖" % [tag, k])
+			check(not sc.buy_list.get_global_rect().intersects(pr), tag + ": 목록과 판이 겹치지 않는다")
+			for j in t.lines.size():
+				var l := t.lines[j]
+				var cl := t.line_layout(j)
+				var who := "%s %s" % [tag, l["key"]]
+				check(_inside(cl["line"], Rect2(Vector2.ZERO, t.size)), who + ": 묶음 안")
+				for k in ["box", "name", "now", "arrow", "after", "delta"]:
+					check(_inside(cl[k], cl["line"]), "%s: %s 이 줄 안" % [who, k])
+				var order := ["name", "now", "arrow", "after", "delta"]
+				for q in order.size() - 1:
+					check((cl[order[q]] as Rect2).end.x <= (cl[order[q + 1]] as Rect2).position.x + 0.01, "%s: %s 다음 %s" % [who, order[q], order[q + 1]])
+				check(font.get_string_size(l["name"], HORIZONTAL_ALIGNMENT_LEFT, -1, EquipTotals.NAME_FS).x <= (cl["name"] as Rect2).size.x + 0.5, who + ": 이름")
+				check(font.get_string_size(str(l["now"]), HORIZONTAL_ALIGNMENT_LEFT, -1, EquipTotals.VALUE_FS).x <= (cl["now"] as Rect2).size.x + 0.5, who + ": 지금 값")
+				check(font.get_string_size(str(l["after"]), HORIZONTAL_ALIGNMENT_LEFT, -1, EquipTotals.VALUE_FS).x <= (cl["after"] as Rect2).size.x + 0.5, who + ": 바꾸면 값")
+				check(font.get_string_size(EquipTotals.delta_text(l), HORIZONTAL_ALIGNMENT_LEFT, -1, EquipTotals.VALUE_FS).x <= (cl["delta"] as Rect2).size.x + 0.5, who + ": 차이")
+				for q in range(j + 1, t.lines.size()):
+					check(not (cl["line"] as Rect2).intersects(t.line_layout(q)["line"]), "%s: %s 와 겹치지 않는다" % [who, t.lines[q]["key"]])
+			# 원작 짜임: 능력치(힘~행운)가 한 열로 위, 공격·방어 판이 그 아래 2×2.
+			var last_stat: Rect2 = t.line_layout(t.lines.size() - 1)["line"]
+			for g in BattleLimits.GEAR.size():
+				check((t.line_layout(g)["line"] as Rect2).position.y >= last_stat.end.y, tag + ": 공격·방어 판은 능력치 열 아래")
+			check((t.line_layout(0)["line"] as Rect2).end.x <= (t.line_layout(1)["line"] as Rect2).position.x, tag + ": 공격 | 마법 공격 나란히")
+
+
 ## 모든 칸이 막히면(-1) 산 뒤 장착 물음이 없다.
 func test_no_equip_prompt_when_every_slot_is_blocked() -> void:
 	_kit()
@@ -869,7 +1016,7 @@ func test_new_part_arguments_keep_the_camp_defaults() -> void:
 	var f := ShopFrame.new()
 	check(f.desc_badges.is_empty(), "ShopFrame 머리글자 칸 기본 없음")
 	f.free()
-	# 캠프 장비 화면: 판은 흐리지 않고 견주는 칸은 칸 커서.
+	# 캠프 장비 화면(07 §9.9 E2-c): 상점 틀(ShopFrame·CharPanel)을 쓰지 않고 왼쪽 상태 시트의 표지는 칸 커서.
 	timeout_sec = 120.0
 	var s := await kit.open("native", 7, "debug=1")
 	var pm := s.party_menu
@@ -879,7 +1026,8 @@ func test_new_part_arguments_keep_the_camp_defaults() -> void:
 	pm.handle("member", 1)
 	await kit.frames(1)
 	var et := pm.equip_tab
-	check_eq([et.frame.panel.drawn["dim_equip"], et.frame.panel.drawn["mark"], et.frame.desc_badges], [false, 0, []], "캠프 장비: 판 흐림 없음·칸 0 표시·머리글자 없음")
+	var shop_parts := et.find_children("*", "Control", true, false).filter(func(n: Node) -> bool: return n is ShopFrame or n is CharPanel)
+	check_eq([shop_parts.size(), et.drawn["mark"]], [0, 0], "캠프 장비: 상점 틀 없음·칸 0 표시")
 	check_eq(pm.camp_list.rows[1].position.y - pm.camp_list.rows[0].position.y, 64.0 + 6.0, "캠프 명령 줄 사이 6")
 
 

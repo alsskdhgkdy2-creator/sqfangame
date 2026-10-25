@@ -1,7 +1,7 @@
 ## 캠프 하위 화면이 함께 쓰는 목록 창(부품 H)·설명 상자(부품 I)·명령 알약(부품 J)을 그리는 정적 함수(07 §9.9 E2, research 08 §4·§8,
 ## 원작 III HD 소지품 yt_eo3hd_05). 소지품(E2-b)이 쓰고, 장비(E2-c)가 오른쪽 목록 창·아래 설명 상자로 다시 쓴다.
 ## - H 목록 창: 어두운 테(#032439)의 양 끝이 괄호처럼 굽는다. 안에 줄(아이콘 칸 | 몸: 이름 왼쪽·개수 오른쪽), 오른쪽 스크롤 막대.
-##   커서 줄은 뿌리 명령 커서의 노랑(CMD_PICK)에 어두운 글자: 화면의 노랑 채움 하나. 장비 화면용으로 「E」 표(낀 것)·흐린 줄도 그린다.
+##   커서 줄은 뿌리 명령 커서의 노랑(CMD_PICK)에 어두운 글자: 화면의 노랑 채움 하나. 장비 화면용으로 「E」 표(낀 것, 원작처럼 줄 오른쪽 끝)·흐린 줄도 그린다.
 ## - I 설명 상자: 같은 굽은 끝의 테 안에 어두운 머리(이름·종류 아이콘, 장비 화면은 오른쪽에 직업 표)와 밝은 몸(글 줄 넷까지).
 ##   줄이 몸 폭에 안 들면 글자를 18px 에서 12px 까지 줄인다(상태 받는 배율 줄과 같은 규칙).
 ## - J 명령 알약: 원작 「使う」「捨てる」 자리의 청록 알약. 커서면 노랑, 켜짐(checked)이면 하늘색.
@@ -21,6 +21,8 @@ const ROW_DIM := Color("12596a")
 const ROW_DIM_TEXT := UiTheme.SUB_TEXT
 const CURSOR := UiTheme.CMD_PICK
 const CURSOR_TEXT := UiTheme.CMD_PICK_TEXT
+## 흐린 줄 위 커서의 노란 테(흐린 커서 모양, 채움 아님).
+const CURSOR_EDGE := UiTheme.BTN_PICK
 const ICON_CELL := SheetParts.ICON_BOX
 const ICON := SheetParts.ICON
 ## 장비 화면의 「E」 표(낀 것): 어두운 남색 칸에 흰 글자(노랑 채움이 아니다).
@@ -65,6 +67,9 @@ const ROW_FS := 20
 const COUNT_FS := 18
 const TEXT_PAD := 14.0
 const MARK_BOX := 24.0
+## 「E」 표: 몸 오른쪽 끝에서 안쪽 여백, 왼쪽 개수 글과의 사이.
+const MARK_INSET := 8.0
+const MARK_GAP := 6.0
 const MARK_FS := 16
 ## 설명 상자: 머리 높이, 테 안 위·아래 여백, 머리와 몸 사이, 줄 간격, 글자 크기(가장 작게 DESC_FS_MIN).
 const HEAD_H := 38.0
@@ -77,7 +82,8 @@ const DESC_FS_MIN := 12
 const DESC_TEXT_PAD := 16.0
 const DESC_LINES := 4
 const HEAD_ICON := 26.0
-const TABLE_CELL := Vector2(56, 26)
+## 직업 표 칸: 머리글자 한 자(shop.badge.*)가 드는 작은 칸(원작 I HD 장비 설명 머리의 직업 칸). 1280 의 486 폭 상자에서도 가장 긴 장비 이름이 든다.
+const TABLE_CELL := Vector2(28, 26)
 const TABLE_GAP := 4.0
 const TABLE_FS := 14
 const PILL_FS := 22
@@ -151,19 +157,25 @@ static func draw_list_window(ci: CanvasItem, r: Rect2, scroll: float, content_h:
 	SheetParts._fill_round(ci, thumb_rect(track, scroll, content_h, rows_rect(r).size.y), SCROLL_THUMB, int(SCROLL_W / 2.0))
 
 
-## 줄 r 의 칸: icon(정사각형) · body · mark(「E」 표 자리, 몸 왼쪽).
+## 줄 r 의 칸: icon(정사각형) · body · mark(「E」 표 자리, 원작 I HD 장비처럼 몸 오른쪽 끝에서 MARK_INSET 안, 세로 가운데).
 static func row_boxes(r: Rect2) -> Dictionary:
 	var icon := Rect2(r.position, Vector2(r.size.y, r.size.y))
 	var body := Rect2(icon.end.x + ICON_GAP, r.position.y, maxf(0.0, r.end.x - icon.end.x - ICON_GAP), r.size.y)
-	var mark := Rect2(body.position.x + 8.0, body.get_center().y - MARK_BOX / 2.0, MARK_BOX, MARK_BOX)
+	var mark := Rect2(body.end.x - MARK_INSET - MARK_BOX, body.get_center().y - MARK_BOX / 2.0, MARK_BOX, MARK_BOX)
 	return {"icon": icon, "body": body, "mark": mark}
 
 
-## 이름 글 자리의 폭(개수 글과 「E」 표 자리를 뺀다).
+## 개수 글이 끝나는 x(오른쪽 맞춤): 보통 몸 오른쪽 − TEXT_PAD, 「E」 표가 있으면 그 왼쪽 − MARK_GAP.
+static func right_edge(r: Rect2, equipped: bool) -> float:
+	var b := row_boxes(r)
+	return (b["mark"] as Rect2).position.x - MARK_GAP if equipped else (b["body"] as Rect2).end.x - TEXT_PAD
+
+
+## 이름 글 자리의 폭: 이름은 늘 몸 왼쪽 + TEXT_PAD 에서 시작하고, 개수 글(있으면)과 「E」 표(있으면) 앞에서 끝난다.
 static func name_room(c: Control, r: Rect2, right: String, equipped: bool) -> float:
 	var body: Rect2 = row_boxes(r)["body"]
 	var rw := SheetParts.text_width(c, right, COUNT_FS) + 12.0 if not right.is_empty() else 0.0
-	return body.size.x - 2.0 * TEXT_PAD - rw - (MARK_BOX + 6.0 if equipped else 0.0)
+	return right_edge(r, equipped) - rw - body.position.x - TEXT_PAD
 
 
 ## 아이콘 칸 안 아이콘 자리.
@@ -173,13 +185,13 @@ static func row_icon_rect(r: Rect2) -> Rect2:
 
 
 ## 줄 하나. icon: VectorIcons 이름(""이면 빈 칸). cursor: 노랑 커서 줄. dim: 흐린 줄(못 고름·「없음」). equipped: 「E」 표(장비 화면).
-## held: 누르는 중(밝은 테두리, 채움은 그대로).
+## held: 누르는 중(밝은 테두리, 채움은 그대로). 흐린 줄에 커서가 서면 흐린 커서 모양(흐린 몸 + 노란 테, 노랑 채움 없음, 07 §9.9 E2-b).
 static func draw_row(ci: Control, r: Rect2, icon: String, text: String, right: String, cursor: bool, dim: bool = false,
 		equipped: bool = false, held: bool = false) -> void:
 	var b := row_boxes(r)
 	var body: Rect2 = b["body"]
-	var fill := CURSOR if cursor else (ROW_DIM if dim else ROW_BODY)
-	var fg := CURSOR_TEXT if cursor else (ROW_DIM_TEXT if dim else ROW_TEXT)
+	var fill := ROW_DIM if dim else (CURSOR if cursor else ROW_BODY)
+	var fg := ROW_DIM_TEXT if dim else (CURSOR_TEXT if cursor else ROW_TEXT)
 	SheetParts._fill(ci, b["icon"], ICON_CELL)
 	SheetParts._fill(ci, body, fill)
 	if not icon.is_empty():
@@ -190,12 +202,14 @@ static func draw_row(ci: Control, r: Rect2, icon: String, text: String, right: S
 		SheetParts._fill(ci, mk, EQUIP_MARK)
 		SheetParts._text(ci, Vector2(mk.position.x, mk.get_center().y + MARK_FS * 0.36), "E", MARK_FS, EQUIP_MARK_TEXT, mk.size.x,
 			HORIZONTAL_ALIGNMENT_CENTER)
-		x = mk.end.x + 6.0
 	var base := body.get_center().y + ROW_FS * 0.36
 	if not right.is_empty():
 		var rw := SheetParts.text_width(ci, right, COUNT_FS)
-		SheetParts._text(ci, Vector2(body.end.x - TEXT_PAD - rw, body.get_center().y + COUNT_FS * 0.36), right, COUNT_FS, fg, rw + 1.0)
+		SheetParts._text(ci, Vector2(right_edge(r, equipped) - rw, body.get_center().y + COUNT_FS * 0.36), right, COUNT_FS, fg, rw + 1.0)
 	SheetParts._text(ci, Vector2(x, base), text, ROW_FS, fg, name_room(ci, r, right, equipped))
+	if cursor and dim:
+		UiTheme.draw_outline(ci, r.grow(-1.0), CURSOR_EDGE, UiTheme.BTN_PICK_W, 0.0)
+		SheetParts._log(ci, {"kind": "outline", "rect": r.grow(-1.0), "color": CURSOR_EDGE})
 	if held:
 		UiTheme.draw_outline(ci, r, Color(1, 1, 1, 0.8), 2.0, 0.0)
 		SheetParts._log(ci, {"kind": "outline", "rect": r, "color": Color(1, 1, 1, 0.8)})

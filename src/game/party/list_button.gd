@@ -46,5 +46,5 @@ func text_parts() -> Dictionary:
 	out["main"] = [text, ListParts.ROW_FS, ListParts.name_room(self, r, right, equipped)]
 	if not right.is_empty():
 		var body: Rect2 = ListParts.row_boxes(r)["body"]
-		out["right"] = [right, ListParts.COUNT_FS, body.size.x - 2.0 * ListParts.TEXT_PAD]
+		out["right"] = [right, ListParts.COUNT_FS, ListParts.right_edge(r, equipped) - body.position.x - ListParts.TEXT_PAD]
 	return out

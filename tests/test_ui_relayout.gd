@@ -319,32 +319,31 @@ func test_overlapping_taps_reach_the_visible_top_element_in_menus() -> void:
 	for px in WINDOWS:
 		var size: Vector2 = await _window(px)
 		var tag := "%s(논리 %s)" % [str(px), str(size)]
-		# ⑤ 캠프 장비·소지품(M2.7 R2-c, 상점 짜임): 보이는 맨 위가 받는다. 창·띠·문패·인물 판은 장식이라 그 빈 곳은 캠프가 받는다
-		# (뒤 탐색 화면에 닿지 않는다). 캠프 → 장비 → 칸 0 대원.
+		# ⑤ 캠프 장비·소지품(07 §9.9 E2-c·E2-b): 보이는 맨 위가 받는다. 띠·왼쪽 열·초상·창 테·설명 상자는 장식이라 그 빈 곳은 캠프가 받는다
+		# (뒤 탐색 화면에 닿지 않는다). 왼쪽 열 장비 줄은 표시만이다. 캠프 → 장비 → 칸 0 대원.
 		await kit.press_key(KEY_P)
 		await kit.press_key(KEY_3)
 		await kit.press_key(KEY_ENTER)
 		var pm := s.party_menu
 		check(pm.is_open() and pm.tab == 2 and pm.find_child("Tab_status", false, false) == null, tag + ": 장비 화면(앞 파티 메뉴 틀 없음)")
 		var et := pm.equip_tab
-		var f := et.frame
-		var pr := _rect(f.panel)
-		var lw := _rect(f.list_window)
+		var lw := _rect(et.window)
 		var spots := [
 			["칸 0", _rect(et.slot_rows[0]).get_center(), et.slot_rows[0]],
 			["키패드 「취소」", _rect(pm.key_pad_stacked.buttons["back"]).get_center(), pm.key_pad_stacked.buttons["back"]],
-			["앞 대원", _rect(f.panel.prev_button()).get_center(), f.panel.prev_button()],
-			["다음 대원", _rect(f.panel.next_button()).get_center(), f.panel.next_button()],
-			["목록 창 빈 곳", Vector2(lw.get_center().x, lw.end.y - 8.0), pm],
-			["설명 창", _rect(f.desc_window).get_center(), pm],
-			["설명 띠", _rect(f.banner).get_center(), pm],
-			["화면 이름 문패", _rect(f.title_plate).get_center(), pm],
-			["인물 판 초상", pr.position + Vector2(pr.size.x - 40.0, 500.0), pm],
-			["인물 판 장비 줄", pr.position + f.panel.equip_rect(0).get_center(), pm],
+			["앞 대원", _rect(et.top.prev_button).get_center(), et.top.prev_button],
+			["다음 대원", _rect(et.top.next_button).get_center(), et.top.next_button],
+			["목록 창 굽은 끝", Vector2(lw.position.x + 8.0, lw.get_center().y), pm],
+			["설명 상자", _rect(et.desc).get_center(), pm],
+			["띠 오른쪽", Vector2(size.x - 60.0, MemberHeader.INFO_Y + 20.0), pm],
+			["왼쪽 열 장비 줄(표시만)", et.equip_rect(0).get_center(), pm],
+			["초상", Vector2(et.portrait_rect().get_center().x, 300.0), pm],
 		]
 		for sp in spots:
 			var got := await _receiver_at(sp[1])
 			check(got == sp[2], "%s 장비: %s → %s, 실제 %s" % [tag, sp[0], _name_of(sp[2]), _name_of(got)])
+		var below := await _receiver_at(Vector2(lw.get_center().x, _rect(et.slot_rows[3]).end.y + 20.0))
+		check(_under(et.list, below), "%s 장비: 칸 줄 아래 목록 빈 곳 → 목록(끌어 내리기), 실제 %s" % [tag, _name_of(below)])
 		await kit.press_key(KEY_ESCAPE)
 		await kit.press_key(KEY_1)
 		check(pm.tab == 3, tag + ": 소지품 화면")
@@ -508,7 +507,7 @@ func test_touch_targets_stay_at_least_64() -> void:
 		pm.handle("dialog_back")
 		await kit.frames(2)
 		check_eq(PartySkillTab.STEP_BUTTON, Vector2(96, 64), "스킬 +/- 단추")
-		check_eq([ListParts.ROW_H, PartyEquipTab.ROW_H], [64.0, 64.0], "목록 줄 높이")
+		check_eq(ListParts.ROW_H, 64.0, "목록 줄 높이(소지품·장비 같은 부품)")
 		for k in 3:
 			if pm.is_open():
 				await kit.press_key(KEY_ESCAPE)

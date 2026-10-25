@@ -472,6 +472,7 @@
   "party.dialog.discard_text": "배분을 확정하지 않았다. 버릴까?",
   "party.dialog.commit_text": "SP {n}만큼 배분한다. 확정하면 되돌릴 수 없다",
   "party.unequip": "빼기",
+  "party.equip.unequip_desc": "이 칸의 장비를 빼서 가방에 넣는다",
   "party.count": "{n}개",
   "party.delta": "{name} {value}",
   "party.no_change": "바뀌는 값 없음",
@@ -497,7 +498,5 @@
   "camp.cmd.records": "기록",
   "camp.cmd.close": "닫기",
   "camp.status.split": "내역",
-  "camp.equip.slots": "어느 칸을 바꿀까?",
-  "camp.equip.list": "{slot} 칸에 무엇을 낄까?",
   "camp.records.file": "파일"
 }

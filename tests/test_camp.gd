@@ -1078,110 +1078,589 @@ func test_skill_screen_follows_the_reference_table() -> void:
 	check_eq([pm.page, pm.camp_cursor], ["root", SKILLS], "키패드 「취소」 → 캠프 뿌리(커서 스킬)")
 
 
-# ---- 장비·소지품(R2-c, 원작 상점 화면 jp_guide3_img1~3) ----
+# ---- 장비(07 §9.9 E2-c, D27 ③, research 08 §5.1: 원작 I HD 장비 yt_eo1hd_04 를 좌우 그대로) ----
 
-## 상점 짜임의 공통 자리(1280×720 기준 실측 표, 넓은 창은 왼쪽이 넓어진다). P3: 왼쪽 창은 x 232 부터(왼쪽 아래 방향 십자 자리).
-func _check_shop_frame(pm: PartyMenu, f: ShopFrame, size: Vector2, with_desc: bool, tag: String) -> void:
-	var pw := CharPanel.W
-	check(f.back_button == null and pm.find_child(str(f.name).trim_suffix("Frame") + "Back", true, false) == null, tag + ": 캠프는 「뒤로」 단추가 없다(E1 ⑤)")
-	check_eq(_rect(f.banner), Rect2(FacilityBanner.X, 0, size.x - pw - 8 - FacilityBanner.X, FacilityBanner.H), tag + ": 설명 띠 x 192 → 판 왼쪽")
-	check_eq(_rect(f.title_plate), Rect2(0, 112, 340, 50), tag + ": 화면 이름 문패 = 원작 돈 문패 자리")
-	var lw := _rect(f.list_window)
-	var bottom := 500.0 if with_desc else size.y - 8
-	check_eq(lw, Rect2(232, 172, size.x - pw - 24 - 232, bottom - 172), tag + ": 목록 창 x 232 → 판 왼쪽 − 24")
-	check_eq(f.desc_window.is_visible_in_tree(), with_desc, tag + ": 설명 창 있음/없음")
-	if with_desc:
-		check_eq(_rect(f.desc_window), Rect2(232, 510, size.x - pw - 24 - 232, size.y - 8 - 510), tag + ": 설명 창 아래, x 232 부터")
-	check_eq(_rect(f.panel), Rect2(size.x - pw, 0, pw, size.y), tag + ": 인물 판 오른쪽 전체 높이")
-	var parts := {"banner": _rect(f.banner), "title": _rect(f.title_plate), "list": lw, "panel": _rect(f.panel)}
-	if with_desc:
-		parts["desc"] = _rect(f.desc_window)
-	var keys := parts.keys()
-	for i in keys.size():
-		check(Rect2(Vector2.ZERO, size).encloses(parts[keys[i]]), "%s: %s 화면 안" % [tag, keys[i]])
-		for j in range(i + 1, keys.size()):
-			check(not (parts[keys[i]] as Rect2).intersects(parts[keys[j]]), "%s: %s 와 %s 가 겹친다" % [tag, keys[i], keys[j]])
-	var p := f.panel
-	var pr := _rect(p)
-	var inner := {"class": p.class_rect(), "totals": p.totals_rect()}
-	for k in 4:
-		inner["equip%d" % k] = p.equip_rect(k)
-	var ik := inner.keys()
-	for i in ik.size():
-		var a: Rect2 = inner[ik[i]]
-		check(Rect2(Vector2(0, MemberHeader.H), pr.size - Vector2(0, MemberHeader.H)).encloses(a), "%s: 판 %s 는 위 줄 아래·판 안" % [tag, ik[i]])
-		for j in range(i + 1, ik.size()):
-			check(not a.intersects(inner[ik[j]]), "%s: 판 %s 와 %s 가 겹친다" % [tag, ik[i], ik[j]])
-	check_eq([_rect(p.prev_button()), _rect(p.next_button())], [Rect2(pr.position.x, 0, 64, 64), Rect2(pr.position.x + 266, 0, 64, 64)],
-		tag + ": 판의 앞·다음 대원(원작 L·R)")
-	for d in [f, f.banner, f.title_plate, f.list_window, f.desc_window, p, p.top, p.totals]:
-		check_eq((d as Control).mouse_filter, Control.MOUSE_FILTER_IGNORE, "%s: %s 는 장식" % [tag, d.name])
-	_check_targets(pm, size, tag)
+const SERVO := "equip.servo_gauntlet"
+const MESH := "equip.mesh_armor"
+const NANO_ROD := "equip.nano_rod"
 
 
-func test_equip_screen_follows_the_shop_table() -> void:
+## 장비 화면 준비: 듀얼리스트 A(칸 0 트윈 엣지 · 1 패딩 코트 · 2 그립 장갑 · 3 빈 칸), 가방에 이온 세이버(낄 수 있음)·나노 로드(직업이 못 낌)·
+## 서보 건틀릿(힘 +3)·메시 아머(민첩 -2).
+func _equip_open() -> DungeonScreen:
 	var s := await _open()
-	var pm := s.party_menu
-	GrowthRules.supply(s.state, "equip.ion_saber", 1)
-	GrowthRules.supply(s.state, "equip.nano_rod", 1)
+	for id in ["equip.ion_saber", NANO_ROD, SERVO, MESH]:
+		GrowthRules.supply(s.state, id, 1)
 	await kit.press_key(KEY_P)
 	await kit.press_key(KEY_3)
 	await kit.press_key(KEY_RIGHT)
 	await kit.press_key(KEY_ENTER)
+	await kit.frames(1)
+	return s
+
+
+func _check_equip_layers(pm: PartyMenu, size: Vector2, tag: String) -> void:
 	var et := pm.equip_tab
-	var f := et.frame
+	var screen := Rect2(Vector2.ZERO, size)
+	var w := size.x
+	var h := size.y
+	# 왼쪽 열: 상태와 같은 자리(왼쪽 위 앵커).
+	check_eq(et.class_rect(), Rect2(92, 190, 318, 45), tag + ": 직업 문패 = 상태 자리")
+	for i in 6:
+		check_eq(et.stat_rect(i), Rect2(66, 297 + 33 * i, 319, 28), "%s: 능력치 줄 %d = 상태 자리" % [tag, i])
+	check_eq([et.gear_row_rect(0), et.gear_row_rect(1)], [Rect2(66, 505, 374, 34), Rect2(66, 543, 374, 34)], tag + ": 공격·방어 두 줄 = 상태 자리")
+	for i in 4:
+		check_eq(et.equip_rect(i), Rect2(80, 590 + 30 * i, 295, 28), "%s: 장비 줄 %d = 상태 자리" % [tag, i])
+	check_eq(_rect(et.left).position, Vector2.ZERO, tag + ": 왼쪽 열은 왼쪽 위")
+	# 위 띠(MemberHeader): 화면 폭 전체, 오른쪽 위는 비어 있다.
+	check_eq(_rect(et.top), Rect2(0, 0, w, 118), tag + ": 대원 띠 0,0 W×118")
+	# 목록 창: 오른쪽 앵커 x W − 440 ~ W − 8, y 130 부터 줄 단위, 설명 상자 위 23 이상 떨어져 한 줄 더 들지 않는 높이.
+	var lw := _rect(et.window)
+	var dr := _rect(et.desc)
+	check_eq([lw.position.x, lw.end.x, lw.position.y], [w - 440.0, w - 8.0, 130.0], tag + ": 목록 창 x W − 440 ~ W − 8, y 130")
+	var n := ListParts.rows_for(lw.size.y)
+	check_eq(lw.size.y, ListParts.list_height(n), tag + ": 목록 창 높이는 줄 단위 %d 줄" % n)
+	check(dr.position.y - lw.end.y >= 23.0 and dr.position.y - (lw.position.y + ListParts.list_height(n + 1)) < 23.0,
+		"%s: 목록 창은 설명 상자 위 23 이상, 한 줄 더는 들지 않는다 (아래 %.0f, 상자 %.0f)" % [tag, lw.end.y, dr.position.y])
+	check(n >= 5, "%s: 줄 다섯 이상(%d)" % [tag, n])
+	if h == 720.0:
+		check_eq(n, 5, tag + ": 720 높이에서 다섯 줄(y 130~490)")
+	# 설명 상자: 오른쪽 끝 W − 130, 왼쪽 끝 max(664, W − 863), y H − 197 ~ H − 8.
+	check_eq(dr, Rect2(maxf(664.0, w - 863.0), h - 197.0, w - 130.0 - maxf(664.0, w - 863.0), 189.0), tag + ": 설명 상자")
+	# 초상: 상태와 같은 가운데를 왼쪽 열 끝 464 ~ 목록 창 왼쪽 − 8 로 자른다.
+	var pr := et.portrait_rect()
+	var cx := w / 2.0 + 20.0
+	check_eq([pr.position.x, pr.end.x, pr.position.y, pr.end.y], [maxf(cx - 240.0, 464.0), minf(cx + 240.0, lw.position.x - 8.0), 118.0, h], tag + ": 초상")
+	# 키패드: 방향 십자 (456, H − 209)(왼쪽 열 장비 줄을 덮지 않게), 세로 「취소」「선택」 (W − 118, H − 172).
+	var dp := _rect(pm.dir_pad)
+	var kp := _rect(pm.key_pad_stacked)
+	check_eq(dp, Rect2(456, h - 209, 200, 200), tag + ": 방향 십자 (456, H − 209)")
+	check(pm.key_pad_stacked.is_visible_in_tree() and not pm.key_pad.is_visible_in_tree(), tag + ": 세로 「취소」「선택」")
+	check_eq(kp, Rect2(w - 118, h - 172, 110, 151), tag + ": 「취소」「선택」 (W − 118, H − 172)")
+	if w == 1280.0:
+		check_eq([dr.position.x - dp.end.x, kp.position.x - dr.end.x], [8.0, 12.0], tag + ": 설명 상자와 키패드 사이 8 · 12")
+	# 겹침: 키패드와 설명 상자가 초상 앞에 오는 것만 된다.
+	var blocks := {"name": et.top.name_tab_rect(), "class": et.class_extent(), "list": lw, "desc": dr, "dir_pad": dp, "keys": kp, "portrait": pr}
+	for i in 6:
+		blocks["stat%d" % i] = et.stat_rect(i)
+	for r in 2:
+		blocks["gear%d" % r] = et.gear_row_rect(r)
+	for i in 4:
+		blocks["equip%d" % i] = et.equip_rect(i)
+	var allowed := [["dir_pad", "portrait"], ["keys", "portrait"], ["desc", "portrait"]]
+	var keys := blocks.keys()
+	for i in keys.size():
+		var a: Rect2 = blocks[keys[i]]
+		check(screen.encloses(a), "%s: %s %s 화면 안" % [tag, keys[i], str(a)])
+		if keys[i] != "name":
+			check(a.position.y >= MemberHeader.H, "%s: %s 는 위 띠 아래" % [tag, keys[i]])
+		for j in range(i + 1, keys.size()):
+			if [keys[i], keys[j]] in allowed or [keys[j], keys[i]] in allowed:
+				continue
+			check(not a.intersects(blocks[keys[j]]), "%s: %s 와 %s 가 겹친다" % [tag, keys[i], keys[j]])
+	# 줄은 목록 창 줄 자리 안(보이는 것), 64 이상.
+	var rr := ListParts.rows_rect(lw)
+	for b in et.slot_rows + et.rows:
+		if b.is_visible_in_tree():
+			check(rr.encloses(pm.clipped_rect(b).grow(-0.5)) and b.size.y >= 64.0, "%s: %s 는 목록 창 줄 자리 안" % [tag, b.name])
+	# 트리 순서(층 표): 초상 → 띠 → 왼쪽 열 → 목록 창 → 설명 상자 → 띠 안내 → (캠프) 키패드. 장식은 누르기를 뒤로.
+	var order: Array = [et.portrait, et.top, et.left, et.window, et.desc, et.note_label].map(func(c: Control) -> int: return c.get_index())
+	var sorted := order.duplicate()
+	sorted.sort()
+	check(order == sorted, tag + ": 그리는 순서 초상 → 띠 → 왼쪽 열 → 목록 창 → 설명 상자 → 안내 %s" % str(order))
+	for d in [et, et.portrait, et.top, et.left, et.window, et.desc, et.note_label]:
+		check_eq((d as Control).mouse_filter, Control.MOUSE_FILTER_IGNORE, "%s: %s 는 장식" % [tag, d.name])
+	# 상점 틀은 캠프 어디에도 없다(마을 상점만 쓴다, 08 §8).
+	var shop_parts := pm.find_children("*", "Control", true, false).filter(func(n: Node) -> bool: return n is ShopFrame or n is CharPanel or n is EquipTotals)
+	check_eq(shop_parts.map(func(n: Node) -> String: return str(n.name)), [], tag + ": 캠프에 ShopFrame·CharPanel·EquipTotals 가 없다")
+	_check_targets(pm, size, tag)
+
+
+func test_equip_screen_follows_the_reference_table() -> void:
+	var s := await _equip_open()
+	var pm := s.party_menu
+	var et := pm.equip_tab
 	check_eq([pm.page, pm.tab, pm.member, et.list_open], ["sub", 2, 1, false], "준비: 듀얼리스트 A 장비")
-	check(pm.find_child("Close", false, false) == null and pm.find_child("Tab_status", false, false) == null, "앞 틀 없음")
 	var first := {}
-	for px in WINDOWS + [WINDOWS[0]]:
+	for px in WINDOWS + [Vector2(1280, 960), WINDOWS[0]]:
 		var size: Vector2 = await _window(px)
-		var tag := "%s(논리 %s) 장비" % [str(px), str(size)]
-		_check_shop_frame(pm, f, size, true, tag)
-		var lw := _rect(f.list_window)
-		for i in et.slot_rows.size():
-			var r := _rect(et.slot_rows[i])
-			check(lw.encloses(r) and r.size.y >= 64.0, "%s: 칸 %d %s 는 목록 창 안" % [tag, i, str(r)])
-			if i > 0:
-				check(not r.intersects(_rect(et.slot_rows[i - 1])), "%s: 칸 %d 와 %d 가 겹친다" % [tag, i - 1, i])
-		var snap := [lw, _rect(f.panel), _rect(et.slot_rows[3])]
+		for open in [false, true]:
+			if open != et.list_open:
+				await kit.press_key(KEY_ENTER if open else KEY_ESCAPE)
+				await kit.frames(1)
+			var tag := "%s(논리 %s) 장비 %s" % [str(px), str(size), "목록" if open else "칸"]
+			_check_equip_layers(pm, size, tag)
+		var snap := [_rect(et.window), _rect(et.desc), _rect(pm.dir_pad), et.portrait_rect()]
 		if first.has(px):
-			check_eq(snap, first[px], tag + ": 크기를 바꿨다 돌아와도 같은 자리(앵커)")
+			check_eq(snap, first[px], "%s: 크기를 바꿨다 돌아와도 같은 자리(앵커)" % str(px))
 		first[px] = snap
-	# 닫힘: 칸 줄 = 장비 이름 + 오른쪽 칸 이름, 설명 창 = 커서 칸 장비, 띠 = 물음, 판 = 대원 값(견주지 않음), 커서 칸 표시.
+	# 넓은 화면(1728): 왼쪽 열·방향 십자는 왼쪽, 목록 창·설명 상자·「취소」「선택」은 오른쪽 앵커.
+	var wide: Vector2 = await _window(WINDOWS[1])
+	check_eq([_rect(et.window).end.x, _rect(et.desc).end.x, _rect(pm.key_pad_stacked).end.x, _rect(pm.dir_pad).position.x, et.stat_rect(0).position.x],
+		[wide.x - 8.0, wide.x - 130.0, wide.x - 8.0, 456.0, 66.0], "1728: 앵커")
+	# 높은 화면(1280×960): 목록 창은 줄 단위로 늘어 여덟 줄, 설명 상자·키패드는 아래.
+	var tall: Vector2 = await _window(Vector2(1280, 960))
+	check_eq([ListParts.rows_for(_rect(et.window).size.y), _rect(et.desc).end.y, _rect(pm.dir_pad).end.y], [8, tall.y - 8.0, tall.y - 9.0], "1280×960: 여덟 줄, 아래 앵커")
+	await _window(WINDOWS[0])
+
+
+## 칸 고르기·목록을 키·키패드·누르기로(07 §9.7 키 표, E2-c): 목록 차례, 커서 시작, 장착·빼기·「E」 닫기, 못 끼는 줄 안내, 대원 바꾸기, ←→·Q/E.
+func test_equip_slot_and_list_modes_by_keys_keypad_and_taps() -> void:
+	var s := await _equip_open()
+	var pm := s.party_menu
+	var et := pm.equip_tab
 	var m := s.state.party.members[1]
-	check_eq([et.slot_rows[0].text, et.slot_rows[0].right], [pm.item_name(m.equip[0]), pm.slot_name(0)], "칸 줄 글")
-	check_eq(f.desc_title, pm.item_name(m.equip[0]), "설명 창 = 커서 칸 장비")
-	check_eq(f.banner.head, s.texts.t("camp.equip.slots"), "띠: 어느 칸을 바꿀까?")
-	check_eq(f.title_text, s.texts.t("camp.cmd.equip"), "문패: 장비")
-	check_eq([f.panel.drawn["name"], f.panel.drawn["mark"], et.totals.comparing], [pm.member_name(1), 0, false], "판: 이름·표시 칸·지금 값")
-	check_eq((f.panel.drawn["equip"] as Array)[0][1], pm.item_name(m.equip[0]), "판 장비 줄")
-	# 열림: 목록 창에 그 칸의 목록(칸 줄은 감춘다), 판은 「지금 → 바꾸면」, 설명 창 = 커서 줄.
+	var kp := pm.key_pad_stacked
+	# 칸 고르기: 줄 넷 = 종류 아이콘 + 이름(빈 칸은 빈 아이콘 + 「비어 있음」). ↑↓ 칸 커서(돌지 않음).
+	check_eq(et.slot_rows.map(func(b: ListButton) -> String: return b.name), ["Slot_0", "Slot_1", "Slot_2", "Slot_3"], "칸 줄 이름")
+	check_eq(et.slot_rows.map(func(b: ListButton) -> Array: return [b.icon_name, b.text]),
+		[["kind_sword", pm.item_name(m.equip[0])], ["kind_body", pm.item_name(m.equip[1])], ["kind_hands", pm.item_name(m.equip[2])], ["", s.texts.t("party.slot.empty")]],
+		"칸 줄: 아이콘 + 이름, 빈 칸")
+	check(et.slot_rows.all(func(b: ListButton) -> bool: return b.is_visible_in_tree()) and et.rows.all(func(b: ListButton) -> bool: return not b.is_visible_in_tree()), "칸 줄만 보인다")
+	var n := pm.accepted_inputs
+	await kit.press_key(KEY_UP)
+	check_eq([et.cursor, pm.accepted_inputs], [0, n], "첫 칸 ↑ = 아무 일 없음(돌지 않음)")
+	for k in 4:
+		await kit.press_key(KEY_DOWN)
+	check_eq(et.cursor, 3, "↓ 넷 → 마지막 칸(돌지 않음)")
+	await kit.tap(kit.center_of(pm.dir_pad.buttons["up"]))
+	check_eq(et.cursor, 2, "키패드 ↑ = ↑")
+	# ←→·Q/E = 대원.
+	await kit.press_key(KEY_RIGHT)
+	check_eq(pm.member, 2, "칸 고르기 → = 다음 대원")
+	await kit.press_key(KEY_Q)
+	check_eq(pm.member, 1, "Q = 앞 대원")
+	await kit.tap(kit.center_of(pm.dir_pad.buttons["left"]))
+	await kit.press_key(KEY_E)
+	check_eq(pm.member, 1, "키패드 ← · E")
+	check(pm.pad_state()["left"] and pm.pad_state()["right"], "칸 고르기: 키패드 ←→ 켜짐")
+	# 「선택」 = 커서 칸 목록. 목록 차례: 「E」 → 낄 수 있는 가방 장비 → 흐린 못 끼는 것 → 「빼기」.
+	await kit.press_key(KEY_UP)
+	await kit.press_key(KEY_UP)
+	check_eq(et.cursor, 0, "준비: 칸 0")
 	await kit.press_key(KEY_ENTER)
-	check(et.list_open and et.list.is_visible_in_tree() and not et.slot_rows[0].is_visible_in_tree(), "Enter → 칸 0 목록(칸 줄 감춤)")
-	check(_rect(f.list_window).encloses(_rect(et.list)), "목록은 목록 창 안")
-	check_eq(f.banner.head, s.texts.t("camp.equip.list", {"slot": pm.slot_name(0)}), "띠: 무엇을 낄까?")
-	var j := et.row_items.find("equip.ion_saber")
+	check(et.list_open and et.slot_rows.all(func(b: ListButton) -> bool: return not b.is_visible_in_tree()), "Enter → 칸 0 목록(칸 줄 감춤)")
+	check_eq([et.row_items, et.row_block, et.equipped_row, et.list_cursor], [["equip.twin_edge", "equip.ion_saber", NANO_ROD, ""], ["", "", "class", ""], 0, 0],
+		"목록 차례 E · 낄 수 있음 · 흐림 · 빼기, 커서는 「E」 줄")
+	check_eq(et.rows.slice(0, 4).map(func(b: ListButton) -> Array: return [str(b.name), b.icon_name, b.equipped, b.dimmed, b.right]),
+		[["Row_0", "kind_sword", true, false, ""], ["Row_1", "kind_sword", false, false, "1개"], ["Row_2", "kind_staff", false, true, "1개"], ["Row_3", "", false, false, ""]],
+		"줄: 「E」 표, 가방 줄 「n개」, 흐린 줄, 빈 아이콘 「빼기」")
+	check_eq(et.rows[3].text, s.texts.t("party.unequip"), "「빼기」 글")
+	var info := pm.debug_info(func(p: Vector2, _c: Control) -> Array: return [p.x, p.y])
+	check_eq((info["equip_rows"] as Array).map(func(r: Dictionary) -> Array: return [r["item"], r["block"], str(r["button"]), r["equipped"]]),
+		[["equip.twin_edge", "", "Row_0", true], ["equip.ion_saber", "", "Row_1", false], [NANO_ROD, "class", "Row_2", false], ["", "", "Row_3", false]], "스냅숏 equip_rows 에 equipped")
+	# ←→ 흐림, Q/E 없음, ↑ 첫 줄 = 아무 일 없음.
+	n = pm.accepted_inputs
+	for k in [KEY_LEFT, KEY_RIGHT, KEY_Q, KEY_E, KEY_UP]:
+		await kit.press_key(k)
+	check_eq([pm.member, et.list_open, et.list_cursor, pm.accepted_inputs], [1, true, 0, n], "목록: ←→·Q/E·첫 줄 ↑ = 아무 일 없음")
+	check(not pm.pad_state()["left"] and not pm.pad_state()["right"] and et.top.prev_button.disabled and et.top.next_button.disabled,
+		"목록: 키패드 ←→ 흐림, 띠의 대원 단추도 받지 않음")
+	await kit.tap(kit.center_of(et.top.next_button))
+	check_eq([pm.member, et.list_open], [1, true], "목록: 띠 → 단추 = 아무 일 없음")
+	# 「E」 줄에서 「선택」 = 바꾸지 않고 닫기(규칙을 부르지 않는다: 상태·저장·안내 그대로).
+	var h := kit.hash_now()
+	var saves := s.autosave_count
+	await kit.tap(kit.center_of(kp.buttons["ok"]))
+	check_eq([et.list_open, et.cursor, kit.hash_now(), s.autosave_count, pm.notice], [false, 0, h, saves, ""], "「E」 줄 「선택」 → 닫힘만")
+	# 낄 수 있는 줄: 키패드 ↓ + 「선택」 = 장착 → 자동 저장 → 목록 닫힘, 커서는 그 칸.
+	await kit.press_key(KEY_ENTER)
+	await kit.tap(kit.center_of(pm.dir_pad.buttons["down"]))
+	check_eq(et.row_items[et.list_cursor], "equip.ion_saber", "키패드 ↓ → 이온 세이버")
+	await kit.tap(kit.center_of(kp.buttons["ok"]))
+	check_eq([m.equip[0], s.autosave_count, et.list_open, et.cursor], ["equip.ion_saber", saves + 1, false, 0], "「선택」 → 장착·자동 저장·닫힘·커서 칸 0")
+	check(et.note_label.text.contains(pm.item_name("equip.ion_saber")), "장착 안내는 띠 오른쪽: %s" % et.note_label.text)
+	# 못 끼는 줄 누르기 = 이유 안내(띠 오른쪽), 목록 그대로.
+	await kit.tap(kit.center_of(et.slot_rows[0]))
+	check_eq(et.row_items, ["equip.ion_saber", "equip.twin_edge", NANO_ROD, ""], "칸 줄 누르기 → 목록, 새 장비가 「E」")
+	await kit.tap(kit.center_of(et.rows[2]))
+	check_eq([et.list_open, et.list_cursor, m.equip[0], pm.notice], [true, 2, "equip.ion_saber", pm.reason_text("class")], "못 끼는 줄 → 이유만, 목록 그대로")
+	check(et.note_label.is_visible_in_tree() and et.note_label.text == pm.reason_text("class"), "이유는 띠 오른쪽")
+	check(_rect(et.note_label).position.y >= MemberHeader.INFO_Y and _rect(et.note_label).end.x <= pm.size.x, "안내는 띠 안")
+	# 「빼기」(맨 끝): ↓ 끝에서 멈춘다, 누르면 빼기.
+	await kit.press_key(KEY_DOWN)
+	n = pm.accepted_inputs
+	await kit.press_key(KEY_DOWN)
+	check_eq([et.list_cursor, pm.accepted_inputs], [3, n], "마지막 줄 ↓ = 아무 일 없음(돌지 않음)")
+	await kit.tap(kit.center_of(et.rows[3]))
+	check_eq([m.equip[0], s.autosave_count, et.list_open], ["", saves + 2, false], "「빼기」 → 칸이 빈다·자동 저장·닫힘")
+	# 대원이 바뀌면 목록을 닫는다(member 입력). 「취소」 = 목록만 닫기, 한 번 더 = 뿌리.
+	await kit.press_key(KEY_ENTER)
+	check(et.list_open, "준비: 목록")
+	check(pm.handle("member", 2), "member 입력은 받는다")
+	check_eq([pm.member, et.list_open], [2, false], "대원 바뀜 → 목록 닫힘")
+	await kit.frames(1)
+	await kit.press_key(KEY_ENTER)
+	check(et.list_open, "준비: 목록 다시 열림")
+	await kit.tap(kit.center_of(kp.buttons["back"]))
+	check_eq([pm.page, et.list_open], ["sub", false], "키패드 「취소」 → 목록만 닫힘")
+	await kit.press_key(KEY_ESCAPE)
+	check_eq([pm.page, pm.camp_cursor], ["root", EQUIP], "Esc → 캠프 뿌리(커서 장비)")
+
+
+## 왼쪽 열이 그린 것(그리기 기록, 07 §9.9 E2-c): 표지 테두리는 칸 고르기 = 커서 칸, 목록 = 연 칸. 목록 커서 줄로 바꾼 뒤 값은
+## 바뀐 칸만 ↑·↓ 와 새 값(오름·내림 실제 후보), 「E」 줄·못 끼는 줄은 지금 값만.
+func _check_sheet_drawn(et: PartyEquipTab, now: Dictionary, then: Dictionary, tag: String) -> int:
+	var arrows := 0
+	var cells := []
+	for i in PartyStatusTab.STAT_ROWS.size():
+		var k: String = PartyStatusTab.STAT_ROWS[i]
+		cells.append([k, SheetParts.stat_boxes(et.stat_rect(i))["value"], int(now["stats"][k]), int(then["stats"][k])])
+	for gi in BattleLimits.GEAR.size():
+		var g: String = BattleLimits.GEAR[gi]
+		var row := 0 if g in ["atk", "def"] else 1
+		var col := 0 if g in ["atk", "matk"] else 1
+		cells.append([g, SheetParts.gear_cells(et.gear_row_rect(row))[col]["value"], int(now["gear"][g]), int(then["gear"][g])])
+	for c in cells:
+		var box: Rect2 = c[1]
+		var icons := _drawn_icons_in(et.left, box)
+		var texts := _drawn_text_in(et.left, box)
+		var want := [] if c[2] == c[3] else (["up"] if c[3] > c[2] else ["down"])
+		check_eq(icons, want, "%s %s: 화살표 %d → %d" % [tag, c[0], c[2], c[3]])
+		check_eq(texts, [str(c[3])], "%s %s: 값 칸 글 = 바꾸면 값만" % [tag, c[0]])
+		if not want.is_empty():
+			arrows += 1
+			var ar := SheetParts.arrow_rect(box)
+			check(_drawn_entries(et.left, "icon").any(func(e: Dictionary) -> bool: return e["rect"] == ar), "%s %s: 화살표는 값 칸 왼쪽" % [tag, c[0]])
+	return arrows
+
+
+func _check_mark(et: PartyEquipTab, slot: int, tag: String) -> void:
+	var outs := _drawn_entries(et.left, "outline")
+	check_eq(outs.map(func(e: Dictionary) -> Array: return [e["rect"], e["color"]]), [[et.equip_rect(slot).grow(2.0), SheetParts.MARK]],
+		"%s: 표지(노란 테두리)는 장비 줄 %d 하나" % [tag, slot])
+
+
+func test_equip_sheet_draws_after_values_arrows_and_the_mark() -> void:
+	var s := await _equip_open()
+	var pm := s.party_menu
+	var et := pm.equip_tab
+	var defs := s.state.defs
+	var m := s.state.party.members[1]
+	var now := GrowthRules.profile(defs, 1, m)
+	await kit.frames(1)
+	_check_mark(et, 0, "칸 고르기 칸 0")
+	check_eq(_check_sheet_drawn(et, now, now, "칸 고르기"), 0, "칸 고르기: 화살표 없음")
+	await kit.press_key(KEY_DOWN)
+	await kit.press_key(KEY_DOWN)
+	await kit.frames(1)
+	_check_mark(et, 2, "칸 고르기 칸 2")
+	# 칸 2(손): 「E」 그립 장갑 → 서보 건틀릿(힘 +3, 오름).
+	await kit.press_key(KEY_ENTER)
+	await kit.frames(1)
+	check_eq(et.row_items[et.list_cursor], m.equip[2], "준비: 커서는 「E」 줄")
+	_check_mark(et, 2, "목록 칸 2(「E」 줄)")
+	check_eq(_check_sheet_drawn(et, now, now, "「E」 줄"), 0, "「E」 줄: 지금 값만")
+	var j := et.row_items.find(SERVO)
 	for k in j:
 		await kit.press_key(KEY_DOWN)
-	check_eq([f.desc_title, et.totals.comparing], [pm.item_name("equip.ion_saber"), true], "설명 창 = 커서 줄, 판은 견준다")
-	check(f.desc_lines.has(et.change_text(GrowthRules.profile(s.state.defs, 1, m), "equip.ion_saber")), "설명 창에 바뀌는 값: %s" % str(f.desc_lines))
-	var b := et.row_items.find("equip.nano_rod")
-	await kit.tap(kit.center_of(et.rows[b]))
-	check_eq(f.banner.body, pm.reason_text(et.row_block[b]), "못 끼는 줄 → 띠 둘째 줄에 이유")
-	check(f.banner.notice and f.desc_lines.has(pm.reason_text(et.row_block[b])), "이유는 안내 색, 설명 창에도")
-	# 대원 넘기기(Q·판 단추)와 「뒤로」 두 단계.
+	await kit.frames(1)
+	var up := et.profile_if(SERVO)
+	check(up["stats"]["STR"] > now["stats"]["STR"], "준비: 서보 건틀릿은 힘이 오른다")
+	check(_check_sheet_drawn(et, now, up, "서보 건틀릿") >= 1, "서보 건틀릿: 화살표가 있다")
+	_check_mark(et, 2, "목록 칸 2(서보)")
+	check_eq(_drawn_text_in(et.left, et.equip_rect(2)), [pm.item_name(m.equip[2])], "장비 줄은 지금 장비 그대로(표시만)")
 	await kit.press_key(KEY_ESCAPE)
-	check(not et.list_open and pm.page == "sub", "Esc → 목록만 닫힘")
-	await kit.tap(kit.center_of(f.panel.next_button()))
-	check_eq([pm.member, f.panel.drawn["name"]], [2, pm.member_name(2)], "판 → 단추 → 다음 대원")
-	await kit.press_key(KEY_Q)
-	check_eq(pm.member, 1, "Q → 앞 대원")
+	# 칸 1(몸): 메시 아머(민첩 -2, 내림).
+	await kit.press_key(KEY_UP)
 	await kit.press_key(KEY_ENTER)
-	check(et.list_open, "준비: 목록 열림")
-	await kit.tap(kit.center_of(pm.key_pad_stacked.buttons["back"]))
-	check(not et.list_open and pm.page == "sub", "키패드 「취소」 → 목록만 닫힘")
-	await kit.tap(kit.center_of(pm.key_pad_stacked.buttons["back"]))
-	check_eq([pm.page, pm.camp_cursor], ["root", EQUIP], "키패드 「취소」 → 캠프 뿌리(커서 장비)")
+	for k in et.row_items.find(MESH):
+		await kit.press_key(KEY_DOWN)
+	await kit.frames(1)
+	var down := et.profile_if(MESH)
+	check(down["stats"]["AGI"] < now["stats"]["AGI"] and et.row_block[et.list_cursor].is_empty(), "준비: 메시 아머는 민첩이 준다(낄 수 있음)")
+	check(_check_sheet_drawn(et, now, down, "메시 아머") >= 1, "메시 아머: 내림 화살표")
+	_check_mark(et, 1, "목록 칸 1")
+	await kit.press_key(KEY_ESCAPE)
+	# 칸 0(무기): 이온 세이버(공격 오름), 못 끼는 나노 로드(지금 값만), 「빼기」(공격 내림).
+	await kit.press_key(KEY_UP)
+	await kit.press_key(KEY_ENTER)
+	await kit.press_key(KEY_DOWN)
+	await kit.frames(1)
+	check(_check_sheet_drawn(et, now, et.profile_if("equip.ion_saber"), "이온 세이버") >= 1, "이온 세이버: 화살표")
+	await kit.press_key(KEY_DOWN)
+	await kit.frames(1)
+	check(not et.row_block[et.list_cursor].is_empty(), "준비: 못 끼는 나노 로드")
+	check_eq(_check_sheet_drawn(et, now, now, "못 끼는 줄"), 0, "못 끼는 줄: 지금 값만")
+	await kit.press_key(KEY_DOWN)
+	await kit.frames(1)
+	var bare := et.profile_if("")
+	check(bare["gear"]["atk"] < now["gear"]["atk"], "준비: 빼면 공격이 준다")
+	check(_check_sheet_drawn(et, now, bare, "빼기") >= 1, "빼기: 내림 화살표")
+	_check_mark(et, 0, "목록 칸 0")
+
+
+## 설명 상자(부품 I): 머리 = 이름 + 종류 아이콘 + 파티 직업 표(shop.badge.*, 낄 수 있으면 켜짐), 몸 = 값·받는 배율(못 끼면 이유),
+## 「빼기」 = 하는 일 한 줄, 빈 칸 = 머리 「비어 있음」만.
+func _check_equip_desc(et: PartyEquipTab, title: String, icon: String, lines: Array, table: Array, tag: String) -> void:
+	await kit.frames(1)
+	check_eq([et.desc.title, et.desc.icon, Array(et.desc.lines), et.desc.table], [title, icon, lines, table], tag + ": 설명 상자 내용")
+	var r := Rect2(Vector2.ZERO, et.desc.size)
+	var cells := ListParts.table_rects(r, table.size())
+	var fills := _drawn_entries(et.desc, "fill").filter(func(e: Dictionary) -> bool: return cells.has(e["rect"]))
+	check_eq(fills.map(func(e: Dictionary) -> Color: return e["color"]), table.map(func(t: Array) -> Color: return ListParts.TABLE_ON if t[1] else ListParts.TABLE_OFF),
+		tag + ": 직업 표 칸 켜짐·꺼짐(그린 색)")
+	var texts := _drawn_entries(et.desc, "text").map(func(e: Dictionary) -> String: return e["text"])
+	for t in table:
+		check(texts.has(t[0]), "%s: 직업 표 글 %s" % [tag, t[0]])
+	check_eq(_drawn_icons_in(et.desc, ListParts.head_rect(r)), [icon] if not icon.is_empty() else [], tag + ": 머리 아이콘")
+	_check_drawn_text(et.desc, tag)
+
+
+func test_equip_description_box_shows_items_class_table_and_rows() -> void:
+	var s := await _equip_open()
+	var pm := s.party_menu
+	var et := pm.equip_tab
+	var t := s.texts
+	var m := s.state.party.members[1]
+	var classes := ["holo_knight", "blade_duelist", "nano_medic", "glyph_wizard"]
+	var table_of := func(id: String) -> Array:
+		var e := s.state.defs.battle.equip(id)
+		return classes.map(func(k: String) -> Array: return [t.t("shop.badge." + k), e.fits(s.state.defs.battle.classes["class." + k])])
+	check_eq(et.class_table("equip.ion_saber").map(func(x: Array) -> String: return x[0]), ["홀", "블", "나", "글"], "직업 표 = 파티 직업 차례(겹치면 한 번)")
+	var lines_of := func(id: String) -> Array:
+		return [PartyNames.values_text(s.state, t, id), PartyNames.received_text(s.state, t, id)].filter(func(x: String) -> bool: return not x.is_empty())
+	await _check_equip_desc(et, pm.item_name(m.equip[0]), "kind_sword", lines_of.call(m.equip[0]), table_of.call(m.equip[0]), "칸 0 트윈 엣지")
+	var nano: Array = table_of.call(NANO_ROD)
+	check(nano.any(func(x: Array) -> bool: return x[1]) and nano.any(func(x: Array) -> bool: return not x[1]), "준비: 나노 로드 표에 켜짐·꺼짐이 섞인다")
+	for k in 3:
+		await kit.press_key(KEY_DOWN)
+	await _check_equip_desc(et, t.t("party.slot.empty"), "", [], [], "빈 칸 3")
+	for k in 3:
+		await kit.press_key(KEY_UP)
+	await kit.press_key(KEY_ENTER)
+	await kit.press_key(KEY_DOWN)
+	await _check_equip_desc(et, pm.item_name("equip.ion_saber"), "kind_sword", lines_of.call("equip.ion_saber"), table_of.call("equip.ion_saber"), "낄 수 있는 줄")
+	await kit.press_key(KEY_DOWN)
+	await _check_equip_desc(et, pm.item_name(NANO_ROD), "kind_staff", lines_of.call(NANO_ROD) + [pm.reason_text("class")], nano, "못 끼는 줄")
+	await kit.press_key(KEY_DOWN)
+	await _check_equip_desc(et, t.t("party.unequip"), "", [t.t("party.equip.unequip_desc")], [], "빼기 줄")
+	# 빈 칸의 「빼기」는 막힌 줄: 하는 일과 이유.
+	await kit.press_key(KEY_ESCAPE)
+	for k in 3:
+		await kit.press_key(KEY_DOWN)
+	await kit.press_key(KEY_ENTER)
+	var last := et.row_items.size() - 1
+	for k in last:
+		await kit.press_key(KEY_DOWN)
+	check_eq([et.row_items[et.list_cursor], et.row_block[et.list_cursor]], ["", "unchanged"], "준비: 빈 칸 「빼기」")
+	await _check_equip_desc(et, t.t("party.unequip"), "", [t.t("party.equip.unequip_desc"), pm.reason_text("unchanged")], [], "빈 칸 빼기")
+
+
+## 가장 긴 실제 내용이 1280 의 설명 상자(486 폭)에 든다: 모든 장비의 이름(직업 표 넷과 함께 머리에)과 값·받는 배율·가장 긴 이유 줄.
+func test_equip_longest_description_content_fits() -> void:
+	var s := await _equip_open()
+	var pm := s.party_menu
+	var et := pm.equip_tab
+	await _window(WINDOWS[0])
+	var r := Rect2(Vector2.ZERO, et.desc.size)
+	check_eq(r.size.x, 486.0, "준비: 1280 의 설명 상자 폭")
+	var room := ListParts.line_room(r)
+	var reasons := ["slot_kind", "class", "kind_limit", "bag_full", "unchanged", "not_in_bag"].map(func(c: String) -> String: return pm.reason_text(c))
+	var widest := ""
+	for id in s.state.defs.battle.equipment_ids:
+		check(SheetParts.text_width(et.desc, pm.item_name(id), ListParts.HEAD_FS) <= ListParts.head_room(r, 4), "%s: 이름이 직업 표와 함께 머리에 든다" % id)
+		var lines := et.item_lines(id)
+		check(lines.size() + 1 <= ListParts.DESC_LINES, "%s: 이유까지 넷 이하" % id)
+		for l in lines + reasons + [s.texts.t("party.equip.unequip_desc")]:
+			var fs := ListParts.line_fs(et.desc, l, room)
+			check(fs >= ListParts.DESC_FS_MIN and SheetParts.text_width(et.desc, l, fs) <= room, "%s: 「%s」 %dpx 가 %.0f 안" % [id, l, fs, room])
+			if SheetParts.text_width(et.desc, l, ListParts.DESC_FS) > SheetParts.text_width(et.desc, widest, ListParts.DESC_FS):
+				widest = l
+	# 실제로 그려 본다: 가장 긴 이름 + 직업 표 + 가장 긴 줄.
+	var longest := ""
+	for id in s.state.defs.battle.equipment_ids:
+		if SheetParts.text_width(et.desc, pm.item_name(id), 20) > SheetParts.text_width(et.desc, pm.item_name(longest) if not longest.is_empty() else "", 20):
+			longest = id
+	et.desc.show_desc(pm.item_name(longest), SheetParts.kind_icon(s.state.defs, longest), [widest, widest, widest] as Array[String], et.class_table(longest))
+	await kit.frames(1)
+	check(_check_drawn_text(et.desc, "가장 긴 설명") >= 8, "가장 긴 설명 글을 그렸다")
+
+
+## 줄 맞춤(E2-b 검토 L1): 432 폭 목록 창(줄 362)에서 모든 실제 장비 이름이 「E」 표와 가장 큰 개수(「99개」)와 함께 그린 크기(20px)에 든다.
+func test_equip_rows_fit_with_the_e_mark_and_the_largest_count() -> void:
+	var s := await _equip_open()
+	var pm := s.party_menu
+	var et := pm.equip_tab
+	await kit.press_key(KEY_ENTER)
+	await kit.frames(1)
+	var row := et.rows[0]
+	check_eq(_rect(et.window).size.x, 432.0, "준비: 목록 창 432 폭")
+	var r := Rect2(Vector2.ZERO, row.size)
+	var count := s.texts.t("party.count", {"n": BattleLimits.BAG_MAX})
+	for id in s.state.defs.battle.equipment_ids:
+		var name := pm.item_name(id)
+		check(SheetParts.text_width(row, name, ListParts.ROW_FS) <= ListParts.name_room(row, r, count, true),
+			"%s: 「%s」 %.0f ≤ 「E」·「%s」 옆 자리 %.0f" % [id, name, SheetParts.text_width(row, name, ListParts.ROW_FS), count, ListParts.name_room(row, r, count, true)])
+	# 실제로 그려 본다: 가장 긴 이름 + 「E」 + 「99개」.
+	row.show_row(pm.item_name("equip.training_sword"), count, "", false)
+	row.equipped = true
+	await kit.frames(1)
+	check(row.clipped_parts().is_empty(), "가장 긴 줄이 잘리지 않는다 %s" % str(row.clipped_parts()))
+	check(_check_drawn_text(row, "가장 긴 줄") == 3, "이름·개수·「E」를 그렸다")
+	# 「E」 와 개수를 함께 그리면 개수는 「E」 왼쪽, 이름은 개수 왼쪽에서 끝난다(겹치지 않는다).
+	var parts := _row_parts(row)
+	check(parts["count_end"] <= (parts["mark"] as Rect2).position.x and parts["name_end"] <= parts["count_x"],
+		"이름 끝 %.0f ≤ 개수 %.0f~%.0f ≤ 「E」 %.0f" % [parts["name_end"], parts["count_x"], parts["count_end"], (parts["mark"] as Rect2).position.x])
+
+
+## 넘치는 장비 목록(E2-c 검토 L1): 가방에 장비를 모두 넣어 빈 칸 3 목록이 줄 열넷 이상 → 높은 화면에서 마지막 줄에 커서를 두고
+## 1280×960 → 1280×720 이면 커서 줄이 다 보인다. 손으로 내려 끝 커서를 가리면 끝 키 한 번(입력 하나)이 되돌리고, 보이는 끝에서 한 번 더는
+## 아무 일 없다. 줄 위 끌기는 내리기만 한다(장착·커서 그대로).
+func test_equip_overflowing_list_keeps_the_cursor_visible_on_resize_ends_and_drags() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var et := pm.equip_tab
+	for id in s.state.defs.battle.equipment_ids:
+		GrowthRules.supply(s.state, id, 1)
+	await _window(Vector2(1280, 960))
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_3)
+	await kit.press_key(KEY_RIGHT)
+	await kit.press_key(KEY_ENTER)
+	for k in 3:
+		await kit.press_key(KEY_DOWN)
+	await kit.press_key(KEY_ENTER)
+	var last := et.row_items.size() - 1
+	var tall_rows := ListParts.rows_for(_rect(et.window).size.y)
+	check(et.list_open and et.cursor == 3 and last >= 2 * tall_rows - 3, "준비: 빈 칸 3 목록 %d 줄이 보이는 %d 줄보다 훨씬 많다" % [last + 1, tall_rows])
+	for k in last:
+		await kit.press_key(KEY_DOWN)
+	check(et.list_cursor == last and et.shown(last) and et.list.scroll > 0.0, "높은 화면: 마지막 줄 커서가 보인다(내림 %.0f)" % et.list.scroll)
+	var tall_scroll := et.list.scroll
+	await _window(WINDOWS[0])
+	await kit.frames(2)
+	check_eq(ListParts.rows_for(_rect(et.window).size.y), 5, "준비: 낮은 화면 다섯 줄")
+	check(et.list_cursor == last and et.shown(last), "1280×960 → 1280×720: 커서 줄이 다 보인다(내림 %.0f → %.0f)" % [tall_scroll, et.list.scroll])
+	check_eq(et.list.scroll, et.list.max_scroll(), "끝 줄이면 끝까지 내린다")
+	# 손으로 맨 위로 올려 끝 커서를 가린다 → ↓ 한 번이 되돌리고(입력 하나, 커서 그대로), 보이는 끝의 ↓ 는 아무 일 없다.
+	et.list.scroll_to(0.0)
+	await kit.frames(1)
+	check(not et.shown(last), "준비: 커서 줄이 가려졌다")
+	var n := pm.accepted_inputs
+	await kit.press_key(KEY_DOWN)
+	check_eq([et.list_cursor, et.shown(last), pm.accepted_inputs], [last, true, n + 1], "가려진 끝 커서: ↓ 한 번 = 되돌림(입력 하나)")
+	await kit.press_key(KEY_DOWN)
+	check_eq([et.list_cursor, pm.accepted_inputs], [last, n + 1], "보이는 끝: ↓ 는 아무 일 없음")
+	# 첫 줄도 같다: 맨 위로 가서 손으로 끝까지 내려 가리면 ↑ 한 번이 되돌린다.
+	for k in last:
+		await kit.press_key(KEY_UP)
+	check(et.list_cursor == 0 and et.shown(0), "준비: 첫 줄 커서")
+	et.list.scroll_to(et.list.max_scroll())
+	await kit.frames(1)
+	n = pm.accepted_inputs
+	await kit.press_key(KEY_UP)
+	check_eq([et.list_cursor, et.shown(0), pm.accepted_inputs], [0, true, n + 1], "가려진 첫 줄 커서: ↑ 한 번 = 되돌림")
+	await kit.press_key(KEY_UP)
+	check_eq(pm.accepted_inputs, n + 1, "보이는 첫 줄: ↑ 는 아무 일 없음")
+	# 줄 위 끌기: 내리기만(장착·저장·커서 그대로).
+	var h := kit.hash_now()
+	var saves := s.autosave_count
+	var from := kit.center_of(et.rows[2])
+	var to := from - Vector2(0, 150)
+	kit.touch(FINGER, from, true)
+	await kit.frames(1)
+	kit.drag(FINGER, from, to)
+	await kit.frames(1)
+	kit.touch(FINGER, to, false)
+	await kit.frames(2)
+	check(et.list.scroll > 0.0, "끌기 → 내림 %.0f" % et.list.scroll)
+	check_eq([et.list_open, et.list_cursor, kit.hash_now(), s.autosave_count], [true, 0, h, saves], "끌기는 장착·커서를 바꾸지 않는다")
+
+
+## 줄 하나의 그린 자리(그리기 기록): mark(「E」 칸, 없으면 빈 Rect2), body, name_x·name_end(이름 글), count_x·count_end(개수 글, 없으면 -1).
+static func _row_parts(row: ListButton) -> Dictionary:
+	var body: Rect2 = ListParts.row_boxes(Rect2(Vector2.ZERO, row.size))["body"]
+	var out := {"mark": Rect2(), "body": body, "name_x": -1.0, "name_end": -1.0, "count_x": -1.0, "count_end": -1.0}
+	for e in SheetParts.record(row):
+		if e["kind"] == "fill" and e["color"] == ListParts.EQUIP_MARK:
+			out["mark"] = e["rect"]
+		elif e["kind"] == "text" and e["text"] == row.text:
+			out["name_x"] = (e["rect"] as Rect2).position.x
+			out["name_end"] = out["name_x"] + SheetParts.text_width(row, row.text, int(e["fs"]))
+		elif e["kind"] == "text" and not row.right.is_empty() and e["text"] == row.right:
+			out["count_x"] = (e["rect"] as Rect2).position.x
+			out["count_end"] = out["count_x"] + SheetParts.text_width(row, row.right, int(e["fs"]))
+	return out
+
+
+## 「E」 표는 원작 I HD 장비(yt_eo1hd_04)처럼 줄 오른쪽 끝(몸 오른쪽에서 8 안, 세로 가운데)이고, 이름은 「E」 가 있든 없든 같은 x 에서 시작한다.
+func test_equip_e_mark_sits_at_the_right_end_and_names_align() -> void:
+	var s := await _equip_open()
+	var pm := s.party_menu
+	var et := pm.equip_tab
+	await kit.press_key(KEY_ENTER)
+	await kit.frames(1)
+	check(et.rows[0].equipped and not et.rows[1].equipped, "준비: Row_0 이 「E」 줄")
+	var e := _row_parts(et.rows[0])
+	var mk: Rect2 = e["mark"]
+	var body: Rect2 = e["body"]
+	check(mk.has_area(), "「E」 칸을 그렸다")
+	check(mk.end.x <= body.end.x and body.end.x - mk.end.x <= 8.5, "「E」 칸 오른쪽 끝 %.0f 은 몸 오른쪽 %.0f 에서 8 안" % [mk.end.x, body.end.x])
+	check(absf(mk.get_center().y - body.get_center().y) <= 0.5, "「E」 칸은 세로 가운데")
+	check(mk.position.x > e["name_end"], "「E」 칸 %.0f 은 그린 이름 끝 %.0f 오른쪽" % [mk.position.x, e["name_end"]])
+	for j in range(1, et.row_items.size()):
+		var o := _row_parts(et.rows[j])
+		check_eq(o["name_x"], e["name_x"], "%s 이름 x = 「E」 줄 이름 x" % et.rows[j].name)
+	check_eq(e["name_x"], body.position.x + ListParts.TEXT_PAD, "이름은 몸 왼쪽 + TEXT_PAD")
+
+
+## 노랑(07 §9.9 E2-c): 채움은 지금 단계의 커서 줄 하나. 못 끼는 줄에 커서면 흐린 커서 모양(흐린 몸 + 노란 테, 채움 0). 왼쪽 표지는 테두리.
+## 그린 글은 모두 그 밑 채움과 4.5:1 이상.
+func _equip_yellow(et: PartyEquipTab) -> Array:
+	var out := []
+	var cs: Array = [et.left, et.window, et.desc]
+	for b in et.slot_rows + et.rows:
+		if b.is_visible_in_tree():
+			cs.append(b)
+	for ci in cs:
+		for e in SheetParts.record(ci):
+			if (e["kind"] == "fill" or e["kind"] == "poly") and _is_yellow(e["color"]):
+				var in_bar := false
+				if ci == et.left:
+					for i in 6:
+						if SheetParts.stat_boxes(et.stat_rect(i))["bar"].encloses(e["rect"]):
+							in_bar = true
+				if not in_bar:
+					out.append(str((ci as Node).name))
+	return out
+
+
+func _check_equip_drawn(et: PartyEquipTab, tag: String) -> void:
+	await kit.frames(1)
+	for ci in [et.left, et.desc]:
+		_check_drawn_text(ci, tag)
+	for b in et.slot_rows + et.rows:
+		if b.is_visible_in_tree():
+			_check_drawn_text(b, tag)
+
+
+func test_equip_yellow_is_one_fill_or_the_dimmed_cursor_look() -> void:
+	var s := await _equip_open()
+	var pm := s.party_menu
+	var et := pm.equip_tab
+	await _check_equip_drawn(et, "칸 고르기")
+	check_eq(_equip_yellow(et), ["Slot_0"], "칸 고르기: 노랑 채움은 커서 칸 줄 하나")
+	await kit.press_key(KEY_ENTER)
+	await _check_equip_drawn(et, "목록 「E」")
+	check_eq(_equip_yellow(et), ["Row_0"], "목록: 노랑 채움은 커서 줄(「E」) 하나")
+	await kit.press_key(KEY_DOWN)
+	await kit.press_key(KEY_DOWN)
+	await _check_equip_drawn(et, "못 끼는 줄")
+	var row := et.rows[et.list_cursor]
+	check(row.dimmed and row.selected, "준비: 못 끼는 줄에 커서")
+	check_eq(_equip_yellow(et), [], "못 끼는 줄: 노랑 채움 0")
+	var rec := SheetParts.record(row)
+	check(rec.any(func(e: Dictionary) -> bool: return e["kind"] == "fill" and e["color"] == ListParts.ROW_DIM), "흐린 커서 모양: 흐린 몸")
+	check(rec.any(func(e: Dictionary) -> bool: return e["kind"] == "outline" and _is_yellow(e["color"])), "흐린 커서 모양: 노란 테")
+	await kit.press_key(KEY_DOWN)
+	await _check_equip_drawn(et, "빼기")
+	check_eq(_equip_yellow(et), ["Row_3"], "「빼기」: 노랑 채움 하나")
+	# 높은 화면에서도 같다.
+	await _window(Vector2(1280, 960))
+	await _check_equip_drawn(et, "1280×960 빼기")
+	check_eq(_equip_yellow(et), ["Row_3"], "1280×960: 노랑 채움 하나")
+	await _window(WINDOWS[0])
 
 
 # ---- 소지품(07 §9.9 E2-b, research 08 §4.1: 원작 III HD 소지품 yt_eo3hd_05) ----
@@ -1606,7 +2085,7 @@ func test_items_longest_description_content_fits() -> void:
 	await kit.frames(1)
 	check(_check_drawn_text(it.desc, "가장 긴 설명 " + best) >= 3, "가장 긴 설명 글을 그렸다")
 	# 직업 표(장비 화면 E2-c 용): 머리 오른쪽 칸, 이름 자리를 줄인다. 그린 칸 색과 글 대비.
-	it.desc.show_desc(it.item_label(best), it.item_icon(best), it.item_lines(best), [["홀로", true], ["듀얼", false], ["메딕", true], ["위저드", false]])
+	it.desc.show_desc(it.item_label(best), it.item_icon(best), it.item_lines(best), [["홀", true], ["블", false], ["나", true], ["글", false]])
 	await kit.frames(1)
 	var cells := ListParts.table_rects(r, 4)
 	var fills := _drawn_entries(it.desc, "fill").filter(func(e: Dictionary) -> bool: return cells.has(e["rect"]))
@@ -2334,7 +2813,7 @@ func test_member_bands_share_one_iii_palette() -> void:
 	var want: Array[Color] = [Color("9ceddb"), Color("1f2861"), Color("1f2861")]
 	await kit.press_key(KEY_P)
 	var got := {}
-	for st in [["상태", KEY_2, pm.status_tab.top], ["스킬", KEY_4, pm.skill_tab.top], ["장비", KEY_3, pm.equip_tab.frame.panel.top]]:
+	for st in [["상태", KEY_2, pm.status_tab.top], ["스킬", KEY_4, pm.skill_tab.top], ["장비", KEY_3, pm.equip_tab.top]]:
 		await kit.press_key(st[1])
 		await kit.press_key(KEY_ENTER)
 		await kit.frames(2)
@@ -2353,6 +2832,7 @@ func test_member_bands_share_one_iii_palette() -> void:
 		await kit.press_key(KEY_ESCAPE)
 	check(got["상태"] == got["스킬"] and got["스킬"] == got["장비"], "세 화면 띠 색이 한 벌")
 	check_eq(pm.skill_tab._note_label.get_theme_color("font_color"), MemberHeader.STRIP_ACCENT, "스킬 띠 안내 글자 = 띠 노랑(대비 4.5:1)")
+	check_eq(pm.equip_tab.note_label.get_theme_color("font_color"), MemberHeader.STRIP_ACCENT, "장비 띠 안내 글자 = 띠 노랑(대비 4.5:1)")
 
 
 ## 하위 화면 tab 의 띠 글(알림이 없을 때): 소지품은 「소지품   장비 n · 소재 n」(E2-b), 기록이 아닌 다른 화면은 없음("").

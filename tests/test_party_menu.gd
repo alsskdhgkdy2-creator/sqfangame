@@ -585,11 +585,13 @@ func test_equip_from_list_autosaves_and_unequip_row_removes() -> void:
 	check_eq(m.equip[0], TWIN_EDGE, "준비: 칸 0 트윈 엣지")
 	await kit.tap(kit.center_of(et.slot_rows[0]))
 	check(et.list_open and et.list.is_visible_in_tree(), "칸 누르기 → 그 칸 목록")
-	check_eq(et.row_items, ["", ION_SABER], "목록: 맨 위 「빼기」, 낄 수 있는 가방 장비")
-	check_eq(et.rows[0].text, "빼기", "「빼기」 줄")
-	check(et.rows[1].note.contains("공격 +8"), "바뀌는 값 글자: %s" % et.rows[1].note)
-	check(et.rows[0].note.contains("공격 -14"), "빼기의 바뀌는 값: %s" % et.rows[0].note)
-	check_eq(et.rows[1].right, "1개", "개수")
+	check_eq([et.row_items, et.equipped_row, et.list_cursor], [[TWIN_EDGE, ION_SABER, ""], 0, 0],
+		"목록(원작 차례): 「E」 지금 낀 것 → 낄 수 있는 가방 장비 → 「빼기」 맨 끝, 커서는 「E」 줄")
+	check_eq([et.rows[0].equipped, et.rows[1].equipped, et.rows[2].text, et.rows[2].icon_name], [true, false, "빼기", ""], "「E」 표·「빼기」 줄(빈 아이콘)")
+	var base := GrowthRules.profile(s.state.defs, DUELIST_A, m)
+	check_eq(et.profile_if(ION_SABER)["gear"]["atk"] - base["gear"]["atk"], 8, "바꾸면 값: 이온 세이버 공격 +8")
+	check_eq(et.profile_if("")["gear"]["atk"] - base["gear"]["atk"], -14, "바꾸면 값: 빼기 공격 -14")
+	check_eq([et.rows[1].right, et.rows[0].right], ["1개", ""], "개수는 가방 줄만")
 	var n := s.autosave_count
 	await kit.tap(kit.center_of(et.rows[1]))
 	check_eq(m.equip[0], ION_SABER, "줄 누르기 → 장착")
@@ -599,7 +601,8 @@ func test_equip_from_list_autosaves_and_unequip_row_removes() -> void:
 	check(not et.list_open and et.cursor == 0, "목록을 닫고 커서는 그 칸")
 	check(et.slot_rows[0].text == texts.t("equip.ion_saber"), "칸 줄이 새 장비")
 	await kit.tap(kit.center_of(et.slot_rows[0]))
-	await kit.tap(kit.center_of(et.rows[0]))
+	check_eq(et.row_items, [ION_SABER, TWIN_EDGE, ""], "다시 열면 새 장비가 「E」")
+	await kit.tap(kit.center_of(et.rows[2]))
 	check_eq(m.equip[0], "", "「빼기」 → 칸이 빈다")
 	check_eq(s.state.gear_bag, {TWIN_EDGE: 1, ION_SABER: 1}, "가방에 돌아온다")
 	check_eq(s.autosave_count, n + 2, "빼기도 자동 저장")
@@ -612,16 +615,17 @@ func test_unequippable_rows_are_dimmed_with_reason_and_cannot_be_chosen() -> voi
 	var et := pm.equip_tab
 	var m := s.state.party.members[DUELIST_A]
 	await kit.tap(kit.center_of(et.slot_rows[0]))
-	check_eq(et.row_items, ["", "equip.focus_staff", "equip.tactical_baton"], "칸 0: 무기만, 못 끼는 것은 아래(칸 종류가 다른 몸 장비는 없음)")
-	check_eq(et.row_block, ["", "class", "class"], "못 끼는 이유")
-	check(et.rows[1].dimmed and et.rows[1].note == "이 직업은 못 낀다", "흐리게·이유: %s" % et.rows[1].note)
+	check_eq(et.row_items, [TWIN_EDGE, "equip.focus_staff", "equip.tactical_baton", ""], "칸 0: 무기만, 못 끼는 것은 「빼기」 앞(칸 종류가 다른 몸 장비는 없음)")
+	check_eq(et.row_block, ["", "class", "class", ""], "못 끼는 이유")
+	check(et.rows[1].dimmed and et.rows[2].dimmed and not et.rows[3].dimmed, "못 끼는 줄만 흐리게")
 	var h := kit.hash_now()
 	var n := s.autosave_count
 	await kit.tap(kit.center_of(et.rows[2]))
 	check_eq(m.equip[0], TWIN_EDGE, "못 끼는 줄 누르기 → 장착 없음")
 	check_eq(pm.notice, "이 직업은 못 낀다", "이유 알림")
-	check(et.list_open, "목록 그대로")
-	await kit.press_key(KEY_DOWN)
+	check(et.list_open and et.list_cursor == 2, "목록 그대로, 커서는 누른 줄")
+	check(et.desc.lines.has("이 직업은 못 낀다"), "설명 상자에 이유: %s" % str(et.desc.lines))
+	await kit.press_key(KEY_UP)
 	await kit.press_key(KEY_ENTER)
 	check_eq(m.equip[0], TWIN_EDGE, "키보드로 골라도 장착 없음")
 	check_eq(kit.hash_now(), h, "상태 그대로")
@@ -630,11 +634,10 @@ func test_unequippable_rows_are_dimmed_with_reason_and_cannot_be_chosen() -> voi
 	await kit.tap(kit.center_of(pm.key_pad_stacked.buttons["back"]))
 	check(not et.list_open and et.slot_rows[3].is_visible_in_tree(), "키패드 「취소」 → 목록 닫힘, 칸 줄이 다시 보인다")
 	await kit.tap(kit.center_of(et.slot_rows[3]))
-	check_eq(et.row_items, ["", "equip.medic_coat"], "칸 3: 몸 장비는 같은 종류 제한")
-	check_eq(et.row_block, ["unchanged", "kind_limit"], "빈 칸 빼기·같은 종류")
-	check_eq(et.rows[1].note, "같은 종류가 이미 있다", "같은 종류 이유")
-	await kit.tap(kit.center_of(et.rows[1]))
-	check_eq(m.equip[3], "", "장착 없음")
+	check_eq([et.row_items, et.equipped_row, et.list_cursor], [["equip.medic_coat", ""], -1, 0], "칸 3(빈 칸): 「E」 없음, 몸 장비는 같은 종류 제한, 커서는 첫 줄")
+	check_eq(et.row_block, ["kind_limit", "unchanged"], "같은 종류·빈 칸 빼기")
+	await kit.tap(kit.center_of(et.rows[0]))
+	check_eq([m.equip[3], pm.notice], ["", "같은 종류가 이미 있다"], "장착 없음, 같은 종류 이유")
 
 
 # ---- 소지품·임시 보급 (07 §5.6·§5.7) ----
@@ -1018,7 +1021,7 @@ func test_context_change_cancels_pressed_pointer() -> void:
 	await kit.press_key(KEY_E)
 	var et := pm.equip_tab
 	await kit.tap(kit.center_of(et.slot_rows[0]))
-	check_eq(et.row_items, ["", ION_SABER], "준비: 듀얼리스트 A 칸 0 목록")
+	check_eq(et.row_items, [TWIN_EDGE, ION_SABER, ""], "준비: 듀얼리스트 A 칸 0 목록")
 	var row := kit.center_of(et.rows[1])
 	var n := s.autosave_count
 	kit.touch(0, row, true)
