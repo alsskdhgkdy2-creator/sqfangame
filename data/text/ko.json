@@ -498,5 +498,12 @@
   "camp.cmd.records": "기록",
   "camp.cmd.close": "닫기",
   "camp.status.split": "내역",
-  "camp.records.file": "파일"
+  "camp.records.file": "파일",
+  "camp.records.help.save": "지금 진행을 슬롯 {n}에 저장한다",
+  "camp.records.help.load": "슬롯 {n}에 저장한 진행을 불러온다",
+  "camp.records.help.load_empty": "빈 슬롯이라 불러올 수 없다",
+  "camp.records.help.export": "진행을 파일로 내보낸다",
+  "camp.records.help.import": "파일에 담긴 진행을 가져온다",
+  "camp.records.help.automap": "걸은 곳을 지도에 저절로 그리는 방식을 고른다",
+  "camp.records.help.new_game": "층 처음부터 새로 시작한다"
 }

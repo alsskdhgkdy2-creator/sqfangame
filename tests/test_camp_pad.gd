@@ -520,6 +520,27 @@ func test_camp_pad_matches_keys_on_equip_and_items() -> void:
 	])
 
 
+## 기록 커서의 칸(E2-e 줄 여섯, 리뷰 Low): 키와 키패드 각각에서 기대 [줄, 칸]을 직접 본다(짝 시험만으로는 둘이 같은 코드라 못 잡는다).
+## 두 칸 줄끼리 ↑↓ 는 칸 1 을 지키고(슬롯 → 슬롯, 슬롯 3 → 파일), 파일 칸 1 ↓ 자동 지도는 칸 1, 자동 지도 칸 2 ↑ 파일은 칸 1(자름),
+## 자동 지도 칸 2 ↓ 새 게임은 칸 0, 거기서 ↑ 는 자동 지도 칸 0.
+func test_records_cursor_keeps_or_clamps_the_column_by_keys_and_pad() -> void:
+	var steps := [["right", [0, 1]], ["down", [1, 1]], ["down", [2, 1]], ["down", [3, 1]], ["down", [4, 1]], ["right", [4, 2]],
+		["up", [3, 1]], ["up", [2, 1]], ["up", [1, 1]], ["down", [2, 1]], ["down", [3, 1]], ["down", [4, 1]], ["right", [4, 2]],
+		["down", [5, 0]], ["up", [4, 0]]]
+	for by_pad in [false, true]:
+		var pm := await _fresh()
+		await _step(pm, "camp", RECORDS)
+		var rt := pm.records_tab
+		check_eq([pm.page, pm.tab, rt.cur_row, rt.cur_col], ["sub", 4, 0, 0], "준비: 기록, 커서 0,0")
+		for st in steps:
+			var tag := "%s %s" % ["키패드" if by_pad else "키", st[0]]
+			if by_pad:
+				await kit.tap(kit.center_of(_pad_button(pm, st[0])), FINGER)
+			else:
+				await kit.press_key(PartyMenu.PAD_KEYS[st[0]])
+			check_eq([rt.cur_row, rt.cur_col], st[1], "%s → %s %s" % [tag, str(st[1]), rt.cursor_button().name])
+
+
 func test_camp_pad_matches_keys_on_records_and_new_game() -> void:
 	var rc := [["camp", RECORDS]]
 	var ng := rc + [["record_new_game"]]
@@ -530,6 +551,8 @@ func test_camp_pad_matches_keys_on_records_and_new_game() -> void:
 		["기록 첫 줄 ↑(가장자리)", false, rc, "up", true, true], ["기록 →", false, rc, "right", true, false],
 		["기록 선택(저장)", false, rc, "ok", true, false], ["기록 취소", false, rc, "back", true, false],
 		["기록 선택(흐린 불러오기)", false, rc + [["cursor_x", 1]], "ok", false, false],
+		["기록 자동 지도 ↓(칸 3 → 새 게임 칸 1, E2-e 줄 여섯)", false, rc + [["cursor", 1], ["cursor", 1], ["cursor", 1], ["cursor", 1], ["cursor_x", 1], ["cursor_x", 1]], "down", true, false],
+		["기록 맨 아랫줄 ↓(가장자리)", false, rc + [["cursor", 1], ["cursor", 1], ["cursor", 1], ["cursor", 1], ["cursor", 1]], "down", true, true],
 		["새 게임 창 ↑", false, ng, "up", false, false], ["새 게임 창 ↓", false, ng, "down", false, false],
 		["새 게임 창 ←", false, ng, "left", true, false], ["새 게임 창 →", false, ng, "right", true, false],
 		["새 게임 창 선택", false, ng + [["dialog_move", 1]], "ok", true, false], ["새 게임 창 취소", false, ng, "back", true, false],

@@ -7,6 +7,9 @@
 ## - J 명령 알약: 원작 「使う」「捨てる」 자리의 청록 알약. 커서면 노랑, 켜짐(checked)이면 하늘색.
 ## - K 알림 띠: 양 끝이 괄호처럼 굽은 청록 띠(원작 I HD 스킬 배움 알림 yt_eo1hd_b_04). 캠프 확인 창(BannerBox)이 쓴다(07 §9.9 E2-d).
 ## - I 의 "tree" 모양: 스킬 트리 설명 상자(원작 yt_eo1hd_b_03). 둥근 판·청록 테, 머리에 이름·레벨 탭·「Lv n」 막대, 몸에 줄을 칸으로(E2-d).
+## - 둥근 판(draw_panel): "tree" = 스킬 트리 판(E2-d, 불투명 파랑), "option" = 기록 화면 판(E2-e, 원작 OPTION 의 반투명 청록 판·테).
+## - OPTION 모양(E2-e, 원작 I HD OPTION yt_eo1hd_06): 어두운 줄 길(track) 위에 이름 알약(draw_option_row)과 값 알약(draw_pill 의 look "option").
+##   커서 줄의 이름 알약이 노랑(화면의 노랑 채움 하나), 다른 알약 초록, 고른 값 밝은 하늘색, 못 누름 회색. 커서 값 알약은 노란 고리만.
 ## 그리기는 모두 SheetParts 의 기록 함수(_fill·_fill_round·_poly·_icon·_text)를 거쳐 같은 기록(SheetParts.record)에 남는다.
 ## 시험은 그 기록으로 노랑·아이콘·머리 채움·글자 크기를 본다. 자리 함수(*_rect·row_boxes)는 그리기와 시험이 같이 쓴다.
 class_name ListParts
@@ -50,6 +53,45 @@ const PILL_TEXT := Color.WHITE
 const PILL_ON := UiTheme.BTN_CHECKED
 const PILL_ON_PRESSED := UiTheme.BTN_CHECKED_PRESSED
 const PILL_ON_TEXT := UiTheme.BTN_PICK_TEXT
+
+# ---- 둥근 판(draw_panel) ----
+## "tree"(스킬 트리 판, 원작 b_03 잼 #0C6A9E, 바깥 선 #013045, E2-d).
+const PANEL_TREE := Color("0c6a9e")
+const PANEL_TREE_OUTER := Color("013045")
+const PANEL_TREE_RADIUS := 12
+## "option"(기록 판, 원작 OPTION): 바깥 밝은 선 #6AC4CA, 테 #297078, 몸은 반투명 청록. 원작 몸 #449FB4 는 흰 도움말 글자 2.84:1 이라
+## #145F6C 알파 0.85 로 어둡게(뒤가 흰색이어도 5.09:1, 검정이면 8.92:1).
+const PANEL_OPT := Color(0x14 / 255.0, 0x5f / 255.0, 0x6c / 255.0, 0.85)
+const PANEL_OPT_RIM := Color("297078")
+const PANEL_OPT_EDGE := Color("6ac4ca")
+const PANEL_OPT_RADIUS := 24
+const PANEL_OPT_EDGE_W := 2
+const PANEL_OPT_RIM_W := 4
+const PANEL_OPT_TEXT := Color.WHITE
+
+# ---- OPTION 알약·줄(원작 잼: 초록 #0E5F53 에 #7DF1DD 5.57:1, 길 #1C3F4F) ----
+const OPT_PILL := Color("0e5f53")
+const OPT_PILL_PRESSED := Color("0a4a40")
+const OPT_TEXT := Color("7df1dd")
+const OPT_CURSOR := UiTheme.CMD_PICK
+const OPT_CURSOR_PRESSED := UiTheme.CMD_PICK_PRESSED
+const OPT_CURSOR_TEXT := UiTheme.CMD_PICK_TEXT
+## 고른 값: 캠프의 고른 명령과 같은 밝은 하늘색(원작 #3AB7BD 근사, 노랑 아님).
+const OPT_CHOSEN := UiTheme.CMD_CHOSEN
+const OPT_CHOSEN_PRESSED := Color("8be3ee")
+const OPT_CHOSEN_TEXT := UiTheme.CMD_CHOSEN_TEXT
+## 못 누름: 원작 회색 #545859 에 #7A7E80 은 1.76:1 이라 몸을 어둡게, 글자를 밝게(6.35:1).
+const OPT_OFF := Color("3a4043")
+const OPT_OFF_TEXT := Color("c4cacc")
+const OPT_TRACK := Color("1c3f4f")
+## 커서 값 알약의 노란 고리(채움 아님).
+const OPT_RING := UiTheme.CMD_PICK
+const OPT_RING_W := 3
+## 줄 길 안쪽 여백(알약이 길 안에 든다), 이름 알약 글: 첫 줄·둘째 줄 크기, 왼쪽 여백.
+const OPT_TRACK_INSET := 3.0
+const OPT_LABEL_FS := 20
+const OPT_LABEL_SUB_FS := 16
+const OPT_LABEL_PAD := 24.0
 
 # ---- 크기 ----
 ## 굽은 끝 폭(테 양쪽).
@@ -470,10 +512,70 @@ static func draw_banner(ci: CanvasItem, r: Rect2) -> void:
 	SheetParts._poly(ci, frame_polygon(banner_body_rect(r), BANNER_BODY_END), BANNER_BODY)
 
 
+# ---- 둥근 판 ----
+
+## 판 r. look "tree": 스킬 트리 판(바깥 어두운 선 + 불투명 파랑). "option": 기록 판(밝은 바깥 선 + 테 + 반투명 청록 몸).
+static func draw_panel(ci: CanvasItem, r: Rect2, look: String) -> void:
+	if look == "option":
+		_ring(ci, r, PANEL_OPT_EDGE, PANEL_OPT_EDGE_W, PANEL_OPT_RADIUS)
+		SheetParts._fill_round(ci, r.grow(-PANEL_OPT_EDGE_W), PANEL_OPT, PANEL_OPT_RADIUS - PANEL_OPT_EDGE_W, PANEL_OPT_RIM, PANEL_OPT_RIM_W)
+		return
+	SheetParts._fill_round(ci, r, PANEL_TREE_OUTER, PANEL_TREE_RADIUS)
+	SheetParts._fill_round(ci, r.grow(-2.0), PANEL_TREE, PANEL_TREE_RADIUS - 2)
+
+
+## 채움 없는 둥근 고리(판의 바깥 선, 커서 값 알약의 노란 고리). 기록에는 outline 으로 남는다(채움이 아니다).
+static func _ring(ci: CanvasItem, r: Rect2, col: Color, w: int, radius: int) -> void:
+	UiTheme.fill_round(ci, r, Color(0, 0, 0, 0), radius, col, w)
+	SheetParts._log(ci, {"kind": "outline", "rect": r, "color": col})
+
+
+# ---- OPTION 줄 ----
+
+## 줄 길 안 이름 알약의 사각형.
+static func option_label_rect(track: Rect2, label_w: float) -> Rect2:
+	return Rect2(track.position + Vector2(OPT_TRACK_INSET, OPT_TRACK_INSET), Vector2(label_w, track.size.y - 2.0 * OPT_TRACK_INSET))
+
+
+## 이름 알약 글 줄의 [글자 크기, 기준선 y](알약 기준이 아닌 같은 좌표계). 줄 하나면 가운데, 둘이면 위 20·아래 16.
+static func option_label_lines(label: Rect2, n: int) -> Array:
+	if n <= 1:
+		return [[OPT_LABEL_FS, label.get_center().y + OPT_LABEL_FS * 0.36]]
+	return [[OPT_LABEL_FS, label.position.y + 27.0], [OPT_LABEL_SUB_FS, label.position.y + 51.0]]
+
+
+## OPTION 줄 하나의 길과 이름 알약(값 알약은 ListButton 이 길 위에 그린다). st: 이름 알약 상태(normal · selected).
+static func draw_option_row(ci: Control, track: Rect2, label_w: float, lines: Array, st: String) -> void:
+	SheetParts._fill_round(ci, track, OPT_TRACK, int(track.size.y / 2.0))
+	var lr := option_label_rect(track, label_w)
+	var cols := pill_colors(st, "option")
+	SheetParts._fill_round(ci, lr, cols[0], int(lr.size.y / 2.0))
+	var spots := option_label_lines(lr, lines.size())
+	for i in mini(lines.size(), spots.size()):
+		SheetParts._text(ci, Vector2(lr.position.x + OPT_LABEL_PAD, spots[i][1]), str(lines[i]), spots[i][0], cols[1],
+			lr.size.x - 2.0 * OPT_LABEL_PAD)
+
+
 # ---- J 명령 알약 ----
 
 ## st: normal · pressed · selected(커서, 노랑) · checked(켜짐, 하늘색) · checked_pressed. selected 가 checked 보다 먼저다.
-static func pill_colors(st: String) -> Array[Color]:
+## look "option"(기록, E2-e): 초록·노랑·밝은 하늘색·회색(disabled) 한 벌. 기본 "camp" 는 소지품 알약 그대로.
+static func pill_colors(st: String, look: String = "camp") -> Array[Color]:
+	if look == "option":
+		match st:
+			"selected":
+				return [OPT_CURSOR, OPT_CURSOR_TEXT]
+			"selected_pressed":
+				return [OPT_CURSOR_PRESSED, OPT_CURSOR_TEXT]
+			"checked":
+				return [OPT_CHOSEN, OPT_CHOSEN_TEXT]
+			"checked_pressed":
+				return [OPT_CHOSEN_PRESSED, OPT_CHOSEN_TEXT]
+			"pressed":
+				return [OPT_PILL_PRESSED, OPT_TEXT]
+			"disabled":
+				return [OPT_OFF, OPT_OFF_TEXT]
+		return [OPT_PILL, OPT_TEXT]
 	match st:
 		"selected", "selected_pressed":
 			return [CURSOR, CURSOR_TEXT]
@@ -486,9 +588,12 @@ static func pill_colors(st: String) -> Array[Color]:
 	return [PILL, PILL_TEXT]
 
 
-static func draw_pill(ci: Control, r: Rect2, text: String, st: String) -> void:
-	var cols := pill_colors(st)
-	SheetParts._fill_round(ci, r, cols[0], int(r.size.y / 2.0), PILL_EDGE, 3)
+## ring: 커서 값 알약의 노란 고리(OPTION 줄, 채움은 그 알약 상태 그대로).
+static func draw_pill(ci: Control, r: Rect2, text: String, st: String, look: String = "camp", ring: bool = false) -> void:
+	var cols := pill_colors(st, look)
+	SheetParts._fill_round(ci, r, cols[0], int(r.size.y / 2.0), OPT_TRACK if look == "option" else PILL_EDGE, 3)
 	var room := r.size.x - r.size.y
 	SheetParts._text(ci, Vector2(r.position.x + r.size.y / 2.0, r.get_center().y + PILL_FS * 0.36), text, PILL_FS, cols[1], room,
 		HORIZONTAL_ALIGNMENT_CENTER)
+	if ring:
+		_ring(ci, r, OPT_RING, OPT_RING_W, int(r.size.y / 2.0))

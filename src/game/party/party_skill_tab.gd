@@ -29,9 +29,10 @@ const AREA_INSET := Vector4(12, 4, 24, 4)
 const SCROLL_RIGHT := 18.0
 const CLASS_TAB := Rect2(72, 103, 220, 34)
 ## 트리 판(원작 잼 #0C6A9E, 바깥 선 #013045)·직업 탭(#1C3B4A).
-const PANEL := Color("0c6a9e")
-const PANEL_OUTER := Color("013045")
-const PANEL_RADIUS := 12
+## 그리기는 공용 둥근 판(ListParts.draw_panel "tree", D28). 이름은 시험이 쓰는 별명.
+const PANEL := ListParts.PANEL_TREE
+const PANEL_OUTER := ListParts.PANEL_TREE_OUTER
+const PANEL_RADIUS := ListParts.PANEL_TREE_RADIUS
 ## 선의 「Lv n」: 글자 크기, 글 상자 높이, 선과의 사이, 색(트리 판 위 5.10:1).
 const LABEL_FS := 12
 const LABEL_H := 15.0
@@ -716,8 +717,7 @@ static func arrow_points(path: PackedVector2Array) -> PackedVector2Array:
 func _draw_tree_panel() -> void:
 	SheetParts.begin(tree_window)
 	var r := Rect2(Vector2.ZERO, tree_window.size)
-	SheetParts._fill_round(tree_window, r, PANEL_OUTER, PANEL_RADIUS)
-	SheetParts._fill_round(tree_window, r.grow(-2.0), PANEL, PANEL_RADIUS - 2)
+	ListParts.draw_panel(tree_window, r, "tree")
 	ListParts.draw_scroll(tree_window, scroll_rect(), tree_area.scroll, tree_area.content_height, tree_area.size.y)
 
 

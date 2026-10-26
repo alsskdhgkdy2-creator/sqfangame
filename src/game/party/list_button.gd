@@ -1,12 +1,16 @@
 ## 목록 창 줄(부품 H)과 명령 알약(부품 J): PartyButton 의 입력(손가락 소유, 뗄 때 한 번, scroller 가 있으면 끌기 = 내리기)을
 ## 그대로 쓰고 그림만 ListParts 로 그린다(그리는 호출이 이 단추의 SheetParts.record 에 남는다).
 ## 줄: icon_name(종류 아이콘)·text·right(개수)·selected(노랑 커서 줄)·dim·equipped(「E」). 알약(pill): text·selected·checked.
+## 알약 모양 look: "camp"(기본, 소지품 알약) · "option"(기록 OPTION 줄, E2-e: 못 누름은 회색, cursor_ring 이면 커서를 노란 고리로).
 class_name ListButton
 extends PartyButton
 
 ## "row" · "pill"
 var style := "row"
 var icon_name := ""
+var look := "camp"
+## OPTION 줄의 값 알약: 커서면 채움은 그대로 두고 노란 고리만(노랑 채움은 그 줄 이름 알약 몫).
+var cursor_ring := false
 var equipped := false:
 	set(v):
 		equipped = v
@@ -22,13 +26,21 @@ func _draw() -> void:
 	SheetParts.begin(self)
 	var r := Rect2(Vector2.ZERO, size)
 	if style == "pill":
-		ListParts.draw_pill(self, r, text, pill_state())
+		ListParts.draw_pill(self, r, text, pill_state(), look, cursor_ring and selected)
 	else:
 		ListParts.draw_row(self, r, icon_name, text, right, selected, dimmed, equipped, held)
 
 
 ## 알약 모양 상태(커서가 켜짐보다 먼저).
 func pill_state() -> String:
+	if look == "option":
+		if disabled or dimmed:
+			return "disabled"
+		if selected and not cursor_ring:
+			return "selected_pressed" if held else "selected"
+		if checked:
+			return "checked_pressed" if held else "checked"
+		return "pressed" if held else "normal"
 	if selected:
 		return "selected_pressed" if held else "selected"
 	if checked:

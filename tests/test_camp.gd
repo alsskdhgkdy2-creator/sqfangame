@@ -1398,7 +1398,7 @@ func _check_banner(pm: PartyMenu, size: Vector2, tag: String) -> void:
 	check_eq(pm.dialog_pick, 0, tag + ": 처음 고른 쪽 「돌아가기」")
 
 
-## 노랑 채움(07 §9.9 노랑 하나): 스킬 화면이 그린 채움·다각형과 보이는 단추 모양의 채움. 확인 창이 떠 있으면 창 층 밖은 어둡게 하는 판과 겹친 색으로 센다.
+## 노랑 채움(07 §9.9 노랑 하나): 스킬·기록 화면이 그린 채움·다각형과 보이는 단추 모양의 채움(ListButton 은 그린 기록). 확인 창이 떠 있으면 창 층 밖은 어둡게 하는 판과 겹친 색으로 센다.
 func _camp_yellow(pm: PartyMenu) -> Array:
 	var out := []
 	var dim := pm.dialog_layer.is_visible_in_tree()
@@ -1410,6 +1410,8 @@ func _camp_yellow(pm: PartyMenu) -> Array:
 		for nd in st.nodes:
 			if nd.is_visible_in_tree():
 				cs.append(nd)
+	if pm.tab == 4 and pm.page == "sub":
+		cs = [pm.records_tab.window]
 	if dim:
 		cs.append(pm.dialog_panel)
 	for ci in cs:
@@ -1419,6 +1421,13 @@ func _camp_yellow(pm: PartyMenu) -> Array:
 	for n in pm.find_children("*", "PartyButton", true, false):
 		var b := n as PartyButton
 		if b is SkillNode or not b.is_visible_in_tree():
+			continue
+		# 목록 줄·알약(ListButton)은 제 그림 기록으로 센다(E2-e: 기록의 커서 값 알약은 노란 고리만, 채움이 아니다).
+		if b is ListButton:
+			for e in SheetParts.record(b):
+				if (e["kind"] == "fill" or e["kind"] == "poly") and _is_yellow(dimmed.call(e["color"], not pm.dialog_layer.is_ancestor_of(b))):
+					out.append(str(b.name))
+					break
 			continue
 		var lk := UiTheme.look(b.theme_state())
 		if lk["fill"] and _is_yellow(dimmed.call(lk["bottom"], not pm.dialog_layer.is_ancestor_of(b))):
@@ -2838,9 +2847,78 @@ func test_capped_next_level_cursor_shows_the_dimmed_cursor_look() -> void:
 	_check_cursor_yellow(it, "흐리지 않은 칸으로 돌아옴")
 
 
-# ---- 기록(R2-d, 원작 불러오기 화면 gs2_653240) ----
+# ---- 기록(E2-e, 원작 I HD OPTION yt_eo1hd_06 모양) ----
 
-func test_records_screen_follows_the_load_screen_table() -> void:
+## 기록 화면 상자(판 기준 자리 → 화면 자리).
+static func _rec_abs(rt: PartyRecordsTab, r: Rect2) -> Rect2:
+	return Rect2(_rect(rt.window).position + r.position, r.size)
+
+
+## 기록 층 표(07 §9.9 E2-e): 판·도움말·줄 길·이름 알약·값 알약·「새 게임」의 자리와 앵커, 허용한 겹침만(키패드는 판 앞, 확인 창 층은 모두 앞),
+## 둥지(판 안 줄, 줄 안 알약)는 겹침이 아니라 안에 든 것. 모두 화면 안, 누르는 것 64 이상, 트리 차례, 장식은 IGNORE.
+func _check_records_layers(pm: PartyMenu, size: Vector2, tag: String) -> void:
+	var rt := pm.records_tab
+	var win := _rect(rt.window)
+	var wx := maxf(size.x / 2.0 - 450.0, 224.0)
+	check_eq(win, Rect2(wx, 116, 900, size.y - 124), tag + ": 판 900 폭, y 116 ~ H − 8, 가운데(1280 은 방향 십자를 비켜 x 224)")
+	var help := _rec_abs(rt, PartyRecordsTab.HELP)
+	check(win.encloses(help) and help.position.y >= win.position.y + 8.0, tag + ": 도움말 줄은 판 안 위쪽")
+	var tracks: Array[Rect2] = []
+	for k in PartyRecordsTab.ROWS:
+		var tr := _rec_abs(rt, PartyRecordsTab.track_rect(k))
+		check_eq(tr, Rect2(wx + 24, 174 + 78 * k, 852, 70), "%s: 줄 길 %d" % [tag, k])
+		check(win.encloses(tr) and not tr.intersects(help), "%s: 줄 길 %d 는 판 안, 도움말 아래" % [tag, k])
+		if k > 0:
+			check(not tr.intersects(tracks[k - 1]), "%s: 줄 길 %d 겹침" % [tag, k])
+		var lr := _rec_abs(rt, PartyRecordsTab.label_rect(k))
+		check(tr.encloses(lr) and lr.size == Vector2(380, 64), "%s: 이름 알약 %d 은 길 안 380×64" % [tag, k])
+		tracks.append(tr)
+	var g := rt.grid()
+	check_eq(g.map(func(r: Array) -> Array: return r.map(func(b: ListButton) -> String: return str(b.name))),
+		[["Save_slot1", "Load_slot1"], ["Save_slot2", "Load_slot2"], ["Save_slot3", "Load_slot3"], ["Export", "Import"],
+		["Automap_off", "Automap_floor", "Automap_full"], ["NewGame"]], tag + ": 커서 줄 여섯(슬롯 셋·파일·자동 지도·새 게임), 이름 그대로")
+	var pills: Array[Rect2] = []
+	for k in 5:
+		var row: Array = g[k]
+		var want := PartyRecordsTab.pill_rects(k, row.size())
+		var lr := _rec_abs(rt, PartyRecordsTab.label_rect(k))
+		for i in row.size():
+			var b: ListButton = row[i]
+			var br := _rect(b)
+			check(br.is_equal_approx(_rec_abs(rt, want[i])), "%s: %s 자리 %s" % [tag, b.name, str(br)])
+			check(tracks[k].encloses(br) and not br.intersects(lr), "%s: %s 는 줄 길 %d 안, 이름 알약 밖" % [tag, b.name, k])
+			check_eq([b.style, b.look, b.cursor_ring], ["pill", "option", true], "%s: %s 는 OPTION 값 알약" % [tag, b.name])
+			for p in pills:
+				check(not br.intersects(p), "%s: %s 가 다른 알약과 겹친다" % [tag, b.name])
+			pills.append(br)
+	var ng := _rect(rt.band_buttons[5])
+	check_eq(ng, Rect2(wx + 644, size.y - 88, 229, 64), tag + ": 「새 게임」은 판 오른쪽 아래(원작 EXIT 자리, 오른쪽 열)")
+	check(win.encloses(ng) and ng.position.y >= tracks[4].end.y + 8.0, tag + ": 「새 게임」은 판 안, 줄 길 아래")
+	check_eq([rt.band_buttons[5].look, rt.band_buttons[5].cursor_ring], ["option", false], tag + ": 「새 게임」은 커서면 스스로 노랑")
+	var parts := {"step": _rect(pm.camp_plate), "ribbon": _rect(pm.ribbon), "money": _rect(pm.money_plate), "strip": _rect(pm.notice_line),
+		"panel": win, "dir_pad": _rect(pm.dir_pad), "keys": _rect(pm.key_pad_stacked)}
+	check(pm.dir_pad.is_visible_in_tree() and pm.key_pad_stacked.is_visible_in_tree() and not pm.key_pad.is_visible_in_tree(), tag + ": 방향 십자와 세로 「취소」「선택」")
+	check_eq(_rect(pm.key_pad_stacked).position, Vector2(size.x - 118, size.y - 300), tag + ": 세로 키패드 (W − 118, H − 300)")
+	var keys := parts.keys()
+	for i in keys.size():
+		for j in range(i + 1, keys.size()):
+			check(not (parts[keys[i]] as Rect2).intersects(parts[keys[j]]), "%s: %s 와 %s 가 겹친다" % [tag, keys[i], keys[j]])
+	check(win.end.x <= _rect(pm.key_pad_stacked).position.x - 16.0, tag + ": 판 오른쪽 끝이 세로 키패드 왼쪽 − 16 안")
+	# 트리 차례: 판 → 값 알약 → 「새 게임」, 캠프에서는 하위 화면 → 확인 창 층 → 방향 십자 → 키패드.
+	var order := [rt.window] + rt.save_buttons.slice(0, 1) + rt.band_buttons.slice(4, 5) + [rt.band_buttons[5]]
+	for i in range(1, order.size()):
+		check((order[i - 1] as Node).get_index() < (order[i] as Node).get_index(), "%s: 트리 차례 %s 다음 %s" % [tag, order[i - 1].name, order[i].name])
+	for b in rt.save_buttons + rt.load_buttons + rt.band_buttons:
+		check(rt.window.get_index() < (b as Node).get_index(), "%s: %s 는 판 앞" % [tag, b.name])
+	check(rt.get_index() < pm.dialog_layer.get_index() and pm.dialog_layer.get_index() < pm.dir_pad.get_index()
+		and pm.dir_pad.get_index() < pm.key_pad_stacked.get_index(), tag + ": 기록 → 확인 창 층 → 방향 십자 → 키패드")
+	for d in [rt, rt.window, pm.notice_line]:
+		check_eq((d as Control).mouse_filter, Control.MOUSE_FILTER_IGNORE, "%s: %s 는 장식" % [tag, d.name])
+	check(rt.find_child("RecordsBand", true, false) == null, tag + ": 옛 아래 띠 없음")
+	_check_targets(pm, size, tag)
+
+
+func test_records_screen_follows_the_option_table() -> void:
 	var s := await _open()
 	var pm := s.party_menu
 	var rt := pm.records_tab
@@ -2850,10 +2928,10 @@ func test_records_screen_follows_the_load_screen_table() -> void:
 	await kit.press_key(KEY_5)
 	check_eq([pm.page, pm.tab, s.modal.kind], ["sub", 4, ""], "준비: 기록 화면")
 	var first := {}
-	for px in WINDOWS + [WINDOWS[0]]:
+	for px in WINDOWS + [Vector2(1280, 960), WINDOWS[0]]:
 		var size: Vector2 = await _window(px)
 		var tag := "%s(논리 %s) 기록" % [str(px), str(size)]
-		# 맨 위(E1 ⑥): 뿌리의 걸음 문패·장소 띠·소지금 그대로, 알림 줄 자리에 「기록」. 「기록」 문패·「뒤로」 단추는 없다.
+		# 맨 위(E1 ⑥, D27 ④): 뿌리의 걸음 문패·장소 띠·소지금 그대로, 알림 줄 자리에 「기록」. 「기록」 문패·「뒤로」·EXIT 는 없다.
 		for c in [pm.camp_plate, pm.ribbon, pm.money_plate, pm.notice_line]:
 			check((c as Control).is_visible_in_tree(), "%s: 맨 위 띠 %s 가 보인다" % [tag, c.name])
 		for c in [pm.camp_list, pm.cards]:
@@ -2863,60 +2941,34 @@ func test_records_screen_follows_the_load_screen_table() -> void:
 			tag + ": 맨 위 띠는 뿌리와 같은 자리")
 		check_eq(pm.notice_line_text(), s.texts.t("camp.cmd.records"), tag + ": 띠에 「기록」")
 		check_eq(s.debug_snapshot()["party_menu"]["strip"], s.texts.t("camp.cmd.records"), tag + ": 스냅숏 strip")
-		for n in ["RecordsTitle", "RecordsBack"]:
+		for n in ["RecordsTitle", "RecordsBack", "Exit"]:
 			check(pm.find_child(n, true, false) == null, "%s: %s 없음" % [tag, n])
-		var win := _rect(rt.window)
-		var wx := maxf(size.x / 2.0 - 430.0, 224.0)
-		check_eq(win, Rect2(wx, 116, 860, 482), tag + ": 슬롯 창 860 폭, y 116~598(띠 아래 + 8), 가운데(1280 은 방향 십자를 비켜 x 224)")
-		var band := _rect(rt.band)
-		check_eq([band.position.x, band.size.x], [wx - 10.0, 880.0], tag + ": 아래 띠 880 폭, 슬롯 창 양옆 10")
-		for i in rt.band_buttons.size():
-			for j in range(i + 1, rt.band_buttons.size()):
-				check(not _rect(rt.band_buttons[i]).intersects(_rect(rt.band_buttons[j])), "%s: %s 와 %s 가 겹친다" % [tag, rt.band_buttons[i].name, rt.band_buttons[j].name])
-		check(band.position.y >= win.end.y and band.end.y <= size.y - 8.0, tag + ": 아래 띠는 슬롯 창 아래, 화면 안(아래 여백 8)")
-		var parts := {"step": _rect(pm.camp_plate), "ribbon": _rect(pm.ribbon), "money": _rect(pm.money_plate), "strip": _rect(pm.notice_line),
-			"window": win, "band": band, "dir_pad": _rect(pm.dir_pad), "keys": _rect(pm.key_pad_stacked)}
-		check(pm.dir_pad.is_visible_in_tree() and pm.key_pad_stacked.is_visible_in_tree(), tag + ": 키패드 둘이 보인다")
-		var keys := parts.keys()
-		for i in keys.size():
-			for j in range(i + 1, keys.size()):
-				check(not (parts[keys[i]] as Rect2).intersects(parts[keys[j]]), "%s: %s 와 %s 가 겹친다" % [tag, keys[i], keys[j]])
-		for i in 3:
-			var card := Rect2(win.position + rt.card_rect(i).position, rt.card_rect(i).size)
-			check(win.encloses(card), "%s: 카드 %d 는 창 안" % [tag, i])
-			for b in [rt.save_buttons[i], rt.load_buttons[i]]:
-				check(card.encloses(_rect(b)), "%s: %s 는 카드 %d 안" % [tag, b.name, i])
-			if i > 0:
-				check(not card.intersects(Rect2(win.position + rt.card_rect(i - 1).position, rt.card_rect(i - 1).size)), "%s: 카드 겹침" % tag)
-		for b in rt.band_buttons:
-			check(band.encloses(_rect(b)), "%s: %s 는 아래 띠 안" % [tag, b.name])
-		for d in [rt, rt.window, rt.band, pm.notice_line]:
-			check_eq((d as Control).mouse_filter, Control.MOUSE_FILTER_IGNORE, "%s: %s 는 장식" % [tag, d.name])
-		_check_targets(pm, size, tag)
-		var snap := [win, band, _rect(rt.load_buttons[2])]
+		_check_records_layers(pm, size, tag)
+		var snap := [_rect(rt.window), _rect(rt.load_buttons[2]), _rect(rt.band_buttons[5])]
 		if first.has(px):
 			check_eq(snap, first[px], tag + ": 크기를 바꿨다 돌아와도 같은 자리(앵커)")
 		first[px] = snap
-	# 노랑(E1 ⑦): 채움은 커서 단추 하나, 커서 카드의 번호 칸은 밝은 하늘색(노랑 아님).
-	check_eq(_yellow(pm), [str(rt.cursor_button().name)], "기록의 노랑 채움은 커서 단추 하나")
-	check_eq([rt.cur_row, rt.num_fill(0), rt.num_fill(1)], [0, UiTheme.CMD_CHOSEN, UiTheme.SHOP_WIN_CAP], "커서 카드 번호 칸 = 밝은 하늘색, 다른 칸 = 마개 색")
-	check(rt.num_fill(0) != UiTheme.BTN_PICK and contrast(rt.num_text_color(0), rt.num_fill(0)) >= 4.5, "번호 칸은 노랑 채움이 아니고 글자 대비 4.5:1")
+	# 노랑 하나(07 §9.2): 커서 줄의 이름 알약. 커서 값 알약은 고리만(그린 것으로 센다).
+	await kit.frames(2)
+	check_eq(_camp_yellow(pm), ["RecordsWindow"], "기록의 노랑 채움은 판 위 커서 줄 이름 알약 하나")
 	# 알림이 있으면 띠의 「기록」을 잠시 대신한다(알림 규칙 그대로).
 	pm.show_notice("시험 안내")
 	check_eq([pm.notice_line_text(), pm.notice_line.is_visible_in_tree()], ["시험 안내", true], "알림이 「기록」을 대신한다")
 	pm._clear_notice()
 	check_eq([pm.notice_line_text(), pm.notice_line.is_visible_in_tree()], [s.texts.t("camp.cmd.records"), true], "알림이 지나면 「기록」")
-	# 카드 값(저장에 있는 값)·버튼 이름(앞 메뉴 창과 같은 이름: web_check 가 누른다).
-	check_eq(rt.card_lines(0)[1], "%s · 걸음 %d" % [s.texts.t(s.state.floor_def.name_key), s.state.steps], "카드 1: 층 · 걸음")
-	check_eq([str(rt.save_buttons[0].name), str(rt.load_buttons[0].name), rt.band_buttons.map(func(b: PartyButton) -> String: return str(b.name))],
-		["Save_slot1", "Load_slot1", ["Export", "Import", "Automap_off", "Automap_floor", "Automap_full", "NewGame"]], "단추 이름")
-	# 저장(카드 2, 포인터) → 카드가 채워지고 커서가 그 단추로.
+	# 슬롯 값(저장에 있는 값)은 이름 알약 두 줄에, 버튼 이름은 앞 메뉴 창과 같다(web_check 가 누른다).
+	check_eq(rt.card_lines(0)[1], "%s · 걸음 %d" % [s.texts.t(s.state.floor_def.name_key), s.state.steps], "슬롯 1: 층 · 걸음")
+	check_eq(rt.row_label_lines(0), ["1  " + rt.card_lines(0)[0], "%s   %s" % [rt.card_lines(0)[1], rt.card_lines(0)[2]]], "슬롯 1 이름 알약: 대표·Lv, 층 · 걸음 · 시각")
+	check_eq(rt.row_label_lines(1), ["2  " + s.texts.t("menu.empty_slot")], "빈 슬롯 이름 알약: 한 줄")
+	check_eq([rt.row_label_lines(3), rt.row_label_lines(4)], [[s.texts.t("camp.records.file")], [s.texts.t("menu.automap")]], "파일·자동 지도 이름 알약")
+	check_eq(s.debug_snapshot()["party_menu"]["records"]["cards"][0], rt.card_lines(0), "스냅숏 records.cards 그대로")
+	# 저장(슬롯 2, 포인터) → 슬롯이 채워지고 커서가 그 단추로.
 	await kit.tap(kit.center_of(rt.save_buttons[1]))
-	check(s.store.load_slot("slot2").ok() and rt.card_lines(1)[0] != s.texts.t("menu.empty_slot") and not rt.load_buttons[1].disabled, "저장 → 카드 2 채움")
+	check(s.store.load_slot("slot2").ok() and rt.card_lines(1)[0] != s.texts.t("menu.empty_slot") and not rt.load_buttons[1].disabled, "저장 → 슬롯 2 채움")
 	check_eq([rt.cur_row, rt.cur_col, pm.is_open(), pm.tab], [1, 0, true, 4], "저장 뒤 기록 화면 그대로, 커서는 누른 단추")
-	# 자동 지도(키보드: ↓ 줄, → 칸, Enter).
-	await kit.press_key(KEY_DOWN)
-	await kit.press_key(KEY_DOWN)
+	# 자동 지도(키보드: ↓ 셋 = 슬롯 3 → 파일 → 자동 지도(E2-e: 줄 여섯, 전에는 ↓ 둘), → 칸, Enter).
+	for k in 3:
+		await kit.press_key(KEY_DOWN)
 	for k in 4:
 		await kit.press_key(KEY_RIGHT)
 	check(rt.cursor_button().name == "Automap_full", "커서: %s" % rt.cursor_button().name)
@@ -2955,6 +3007,304 @@ func test_records_screen_follows_the_load_screen_table() -> void:
 	await kit.press_key(KEY_5)
 	await kit.tap(kit.center_of(rt.load_buttons[2]))
 	check(pm.is_open() and pm.tab == 4, "빈 칸 불러오기: 아무 일도 없다")
+
+
+## 기록 그리기 기록의 채움 [{rect(화면), color}]: 판(이름 알약·길·판 몸)과 값 알약. 판은 바깥 선·고리(outline)를 채움으로 치지 않는다.
+static func _records_drawn(rt: PartyRecordsTab) -> Dictionary:
+	var out := {}
+	var wp := _rect(rt.window).position
+	out["window"] = SheetParts.record(rt.window).map(func(e: Dictionary) -> Dictionary:
+		var d := e.duplicate()
+		d["rect"] = Rect2(wp + (e["rect"] as Rect2).position, (e["rect"] as Rect2).size)
+		return d)
+	for b in rt.save_buttons + rt.load_buttons + rt.band_buttons:
+		out[str(b.name)] = SheetParts.record(b)
+	return out
+
+
+static func _fills_of(rec: Array) -> Array:
+	return rec.filter(func(e: Dictionary) -> bool: return e["kind"] == "fill" or e["kind"] == "poly")
+
+
+## 노랑 채움(판·알약 기록) 이름: 판이면 「label k」, 알약이면 단추 이름.
+func _records_yellow(rt: PartyRecordsTab) -> Array:
+	var out := []
+	var d := _records_drawn(rt)
+	for k in d:
+		for e in _fills_of(d[k]):
+			if _is_yellow(e["color"]):
+				if k == "window":
+					var hit := "window ?"
+					for r in PartyRecordsTab.ROWS:
+						if (e["rect"] as Rect2).is_equal_approx(_rec_abs(rt, PartyRecordsTab.label_rect(r))):
+							hit = "label %d" % r
+					out.append(hit)
+				else:
+					out.append(k)
+	return out
+
+
+## 알약 색은 그린 것에서 읽는다(E2-e): 커서 줄 이름 알약 노랑, 다른 이름 알약 초록, 값 알약 초록·고른 값 밝은 하늘색·못 누름 회색,
+## 커서 값 알약은 노란 고리만, 「새 게임」은 커서면 노랑 채움. 모든 칸에서 노랑 채움은 하나.
+func test_records_pills_are_read_from_what_is_drawn() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var rt := pm.records_tab
+	s._save_slot("slot1")
+	await kit.frames(2)
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_5)
+	await kit.frames(2)
+	check(rt.load_buttons[1].disabled and not rt.load_buttons[0].disabled, "준비: 슬롯 2 비어 있음(불러오기 못 누름)")
+	check(ListParts.OPT_OFF.s < 0.15 and ListParts.OPT_OFF_TEXT.s < 0.15, "못 누름은 회색(채도 낮음)")
+	var g := rt.grid()
+	var seen := 0
+	for r in g.size():
+		for c in (g[r] as Array).size():
+			pm.handle("cursor", -9)
+			await kit.frames(1)
+			for i in r:
+				pm.handle("cursor", 1)
+				await kit.frames(1)
+			pm.handle("cursor_x", -9)
+			await kit.frames(1)
+			for i in c:
+				pm.handle("cursor_x", 1)
+				await kit.frames(1)
+			await kit.frames(2)
+			var cb := rt.cursor_button()
+			var tag := "커서 %d,%d %s" % [r, c, cb.name]
+			check_eq([rt.cur_row, rt.cur_col], [r, c], tag + ": 준비")
+			var d := _records_drawn(rt)
+			# 이름 알약(판 기록): 길 다음의 채움.
+			for k in PartyRecordsTab.ROWS:
+				var lr := _rec_abs(rt, PartyRecordsTab.label_rect(k))
+				var got := _fills_of(d["window"]).filter(func(e: Dictionary) -> bool: return (e["rect"] as Rect2).is_equal_approx(lr))
+				check_eq(got.map(func(e: Dictionary) -> Color: return e["color"]), [ListParts.OPT_CURSOR if k == r else ListParts.OPT_PILL],
+					"%s: 이름 알약 %d 은 %s" % [tag, k, "노랑" if k == r else "초록"])
+			# 값 알약(제 기록): 첫 채움과 고리.
+			for b in rt.save_buttons + rt.load_buttons + rt.band_buttons:
+				var rec: Array = d[str(b.name)]
+				var fills := _fills_of(rec)
+				var rings := rec.filter(func(e: Dictionary) -> bool: return e["kind"] == "outline")
+				var want := ListParts.OPT_PILL
+				if b.disabled:
+					want = ListParts.OPT_OFF
+				elif b == cb and not b.cursor_ring:
+					want = ListParts.OPT_CURSOR
+				elif b.checked:
+					want = ListParts.OPT_CHOSEN
+				check(not fills.is_empty() and fills[0]["color"] == want, "%s: %s 채움 %s(바람 %s)" % [tag, b.name,
+					(fills[0]["color"] as Color).to_html(false) if not fills.is_empty() else "-", want.to_html(false)])
+				var ring_want := b == cb and b.cursor_ring
+				check_eq(rings.map(func(e: Dictionary) -> Color: return e["color"]), [ListParts.OPT_RING] if ring_want else [],
+					"%s: %s 노란 고리 %s" % [tag, b.name, "있음" if ring_want else "없음"])
+			var want_yellow := ["NewGame"] if r == 5 else ["label %d" % r]
+			check_eq(_records_yellow(rt), want_yellow, tag + ": 노랑 채움은 하나")
+			check_eq(_camp_yellow(pm), ["NewGame"] if r == 5 else ["RecordsWindow"], tag + ": 캠프 전체에서도 노랑 채움 하나")
+			seen += 1
+	check_eq(seen, 12, "칸 열둘 모두 보았다(고른 자동 지도·흐린 불러오기 포함)")
+	# 확인 창이 떠 있으면 기록의 노랑은 어둡게 하는 판 뒤라 노랑이 아니다.
+	pm.handle("record_new_game")
+	await kit.frames(2)
+	check_eq(_camp_yellow(pm), ["DialogBack"], "새 게임 창: 노랑 채움은 창의 커서 단추 하나(기록은 어둡게 하는 판 뒤)")
+	await kit.press_key(KEY_ESCAPE)
+
+
+## 글자 대비(그린 것): 판의 도움말(판 몸을 흰 뒤·검은 뒤에 겹친 색), 이름 알약 두 줄, 값 알약 글. 모든 알약 상태 색 쌍도.
+func test_records_contrast_on_what_is_drawn() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var rt := pm.records_tab
+	s._save_slot("slot1")
+	await kit.frames(2)
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_5)
+	for st in ["normal", "pressed", "selected", "selected_pressed", "checked", "checked_pressed", "disabled"]:
+		var cols := ListParts.pill_colors(st, "option")
+		check(contrast(cols[1], cols[0]) >= 4.5, "OPTION 알약 %s: %.2f" % [st, contrast(cols[1], cols[0])])
+	var body := ListParts.PANEL_OPT
+	for bg in [Color.WHITE, Color.BLACK]:
+		var mixed := Color(body.r * body.a + bg.r * (1.0 - body.a), body.g * body.a + bg.g * (1.0 - body.a), body.b * body.a + bg.b * (1.0 - body.a))
+		check(contrast(ListParts.PANEL_OPT_TEXT, mixed) >= 4.5, "도움말: 판 몸을 %s 뒤에 겹친 색 위 %.2f" % [bg.to_html(false), contrast(ListParts.PANEL_OPT_TEXT, mixed)])
+	var checked_n := 0
+	for moves in [[], [["cursor_x", 1], ["cursor", 1]], [["cursor", 1], ["cursor", 1], ["cursor", 1]], [["cursor", 1]]]:
+		for m in moves:
+			pm.handle(m[0], m[1])
+			await kit.frames(1)
+		await kit.frames(2)
+		var d := _records_drawn(rt)
+		for k in d:
+			var rec: Array = d[k]
+			for j in rec.size():
+				var e: Dictionary = rec[j]
+				if e["kind"] != "text":
+					continue
+				# 글 아래 채움: 글보다 앞에 그린 채움 가운데 글 시작점을 덮는 마지막 것(판 몸은 흰 뒤에 겹친 색).
+				var p := (e["rect"] as Rect2).position + Vector2(2, (e["rect"] as Rect2).size.y * 0.5)
+				var under := Color.BLACK
+				var found := false
+				for i in j:
+					var f: Dictionary = rec[i]
+					if f["kind"] == "fill" and (f["rect"] as Rect2).has_point(p):
+						under = f["color"]
+						found = true
+				check(found, "%s 「%s」: 아래 채움을 찾았다" % [k, e["text"]])
+				if under.a < 1.0:
+					under = Color(under.r * under.a + (1.0 - under.a), under.g * under.a + (1.0 - under.a), under.b * under.a + (1.0 - under.a))
+				var cr := contrast(e["color"], under)
+				check(cr >= 4.5, "%s 「%s」 %s on %s: %.2f" % [k, e["text"], (e["color"] as Color).to_html(false), under.to_html(false), cr])
+				checked_n += 1
+	check_eq(checked_n, 4 * 19, "그린 글을 모두 쟀다(상태 넷 × 도움말 1·이름 알약 6줄·값 알약 12)")
+
+
+## 자동 지도 값 알약은 설정을 따른다(밝은 하늘색 하나, 그린 것): 단추·키·바깥에서 바꾼 설정 모두.
+func test_records_automap_pills_follow_the_setting() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var rt := pm.records_tab
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_5)
+	var modes: Array = ExplorationRules.AUTOMAP_MODES
+	for mode in modes + [modes[0]]:
+		pm.handle("record_automap", mode)
+		await kit.frames(2)
+		check_eq(s.settings.automap, mode, "준비: 설정 %s" % mode)
+		_check_automap_drawn(rt, mode, "단추 %s" % mode)
+	for mode in modes:
+		s.settings.set_automap(mode)
+		pm.refresh_view()
+		await kit.frames(2)
+		_check_automap_drawn(rt, mode, "바깥에서 바꾼 설정 %s" % mode)
+
+
+func _check_automap_drawn(rt: PartyRecordsTab, mode: String, tag: String) -> void:
+	var d := _records_drawn(rt)
+	for k in ExplorationRules.AUTOMAP_MODES.size():
+		var b: ListButton = rt.band_buttons[2 + k]
+		var on: bool = ExplorationRules.AUTOMAP_MODES[k] == mode
+		var f := _fills_of(d[str(b.name)])
+		check_eq(b.checked, on, "%s: %s 켜짐" % [tag, b.name])
+		check(not f.is_empty() and f[0]["color"] == (ListParts.OPT_CHOSEN if on else ListParts.OPT_PILL), "%s: %s 그린 색" % [tag, b.name])
+
+
+## 도움말 줄은 커서 단추가 할 일을 말한다(키·누르기 모두, 빈 슬롯 불러오기는 「빈 슬롯」).
+func test_records_help_line_follows_the_cursor() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var rt := pm.records_tab
+	s._save_slot("slot1")
+	await kit.frames(2)
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_5)
+	var t := s.texts
+	var want := [
+		[t.t("camp.records.help.save", {"n": 1}), t.t("camp.records.help.load", {"n": 1})],
+		[t.t("camp.records.help.save", {"n": 2}), t.t("camp.records.help.load_empty")],
+		[t.t("camp.records.help.save", {"n": 3}), t.t("camp.records.help.load_empty")],
+		[t.t("camp.records.help.export"), t.t("camp.records.help.import")],
+		[t.t("camp.records.help.automap"), t.t("camp.records.help.automap"), t.t("camp.records.help.automap")],
+		[t.t("camp.records.help.new_game")]]
+	var all := {}
+	for r in want.size():
+		for c in (want[r] as Array).size():
+			all[want[r][c]] = true
+			check(not str(want[r][c]).begins_with("camp."), "문구 %d,%d 가 있다" % [r, c])
+	check_eq(all.size(), 9, "문구 아홉이 서로 다르다(저장 셋·불러오기·빈 슬롯·내보내기·가져오기·자동 지도·새 게임)")
+	for r in want.size():
+		for c in (want[r] as Array).size():
+			for i in 6:
+				await kit.press_key(KEY_UP)
+			for i in 3:
+				await kit.press_key(KEY_LEFT)
+			for i in r:
+				await kit.press_key(KEY_DOWN)
+			for i in c:
+				await kit.press_key(KEY_RIGHT)
+			await kit.frames(2)
+			check_eq([rt.cur_row, rt.cur_col], [r, c], "준비: 커서 %d,%d" % [r, c])
+			check_eq(_help_drawn(rt), [want[r][c]], "커서 %d,%d %s: 도움말" % [r, c, rt.cursor_button().name])
+	await kit.tap(kit.center_of(rt.save_buttons[2]))
+	await kit.frames(2)
+	check_eq(_help_drawn(rt), [t.t("camp.records.help.save", {"n": 3})], "누르기: 슬롯 3 저장 → 도움말도 그 단추")
+	await kit.press_key(KEY_RIGHT)
+	await kit.frames(2)
+	check_eq(_help_drawn(rt), [t.t("camp.records.help.load", {"n": 3})], "저장한 슬롯 3 불러오기: 빈 슬롯 문구가 아니다")
+	await kit.tap(kit.center_of(rt.band_buttons[2]))
+	await kit.frames(2)
+	check_eq(_help_drawn(rt), [t.t("camp.records.help.automap")], "누르기: 자동 지도 끔 → 도움말도 그 줄")
+
+
+## 판에 그린 도움말 줄 글(도움말 자리 안의 글).
+static func _help_drawn(rt: PartyRecordsTab) -> Array:
+	var h := PartyRecordsTab.HELP
+	return SheetParts.record(rt.window).filter(func(e: Dictionary) -> bool:
+		return e["kind"] == "text" and h.grow(2.0).encloses(Rect2((e["rect"] as Rect2).position + Vector2(0, 4), Vector2(h.size.x, 1)))).map(
+		func(e: Dictionary) -> String: return str(e["text"]))
+
+
+## 공용 부품의 기록용 선택지가 다른 화면 그림을 바꾸지 않는다(D28): 소지품 알약은 기본 "camp" 색, 스킬 트리 판은 "tree" 판 그대로.
+func test_shared_look_options_keep_other_screens() -> void:
+	check_eq([ListParts.pill_colors("normal"), ListParts.pill_colors("selected"), ListParts.pill_colors("checked"), ListParts.pill_colors("pressed")],
+		[[Color("1c7f90"), Color.WHITE], [UiTheme.CMD_PICK, UiTheme.CMD_PICK_TEXT], [UiTheme.BTN_CHECKED, UiTheme.BTN_PICK_TEXT],
+		[Color("145f6c"), Color.WHITE]], "캠프 알약 색(기본 look) 그대로")
+	var lb := ListButton.new()
+	check_eq([lb.look, lb.cursor_ring], ["camp", false], "ListButton 기본 모양 = 캠프")
+	lb.free()
+	check_eq([ListParts.PANEL_TREE, ListParts.PANEL_TREE_OUTER, ListParts.PANEL_TREE_RADIUS], [Color("0c6a9e"), Color("013045"), 12], "트리 판 색 그대로")
+	var s := await _open()
+	var pm := s.party_menu
+	# 소지품(디버그): 알약이 커서일 때와 아닐 때 그린 채움·글자.
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	await kit.frames(2)
+	var pill: ListButton = pm.find_child("SupplyToggle", true, false)
+	check(pill != null and pill.style == "pill" and pill.look == "camp", "준비: 소지품 알약(캠프 모양)")
+	var rec := SheetParts.record(pill)
+	var fills := _fills_of(rec)
+	var texts := rec.filter(func(e: Dictionary) -> bool: return e["kind"] == "text")
+	check_eq([fills[0]["color"] if not fills.is_empty() else null, rec.filter(func(e: Dictionary) -> bool: return e["kind"] == "outline").size()],
+		[ListParts.pill_colors("selected" if pill.selected else ("checked" if pill.checked else "normal"))[0], 0], "소지품 알약: 캠프 채움, 고리 없음")
+	# 보급을 열고 커서를 「+1」로: 알약은 켜짐(하늘색 BTN_CHECKED, OPTION 의 고른 값 색 아님).
+	await kit.press_key(KEY_ENTER)
+	await kit.press_key(KEY_DOWN)
+	await kit.frames(2)
+	rec = SheetParts.record(pill)
+	fills = _fills_of(rec)
+	texts = rec.filter(func(e: Dictionary) -> bool: return e["kind"] == "text")
+	check(not pill.selected and pill.checked, "준비: 보급이 열렸고 커서가 알약을 떠났다")
+	check_eq([fills[0]["color"], texts[0]["color"]], [UiTheme.BTN_CHECKED, UiTheme.BTN_PICK_TEXT], "켜진 소지품 알약: 캠프 켜짐 색(OPTION 하늘색 아님)")
+	pm.close_menu()
+	await kit.frames(2)
+	# 기본 모양 알약 하나(보통 상태)를 그려 본다: #1C7F90 에 흰 글자.
+	var lone := ListButton.new()
+	lone.style = "pill"
+	lone.text = "시험"
+	tree.root.add_child(lone)
+	lone.size = Vector2(200, 64)
+	await kit.frames(2)
+	rec = SheetParts.record(lone)
+	fills = _fills_of(rec)
+	texts = rec.filter(func(e: Dictionary) -> bool: return e["kind"] == "text")
+	check_eq([fills[0]["color"], texts[0]["color"], rec.filter(func(e: Dictionary) -> bool: return e["kind"] == "outline").size()],
+		[Color("1c7f90"), Color.WHITE, 0], "기본 모양 알약(보통): #1C7F90 에 흰 글자, 고리 없음(OPTION 초록 아님)")
+	lone.selected = true
+	lone.disabled = true
+	await kit.frames(2)
+	check_eq(_fills_of(SheetParts.record(lone))[0]["color"], UiTheme.CMD_PICK, "기본 모양 알약은 못 누름이어도 회색으로 바뀌지 않는다(지금 그대로)")
+	lone.queue_free()
+	await kit.frames(2)
+	# 스킬 트리 판: 바깥 #013045 r = 판, 안 #0C6A9E = 판 − 2.
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_4)
+	await kit.press_key(KEY_ENTER)
+	await kit.frames(2)
+	var tw := pm.skill_tab.tree_window
+	var tf := _fills_of(SheetParts.record(tw))
+	var r := Rect2(Vector2.ZERO, tw.size)
+	check_eq(tf.slice(0, 2).map(func(e: Dictionary) -> Array: return [e["color"], e["rect"]]), [[Color("013045"), r], [Color("0c6a9e"), r.grow(-2.0)]],
+		"스킬 트리 판: 같은 두 채움(공용 draw_panel \"tree\")")
+	check(SheetParts.record(tw).filter(func(e: Dictionary) -> bool: return e["kind"] == "outline").is_empty(), "스킬 트리 판에 OPTION 바깥 선 없음")
 
 
 # ---- 바깥 창(층 3)과 누르고 있던 캠프 단추(R2 리뷰 고침 1) ----

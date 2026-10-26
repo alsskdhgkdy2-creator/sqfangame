@@ -6,7 +6,7 @@
 ## 쪽(page): root(캠프 뿌리: 명령 목록) → pick(상태·스킬·장비: 파티 카드에서 대원 고르기) → sub(그 대원의 하위 화면).
 ## 소지품·기록은 파티 전체 것이라 고르기 없이 바로, 닫기는 탐색으로. Esc·P 는 한 단계 뒤로(하위 화면 → 뿌리 → 닫힘).
 ## 하위 화면은 원작 화면을 옮긴 것: 상태(PartyStatusTab, 상태 화면), 스킬(PartySkillTab, 스킬 트리), 장비(PartyEquipTab,
-## 원작 I HD 장비 시트: 왼쪽 상태 시트·오른쪽 목록 창·설명 상자), 소지품(PartyItemsTab, 원작 소지품 목록 창·설명 상자), 기록(PartyRecordsTab, 불러오기 화면의 슬롯 카드). 기록의 일(저장·불러오기·내보내기·
+## 원작 I HD 장비 시트: 왼쪽 상태 시트·오른쪽 목록 창·설명 상자), 소지품(PartyItemsTab, 원작 소지품 목록 창·설명 상자), 기록(PartyRecordsTab, 원작 OPTION 모양의 둥근 판과 알약 줄, E2-e). 기록의 일(저장·불러오기·내보내기·
 ## 가져오기·자동 지도·새 게임)은 탐색 화면이 records 갈고리로 준다.
 ## 값은 규칙의 읽기 함수(GrowthRules.profile·learn_block·equip_block·sp_left 등)에서 읽고 화면이 다시 계산하지 않는다(07 §11.4).
 ## 상태는 규칙 함수(allocate·equip·supply·grant_exp)로만 바꾸고, 받아들여지면 save_hook(자동 저장, 07 §8.5) 뒤 changed 를 낸다.

@@ -82,7 +82,11 @@ static func _fill(ci: CanvasItem, r: Rect2, col: Color) -> void:
 
 static func _fill_round(ci: CanvasItem, r: Rect2, col: Color, radius: int, edge: Color = Color(0, 0, 0, 0), edge_w: int = 0) -> void:
 	UiTheme.fill_round(ci, r, col, radius, edge, edge_w)
-	_log(ci, {"kind": "fill", "rect": r, "color": col})
+	# 테두리가 있을 때만 그 색·굵기를 남긴다(테 없는 채움 기록은 그대로).
+	if edge_w > 0:
+		_log(ci, {"kind": "fill", "rect": r, "color": col, "edge": edge, "edge_w": edge_w})
+	else:
+		_log(ci, {"kind": "fill", "rect": r, "color": col})
 
 
 static func _poly(ci: CanvasItem, pts: PackedVector2Array, col: Color) -> void:

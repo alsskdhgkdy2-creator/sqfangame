@@ -450,21 +450,32 @@ func test_menu_buttons_have_borders_and_clear_checked_and_selected_states() -> v
 	var buttons: Array = rt.save_buttons + rt.load_buttons + rt.band_buttons
 	check(buttons.size() >= 12, "단추 %d개" % buttons.size())
 	var disabled_seen := 0
+	await kit.frames(2)
+	# E2-e: 기록 단추는 OPTION 알약(ListButton "option"). 테두리 = 알약이 어두운 줄 길 안에 그려진다(「새 게임」은 길 색 테 3).
+	var tracks := SheetParts.record(rt.window).filter(func(e: Dictionary) -> bool: return e["kind"] == "fill" and e["color"] == ListParts.OPT_TRACK)
+	check_eq(tracks.size(), PartyRecordsTab.ROWS, "줄 길 다섯을 그렸다")
 	for bb in buttons:
-		var b := bb as PartyButton
-		var st := b.theme_state()
-		check(st.begins_with("fac:") or (b.checked and st.begins_with("checked")), "%s: 시설 모양(켜짐은 공용 켜짐) %s" % [b.name, st])
-		var lk := UiTheme.look(st)
-		check(lk["inner_w"] >= 1.0 or lk["outer_w"] >= 1.0, "%s: 보이는 테두리" % b.name)
+		var b := bb as ListButton
+		check(b != null and b.style == "pill" and b.look == "option", "%s: OPTION 알약" % bb.name)
+		var br := Rect2(b.position - rt.window.position, b.size)
+		var in_track := tracks.any(func(e: Dictionary) -> bool: return (e["rect"] as Rect2).encloses(br))
+		if b.name == "NewGame":
+			# 판 위에 홀로 선 알약: 그린 채움에 테(굵기 1 이상)가 있고, 테 색은 제 채움·판 몸과 다르다.
+			var f: Array = SheetParts.record(b).filter(func(e: Dictionary) -> bool: return e["kind"] == "fill")
+			var edge_ok: bool = not f.is_empty() and int(f[0].get("edge_w", 0)) >= 1 and f[0].has("edge") \
+				and (f[0]["edge"] as Color) != (f[0]["color"] as Color) and (f[0]["edge"] as Color) != ListParts.PANEL_OPT
+			check(edge_ok, "%s: 보이는 테두리(판 위 알약의 테 %s)" % [b.name, str(f[0] if not f.is_empty() else {})])
+		else:
+			check(in_track, "%s: 보이는 테두리(줄 길 안)" % b.name)
 		check(b.size.x >= 64.0 and b.size.y >= 64.0, "%s: 64 이상 %s" % [b.name, str(b.size)])
 		if b.disabled:
 			disabled_seen += 1
 	check(disabled_seen >= 2, "못 누르는 단추(빈 불러오기 칸)도 보았다(%d)" % disabled_seen)
-	var sel := UiTheme.look(rt.save_buttons[0].theme_state())
-	var normal := UiTheme.look(rt.save_buttons[1].theme_state())
-	check(rt.save_buttons[0].selected and rt.save_buttons[0].theme_state() == "fac:selected", "커서 단추 = 고름")
-	check((sel["text"] as Color).get_luminance() < 0.3 and (normal["text"] as Color).get_luminance() > 0.5, "고른 것은 색 말고도 글자 밝기가 뒤집힌다(밝은 채움 + 어두운 글자)")
-	check(rt.cur_row == 0, "커서 카드는 번호 칸 노랑 + 테두리(그리기)")
+	var sel := ListParts.pill_colors("selected", "option")
+	var normal := ListParts.pill_colors("normal", "option")
+	check(rt.save_buttons[0].selected and rt.save_buttons[0].pill_state() == "normal" and rt.save_buttons[0].cursor_ring, "커서 단추 = 고름(값 알약은 노란 고리)")
+	check(sel[1].get_luminance() < 0.3 and normal[1].get_luminance() > 0.5, "고른 것은 색 말고도 글자 밝기가 뒤집힌다(밝은 채움 + 어두운 글자)")
+	check(rt.cur_row == 0 and rt.label_state(0) == "selected", "커서 줄은 이름 알약 노랑(그리기)")
 	var mode: String = s.settings.automap
 	for m in ExplorationRules.AUTOMAP_MODES:
 		var ab: PartyButton = rt.find_child("Automap_" + m, true, false)
@@ -476,7 +487,7 @@ func test_menu_buttons_have_borders_and_clear_checked_and_selected_states() -> v
 	check(rt.load_buttons[1].disabled, "빈 칸 불러오기: 못 누름")
 	await kit.press_key(KEY_DOWN)
 	await kit.press_key(KEY_RIGHT)
-	check(rt.load_buttons[1].selected and rt.load_buttons[1].theme_state() == "fac:disabled_selected", "빈 칸도 커서는 받는다(이동이 건너뛰지 않는다)")
+	check(rt.load_buttons[1].selected and rt.load_buttons[1].pill_state() == "disabled", "빈 칸도 커서는 받는다(이동이 건너뛰지 않는다, 회색 + 고리)")
 	var h := kit.hash_now()
 	await kit.press_key(KEY_ENTER)
 	check(pm.is_open() and kit.hash_now() == h, "못 누르는 칸에서 Enter: 아무 일도 없다")
