@@ -172,7 +172,7 @@ func test_config_rejects_missing_axes_and_bad_values() -> void:
 	_cfg_rejects("파티 직업", func(c): c["parties"]["P3"][2][0] = "class.nope", "parties.P3: 직업 class.nope")
 	_cfg_rejects("파티 넷", func(c): c["parties"]["P2"].pop_back(), "parties.P2: [직업 ID, front|back] 5개")
 	_cfg_rejects("수용 범위", func(c): c["acceptance"].erase("p1_chain_median"), "acceptance.p1_chain_median")
-	_cfg_rejects("자료형", func(c): c["floor"] = 3, "floor: 비지 않은 문자열")
+	_cfg_rejects("자료형", func(c): c["labyrinth"] = 3, "labyrinth: 비지 않은 문자열")
 	_cfg_rejects("stall_limit 0", func(c): c["stall_limit"] = 0, "stall_limit: 1 이상 정수")
 	DirAccess.make_dir_recursive_absolute(Fx.SAVE_DIR)
 	var f := FileAccess.open(CFG_PATH, FileAccess.WRITE)

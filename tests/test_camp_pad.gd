@@ -121,7 +121,7 @@ func _fresh(debug: bool = false) -> PartyMenu:
 		"new_game": func() -> void: hook_log.append("new_game"),
 	}
 	if _defs == null:
-		_defs = GameDefs.load_paths("res://data/floors/f1_test.json", "res://data/party/test_party.json", "res://data", texts).defs
+		_defs = GameDefs.load_paths("res://data/floors/labyrinth.json", "res://data/party/test_party.json", "res://data", texts).defs
 	var defs := _defs
 	var st := ExplorationRules.new_game(defs, 1, "floor")
 	GrowthRules.grant_exp(st, DUELIST_A, defs.battle.growth.cum(3))

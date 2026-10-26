@@ -107,6 +107,11 @@ func set_state(s: ExplorationState) -> void:
 	overview.set_state(s)
 
 
+## 도구 열 층 문패의 글(층 표시 「B1F」, M3 A1). 층이 바뀌면 탐색 화면이 부른다.
+func set_floor_label(text: String) -> void:
+	toolbar.floor_plate.text = text
+
+
 ## 지금 도구를 보인다: 도구 열 강조, 아이콘 도구면 층 전체 보기 대신 아이콘 판.
 func show_current(tool: String, color: int, icon_type: String, can_undo: bool) -> void:
 	toolbar.show_current(tool, color, icon_type, can_undo)

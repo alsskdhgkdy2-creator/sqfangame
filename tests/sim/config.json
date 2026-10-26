@@ -2,7 +2,7 @@
   "base_seed": 20261017,
   "stall_limit": 50,
   "chain_cap": 40,
-  "floor": "res://data/floors/f1_test.json",
+  "labyrinth": "res://data/floors/labyrinth.json",
   "party_template": "res://data/party/test_party.json",
   "data_dir": "res://data",
   "parties": {

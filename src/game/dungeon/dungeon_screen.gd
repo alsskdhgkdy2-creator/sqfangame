@@ -11,12 +11,15 @@
 ## 전투(06 §9): 전투 중이면 전투 층(BattleLayer)을 덮는다. HUD·지도 판을 감춘다.
 ## 캠프(07 §9, M2.7 R2): 안내 줄 「캠프」 단추·P·Esc 로 여는 층 2 의 창(PartyMenu). 열린 동안은 창이 열린 것과 같다(이동·지도·메뉴 키를 막는다).
 ## 저장·불러오기·내보내기·가져오기·자동 지도·새 게임은 캠프 「기록」 화면이 records 갈고리로 부른다(따로 된 메뉴 창은 없다, R2-d).
-## 층 3 Modal 은 알림·파일 고르기·메모·전멸 창만 띄운다.
+## 층 3 Modal 은 알림·파일 고르기·메모·전멸·계단 확인 창만 띄운다.
+## 계단(M3 A1): 계단 칸에 멈추거나 계단 위에서 조사하면 연출이 끝난 뒤 계단 확인 창(「예」 먼저, Esc·Backspace = 「아니오」)을 띄우고,
+##   「예」면 규칙 행동 STAIRS 로 층을 바꾼 뒤 시야·지도·층 문패를 그 층으로 다시 맞추고 자동 저장한다. 위험도·걸음은 그대로다.
 ## 미리 받는 입력은 하나(나중 것이 대신)이고, 창이 열릴 때·불러올 때·포커스를 잃을 때·입력 창이 닫힌 뒤 비운다.
 class_name DungeonScreen
 extends Control
 
-const FLOOR_PATH := "res://data/floors/f1_test.json"
+## 층 묶음(미궁 하나, M3 A1): 층 차례가 깊이(B1F, B2F, …).
+const LABYRINTH_PATH := "res://data/floors/labyrinth.json"
 const PARTY_PATH := "res://data/party/test_party.json"
 const TEXT_PATH := "res://data/text/ko.json"
 const DATA_DIR := "res://data"
@@ -61,7 +64,7 @@ const HOLD_REPEAT_MS := 220
 # ---- 시험이 트리에 넣기 전에 바꿀 수 있는 값 ----
 var save_dir := "user://saves"
 ## 정의 데이터 경로(시험이 읽기 실패를 만들 때 바꾼다).
-var floor_path := FLOOR_PATH
+var labyrinth_path := LABYRINTH_PATH
 var party_path := PARTY_PATH
 var data_dir := DATA_DIR
 ## 시험용: "export_write"·"import_read" 가 들어 있으면 네이티브 내보내기 쓰기·가져오기 읽기 뒤 오류가 난 것처럼 한다.
@@ -83,6 +86,7 @@ var native_debug := OS.is_debug_build()
 
 # ---- 상태 ----
 var state: ExplorationState
+## 시야·지도가 지금 보이는 층(층이 바뀌면 _show_floor 가 맞춘다).
 var floor_def: FloorModel
 var party_data: PartyData
 var texts: TextDb
@@ -149,6 +153,9 @@ var _repeat_wait := false
 var _action_frame := -1
 ## 지도 획이 열려 있어 미룬 자동 저장(획이 끝나거나 취소된 뒤 저장한다).
 var _autosave_pending := false
+## 이번 행동이 계단 칸에서 끝났다(stairs 이벤트): 연출이 끝나면 계단 확인 창을 띄운다(M3 A1).
+## 창을 띄울 수 없는 동안(다른 창이 열림)에는 남겨 두고 그 창이 닫힐 때 다시 본다. 띄우거나 상태가 바뀌면 지운다.
+var _stairs_ask := false
 ## 네이티브 파일 고르기 요청 번호(창마다 오른다). 낡은 요청의 콜백을 가린다.
 var _file_req := 0
 ## 불러오기·가져오기·새 게임마다 오른다. 늦게 온 가져오기 결과를 가린다.
@@ -175,12 +182,12 @@ var _file_dialog: FileDialog
 func _ready() -> void:
 	theme = _make_theme()
 	texts = TextDb.load_path(TEXT_PATH)
-	var dr := GameDefs.load_paths(floor_path, party_path, data_dir, texts)
+	var dr := GameDefs.load_paths(labyrinth_path, party_path, data_dir, texts)
 	if not dr.ok():
 		push_error("정의 데이터를 읽지 못했다: %s" % "; ".join(dr.errors))
 		_show_start_error(dr.errors)
 		return
-	floor_def = dr.defs.floor_def
+	floor_def = dr.defs.first_floor()
 	party_data = dr.defs.party
 	for k in party_data.name_keys:
 		_member_names.append(texts.t(k))
@@ -233,11 +240,33 @@ func _set_state(s: ExplorationState) -> void:
 	if shop_screen.is_open():
 		shop_screen.close_shop(false)  # 앞 상태의 상점 화면·물음은 버린다
 	_clear_input()
-	view.rebuild(state.world)
+	_stairs_ask = false
+	if floor_def != state.floor_def:
+		floor_def = state.floor_def
+		view.setup(floor_def, state.world)
+	else:
+		view.rebuild(state.world)
 	view.set_pose(state.party.at, state.party.facing)
 	map_window.set_state(state)
 	minimap.set_state(state)
+	_refresh_floor_text()
 	_refresh_hud()
+
+
+## 층이 바뀌었다(계단, M3 A1): 시야를 그 층으로 다시 만들고 지도 판(열려 있으면 그대로 열린 채)·미니맵·층 문패를 맞춘다.
+func _show_floor() -> void:
+	floor_def = state.floor_def
+	view.setup(floor_def, state.world)
+	view.set_pose(state.party.at, state.party.facing)
+	map_window.set_state(state)
+	minimap.set_state(state)
+	_refresh_floor_text()
+
+
+## 층 문패(장소 글)·지도 판 층 문패(층 표시).
+func _refresh_floor_text() -> void:
+	_floor_label.text = FloorNames.place(texts, state.defs, state.floor_def)
+	map_window.set_floor_label(FloorNames.label(texts, state.defs, state.floor_def))
 
 
 # ---- 행동 ----
@@ -245,9 +274,15 @@ func _set_state(s: ExplorationState) -> void:
 ## 화면 단추·키보드·미리 받은 입력·누르고 있기 반복이 모두 이리로 온다(05 §9.3).
 ## 막혀 있으면 버리고(미리 받지도 않는다). 연출 중이거나 이미 미리 받은 행동이 있으면 미리 받는 칸(하나)에 넣는다:
 ## 나중 입력이 미리 받은 것을 바꾸고, 행동은 늘 칸에서 꺼낸 순서로만 한다(새 요청이 칸을 앞지르지 않는다).
+## 남은 계단 물음이 먼저다: 연출이 끝났는데 물음이 남아 있으면(막은 창이 닫힌 뒤 미뤄 둔 _retry_stairs 전 틈 포함)
+## 이 요청 대신 계단 창을 띄우고 요청은 버린다. 물음이 낡았으면(계단 밖·전투 대기·전멸) 물음만 버리고 요청을 잇는다.
 func request_action(action: int) -> void:
 	if _input_blocked():
 		return
+	if _stairs_ask and not view.is_busy():
+		_try_stairs()
+		if _stairs_ask or modal.is_open():
+			return
 	if view.is_busy() or _queued >= 0:
 		_queued = action
 		return
@@ -293,10 +328,16 @@ func _do_action(action: int) -> void:
 	if action == A.REST:
 		_pad_since.erase(A.REST)
 	_action_frame = Engine.get_process_frames()
+	_stairs_ask = false  # 새 행동이 받아들여졌으면 앞의 물음은 낡았다(이 행동의 이벤트가 다시 세운다)
 	var rebuild := false
 	var slid := false
+	var changed := false
 	for ev in events:
 		match ev["type"]:
+			"stairs":
+				_stairs_ask = true
+			"floor_changed":
+				changed = true
 			"blocked":
 				_show_toast(texts.t("msg." + str(ev["reason"])))
 			"shortcut_opened", "passage_found":
@@ -314,9 +355,13 @@ func _do_action(action: int) -> void:
 					slid = true
 	if slid:
 		_show_toast(texts.t("msg.slide"))
+	if changed:
+		_show_toast(FloorNames.place(texts, state.defs, state.floor_def))
 	# 저장 실패 안내가 위 행동 안내에 덮이지 않게 안내 뒤에 저장한다.
 	_autosave()
-	if rebuild:
+	if changed:
+		_show_floor()
+	elif rebuild:
 		view.rebuild(state.world)
 	view.play(events, move_dir)
 	map.refresh()
@@ -329,6 +374,12 @@ func _on_animation_finished() -> void:
 	if state == null or view.is_busy():
 		return
 	if _check_windows():
+		_stairs_ask = false
+		return
+	if _stairs_ask:
+		# 물음이 남아 있으면 미리 받은 입력·누르고 있기 반복으로 넘어가지 않는다(물음을 건너뛰지 않는다).
+		# 띄우면 창이 지도 손짓·입력을 취소하고, 못 띄우면 막은 창이 닫힐 때 _retry_stairs 가 다시 본다.
+		_try_stairs()
 		return
 	if _queued >= 0:
 		var a := _queued
@@ -403,6 +454,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if shop_screen.is_open():
 		return  # 상점이 키를 받는다(08 §8: 열린 동안 캠프·지도·이동은 열리거나 움직이지 않는다)
+	if modal.kind == "stairs":
+		# 계단 확인 창: Esc·Backspace = 「아니오」. Enter·Space·방향 키는 창 안의 포커스 단추가 받는다(05 §9.3).
+		if event.is_action_pressed("open_menu") or k.keycode == KEY_BACKSPACE or k.physical_keycode == KEY_BACKSPACE:
+			get_viewport().set_input_as_handled()
+			_answer_stairs(false)
+		return
 	if event.is_action_pressed("open_menu"):
 		get_viewport().set_input_as_handled()
 		if not modal.is_open():
@@ -774,6 +831,7 @@ func _on_party_closed() -> void:
 	_debug_dirty = true
 	_debug_settle = 2
 	_check_windows()
+	_retry_stairs.call_deferred()
 
 
 ## 파티 메뉴 저장 갈고리(배분 확정·장착 변경·임시 보급이 받아들여진 직후).
@@ -807,6 +865,58 @@ func _on_shop_save() -> void:
 	_autosave()
 
 
+## 남은 계단 물음을 띄울 수 있으면 띄운다. 전멸·전투 대기거나 계단 위가 아니면 물음을 버린다.
+## 창(알림·메모·전투·캠프·상점)이 열려 있거나 연출 중이면 남겨 둔다. 지도 손짓은 막지 않는다: 창이 열리며 취소한다(05 §9.3).
+func _try_stairs() -> void:
+	if not _stairs_ask:
+		return
+	if state == null or state.wiped or state.encounter.pending or state.floor_def.stair_at(state.party.at) == null:
+		_stairs_ask = false
+		return
+	if view.is_busy() or modal.is_open() or battle_layer.is_open() or party_menu.is_open() or shop_screen.is_open() \
+			or not ExplorationRules.can_act(state):
+		return
+	_stairs_ask = false
+	_open_stairs()
+
+
+## 다른 창이 닫힌 뒤(다음 프레임): 전투·전멸 창이 먼저이고, 그다음 남은 계단 물음.
+func _retry_stairs() -> void:
+	if state == null or not _stairs_ask:
+		return
+	if state.wiped or state.encounter.pending:
+		_stairs_ask = false
+		return
+	_try_stairs()
+
+
+## 계단 확인 창(M3 A1). 원작 프레임을 찾지 못해 알림·전멸 창과 같은 층 3 창으로 띄운다(원작과 다른 점).
+## 처음 커서(키보드 포커스)는 「예」다(D25: 되돌릴 수 있는 물음은 원작처럼 YES 먼저). 행동할 수 있고 계단 위일 때만 띄우고, 띄웠으면 true.
+## 지도에서 진행 중인 손짓은 막지 않는다: 창이 열리면(modal.opened → _clear_input) 다른 창처럼 지도 입력을 취소한다.
+func _open_stairs() -> bool:
+	if state == null or modal.is_open() or battle_layer.is_open() or party_menu.is_open() or shop_screen.is_open() \
+			or not ExplorationRules.can_act(state):
+		return false
+	var st := state.floor_def.stair_at(state.party.at)
+	if st == null:
+		return false
+	var yes := _named(ModalLayer.button(texts.t("ui.yes"), _answer_stairs.bind(true)), "StairsYes")
+	var no := _named(ModalLayer.button(texts.t("ui.no"), _answer_stairs.bind(false)), "StairsNo")
+	var rows: Array[Control] = [ModalLayer.label(texts.t("stairs.ask_" + st.way)), ModalLayer.row([yes, no] as Array[Control])]
+	modal.open("stairs", texts.t("stairs.title"), rows)
+	yes.grab_focus.call_deferred()
+	return true
+
+
+## 계단 확인 창의 답: 「예」면 규칙 행동 STAIRS(층 바꾸기·자동 저장), 「아니오」면 닫기만(계단 위에 그대로 선다, 저장 없음).
+func _answer_stairs(yes: bool) -> void:
+	if modal.kind != "stairs":
+		return
+	modal.close()
+	if yes:
+		request_action(A.STAIRS)
+
+
 func _open_wipe() -> void:
 	var rows: Array[Control] = [ModalLayer.label(texts.t("msg.wiped"))]
 	var slot := store.latest_manual()
@@ -831,7 +941,7 @@ func record_slots() -> Array:
 		var st := l.result.state
 		out.append({"slot": slot, "ok": true, "leader": texts.t(st.defs.party.name_keys[0]),
 			"level": texts.t("party.level", {"level": st.party.members[0].level}),
-			"where": texts.t("menu.slot_where", {"floor": texts.t(st.floor_def.name_key), "steps": st.steps}),
+			"where": texts.t("menu.slot_where", {"floor": FloorNames.place(texts, st.defs, st.floor_def), "steps": st.steps}),
 			"time": _local_time(l.result.saved_at)})
 	return out
 
@@ -1014,7 +1124,7 @@ func _build_ui() -> void:
 	map_window = MapWindow.new()
 	map_window.name = "MapWindow"
 	windows_root.add_child(map_window)
-	map_window.build(texts, texts.t(floor_def.name_key))
+	map_window.build(texts, FloorNames.label(texts, store.defs, floor_def))
 	map = map_window.map
 	toolbar = map_window.toolbar
 	toolbar.tool_chosen.connect(_choose_tool)
@@ -1087,6 +1197,7 @@ func _build_ui() -> void:
 		_debug_settle = 2)
 	modal.closed.connect(func(_k: String) -> void:
 		_clear_input()  # 창 안에서 누른 키·단추는 닫힌 뒤에도 승인되지 않는다
+		_retry_stairs.call_deferred()  # 이 창 때문에 띄우지 못한 계단 물음
 		party_menu.cancel_pointers()  # 창이 뜨기 전부터 캠프에서 누르고 있던 손가락도(다른 손가락으로 창을 닫은 뒤 떼기)
 		battle_layer.cancel_pointers()
 		shop_screen.cancel_pointers()
@@ -1187,7 +1298,7 @@ func _build_hud() -> void:
 	floor_plate.offset_bottom = PLATE_SIZE.y
 	view_area.add_child(floor_plate)
 	_floor_label.name = "FloorName"
-	_floor_label.text = texts.t(floor_def.name_key)
+	_floor_label.text = FloorNames.place(texts, store.defs, floor_def)
 	_floor_label.add_theme_font_size_override("font_size", 22)
 	_floor_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	_floor_label.add_theme_constant_override("outline_size", 6)
@@ -1330,7 +1441,7 @@ func _refresh_hud() -> void:
 func _refresh_rest_button() -> void:
 	if rest_button == null:
 		return
-	var show := not _hud_hidden() and state != null and ExplorationRules.can_act(state) and state.party.at == floor_def.start_at
+	var show := not _hud_hidden() and state != null and ExplorationRules.can_act(state) and state.party.at == state.floor_def.start_at
 	if rest_button.visible != show:
 		rest_button.visible = show
 		if not show:
@@ -1448,7 +1559,7 @@ func debug_snapshot() -> Dictionary:
 		map_info = {"origin": o, "cell": [o2[0] - o[0], o2[1] - o[1]]}
 	return {
 		"hash": SaveCodec.state_hash(state), "generation": state.generation, "autosaves": autosave_count, "seed": seed_override,
-		"at": [state.party.at.x, state.party.at.y], "facing": state.party.facing, "steps": state.steps,
+		"floor": state.floor_def.id, "at": [state.party.at.x, state.party.at.y], "facing": state.party.facing, "steps": state.steps,
 		"pending": state.encounter.pending, "wiped": state.wiped, "danger": state.encounter.danger,
 		"busy": _is_busy(), "modal": modal.kind, "automap": settings.automap, "battle": battle,
 		"materials": state.materials, "hp": state.party.members.map(func(m: PartyState.Member) -> int: return m.hp),

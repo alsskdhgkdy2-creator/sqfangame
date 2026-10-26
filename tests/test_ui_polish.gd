@@ -481,7 +481,7 @@ func test_menu_buttons_have_borders_and_clear_checked_and_selected_states() -> v
 		var ab: PartyButton = rt.find_child("Automap_" + m, true, false)
 		check_eq(ab.checked, m == mode, "자동 지도 %s 켜짐 = 지금 설정" % m)
 	check_eq(rt.card_lines(0), [s.texts.t(s.state.defs.party.name_keys[0]) + "  " + s.texts.t("party.level", {"level": s.state.party.members[0].level}),
-		"%s · 걸음 %d" % [texts.t(s.floor_def.name_key), s.state.steps], rt.slots[0]["time"]], "채운 칸: 대표 대원·Lv, 층·걸음(저장에 있는 값), 저장 시각")
+		"%s / B1F · 걸음 %d" % [texts.t(s.floor_def.name_key), s.state.steps], rt.slots[0]["time"]], "채운 칸: 대표 대원·Lv, 장소(층 이름 / B1F)·걸음(저장에 있는 값), 저장 시각")
 	check(not str(rt.slots[0]["time"]).is_empty() and not rt.load_buttons[0].disabled, "채운 칸은 불러올 수 있다")
 	check_eq(rt.card_lines(1), ["비어 있음", "", ""], "빈 칸: 「비어 있음」")
 	check(rt.load_buttons[1].disabled, "빈 칸 불러오기: 못 누름")

@@ -20,7 +20,8 @@ func _game(automap: String = "floor") -> ExplorationState:
 
 func _snapshot(s: ExplorationState) -> String:
 	var d := SaveCodec.state_to_dict(s)
-	return JSON.stringify([d["world"], d["knowledge"]], "", true)
+	var r: Dictionary = d["floor_states"][d["floor"]]
+	return JSON.stringify([r["world"], r["knowledge"]], "", true)
 
 
 func test_drawn_wall_does_not_block_and_erased_wall_still_blocks() -> void:

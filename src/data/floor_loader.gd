@@ -1,7 +1,13 @@
 ## 층 정의 JSON(문자 격자) → FloorModel. 검사 오류는 "파일:줄:열: 내용".
+## 층 묶음(미궁 하나, M3 A1): data/floors/labyrinth.json 의 floors 차례가 깊이(B1F, B2F, …)이고 계단 짝은 load_set·check_set 이 본다.
 ## 도달·갇힘 분석(analyze)은 읽기와 따로 부른다(시험·층 작성 도구용, 게임은 부르지 않는다).
 class_name FloorLoader
 extends RefCounted
+
+## 층 ID(파일 이름이 된다).
+const FLOOR_ID_PATTERN := "^[a-z][a-z0-9_]*$"
+const SET_KEYS := ["id", "floors"]
+const STAIR_WAYS := ["up", "down"]
 
 const MAX_SIZE := 64
 const CELL_CHARS := {".": FloorModel.Cell.FLOOR, "#": FloorModel.Cell.VOID, "~": FloorModel.Cell.DAMAGE, "=": FloorModel.Cell.ICE}
@@ -17,6 +23,104 @@ class Result:
 
 	func ok() -> bool:
 		return errors.is_empty()
+
+
+## 층 묶음 읽기 결과. 오류가 없을 때만 floors 가 차례대로 다 있다.
+class SetResult:
+	extends RefCounted
+	var floors: Array[FloorModel] = []
+	var errors: Array[String] = []
+
+	func ok() -> bool:
+		return errors.is_empty()
+
+
+## 층 묶음 파일({"id", "floors": [층 ID, …]})과 같은 폴더의 <층 ID>.json 을 읽고 층 사이 검사(check_set)까지 한다.
+static func load_set(path: String) -> SetResult:
+	var r := SetResult.new()
+	var file := path.get_file()
+	var text := FileAccess.get_file_as_string(path)
+	if text.is_empty() and FileAccess.get_open_error() != OK:
+		r.errors.append("%s:1:1: 파일을 읽을 수 없다 (%s)" % [path, error_string(FileAccess.get_open_error())])
+		return r
+	var data: Variant = JSON.parse_string(text)
+	if typeof(data) != TYPE_DICTIONARY:
+		r.errors.append("%s: 맨 위가 객체가 아니다" % file)
+		return r
+	for k in data:
+		if not SET_KEYS.has(k):
+			r.errors.append("%s: %s 는 모르는 키다" % [file, str(k)])
+	if typeof(data.get("id")) != TYPE_STRING or str(data["id"]).is_empty():
+		r.errors.append("%s: id 는 빈 문자열이 아닌 문자열이어야 한다" % file)
+	if typeof(data.get("floors")) != TYPE_ARRAY or data["floors"].is_empty():
+		r.errors.append("%s: floors 는 층 ID 가 하나 이상인 배열이어야 한다" % file)
+		return r
+	var id_re := RegEx.create_from_string(FLOOR_ID_PATTERN)
+	var seen := {}
+	for v in data["floors"]:
+		if typeof(v) != TYPE_STRING or id_re.search(v) == null:
+			r.errors.append("%s: floors 의 %s 가 층 ID(%s)가 아니다" % [file, str(v), FLOOR_ID_PATTERN])
+			continue
+		if seen.has(v):
+			r.errors.append("%s: floors 에 %s 가 두 번 있다" % [file, v])
+			continue
+		seen[v] = true
+		var fr := load_path(path.get_base_dir().path_join(v + ".json"))
+		r.errors.append_array(fr.errors)
+		if not fr.ok():
+			continue
+		if fr.floor_def.id != v:
+			r.errors.append("%s.json: id %s 가 묶음의 층 ID %s 와 다르다" % [v, fr.floor_def.id, v])
+			continue
+		r.floors.append(fr.floor_def)
+	if r.errors.is_empty():
+		r.errors.append_array(check_set(r.floors))
+	if not r.errors.is_empty():
+		r.floors = []
+	return r
+
+
+## 층 사이 검사: ID 가 겹치지 않음, 첫 층에 시작 칸, 첫 층이 아니면 올라가는 계단이 하나 이상,
+## 계단은 다른 층의 계단과 짝(서로 가리킴), 내려가는 계단은 바로 아래층·올라가는 계단은 바로 위층, 짝과 방향이 반대.
+static func check_set(floors: Array[FloorModel]) -> Array[String]:
+	var out: Array[String] = []
+	if floors.is_empty():
+		out.append("층 묶음에 층이 없다")
+		return out
+	var index := {}
+	for i in floors.size():
+		if index.has(floors[i].id):
+			out.append("층 묶음에 %s 가 두 번 있다" % floors[i].id)
+		else:
+			index[floors[i].id] = i
+	if not floors[0].has_start():
+		out.append("%s: 첫 층에는 start 가 있어야 한다" % floors[0].id)
+	for i in floors.size():
+		var f := floors[i]
+		var ups := 0
+		for st in f.stair_list():
+			if st.way == "up":
+				ups += 1
+			var where := "%s: 계단 %d:%d" % [f.id, st.at.x, st.at.y]
+			if st.to_floor == f.id:
+				out.append("%s 이 같은 층을 가리킨다" % where)
+				continue
+			if not index.has(st.to_floor):
+				out.append("%s 이 없는 층 %s 를 가리킨다" % [where, st.to_floor])
+				continue
+			var j: int = index[st.to_floor]
+			if j != i + (1 if st.way == "down" else -1):
+				out.append("%s: %s 계단은 바로 %s층으로 이어져야 하는데 %s 를 가리킨다" % [where, st.way, "아래" if st.way == "down" else "위", st.to_floor])
+			var t := floors[j].stair_at(st.to_at)
+			if t == null:
+				out.append("%s 의 짝 %s %d:%d 에 계단이 없다" % [where, st.to_floor, st.to_at.x, st.to_at.y])
+			elif t.to_floor != f.id or t.to_at != st.at:
+				out.append("%s 의 짝 %s %d:%d 계단이 이 계단을 가리키지 않는다" % [where, st.to_floor, st.to_at.x, st.to_at.y])
+			elif t.way == st.way:
+				out.append("%s 과 짝 계단의 방향(way)이 같다" % where)
+		if i > 0 and ups == 0:
+			out.append("%s: 첫 층이 아니면 올라가는 계단(up)이 있어야 한다" % f.id)
+	return out
 
 
 static func load_path(path: String) -> Result:
@@ -56,7 +160,9 @@ enum Reach { NO, YES, UNKNOWN }
 
 
 ## 도달·갇힘 분석 경고 목록. 세계 상태는 찾은 숨은 통로·연 지름길의 집합(비트)이고 늘기만 한다.
-## 닿을 수 없는 칸(미끄러져 지나간 칸은 닿은 것), 어떤 상태로도 시작 칸에 돌아오지 못하는 (칸, 상태)(갇힘).
+## 들어오는 곳(entries: 시작 칸, 계단 칸 — 계단으로 오면 그 계단 칸에 선다)에서 닿을 수 없는 칸(미끄러져 지나간 칸은 닿은 것),
+## 어떤 상태로도 나가는 곳(exits: 시작 칸, 올라가는 계단)에 가지 못하는 (칸, 상태)(갇힘). 내려가는 계단만 닿는 곳은 갇힘이다:
+## 내려갔다 올라오면 같은 계단 칸에 다시 선다.
 ## 한도(비트 수, 노드 수 budget)를 넘으면 「분석 미완료」 경고 하나만 낸다.
 static func analyze(f: FloorModel, source: String = "", budget: int = MAX_ANALYSIS_NODES) -> Array[String]:
 	var out: Array[String] = []
@@ -64,28 +170,51 @@ static func analyze(f: FloorModel, source: String = "", budget: int = MAX_ANALYS
 	if bits.size() > MAX_WORLD_BITS:
 		out.append("%s: 분석 미완료: 숨은 통로·지름길이 %d개라 세계 상태가 4096 을 넘는다" % [source, bits.size()])
 		return out
-	var g := _explore(f, f.start_at, 0, bits, budget, GridKey.BAD_CELL)
+	var g := _explore(f, entries(f), 0, bits, budget, {})
 	if not g["complete"]:
 		out.append("%s: 분석 미완료: 탐색 노드가 한도 %d 개를 넘었다" % [source, budget])
 		return out
 	var touched: Dictionary = g["touched"]
 	for c in f.cells():
 		if not touched.has(c):
-			out.append("%s: 칸 %d:%d 에 시작 칸에서 닿을 수 없다" % [source, c.x, c.y])
-	var back := _returning(f, g)
+			out.append("%s: 칸 %d:%d 에 %s 닿을 수 없다" % [source, c.x, c.y, "시작 칸에서" if f.stairs.is_empty() else "들어오는 곳(시작 칸·계단)에서"])
+	var back := _returning(f, g, exits(f))
+	var goal := "시작 칸으로 돌아올" if f.stairs.is_empty() else "나가는 곳(시작 칸·올라가는 계단)으로 갈"
 	var keys: Array = g["next"].keys()
 	keys.sort()
 	for key in keys:
 		if not back.has(key):
 			var c := _node_cell(f, key)
-			out.append("%s: 칸 %d:%d 에서 시작 칸으로 돌아올 수 없다 (갇힘, 세계 상태: %s)" % [source, c.x, c.y, _describe(bits, _node_mask(f, key))])
+			out.append("%s: 칸 %d:%d 에서 %s 수 없다 (갇힘, 세계 상태: %s)" % [source, c.x, c.y, goal, _describe(bits, _node_mask(f, key))])
 	return out
 
 
-## 칸 at 에 세계 상태 world 로 서 있을 때 시작 칸으로 돌아갈 길이 있는지(조사·지름길 열기 포함).
+## 들어오는 곳: 시작 칸(있으면), 계단 칸.
+static func entries(f: FloorModel) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if f.has_start():
+		out.append(f.start_at)
+	for st in f.stair_list():
+		out.append(st.at)
+	return out
+
+
+## 나가는 곳(칸 → true): 시작 칸(있으면, 첫 층의 입구), 올라가는 계단 칸.
+static func exits(f: FloorModel) -> Dictionary:
+	var out := {}
+	if f.has_start():
+		out[f.start_at] = true
+	for st in f.stair_list():
+		if st.way == "up":
+			out[st.at] = true
+	return out
+
+
+## 칸 at 에 세계 상태 world 로 서 있을 때 나가는 곳(시작 칸·올라가는 계단)으로 갈 길이 있는지(조사·지름길 열기 포함).
 ## analyze 와 같은 한도를 쓰고, 넘으면 Reach.UNKNOWN.
 static func can_return(f: FloorModel, at: Vector2i, world: WorldState, budget: int = MAX_ANALYSIS_NODES) -> Reach:
-	if at == f.start_at:
+	var goals := exits(f)
+	if goals.has(at):
 		return Reach.YES
 	var bits := _world_bits(f)
 	if bits.size() > MAX_WORLD_BITS:
@@ -94,7 +223,8 @@ static func can_return(f: FloorModel, at: Vector2i, world: WorldState, budget: i
 	for i in bits.size():
 		if world.is_passage_found(bits[i]) or world.is_shortcut_open(bits[i]):
 			mask |= 1 << i
-	var g := _explore(f, at, mask, bits, budget, f.start_at)
+	var starts: Array[Vector2i] = [at]
+	var g := _explore(f, starts, mask, bits, budget, goals)
 	if g["found"]:
 		return Reach.YES
 	return Reach.NO if g["complete"] else Reach.UNKNOWN
@@ -107,17 +237,22 @@ static func _world_bits(f: FloorModel) -> Array[Vector3i]:
 	return bits
 
 
-## (칸, 상태)에서 닿는 노드와 전이. next: 노드 → 다음 노드 목록, touched: 지나간 칸 포함.
-## 노드가 budget 개를 넘으면(budget < 1 이면 탐색 없이) complete=false 로 멈춘다. goal 칸에 멈추는 노드가 나오면 found=true 로 바로 멈춘다.
-static func _explore(f: FloorModel, start: Vector2i, start_mask: int, bits: Array[Vector3i], budget: int, goal: Vector2i) -> Dictionary:
+## (칸들, 상태)에서 닿는 노드와 전이. next: 노드 → 다음 노드 목록, touched: 지나간 칸 포함.
+## 노드가 budget 개를 넘으면(budget < 1 이면 탐색 없이) complete=false 로 멈춘다. goals 칸에 멈추는 노드가 나오면 found=true 로 바로 멈춘다.
+static func _explore(f: FloorModel, starts: Array[Vector2i], start_mask: int, bits: Array[Vector3i], budget: int, goals: Dictionary) -> Dictionary:
 	if budget < 1:
 		return {"next": {}, "touched": {}, "complete": false, "found": false}
 	var worlds := {}
 	var next := {}
-	var touched := {start: true}
-	var queue: Array[int] = [_node(f, start, start_mask)]
+	var touched := {}
+	var queue: Array[int] = []
+	for st in starts:
+		touched[st] = true
+		var n := _node(f, st, start_mask)
+		if not next.has(n):
+			next[n] = []
+			queue.append(n)
 	var head := 0
-	next[queue[0]] = []
 	while head < queue.size():
 		var key := queue[head]
 		head += 1
@@ -138,7 +273,7 @@ static func _explore(f: FloorModel, start: Vector2i, start_mask: int, bits: Arra
 		for t in targets:
 			if next.has(t):
 				continue
-			if _node_cell(f, t) == goal:
+			if goals.has(_node_cell(f, t)):
 				return {"next": next, "touched": touched, "complete": false, "found": true}
 			if next.size() >= budget:
 				return {"next": next, "touched": touched, "complete": false, "found": false}
@@ -147,8 +282,8 @@ static func _explore(f: FloorModel, start: Vector2i, start_mask: int, bits: Arra
 	return {"next": next, "touched": touched, "complete": true, "found": false}
 
 
-## 시작 칸에 (어떤 상태로든) 돌아올 수 있는 노드 집합(거꾸로 너비 우선 탐색).
-static func _returning(f: FloorModel, g: Dictionary) -> Dictionary:
+## 나가는 곳(goals)에 (어떤 상태로든) 갈 수 있는 노드 집합(거꾸로 너비 우선 탐색).
+static func _returning(f: FloorModel, g: Dictionary, goals: Dictionary) -> Dictionary:
 	var next: Dictionary = g["next"]
 	var prev := {}
 	var queue: Array[int] = []
@@ -158,7 +293,7 @@ static func _returning(f: FloorModel, g: Dictionary) -> Dictionary:
 			if not prev.has(t):
 				prev[t] = []
 			prev[t].append(key)
-		if _node_cell(f, key) == f.start_at:
+		if goals.has(_node_cell(f, key)):
 			back[key] = true
 			queue.append(key)
 	var head := 0
@@ -234,6 +369,7 @@ static func _build(ctx: _Ctx, d: Dictionary) -> FloorModel:
 	_check_border_and_void(ctx, f)
 	_read_shortcuts(ctx, d, f)
 	_read_start(ctx, d, f)
+	_read_stairs(ctx, d, f)
 	_read_encounter(ctx, d, f)
 	_read_zones(ctx, d, f)
 	_read_damage(ctx, d, f)
@@ -348,7 +484,11 @@ static func _read_shortcuts(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 			ctx.fail_grid(r, c, "격자 %d줄 %d열: 지름길 문 L 에 맞는 shortcuts 항목이 없다" % [r, c])
 
 
+## start: 계단이 있는 층은 없어도 된다(GridKey.BAD_CELL). 층 묶음의 첫 층에 있는지는 check_set 이 본다.
 static func _read_start(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
+	if not d.has("start") and typeof(d.get("stairs")) == TYPE_ARRAY and not d["stairs"].is_empty():
+		f.start_at = GridKey.BAD_CELL
+		return
 	if typeof(d.get("start")) != TYPE_DICTIONARY:
 		ctx.fail_key("start", "start는 객체여야 한다")
 		return
@@ -362,6 +502,67 @@ static func _read_start(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 	if f.cell_kind(at) != FloorModel.Cell.FLOOR:
 		ctx.fail_key("start", "start.at %d:%d 이 바닥 칸(.)이 아니다" % [at.x, at.y])
 	f.start_at = at
+
+
+## 계단(M3 A1): [{"at", "way": up·down, "exit": N·E·S·W, "to": {"floor", "at"}}]. 계단 칸은 바닥(.)이고 칸마다 하나, 시작 칸이 아니다.
+## 내려설 칸(at + exit)은 바닥(.)이고 계단이 아니며, 그 사이 경계는 열림·문이다. 짝(to)은 check_set 이 본다.
+static func _read_stairs(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
+	if not d.has("stairs"):
+		return
+	if typeof(d["stairs"]) != TYPE_ARRAY:
+		ctx.fail_key("stairs", "stairs는 배열이어야 한다")
+		return
+	var id_re := RegEx.create_from_string(FLOOR_ID_PATTERN)
+	var list: Array = d["stairs"]
+	for i in list.size():
+		var item: Variant = list[i]
+		var label := "stairs[%d]" % i
+		if typeof(item) != TYPE_DICTIONARY:
+			ctx.fail_key("stairs", "%s 는 객체여야 한다" % label)
+			continue
+		var bad := false
+		var at := ctx.cell_value(item.get("at"), "stairs", label + ".at")
+		var way: Variant = item.get("way")
+		if typeof(way) != TYPE_STRING or not STAIR_WAYS.has(way):
+			ctx.fail_key("stairs", "%s.way 는 up·down 중 하나여야 한다" % label)
+			bad = true
+		var exit := Dir.from_name(item.get("exit"))
+		if exit < 0:
+			ctx.fail_key("stairs", "%s.exit 는 N·E·S·W 중 하나여야 한다" % label)
+			bad = true
+		var to: Variant = item.get("to")
+		var to_at := GridKey.BAD_CELL
+		if typeof(to) != TYPE_DICTIONARY or typeof(to.get("floor")) != TYPE_STRING or id_re.search(to["floor"]) == null:
+			ctx.fail_key("stairs", "%s.to 는 {\"floor\": 층 ID, \"at\": [x, y]} 이어야 한다" % label)
+			bad = true
+		else:
+			to_at = ctx.cell_value(to.get("at"), "stairs", label + ".to.at")
+		if bad or at == GridKey.BAD_CELL or to_at == GridKey.BAD_CELL:
+			continue
+		var where := "%s %d:%d" % [label, at.x, at.y]
+		var step := at + Dir.vec(exit)
+		if f.cell_kind(at) != FloorModel.Cell.FLOOR:
+			ctx.fail_key("stairs", "%s 이 바닥 칸(.)이 아니다" % where)
+		elif f.stairs.has(at):
+			ctx.fail_key("stairs", "%s 에 계단이 이미 있다" % where)
+		elif f.has_start() and at == f.start_at:
+			ctx.fail_key("stairs", "%s 이 시작 칸이다" % where)
+		elif f.cell_kind(step) != FloorModel.Cell.FLOOR:
+			ctx.fail_key("stairs", "%s 에서 내려설 칸 %d:%d 이 바닥 칸(.)이 아니다" % [where, step.x, step.y])
+		elif not (f.edge_kind(FloorModel.edge_of(at, exit)) in [FloorModel.Edge.OPEN, FloorModel.Edge.DOOR]):
+			ctx.fail_key("stairs", "%s 과 내려설 칸 사이 경계가 열림·문이 아니다" % where)
+		else:
+			var st := FloorModel.Stair.new()
+			st.at = at
+			st.way = way
+			st.exit = exit
+			st.to_floor = to["floor"]
+			st.to_at = to_at
+			f.stairs[at] = st
+	for st in f.stair_list():
+		var step: Vector2i = st.at + Dir.vec(st.exit)
+		if f.stairs.has(step):
+			ctx.fail_key("stairs", "계단 %d:%d 에서 내려설 칸 %d:%d 이 계단이다" % [st.at.x, st.at.y, step.x, step.y])
 
 
 static func _read_encounter(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:

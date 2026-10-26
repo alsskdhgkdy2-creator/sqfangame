@@ -25,7 +25,7 @@ func _party_rejects(label: String, mutate: Callable, needle: String) -> void:
 	var p := Fx.party_dict()
 	mutate.call(p)
 	var party := PartyData.parse_dict(JSON.parse_string(JSON.stringify(p)), "test_party.json")
-	var errs := GameDefs.from_parts(Fx.f1(), party, Fx.battle_db(Fx.battle_files())).errors
+	var errs := GameDefs.from_parts(Fx.floors(), party, Fx.battle_db(Fx.battle_files())).errors
 	check(errs.any(func(e: String) -> bool: return e.contains(needle)), "%s: 오류에 「%s」 가 없다: %s" % [label, needle, str(errs)])
 
 

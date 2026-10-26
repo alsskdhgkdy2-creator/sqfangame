@@ -71,9 +71,9 @@ func _rich() -> ExplorationState:
 	return s
 
 
-## 4판 문서에서 3판 문서를 만든다(머리 3·"m2g", money·shop 없음). 시작 소지금·빈 상점 상태면 3판 → 4판 이전이 같은 상태를 돌려준다.
+## 5판 문서에서 3판 문서를 만든다(4판 꼴로 펴고 머리 3·"m2g", money·shop 없음). 시작 소지금·빈 상점 상태면 3판 → 5판 이전이 같은 상태를 돌려준다.
 static func as_v3(doc: Dictionary) -> Dictionary:
-	var d := doc.duplicate(true)
+	var d := Fx.as_v4(doc)
 	d.merge({"schema": 3, "rules": "m2g"}, true)
 	d["state"].erase("money")
 	d["state"].erase("shop")
@@ -85,7 +85,7 @@ func test_v3_roundtrip_with_growth_mid_battle() -> void:
 	var m0 := s.party.members[0]
 	check(m0.level == 3 and m0.skills.get(SHIELD_M) == 2 and m0.equip[1] == "equip.aegis_plate" and s.gear_bag.has("equip.training_shield") and s.battle != null, "준비: 성장 값·전투")
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	check_eq([doc["schema"], doc["rules"]], [4.0, "m3s"], "4판 머리")
+	check_eq([doc["schema"], doc["rules"]], [5.0, "m3f"], "5판 머리")
 	var v3 := SaveCodec.decode(JSON.stringify(as_v3(doc)), _defs())
 	check(v3.ok(), "3판 문서 읽기(4판으로 이전) %s" % v3.error)
 	if v3.ok():
@@ -114,11 +114,11 @@ func test_v3_roundtrip_with_growth_mid_battle() -> void:
 
 # ---- 3판 거부 (07 §8.3 표의 줄마다) ----
 
-## 4판 문서와, 같은 상태의 3판 문서(이전 경로, 「3판 검사 실패」로 이전 전에 거부) 둘 다.
+## 5판 문서와, 같은 상태의 3판 문서(이전 경로, 「3판 검사 실패」로 이전 전에 거부) 둘 다.
 func _expect_reject(s: ExplorationState, mutate: Callable, needle: String, label: String) -> void:
 	var before := SaveCodec.state_hash(s)
 	var v4: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	for x in [["4판", v4, ""], ["3판", as_v3(v4), "3판 검사 실패: "]]:
+	for x in [["5판", v4, ""], ["3판", as_v3(v4), "3판 검사 실패: "]]:
 		var doc: Dictionary = x[1]
 		mutate.call(doc["state"])
 		var r := SaveCodec.decode(JSON.stringify(doc), s.defs)
@@ -205,6 +205,8 @@ func test_v2_migration_keeps_values_and_adds_growth_defaults() -> void:
 			continue
 		var s := r.state
 		var now := SaveCodec.state_to_dict(s)
+		check_eq(now["floor_states"].keys(), ["f1_test"], "%s: 층 기록은 그 층 하나(5판)" % label)
+		now.merge(now["floor_states"]["f1_test"])  # 5판 층 기록을 2판 자리와 견준다
 		var o: Dictionary = orig["state"]
 		for path in [["floor"], ["party", "at"], ["party", "facing"], ["world"], ["knowledge"], ["annotation"], ["encounter"], ["materials"], ["battle"], ["rng"], ["steps"], ["wiped"]]:
 			_same(o, now, path, label)
@@ -327,7 +329,7 @@ func test_v1_migrates_straight_to_v4_with_growth_defaults() -> void:
 			check_eq([m.id, m.level, m.exp, m.skills, m.equip], [defs.party.ids[i], 1, 0, defs.party.skills[i], defs.party.equips[i]], "대원 %d 성장 기본값" % i)
 		check_eq([s.gear_bag, s.materials], [{}, {}], "가방·소재 비어 있음")
 		check_eq([s.money, SaveCodec.state_to_dict(s)["shop"]], [200, {"sold": {}, "pool": {}, "bought": []}], "시작 소지금·빈 상점(08 §4)")
-		check_eq(JSON.parse_string(SaveCodec.encode(s))["schema"], 4.0, "4판으로 쓴다")
+		check_eq(JSON.parse_string(SaveCodec.encode(s))["schema"], 5.0, "5판으로 쓴다")
 		var again := SaveCodec.decode(x[0], defs)
 		check(again.ok() and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(s), "두 번 읽어도 같은 해시")
 
@@ -337,7 +339,7 @@ func test_v1_pending_starts_battle_exactly_once() -> void:
 	var orig: Dictionary = JSON.parse_string(BS.V1_PENDING)
 	var t := ExplorationState.new()
 	t.defs = defs
-	t.floor_def = defs.floor_def
+	t.floor_def = defs.first_floor()
 	t.rng.set_state(SaveCodec.parse_int64(orig["state"]["rng"]["state"]))
 	var once := BattleRules.pick_formation(t)
 	var after_once := str(t.rng.get_state())

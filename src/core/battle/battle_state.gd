@@ -209,7 +209,8 @@ const KILL_KEYS := ["turn", "element", "ailment", "binds", "by"]
 
 
 ## 저장된 battle 객체를 검사한다. 문제가 없으면 "", 있으면 "battle.<경로>: 내용". members 는 이미 읽은 대원(HP).
-static func check_dict(v: Variant, defs: GameDefs, members: Array[PartyState.Member]) -> String:
+## floor_def 는 전투가 난 층(저장의 지금 층): 편성이 그 층 출현 표에 있어야 한다(M3 A1).
+static func check_dict(v: Variant, defs: GameDefs, members: Array[PartyState.Member], floor_def: FloorModel) -> String:
 	if typeof(v) != TYPE_DICTIONARY:
 		return "battle: 객체 또는 null 이어야 한다"
 	var d: Dictionary = v
@@ -217,7 +218,7 @@ static func check_dict(v: Variant, defs: GameDefs, members: Array[PartyState.Mem
 	if not err.is_empty():
 		return err
 	var fid: Variant = d["formation"]
-	if typeof(fid) != TYPE_STRING or not defs.battle.table_formations(defs.floor_def.encounter_table).has(fid):
+	if typeof(fid) != TYPE_STRING or not defs.battle.table_formations(floor_def.encounter_table).has(fid):
 		return "battle.formation: 이 층 출현 표의 편성이 아니다"
 	var f: BattleDb.FormationDef = defs.battle.formations[fid]
 	var turn: Variant = SaveCodec.to_int(d["turn"])

@@ -33,7 +33,7 @@ func test_v4_roundtrip_with_money_and_shop() -> void:
 	var s := _shopped()
 	check_eq([s.money, s.shop.sold, s.shop.pool], [1000 - 400 - 150 - 80, {BEETLE: 4, PINCER: 2, RAT: 3}, {BEETLE: 2, PINCER: 1, RAT: 3}], "준비: 소지금·sold·pool")
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	check_eq([doc["schema"], doc["rules"]], [4.0, "m3s"], "4판 머리")
+	check_eq([doc["schema"], doc["rules"]], [5.0, "m3f"], "5판 머리")
 	check_eq(doc["state"]["money"], 370.0, "money")
 	check_eq(doc["state"]["shop"], {"sold": {BEETLE: 4.0, PINCER: 2.0, RAT: 3.0}, "pool": {BEETLE: 2.0, PINCER: 1.0, RAT: 3.0}, "bought": [AEGIS, "equip.sensor_cap", "equip.visor"]}, "shop(bought 는 정렬한 배열)")
 	var r := SaveCodec.decode(SaveCodec.encode(s), s.defs)
@@ -41,7 +41,7 @@ func test_v4_roundtrip_with_money_and_shop() -> void:
 	if not r.ok():
 		return
 	var c := r.state
-	check_eq([r.from_schema, c.money, c.shop.sold, c.shop.pool, c.shop.bought], [4, s.money, s.shop.sold, s.shop.pool, s.shop.bought], "읽은 소지금·상점 상태")
+	check_eq([r.from_schema, c.money, c.shop.sold, c.shop.pool, c.shop.bought], [5, s.money, s.shop.sold, s.shop.pool, s.shop.bought], "읽은 소지금·상점 상태")
 	check_eq(SaveCodec.state_hash(c), SaveCodec.state_hash(s), "같은 해시")
 	check_eq(ShopRules.catalog(c.defs, c, JUNK), ShopRules.catalog(s.defs, s, JUNK), "같은 진열(풀림·재고·NEW)")
 	check_eq(ShopRules.buy(c, JUNK, AEGIS, 1), ShopRules.buy(s, JUNK, AEGIS, 1), "같은 다음 사기")
@@ -79,9 +79,9 @@ func _check_start_shop(r: SaveCodec.LoadResult, from: int, label: String) -> voi
 	if not r.ok():
 		return
 	check_eq([r.from_schema, r.state.money, SaveCodec.state_to_dict(r.state)["shop"]], [from, ExplorationState.START_MONEY, EMPTY_SHOP], "%s: from_schema·시작 소지금·빈 상점" % label)
-	check_eq(JSON.parse_string(SaveCodec.encode(r.state))["schema"], 4.0, "%s: 4판으로 쓴다" % label)
+	check_eq(JSON.parse_string(SaveCodec.encode(r.state))["schema"], 5.0, "%s: 5판으로 쓴다" % label)
 	var again := SaveCodec.decode(SaveCodec.encode(r.state), r.state.defs)
-	check(again.ok() and again.from_schema == 4 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 4판 다시 읽기 같은 해시" % label)
+	check(again.ok() and again.from_schema == 5 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 5판 다시 읽기 같은 해시" % label)
 
 
 func test_v1_v2_v3_migrate_to_start_money_and_empty_shop() -> void:

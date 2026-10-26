@@ -123,7 +123,7 @@ func cancel_all() -> void:
 		(buttons[key] as TouchButton).cancel()
 
 
-## 층 문패(원작의 층 고르기 자리). 층이 하나라 고르기 화살표는 없다. 장식이라 누르기를 받지 않는다.
+## 층 문패(원작의 층 고르기 자리): 지금 층 표시(「B1F」, M3 A1). 다른 층 지도 보기(고르기 화살표)는 아직 없다. 장식이라 누르기를 받지 않는다.
 class FloorTag:
 	extends Control
 	const FS := 15

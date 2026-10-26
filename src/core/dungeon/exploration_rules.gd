@@ -3,12 +3,14 @@
 class_name ExplorationRules
 extends RefCounted
 
-enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, REST }
+## STAIRS(M3 A1): 서 있는 계단으로 층을 바꾼다(화면이 확인 창 「예」 뒤에 부른다). 값이 바뀌지 않게 맨 뒤에 둔다.
+enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, REST, STAIRS }
 
 ## 행동 이름(공략 행동열 파일·디버그용) → Action.
 const ACTION_NAMES := {
 	"forward": Action.FORWARD, "back": Action.BACK, "strafe_left": Action.STRAFE_LEFT, "strafe_right": Action.STRAFE_RIGHT,
 	"turn_left": Action.TURN_LEFT, "turn_right": Action.TURN_RIGHT, "investigate": Action.INVESTIGATE, "rest": Action.REST,
+	"stairs": Action.STAIRS,
 }
 const AUTOMAP_OFF := "off"
 const AUTOMAP_FLOOR := "floor"
@@ -16,14 +18,13 @@ const AUTOMAP_FULL := "full"
 const AUTOMAP_MODES := ["off", "floor", "full"]
 
 
-## 새 게임: 시작 칸을 방문·관찰·자동 기록하고 한계값을 처음 뽑는다. 대원은 HP·TP 가득(defs.members()), 시작 소지금, 빈 상점(08 §2).
-## s.floor_def 는 M1 코드가 쓰므로 defs.floor_def 와 같은 객체로 둔다.
+## 새 게임: 첫 층(B1F)의 시작 칸을 방문·관찰·자동 기록하고 한계값을 처음 뽑는다. 대원은 HP·TP 가득(defs.members()), 시작 소지금, 빈 상점(08 §2).
+## 층 기록은 첫 층 것 하나만 있다(M3 A1).
 static func new_game(defs: GameDefs, seed_value: int, automap: String) -> ExplorationState:
 	var s := ExplorationState.new()
-	var floor_def := defs.floor_def
+	var floor_def := defs.first_floor()
 	s.defs = defs
-	s.floor_def = floor_def
-	s.annotation = MapAnnotation.new(floor_def.width, floor_def.height)
+	s.enter_floor(floor_def)
 	s.rng = GameRng.new(seed_value)
 	s.party.at = floor_def.start_at
 	s.party.facing = floor_def.start_facing
@@ -64,6 +65,8 @@ static func apply(s: ExplorationState, action: int, automap: String) -> Array[Di
 			_investigate(s, events, automap)
 		Action.REST:
 			_rest(s, events)
+		Action.STAIRS:
+			_take_stairs(s, events, automap)
 		_:
 			_move(s, _move_dir(s.party.facing, action), action == Action.FORWARD, events, automap)
 	return events
@@ -175,6 +178,9 @@ static func _investigate(s: ExplorationState, events: Array[Dictionary], automap
 		return
 	if _try_open_shortcut(s, e, events, automap):
 		return
+	# 계단 위에서 조사하면 계단 확인을 다시 묻는다(거절·전투·새로고침 뒤, M3 A1).
+	if _stairs_event(s, events):
+		return
 	events.append({"type": "nothing_found"})
 
 
@@ -203,6 +209,35 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 		var formation := BattleRules.pick_formation(s)
 		BattleRules.start(s, formation)
 		events.append({"type": "encounter", "formation": formation})
+		return
+	# 계단 칸에서 멈췄으면(전멸·인카운트가 아닐 때만) 화면이 확인 창을 띄운다(M3 A1).
+	_stairs_event(s, events)
+
+
+## 서 있는 칸이 계단이면 stairs 이벤트(way·to)를 더하고 true.
+static func _stairs_event(s: ExplorationState, events: Array[Dictionary]) -> bool:
+	var st := s.floor_def.stair_at(s.party.at)
+	if st == null:
+		return false
+	events.append({"type": "stairs", "way": st.way, "to": st.to_floor})
+	return true
+
+
+## 계단으로 층 바꾸기(M3 A1): 짝 계단이 있는 층으로 들어가 그 계단 칸에 서서 계단의 exit 쪽을 본다. 계단 칸을 방문·관찰·자동 기록한다.
+## 걸음·위험도·한계값·난수는 그대로이고 인카운트 판정도 없다(위험도는 층과 상관없이 이어진다). 계단이 아니면 막힘 not_stairs.
+static func _take_stairs(s: ExplorationState, events: Array[Dictionary], automap: String) -> void:
+	var st := s.floor_def.stair_at(s.party.at)
+	if st == null:
+		events.append({"type": "blocked", "reason": "not_stairs"})
+		return
+	var from := s.floor_def.id
+	var target := s.defs.floor_by_id(st.to_floor)
+	var t := target.stair_at(st.to_at)
+	s.enter_floor(target)
+	s.party.at = t.at
+	s.party.facing = t.exit
+	record_cell(s, t.at, automap)
+	events.append({"type": "floor_changed", "from": from, "to": target.id, "at": t.at, "facing": t.exit})
 
 
 ## 휴식(06 §8.8, M3 여관 자리표시): 층의 시작 칸에서만. 모든 대원 HP·TP 최대(쓰러진 대원도). 위험도·걸음·난수 그대로.

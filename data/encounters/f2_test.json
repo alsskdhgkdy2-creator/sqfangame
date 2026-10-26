@@ -1,0 +1,51 @@
+{
+  "id": "encounter.f2_test",
+  "formations": [
+    {
+      "id": "formation.f2.moths_beetle",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.clamp_beetle",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.cable_moth",
+          "row": "back"
+        },
+        {
+          "enemy": "enemy.cable_moth",
+          "row": "back"
+        }
+      ]
+    },
+    {
+      "id": "formation.f2.serpent_moles",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        }
+      ]
+    }
+  ],
+  "table": [
+    {
+      "formation": "formation.f2.moths_beetle",
+      "weight": 50
+    },
+    {
+      "formation": "formation.f2.serpent_moles",
+      "weight": 50
+    }
+  ]
+}

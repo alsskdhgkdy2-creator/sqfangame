@@ -136,7 +136,7 @@ func test_shop_name_key_must_exist_in_text() -> void:
 	var texts := TextDb.load_path("res://data/text/ko.json")
 	var files := Fx.battle_files()
 	files[SH]["name_key"] = "shop.nope"
-	var r := GameDefs.from_parts(Fx.f1(), PartyData.parse_dict(Fx.party_dict(), "p.json"), Fx.battle_db(files), texts)
+	var r := GameDefs.from_parts(Fx.floors(), PartyData.parse_dict(Fx.party_dict(), "p.json"), Fx.battle_db(files), texts)
 	check(r.errors.any(func(e: String) -> bool: return e.contains("ko.json: shop.nope: 화면 문구가 없다")), "상점 name_key: %s" % str(r.errors))
 
 

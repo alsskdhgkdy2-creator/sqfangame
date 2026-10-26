@@ -264,7 +264,7 @@ func test_r2_fourth_buff_evicts_oldest() -> void:
 	var ev := _apply(s, u, "skill.t.d")
 	check_eq(ev["evicted"]["id"], "skill.t.a", "A 가 밀려남(evicted)")
 	check_eq(_ids(u.buffs), ["skill.t.b", "skill.t.c", "skill.t.d"], "B·C·D")
-	check_eq(BattleState.check_dict(s.battle.to_dict(), s.defs, s.party.members), "", "저장 검사 통과")
+	check_eq(BattleState.check_dict(s.battle.to_dict(), s.defs, s.party.members, s.floor_def), "", "저장 검사 통과")
 
 
 func test_r2_fourth_buff_reapplied_effect_counts_as_newest() -> void:
@@ -278,7 +278,7 @@ func test_r2_fourth_buff_reapplied_effect_counts_as_newest() -> void:
 	check_eq([u.buffs[2]["seq"], u.buffs[2]["turns"]], [4, 5], "seq 새로 받음, 남은 턴 새로")
 	check_eq(_apply(s, u, "skill.t.d")["evicted"]["id"], "skill.t.b", "B 가 밀려남")
 	check_eq(_ids(u.buffs), ["skill.t.c", "skill.t.a", "skill.t.d"], "C·A·D")
-	check_eq(BattleState.check_dict(s.battle.to_dict(), s.defs, s.party.members), "", "저장 검사 통과")
+	check_eq(BattleState.check_dict(s.battle.to_dict(), s.defs, s.party.members, s.floor_def), "", "저장 검사 통과")
 
 
 func test_r2_fourth_buff_reapply_keeps_count_refreshes_turns_keeps_stronger() -> void:
@@ -295,7 +295,7 @@ func test_r2_fourth_buff_reapply_keeps_count_refreshes_turns_keeps_stronger() ->
 	_apply(s, u, "skill.t.g", 1)
 	_apply(s, u, "skill.t.g", 2)
 	check_eq(u.buffs[1]["value"], 700, "방어 강화는 작은 값이 셈")
-	check_eq(BattleState.check_dict(s.battle.to_dict(), s.defs, s.party.members), "", "저장 검사 통과")
+	check_eq(BattleState.check_dict(s.battle.to_dict(), s.defs, s.party.members, s.floor_def), "", "저장 검사 통과")
 
 
 func test_r2_fourth_buff_debuff_slots_are_separate() -> void:
@@ -307,7 +307,7 @@ func test_r2_fourth_buff_debuff_slots_are_separate() -> void:
 	check_eq([u.buffs.size(), u.debuffs.size()], [3, 3], "강화 3 + 약화 3")
 	check_eq(_apply(s, u, "skill.enemy.t_d9")["evicted"]["id"], "skill.enemy.t_d0", "약화끼리만 밀어냄")
 	check_eq(_ids(u.buffs), ["skill.t.b0", "skill.t.b1", "skill.t.b2"], "강화 칸 그대로")
-	check_eq(BattleState.check_dict(s.battle.to_dict(), s.defs, s.party.members), "", "저장 검사 통과")
+	check_eq(BattleState.check_dict(s.battle.to_dict(), s.defs, s.party.members, s.floor_def), "", "저장 검사 통과")
 
 
 func test_r2_fourth_buff_expiry_order() -> void:

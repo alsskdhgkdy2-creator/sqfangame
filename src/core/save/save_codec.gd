@@ -1,12 +1,14 @@
-## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
+## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
 class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 4
-const RULES := "m3s"
-## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1·2·3판은 읽을 때 4판으로 바로 옮긴다(07 §8.4, 08 §4).
-const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s"}
+const SCHEMA := 5
+const RULES := "m3f"
+## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~4판은 읽을 때 5판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1).
+const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f"}
+## 5판 층 기록(floor_states.<층 ID>)의 키. 1~4판은 이 셋이 state 바로 아래에 있다(층 하나).
+const FLOOR_STATE_KEYS := ["world", "knowledge", "annotation"]
 ## 1판 검사에 쓰는 옛 대원 표(06 §8.6 2단계): [id, 최대 HP], 칸 순서.
 const V1_MEMBERS := [["holo_knight", 60], ["blade_duelist", 52], ["rail_ranger", 46], ["nano_medic", 42], ["glyph_wizard", 40]]
 ## 2판 검사에 쓰는 고정 대원 표(07 §8.4 2단계): [id, 최대 HP, 최대 TP], 칸 순서(06 §6.1). 정의에서 읽지 않는다.
@@ -25,7 +27,7 @@ class LoadResult:
 	var error := ""
 	var saved_at := ""
 	var generation := 0
-	## 읽은 원본의 schema(1·2·3 이면 이전한 결과다).
+	## 읽은 원본의 schema(1~4 이면 이전한 결과다).
 	var from_schema := 0
 
 	func ok() -> bool:
@@ -106,6 +108,7 @@ static func now_utc() -> String:
 	return Time.get_datetime_string_from_system(true) + "Z"
 
 
+## 5판 state(M3 A1): 지금 층(floor)·위치는 전체 몫이고, 세계 상태·방문 기록·지도 그림은 들어가 본 층마다 floor_states.<층 ID> 에 둔다.
 static func state_to_dict(s: ExplorationState) -> Dictionary:
 	var members: Array = []
 	for m in s.party.members:
@@ -113,10 +116,31 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 		for id in m.equip:
 			equip.append(id if not id.is_empty() else null)
 		members.append({"id": m.id, "hp": m.hp, "tp": m.tp, "level": m.level, "exp": m.exp, "skills": m.skills.duplicate(), "equip": equip})
+	var floor_states := {}
+	for id in s.floor_states:
+		floor_states[id] = floor_state_to_dict(s.floor_states[id])
+	return {
+		"floor": s.floor_def.id,
+		"party": {"at": [s.party.at.x, s.party.at.y], "facing": Dir.name_of(s.party.facing), "members": members},
+		"floor_states": floor_states,
+		"encounter": {"danger": s.encounter.danger, "threshold": s.encounter.threshold, "pending": s.encounter.pending},
+		"materials": s.materials.duplicate(),
+		"gear_bag": s.gear_bag.duplicate(),
+		"money": s.money,
+		"shop": {"sold": s.shop.sold.duplicate(), "pool": s.shop.pool.duplicate(), "bought": s.shop.bought_list()},
+		"battle": s.battle.to_dict() if s.battle != null else null,
+		"rng": {"state": str(s.rng.get_state())},
+		"steps": s.steps,
+		"wiped": s.wiped,
+	}
+
+
+## 한 층 기록 → {world, knowledge, annotation}(4판까지의 같은 이름 객체와 모양이 같다).
+static func floor_state_to_dict(r: FloorState) -> Dictionary:
 	var k_edges := {}
-	for e in s.knowledge.edges:
-		k_edges[GridKey.edge(e)] = s.knowledge.edges[e]
-	var a := s.annotation
+	for e in r.knowledge.edges:
+		k_edges[GridKey.edge(e)] = r.knowledge.edges[e]
+	var a := r.annotation
 	var a_floors := {}
 	for c in a.floors:
 		a_floors[GridKey.cell(c)] = a.floors[c]
@@ -131,20 +155,9 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 	for c in a.memos:
 		memos[GridKey.cell(c)] = a.memos[c]
 	return {
-		"floor": s.floor_def.id,
-		"party": {"at": [s.party.at.x, s.party.at.y], "facing": Dir.name_of(s.party.facing), "members": members},
-		"world": {"shortcuts_open": _edge_set(s.world.shortcuts_open), "passages_found": _edge_set(s.world.passages_found)},
-		"knowledge": {"visited": _cell_set(s.knowledge.visited), "edges": k_edges},
+		"world": {"shortcuts_open": _edge_set(r.world.shortcuts_open), "passages_found": _edge_set(r.world.passages_found)},
+		"knowledge": {"visited": _cell_set(r.knowledge.visited), "edges": k_edges},
 		"annotation": {"floors": a_floors, "edges": a_edges, "auto_edges": _edge_set(a.auto_edges), "icons": icons, "memos": memos},
-		"encounter": {"danger": s.encounter.danger, "threshold": s.encounter.threshold, "pending": s.encounter.pending},
-		"materials": s.materials.duplicate(),
-		"gear_bag": s.gear_bag.duplicate(),
-		"money": s.money,
-		"shop": {"sold": s.shop.sold.duplicate(), "pool": s.shop.pool.duplicate(), "bought": s.shop.bought_list()},
-		"battle": s.battle.to_dict() if s.battle != null else null,
-		"rng": {"state": str(s.rng.get_state())},
-		"steps": s.steps,
-		"wiped": s.wiped,
 	}
 
 
@@ -159,7 +172,7 @@ static func _cell_set(d: Dictionary) -> Array[String]:
 # ---- 읽기 ----
 
 ## 저장 문서를 읽어 새 상태를 만든다. 실패하면 error만 있고 state는 null.
-## 입력 글과 defs 만 읽고 공유 상태를 바꾸지 않는다. 1·2·3판은 07 §8.4·08 §4 순서로 옮긴 뒤 4판 검사를 다시 거친다.
+## 입력 글과 defs 만 읽고 공유 상태를 바꾸지 않는다. 1~4판은 07 §8.4·08 §4·M3 A1 순서로 옮긴 뒤 5판 검사를 다시 거친다.
 static func decode(text: String, defs: GameDefs) -> LoadResult:
 	var r := LoadResult.new()
 	var json := JSON.new()
@@ -180,6 +193,8 @@ static func decode(text: String, defs: GameDefs) -> LoadResult:
 			return migrate_v2(doc, defs)
 		3:
 			return migrate_v3(doc, defs)
+		4:
+			return migrate_v4(doc, defs)
 	var s := ExplorationState.new()
 	r.error = _read_state(doc["state"], defs, [], SCHEMA, s)
 	if not r.error.is_empty():
@@ -192,10 +207,10 @@ static func decode(text: String, defs: GameDefs) -> LoadResult:
 	return r
 
 
-## 1판 → 4판(07 §8.4·08 §4, 2·3판 문서를 거치지 않는다). doc 은 머리 검사를 통과한 1판 문서.
+## 1판 → 5판(07 §8.4·08 §4·M3 A1, 2~4판 문서를 거치지 않는다). doc 은 머리 검사를 통과한 1판 문서.
 ## ① 1판 원본을 옛 대원 표로 다 검사 ② 통과한 임시 상태에서만 대원 ID·성장 기본값·최대치·HP 비율을 옮기고 시작 소지금·빈 상점을 넣는다
-## ③ pending 이면 성장 값이 들어간 임시 상태의 난수로 전투를 정확히 한 번 연다 ④ 원본 saved_at·generation 으로 4판 encode
-## ⑤ 4판 읽기를 그대로 거친 결과만 돌려준다.
+## ③ pending 이면 성장 값이 들어간 임시 상태의 난수로 전투를 정확히 한 번 연다 ④ 원본 saved_at·generation 으로 5판 encode
+## ⑤ 5판 읽기를 그대로 거친 결과만 돌려준다.
 static func migrate_v1(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	var r := LoadResult.new()
 	var table := []
@@ -235,10 +250,10 @@ static func migrate_v1(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
-## 2판 → 4판(07 §8.4·08 §4, 3판 문서를 거치지 않는다). doc 은 머리 검사를 통과한 2판 문서.
+## 2판 → 5판(07 §8.4·08 §4·M3 A1, 3·4판 문서를 거치지 않는다). doc 은 머리 검사를 통과한 2판 문서.
 ## ① 2판 원본을 고정 2판 대원 표로 다 검사(battle 은 check_dict 로 검사만) ② 대원을 성장 기본값으로 옮기고 HP·TP 는 새 최대로 자름,
-## 시작 소지금·빈 상점 ③ 2판 battle 이 있으면 옮긴 대원으로 from_dict(난수 없음, 전투를 새로 열지 않는다) ④ 원본 saved_at·generation 으로 4판 encode
-## ⑤ 4판 읽기를 그대로 거친 결과만 돌려준다. 시작 배분에 없는 스킬(글리프 위저드의 부식 글리프)은 잃는다(07 §8.4 이전 정책).
+## 시작 소지금·빈 상점 ③ 2판 battle 이 있으면 옮긴 대원으로 from_dict(난수 없음, 전투를 새로 열지 않는다) ④ 원본 saved_at·generation 으로 5판 encode
+## ⑤ 5판 읽기를 그대로 거친 결과만 돌려준다. 시작 배분에 없는 스킬(글리프 위저드의 부식 글리프)은 잃는다(07 §8.4 이전 정책).
 static func migrate_v2(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	var r := LoadResult.new()
 	var table := []
@@ -275,9 +290,27 @@ static func migrate_v2(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
-## 3판 → 4판(08 §4). doc 은 머리 검사를 통과한 3판 문서.
+## 4판 → 5판(M3 A1). doc 은 머리 검사를 통과한 4판 문서.
+## ① 4판 원본을 4판 규칙(층 하나, world·knowledge·annotation 이 state 바로 아래)으로 다 검사 — 그 셋은 그 층(state.floor)의 기록이 된다
+## ② 원본 saved_at·generation 으로 5판 encode ③ 5판 읽기를 그대로 거친 결과만 돌려준다.
+static func migrate_v4(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, [], 4, old)
+	if not err.is_empty():
+		r.error = "4판 검사 실패: " + err
+		return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "4판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 4
+	return again
+
+
+## 3판 → 5판(08 §4, 4판 문서를 거치지 않는다). doc 은 머리 검사를 통과한 3판 문서.
 ## ① 3판 원본을 3판 규칙으로 다 검사(전투 객체도 만든다) ② 통과한 임시 상태에 시작 소지금·빈 상점
-## ③ 원본 saved_at·generation 으로 4판 encode ④ 4판 읽기를 그대로 거친 결과만 돌려준다.
+## ③ 원본 saved_at·generation 으로 5판 encode ④ 5판 읽기를 그대로 거친 결과만 돌려준다.
 static func migrate_v3(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	var r := LoadResult.new()
 	var old := ExplorationState.new()
@@ -321,22 +354,25 @@ static func _check_header(doc: Dictionary) -> String:
 ## schema 1·2: table 은 대원마다 {id, max_hp, max_tp}(고정 표). schema 2 부터 대원 tp·materials·battle 도 읽는다.
 ## schema 3: 대원 성장 필드를 먼저 읽어 최대 HP·TP 를 정한 뒤 hp·tp·battle 을 본다(07 §8.3). gear_bag 도 읽는다.
 ## schema 4: gear_bag 다음에 money·shop 을 읽는다(08 §4).
+## schema 5: 층 기록이 floor_states.<층 ID> 에 있다(M3 A1). 1~4판은 state 바로 아래의 world·knowledge·annotation 이 state.floor 층의 기록이다.
+## 위치(party.at)와 전투 편성은 지금 층(state.floor)으로, 층 기록은 각자 그 층으로 검사한다.
 ## schema 2 의 battle 은 검사만 하고 만들지 않는다(옮긴 대원으로 migrate_v2 가 만든다).
 static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int, s: ExplorationState) -> String:
-	var f := defs.floor_def
-	if not _is_str(d.get("floor"), f.id):
+	var f: FloorModel = defs.floor_by_id(d["floor"]) if typeof(d.get("floor")) == TYPE_STRING else null
+	if f == null:
 		return "알 수 없는 층이다: %s" % str(d.get("floor"))
-	s.floor_def = f
-	s.annotation = MapAnnotation.new(f.width, f.height)
 	s.defs = defs
+	s.enter_floor(f)
 	var err := _read_party(d, s, table, schema)
-	for part in ["world", "knowledge", "annotation", "encounter", "misc"]:
+	if err.is_empty():
+		err = _read_floor_states(d, s, schema)
+	for part in ["encounter", "misc"]:
 		if not err.is_empty():
 			return err
 		err = _read_part(part, d, s)
 	if not err.is_empty():
 		return err
-	err = _check_consistency(s)
+	err = _check_consistency(s, schema)
 	if not err.is_empty() or schema == 1:
 		return err
 	err = _read_materials(d, defs, s)
@@ -355,7 +391,7 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 	if not d.has("battle"):
 		return "battle 이 없다(전투가 없으면 null)"
 	if d["battle"] != null:
-		err = BattleState.check_dict(d["battle"], defs, s.party.members)
+		err = BattleState.check_dict(d["battle"], defs, s.party.members, s.floor_def)
 		if not err.is_empty():
 			return err
 		if schema >= 3:
@@ -442,16 +478,50 @@ static func _read_materials(d: Dictionary, defs: GameDefs, s: ExplorationState) 
 
 static func _read_part(part: String, d: Dictionary, s: ExplorationState) -> String:
 	match part:
-		"world":
-			return _read_world(d, s)
-		"knowledge":
-			return _read_knowledge(d, s)
-		"annotation":
-			return _read_annotation(d, s)
 		"encounter":
 			return _read_encounter(d, s)
 		_:
 			return _read_misc(d, s)
+
+
+## 층 기록 읽기. schema < 5 는 state 바로 아래 셋이 지금 층 기록이다. 5판은 floor_states: 키는 묶음의 층 ID, 지금 층이 꼭 있고,
+## 값은 키가 정확히 world·knowledge·annotation 인 객체이며 각자 그 층 정의로 검사한다.
+static func _read_floor_states(d: Dictionary, s: ExplorationState, schema: int) -> String:
+	if schema < 5:
+		return _read_floor_state(d, s.floor_states[s.floor_def.id])
+	var v: Variant = d.get("floor_states")
+	if typeof(v) != TYPE_DICTIONARY:
+		return "floor_states 가 객체가 아니다"
+	if not v.has(s.floor_def.id):
+		return "floor_states 에 지금 층 %s 가 없다" % s.floor_def.id
+	for id in v:
+		var g: FloorModel = s.defs.floor_by_id(id) if typeof(id) == TYPE_STRING else null
+		if g == null:
+			return "floor_states 의 %s 는 모르는 층이다" % str(id)
+		var rv: Variant = v[id]
+		if typeof(rv) != TYPE_DICTIONARY:
+			return "floor_states.%s 가 객체가 아니다" % id
+		for k in FLOOR_STATE_KEYS:
+			if not rv.has(k):
+				return "floor_states.%s.%s 가 없다" % [id, k]
+		for k in rv:
+			if not FLOOR_STATE_KEYS.has(k):
+				return "floor_states.%s.%s 는 모르는 필드다" % [id, str(k)]
+		if not s.floor_states.has(id):
+			s.floor_states[id] = FloorState.new(g)
+		var err := _read_floor_state(rv, s.floor_states[id])
+		if not err.is_empty():
+			return "floor_states.%s.%s" % [id, err]
+	return ""
+
+
+static func _read_floor_state(d: Dictionary, r: FloorState) -> String:
+	var err := _read_world(d, r)
+	if err.is_empty():
+		err = _read_knowledge(d, r)
+	if err.is_empty():
+		err = _read_annotation(d, r)
+	return err
 
 
 ## 자료형이 다른 값끼리 == 를 쓰지 않도록 문자열인지 먼저 본다.
@@ -567,7 +637,7 @@ static func _read_members_v3(p: Dictionary, s: ExplorationState) -> String:
 	return ""
 
 
-static func _read_world(d: Dictionary, s: ExplorationState) -> String:
+static func _read_world(d: Dictionary, s: FloorState) -> String:
 	var w := _dict(d, "world")
 	var err := _read_edge_set(w.get("shortcuts_open"), s.floor_def, FloorModel.Edge.SHORTCUT, s.world.shortcuts_open)
 	if not err.is_empty():
@@ -576,7 +646,7 @@ static func _read_world(d: Dictionary, s: ExplorationState) -> String:
 	return "" if err.is_empty() else "world.passages_found: " + err
 
 
-static func _read_knowledge(d: Dictionary, s: ExplorationState) -> String:
+static func _read_knowledge(d: Dictionary, s: FloorState) -> String:
 	var k := _dict(d, "knowledge")
 	if typeof(k.get("visited")) != TYPE_ARRAY or typeof(k.get("edges")) != TYPE_DICTIONARY:
 		return "knowledge 에 visited·edges 가 없다"
@@ -594,7 +664,7 @@ static func _read_knowledge(d: Dictionary, s: ExplorationState) -> String:
 	return ""
 
 
-static func _read_annotation(d: Dictionary, s: ExplorationState) -> String:
+static func _read_annotation(d: Dictionary, s: FloorState) -> String:
 	var a := _dict(d, "annotation")
 	var m := s.annotation
 	for name in ["floors", "edges", "icons", "memos"]:
@@ -675,16 +745,19 @@ static func _read_misc(d: Dictionary, s: ExplorationState) -> String:
 	return ""
 
 
-static func _check_consistency(s: ExplorationState) -> String:
+## 층 기록의 경로는 문서 꼴을 따른다: 5판은 floor_states.<층 ID>. 를 붙이고(기록이 하나여도), 4판 이하(평평한 꼴)는 붙이지 않는다.
+static func _check_consistency(s: ExplorationState, schema: int) -> String:
 	if s.party.all_down() != s.wiped:
 		return "모든 대원 HP 0 과 wiped 가 맞지 않다"
 	if s.wiped and s.encounter.pending:
 		return "전멸 상태에서 전투 대기일 수 없다(전멸이면 battle 도 없다)"
 	if s.encounter.pending != (s.encounter.danger >= s.encounter.threshold):
 		return "전투 대기(pending)와 위험도 >= 한계값이 맞지 않다"
-	for e in s.knowledge.edges:
-		if s.knowledge.edges[e] != ExplorationRules.look_of(s.floor_def, s.world, e):
-			return "knowledge.edges 의 %s 겉모습이 세계 상태와 맞지 않다" % GridKey.edge(e)
+	for id in s.floor_states:
+		var r: FloorState = s.floor_states[id]
+		for e in r.knowledge.edges:
+			if r.knowledge.edges[e] != ExplorationRules.look_of(r.floor_def, r.world, e):
+				return "%sknowledge.edges 의 %s 겉모습이 세계 상태와 맞지 않다" % ["" if schema < 5 else "floor_states.%s." % id, GridKey.edge(e)]
 	return ""
 
 

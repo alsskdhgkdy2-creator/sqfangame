@@ -363,9 +363,11 @@ func test_generation_after_recovery() -> void:
 # ---- 8. 문서 트리를 돌며 필드 지우기·자료형 바꾸기 ----
 
 ## 고정 필드가 있는 사전(지우면 거부되어야 하는 것)의 경로.
+## 5판(M3 A1): 층 기록은 state.floor_states.<층 ID> 아래(그 층 기록 객체와 그 키 셋도 필수).
+const FS := ["state", "floor_states", "fx_review"]
 const RECORDS := [
-	[], ["state"], ["state", "party"], ["state", "party", "members", 0], ["state", "world"], ["state", "knowledge"],
-	["state", "annotation"], ["state", "annotation", "icons", "1:0"], ["state", "encounter"], ["state", "rng"],
+	[], ["state"], ["state", "party"], ["state", "party", "members", 0], ["state", "floor_states"], FS, FS + ["world"], FS + ["knowledge"],
+	FS + ["annotation"], FS + ["annotation", "icons", "1:0"], ["state", "encounter"], ["state", "rng"],
 ]
 
 
@@ -427,7 +429,8 @@ func test_every_node_rejects_wrong_container_type() -> void:
 	var paths := []
 	_paths(JSON.parse_string(original), [], paths)
 	var joined := ",".join(paths.map(func(p: Array) -> String: return "/".join(p.map(func(k: Variant) -> String: return str(k)))))
-	check(joined.contains("state/world/shortcuts_open/0") and joined.contains("state/world/passages_found/0") and joined.contains("state/annotation/memos/2:0"), "통로·지름길·메모 원소 경로가 있음")
+	check(joined.contains("state/floor_states/fx_review/world/shortcuts_open/0") and joined.contains("state/floor_states/fx_review/world/passages_found/0")
+		and joined.contains("state/floor_states/fx_review/annotation/memos/2:0"), "통로·지름길·메모 원소 경로가 있음")
 	var n := 0
 	for path in paths:
 		var kind := typeof(_at(JSON.parse_string(original), path))

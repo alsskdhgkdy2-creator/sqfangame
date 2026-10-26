@@ -3,10 +3,14 @@ extends RefCounted
 
 const A := ExplorationRules.Action
 const F1_PATH := "res://data/floors/f1_test.json"
+const F2_PATH := "res://data/floors/f2_test.json"
+## 실제 층 묶음(M3 A1): f1_test(B1F) · f2_test(B2F).
+const LABYRINTH_PATH := "res://data/floors/labyrinth.json"
 const PARTY_PATH := "res://data/party/test_party.json"
 const SAVE_DIR := "user://test_saves"
 
 static var _f1: FloorModel
+static var _f2: FloorModel
 static var _party: PartyData
 static var _db: BattleDb
 static var _defs_by_floor := {}
@@ -18,8 +22,26 @@ static func f1() -> FloorModel:
 	return _f1
 
 
-## 시험용 정의 묶음: 그 층 + data/ 의 파티·전투 정의(한 번 읽어 나눠 쓴다). 층에 출현 표가 없으면 encounter.f1_test 를 채운다.
-## 층 객체마다 같은 GameDefs 를 돌려준다.
+static func f2() -> FloorModel:
+	if _f2 == null:
+		_f2 = FloorLoader.load_path(F2_PATH).floor_def
+	return _f2
+
+
+## 실제 층 묶음(깊이 차례, f1()·f2() 와 같은 객체).
+static func floors() -> Array[FloorModel]:
+	return [f1(), f2()] as Array[FloorModel]
+
+
+## 층 f 가 든 시험 층 묶음: f1 이면 실제 묶음(계단 짝 f2 포함), 아니면 그 층 하나.
+static func set_of(f: FloorModel) -> Array[FloorModel]:
+	if f == f1():
+		return floors()
+	return [f] as Array[FloorModel]
+
+
+## 시험용 정의 묶음: 그 층의 묶음(set_of) + data/ 의 파티·전투 정의(한 번 읽어 나눠 쓴다). 층에 출현 표가 없으면 encounter.f1_test 를 채운다.
+## 층 객체마다 같은 GameDefs 를 돌려준다(층 사이 검사는 하지 않는다, GameDefs.assemble).
 static func defs(f: FloorModel = null) -> GameDefs:
 	if f == null:
 		f = f1()
@@ -31,10 +53,7 @@ static func defs(f: FloorModel = null) -> GameDefs:
 		_party.resolve(_db)
 	if f.encounter_table.is_empty():
 		f.encounter_table = "encounter.f1_test"
-	var d := GameDefs.new()
-	d.floor_def = f
-	d.party = _party
-	d.battle = _db
+	var d := GameDefs.assemble(set_of(f), _party, _db)
 	_defs_by_floor[f] = d
 	return d
 
@@ -59,6 +78,22 @@ static func floor_dict(grid: Array, extra: Dictionary = {}) -> Dictionary:
 
 static func parse(d: Dictionary) -> FloorLoader.Result:
 	return FloorLoader.parse_text(JSON.stringify(d, "\t"), "fx.json")
+
+
+## 5판 저장 문서(사전)의 지금 층 기록 {world, knowledge, annotation}(M3 A1). 시험이 고치면 문서가 바뀐다.
+static func cur(doc: Dictionary) -> Dictionary:
+	return doc["state"]["floor_states"][doc["state"]["floor"]]
+
+
+## 5판 문서에서 4판 문서를 만든다(머리 4·"m3s", 지금 층 기록을 state 바로 아래로, floor_states 없음). 층 하나만 들어가 본 상태여야 한다.
+static func as_v4(doc: Dictionary) -> Dictionary:
+	var d := doc.duplicate(true)
+	d.merge({"schema": 4, "rules": "m3s"}, true)
+	var st: Dictionary = d["state"]
+	assert(st["floor_states"].size() == 1, "4판은 층 하나")
+	st.merge(st["floor_states"][st["floor"]], true)
+	st.erase("floor_states")
+	return d
 
 
 ## 오류 없이 읽히는 층. 오류가 있으면 실행을 멈추게 null.
@@ -175,7 +210,7 @@ static func defs_from(files: Dictionary, party: Dictionary = {}) -> GameDefs:
 	if files.has("encounters/test.json"):
 		f = FloorLoader.load_path(F1_PATH).floor_def
 		f.encounter_table = "encounter.test"
-	var r := GameDefs.from_parts(f, p, db)
+	var r := GameDefs.from_parts([f, f2()] as Array[FloorModel], p, db)
 	if not r.ok():
 		push_error("시험 정의 오류: %s" % str(r.errors))
 		return null

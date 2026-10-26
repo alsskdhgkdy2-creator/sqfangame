@@ -1070,7 +1070,7 @@ func test_snapshot_lists_party_menu_buttons_and_growth_fields() -> void:
 	check_eq([snap["party_menu"]["open"], snap["party_menu"]["page"], snap["party_menu"]["tab"], snap["party_menu"]["member"]], [true, "root", "", 0], "메뉴 필드")
 	check(not snap["party_menu"].has("banner"), "설명 띠 없음(07 §9.8 ③)")
 	check_eq([snap["party_menu"]["ribbon"], snap["party_menu"]["money"], snap["party_menu"]["notice"]],
-		[s.texts.t("floor.f1_test"), s.texts.t("shop.money", {"money": ShopRow.grouped(s.state.money)}), ""], "장소 띠·소지금·알림 줄")
+		[s.texts.t("floor.f1_test") + " / B1F", s.texts.t("shop.money", {"money": ShopRow.grouped(s.state.money)}), ""], "장소 띠·소지금·알림 줄")
 	await kit.press_key(KEY_2)
 	snap = s.debug_snapshot()
 	check(snap["buttons"].has("Member_0") and snap["buttons"].has("VPad_back") and snap["buttons"].has("Camp_equip") and snap["buttons"].has("Camp_records"),

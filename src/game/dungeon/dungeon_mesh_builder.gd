@@ -26,6 +26,8 @@ const FLOOR_TINT := {
 	FloorModel.Cell.DAMAGE: Color(1.0, 0.42, 0.36),
 	FloorModel.Cell.ICE: Color(0.62, 0.9, 1.0),
 }
+## 계단 칸 바닥 색(M3 A1 자리표시: 정점을 더하지 않고 바닥 색만 바꾼다. 계단 모형은 그림 단계에서).
+const STAIRS_TINT := {"down": Color(0.72, 0.5, 1.0), "up": Color(1.0, 0.85, 0.35)}
 const CEILING_COLOR := Color(0.14, 0.16, 0.2)
 const FRAME_COLOR := Color(0.32, 0.36, 0.42)
 const DOOR_PLATE := [Color(0.1, 0.36, 0.42), Color(0.08, 0.3, 0.36)]
@@ -179,6 +181,9 @@ class _Builder:
 		var z0 := (c.y - 0.5) * CELL
 		var uv: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
 		var tint: Color = FLOOR_TINT.get(f.cell_kind(c), WHITE)
+		var st := f.stair_at(c)
+		if st != null:
+			tint = STAIRS_TINT[st.way]
 		quad("floor", [Vector3(x0, 0, z0), Vector3(x0 + CELL, 0, z0), Vector3(x0 + CELL, 0, z0 + CELL), Vector3(x0, 0, z0 + CELL)], uv, Vector3.UP, tint)
 		quad("ceiling", [Vector3(x0, WALL_H, z0), Vector3(x0 + CELL, WALL_H, z0), Vector3(x0 + CELL, WALL_H, z0 + CELL), Vector3(x0, WALL_H, z0 + CELL)], uv, Vector3.DOWN, CEILING_COLOR)
 

@@ -114,10 +114,12 @@ func _expect_reject(mutate: Callable, needle: String, label: String) -> void:
 
 func test_rejects_bad_header() -> void:
 	_expect_reject(func(d): d["format"] = "other", "format", "형식")
-	_expect_reject(func(d): d["schema"] = 5, "schema", "새 schema")
-	_expect_reject(func(d): d["schema"] = 1, "rules", "schema 1 + rules m3s 쌍")
-	_expect_reject(func(d): d["schema"] = 3, "rules", "schema 3 + rules m3s 쌍")
-	_expect_reject(func(d): d["rules"] = "m2g", "rules", "schema 4 + rules m2g 쌍")
+	_expect_reject(func(d): d["schema"] = 6, "schema", "새 schema")
+	_expect_reject(func(d): d["schema"] = 1, "rules", "schema 1 + rules m3f 쌍")
+	_expect_reject(func(d): d["schema"] = 3, "rules", "schema 3 + rules m3f 쌍")
+	_expect_reject(func(d): d["schema"] = 4, "rules", "schema 4 + rules m3f 쌍")
+	_expect_reject(func(d): d["rules"] = "m3s", "rules", "schema 5 + rules m3s 쌍")
+	_expect_reject(func(d): d["rules"] = "m2g", "rules", "schema 5 + rules m2g 쌍")
 	_expect_reject(func(d): d.merge({"schema": 3, "rules": "m2"}, true), "rules", "schema 3 + rules m2 쌍")
 	_expect_reject(func(d): d.merge({"schema": 2, "rules": "m2g"}, true), "rules", "schema 2 + rules m2g 쌍")
 	_expect_reject(func(d): d["schema"] = 0, "schema", "schema 0")
@@ -136,10 +138,10 @@ func test_rejects_bad_types() -> void:
 	_expect_reject(func(d): d["state"]["encounter"]["pending"] = 1, "pending", "pending 숫자")
 	_expect_reject(func(d): d["state"]["rng"]["state"] = 12345, "rng.state", "난수 숫자")
 	_expect_reject(func(d): d["state"]["rng"]["state"] = "12x", "rng.state", "난수 문자")
-	_expect_reject(func(d): d["state"]["annotation"]["memos"]["4:0"] = "가".repeat(41), "memos", "메모 41자")
-	_expect_reject(func(d): d["state"]["knowledge"]["visited"].append("01:0"), "visited", "칸 키 형식")
-	_expect_reject(func(d): d["state"]["annotation"]["floors"]["x:1"] = 1, "floors", "지도 칸 키")
-	_expect_reject(func(d): d["state"]["knowledge"]["edges"]["q:1:1"] = "wall", "knowledge.edges", "경계 키")
+	_expect_reject(func(d): Fx.cur(d)["annotation"]["memos"]["4:0"] = "가".repeat(41), "memos", "메모 41자")
+	_expect_reject(func(d): Fx.cur(d)["knowledge"]["visited"].append("01:0"), "visited", "칸 키 형식")
+	_expect_reject(func(d): Fx.cur(d)["annotation"]["floors"]["x:1"] = 1, "floors", "지도 칸 키")
+	_expect_reject(func(d): Fx.cur(d)["knowledge"]["edges"]["q:1:1"] = "wall", "knowledge.edges", "경계 키")
 
 
 func test_rejects_bad_ranges_and_refs() -> void:
@@ -149,13 +151,13 @@ func test_rejects_bad_ranges_and_refs() -> void:
 	_expect_reject(func(d): d["state"]["party"]["members"].reverse(), "id", "대원 순서")
 	_expect_reject(func(d): d["state"]["party"]["members"][0]["hp"] = 61, "hp", "HP 초과")
 	_expect_reject(func(d): d["state"]["party"]["members"][0]["hp"] = -1, "hp", "HP 음수")
-	_expect_reject(func(d): d["state"]["world"]["shortcuts_open"].append("v:1:0"), "shortcuts_open", "지름길 아닌 경계")
-	_expect_reject(func(d): d["state"]["world"]["passages_found"].append("h:4:1"), "passages_found", "통로 아닌 경계")
-	_expect_reject(func(d): d["state"]["knowledge"]["visited"].append("9:9"), "visited", "층 밖 방문")
-	_expect_reject(func(d): d["state"]["annotation"]["floors"]["0:0"] = 5, "floors", "지도 색 5")
-	_expect_reject(func(d): d["state"]["annotation"]["icons"]["0:0"] = {"type": "dragon"}, "icons", "아이콘 종류")
-	_expect_reject(func(d): d["state"]["annotation"]["icons"]["0:0"] = {"type": "arrow"}, "화살표", "화살표 방향")
-	_expect_reject(func(d): d["state"]["annotation"]["auto_edges"].append("v:3:2"), "auto_edges", "표시 없는 자동 목록")
+	_expect_reject(func(d): Fx.cur(d)["world"]["shortcuts_open"].append("v:1:0"), "shortcuts_open", "지름길 아닌 경계")
+	_expect_reject(func(d): Fx.cur(d)["world"]["passages_found"].append("h:4:1"), "passages_found", "통로 아닌 경계")
+	_expect_reject(func(d): Fx.cur(d)["knowledge"]["visited"].append("9:9"), "visited", "층 밖 방문")
+	_expect_reject(func(d): Fx.cur(d)["annotation"]["floors"]["0:0"] = 5, "floors", "지도 색 5")
+	_expect_reject(func(d): Fx.cur(d)["annotation"]["icons"]["0:0"] = {"type": "dragon"}, "icons", "아이콘 종류")
+	_expect_reject(func(d): Fx.cur(d)["annotation"]["icons"]["0:0"] = {"type": "arrow"}, "화살표", "화살표 방향")
+	_expect_reject(func(d): Fx.cur(d)["annotation"]["auto_edges"].append("v:3:2"), "auto_edges", "표시 없는 자동 목록")
 	_expect_reject(func(d): d["state"]["encounter"]["threshold"] = 0, "threshold", "한계값 0")
 	_expect_reject(func(d): d["state"]["encounter"]["danger"] = -1, "danger", "위험도 음수")
 
@@ -164,8 +166,8 @@ func test_rejects_inconsistent_state() -> void:
 	_expect_reject(func(d): d["state"]["wiped"] = true, "wiped", "HP 남았는데 전멸")
 	_expect_reject(_zero_hp, "wiped", "모두 0 인데 전멸 아님")
 	_expect_reject(_wiped_and_pending, "전투 대기", "전멸 + 대기")
-	_expect_reject(func(d): d["state"]["world"]["passages_found"] = [], "겉모습", "찾은 통로를 잃은 관찰")
-	_expect_reject(func(d): d["state"]["knowledge"]["edges"]["v:2:2"] = "passage", "겉모습", "못 찾은 통로를 통로로 관찰")
+	_expect_reject(func(d): Fx.cur(d)["world"]["passages_found"] = [], "겉모습", "찾은 통로를 잃은 관찰")
+	_expect_reject(func(d): Fx.cur(d)["knowledge"]["edges"]["v:2:2"] = "passage", "겉모습", "못 찾은 통로를 통로로 관찰")
 
 
 func _zero_hp(d: Dictionary) -> void:

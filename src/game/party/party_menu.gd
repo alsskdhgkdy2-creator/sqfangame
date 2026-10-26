@@ -951,8 +951,8 @@ func root_band() -> bool:
 ## 맨 위 띠: 걸음 문패·장소 띠·소지금(뿌리·고르기·기록).
 func _refresh_top() -> void:
 	camp_plate.show_lines(texts.t("hud.steps", {"steps": state.steps}), "")
-	# 층 번호·계층 자료가 생기면(M3) 원작처럼 「계층 / B1F」로 넓힌다(07 §9.8 ③).
-	ribbon.show_text(texts.t(state.floor_def.name_key))
+	# 원작 「第1階層 / B1F」처럼 「층 이름 / B1F」(07 §9.8 ③, M3 A1).
+	ribbon.show_text(FloorNames.place(texts, state.defs, state.floor_def))
 	money_plate.queue_redraw()
 
 

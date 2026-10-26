@@ -86,7 +86,8 @@ func _check_auto_matches(s: DungeonScreen, label: String) -> void:
 
 
 func _annotation_json(s: DungeonScreen) -> String:
-	return JSON.stringify(SaveCodec.state_to_dict(s.state)["annotation"])
+	var d := SaveCodec.state_to_dict(s.state)
+	return JSON.stringify(d["floor_states"][d["floor"]]["annotation"])
 
 
 ## 위험도를 한계 바로 밑에 두고 북쪽으로 (2,15)까지 → 안전 구역을 벗어난 첫 걸음에 전투.

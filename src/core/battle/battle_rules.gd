@@ -28,9 +28,9 @@ const EVENT_TYPES := [
 
 # ---- 전투 시작 (06 §8.3) ----
 
-## 층 출현 표에서 편성 하나를 가중치로 뽑는다(항목 하나면 뽑지 않는다). 표가 없으면 "".
+## 지금 층의 출현 표에서 편성 하나를 가중치로 뽑는다(항목 하나면 뽑지 않는다). 표가 없으면 "".
 static func pick_formation(state: ExplorationState) -> String:
-	var e: BattleDb.EncounterDef = state.defs.battle.encounters.get(state.defs.floor_def.encounter_table)
+	var e: BattleDb.EncounterDef = state.defs.battle.encounters.get(state.floor_def.encounter_table)
 	if e == null:
 		return ""
 	var weights: Array[int] = []

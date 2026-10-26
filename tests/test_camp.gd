@@ -149,7 +149,7 @@ func test_camp_root_follows_the_layer_table_at_both_sizes() -> void:
 		check_eq(plate, Rect2(0, 0, 176, 66), tag + ": 걸음 문패 = 원작 시계 다이얼 자리 0,0 176×66")
 		check_eq([pm.camp_plate.first, pm.camp_plate.second], [s.texts.t("hud.steps", {"steps": s.state.steps}), ""], tag + ": 걸음 문패 글")
 		check_eq(ribbon, Rect2(176, 0, w - 176 - 328, 66), tag + ": 장소 띠 x 176 → 소지금 왼쪽 끝, y 0~66")
-		check_eq(pm.ribbon.text, s.texts.t(s.state.floor_def.name_key), tag + ": 장소 띠 글 = 층 이름")
+		check_eq(pm.ribbon.text, s.texts.t(s.state.floor_def.name_key) + " / B1F", tag + ": 장소 띠 글 = 층 이름 / B1F(원작 「第1階層 / B1F」)")
 		check_eq(money, Rect2(w - 328, 16, 328, 50), tag + ": 소지금 (W − 328, 16) 328×50")
 		check_eq(pm.money_text(), s.texts.t("shop.money", {"money": ShopRow.grouped(s.state.money)}), tag + ": 소지금 글 = 상점과 같은 「n엔」")
 		check(not ribbon.intersects(money) and not plate.intersects(ribbon) and not plate.intersects(money), tag + ": 걸음 문패·장소 띠·소지금이 겹치지 않는다")
@@ -2957,7 +2957,7 @@ func test_records_screen_follows_the_option_table() -> void:
 	pm._clear_notice()
 	check_eq([pm.notice_line_text(), pm.notice_line.is_visible_in_tree()], [s.texts.t("camp.cmd.records"), true], "알림이 지나면 「기록」")
 	# 슬롯 값(저장에 있는 값)은 이름 알약 두 줄에, 버튼 이름은 앞 메뉴 창과 같다(web_check 가 누른다).
-	check_eq(rt.card_lines(0)[1], "%s · 걸음 %d" % [s.texts.t(s.state.floor_def.name_key), s.state.steps], "슬롯 1: 층 · 걸음")
+	check_eq(rt.card_lines(0)[1], "%s / B1F · 걸음 %d" % [s.texts.t(s.state.floor_def.name_key), s.state.steps], "슬롯 1: 장소(층 이름 / B1F) · 걸음")
 	check_eq(rt.row_label_lines(0), ["1  " + rt.card_lines(0)[0], "%s   %s" % [rt.card_lines(0)[1], rt.card_lines(0)[2]]], "슬롯 1 이름 알약: 대표·Lv, 층 · 걸음 · 시각")
 	check_eq(rt.row_label_lines(1), ["2  " + s.texts.t("menu.empty_slot")], "빈 슬롯 이름 알약: 한 줄")
 	check_eq([rt.row_label_lines(3), rt.row_label_lines(4)], [[s.texts.t("camp.records.file")], [s.texts.t("menu.automap")]], "파일·자동 지도 이름 알약")

@@ -1,6 +1,18 @@
-## 층의 정적 정의: 칸 종류, 경계 종류, 지름길 열 수 있는 쪽, 구역, 시작. 읽은 뒤 바뀌지 않는다.
+## 층의 정적 정의: 칸 종류, 경계 종류, 지름길 열 수 있는 쪽, 구역, 시작, 계단. 읽은 뒤 바뀌지 않는다.
 class_name FloorModel
 extends RefCounted
+
+
+## 계단 하나(M3 A1). 짝은 다른 층의 계단(to_floor 의 to_at)이고 방향(way)이 반대다.
+## 계단으로 이 층에 오면 이 계단 칸에 서서 exit 쪽을 바라본다. at + exit 는 바닥 칸이고 그 사이 경계는 열림·문이다(내려설 수 있다).
+class Stair:
+	extends RefCounted
+	var at := Vector2i.ZERO
+	## "up"·"down"
+	var way := ""
+	var exit := Dir.N
+	var to_floor := ""
+	var to_at := Vector2i.ZERO
 
 enum Cell { VOID, FLOOR, DAMAGE, ICE }
 enum Edge { OPEN, WALL, DOOR, SHORTCUT, PASSAGE, ONEWAY }
@@ -10,6 +22,7 @@ var name_key := ""
 var theme := ""
 var width := 0
 var height := 0
+## 시작 칸. 계단이 있는 층은 없어도 된다(그때 GridKey.BAD_CELL, has_start 거짓). 층 묶음의 첫 층은 있어야 한다.
 var start_at := Vector2i.ZERO
 var start_facing := Dir.N
 var danger_per_step := 0
@@ -20,6 +33,8 @@ var encounter_table := ""
 var damage := 0
 ## 구역: {"id": String, "rect": Rect2i, "danger_per_step": int}. 목록 순서대로 처음 맞는 것.
 var zones: Array[Dictionary] = []
+## 계단: 칸 Vector2i → Stair.
+var stairs := {}
 
 var _cells := PackedByteArray()
 var _h := PackedByteArray()
@@ -34,6 +49,24 @@ func _init(w: int = 1, h: int = 1) -> void:
 	_cells.resize(w * h)
 	_h.resize(w * (h + 1))
 	_v.resize((w + 1) * h)
+
+
+func has_start() -> bool:
+	return start_at != GridKey.BAD_CELL
+
+
+## 칸 c 의 계단. 없으면 null.
+func stair_at(c: Vector2i) -> Stair:
+	return stairs.get(c)
+
+
+## 계단 목록(줄 순서).
+func stair_list() -> Array[Stair]:
+	var out: Array[Stair] = []
+	for c in cells():
+		if stairs.has(c):
+			out.append(stairs[c])
+	return out
 
 
 func in_bounds(c: Vector2i) -> bool:

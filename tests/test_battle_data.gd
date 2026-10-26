@@ -30,7 +30,7 @@ func _party_errors(mutate: Callable, text_db: TextDb = null) -> Array[String]:
 	var p := Fx.party_dict()
 	mutate.call(p)
 	var party := PartyData.parse_dict(JSON.parse_string(JSON.stringify(p)), "test_party.json")
-	return GameDefs.from_parts(Fx.f1(), party, Fx.battle_db(Fx.battle_files()), text_db).errors
+	return GameDefs.from_parts(Fx.floors(), party, Fx.battle_db(Fx.battle_files()), text_db).errors
 
 
 func _has(errs: Array[String], needle: String, label: String) -> void:
@@ -42,7 +42,7 @@ func _has(errs: Array[String], needle: String, label: String) -> void:
 
 
 func test_real_data_loads_without_errors_or_warnings() -> void:
-	var r := GameDefs.load_paths("res://data/floors/f1_test.json", "res://data/party/test_party.json", "res://data", TextDb.load_path("res://data/text/ko.json"))
+	var r := GameDefs.load_paths(Fx.LABYRINTH_PATH, "res://data/party/test_party.json", "res://data", TextDb.load_path("res://data/text/ko.json"))
 	check_eq(r.errors, [] as Array[String], "오류 0")
 	check_eq(r.warnings, [] as Array[String], "경고 0")
 	check(r.ok(), "defs 있음")
@@ -50,7 +50,7 @@ func test_real_data_loads_without_errors_or_warnings() -> void:
 	check_eq(db.class_ids.size(), 4, "직업 넷")
 	check_eq(db.enemy_ids.size(), 6, "적 여섯")
 	check_eq(db.table_formations("encounter.f1_test").size(), 6, "편성 여섯")
-	check_eq(r.defs.floor_def.encounter_table, "encounter.f1_test", "층 출현 표")
+	check_eq(r.defs.first_floor().encounter_table, "encounter.f1_test", "층 출현 표")
 	check_eq(r.defs.party.ids, ["holo_knight", "blade_duelist", "blade_duelist_2", "nano_medic", "glyph_wizard"] as Array[String], "D12 파티")
 	var ms := r.defs.members()
 	check_eq(ms.map(func(m): return m.max_hp), [60, 52, 52, 42, 40], "최대 HP 는 직업 레벨 표(시작 파티 Lv1)")
@@ -78,7 +78,7 @@ func test_members_are_new_objects_each_call() -> void:
 func test_party_max_values_come_from_class_table() -> void:
 	var p := PartyData.read_path("res://data/party/test_party.json")
 	check_eq(p.errors, [] as Array[String], "오류 없음")
-	var r := GameDefs.from_parts(Fx.f1(), p, BattleDb.load_dir("res://data"))
+	var r := GameDefs.from_parts(Fx.floors(), p, BattleDb.load_dir("res://data"))
 	check(r.ok(), "정의 %s" % str(r.errors))
 	var m := r.defs.members()
 	check_eq(m.size(), 5, "다섯")
@@ -100,11 +100,11 @@ func test_floor_keeps_encounter_table_and_checks_format() -> void:
 func test_game_defs_checks_floor_table_reference() -> void:
 	var db := Fx.battle_db(Fx.battle_files())
 	var none := Fx.floor_of(Fx.row_grid("..", " "))
-	var r := GameDefs.from_parts(none, PartyData.parse_dict(Fx.party_dict(), "p.json"), db)
+	var r := GameDefs.from_parts(Fx.set_of(none), PartyData.parse_dict(Fx.party_dict(), "p.json"), db)
 	_has(r.errors, "encounter.table: 층에 출현 표가 없다", "게임용은 표 없는 층 거부")
-	check(GameDefs.from_parts(none, PartyData.parse_dict(Fx.party_dict(), "p.json"), db, null, false).ok(), "시험용(require_table 거짓)은 받음")
+	check(GameDefs.from_parts(Fx.set_of(none), PartyData.parse_dict(Fx.party_dict(), "p.json"), db, null, false).ok(), "시험용(require_table 거짓)은 받음")
 	var bad := Fx.floor_of(Fx.row_grid("..", " "), {"encounter": {"danger_per_step": 10, "threshold_min": 5, "threshold_max": 5, "table": "encounter.nope"}})
-	r = GameDefs.from_parts(bad, PartyData.parse_dict(Fx.party_dict(), "p.json"), db)
+	r = GameDefs.from_parts(Fx.set_of(bad), PartyData.parse_dict(Fx.party_dict(), "p.json"), db)
 	_has(r.errors, "없는 출현 표 encounter.nope", "없는 표")
 
 
@@ -114,7 +114,7 @@ func test_name_keys_must_exist_in_text() -> void:
 	_has(_party_errors(func(p): p["members"][0]["name_key"] = "member.nope", texts), "ko.json: member.nope", "대원 name_key")
 	var files := Fx.battle_files()
 	files[EN]["enemies"][0]["name_key"] = "enemy.nope"
-	var r := GameDefs.from_parts(Fx.f1(), PartyData.parse_dict(Fx.party_dict(), "p.json"), Fx.battle_db(files), texts)
+	var r := GameDefs.from_parts(Fx.floors(), PartyData.parse_dict(Fx.party_dict(), "p.json"), Fx.battle_db(files), texts)
 	_has(r.errors, "ko.json: enemy.nope", "적 name_key")
 
 

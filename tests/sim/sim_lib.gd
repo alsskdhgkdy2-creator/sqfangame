@@ -54,9 +54,10 @@ func load_all(config_path: String = CONFIG_PATH) -> bool:
 	var data_dir: String = config["data_dir"]
 	db = BattleDb.load_dir(data_dir)
 	errors.append_array(db.errors)
-	var fr := FloorLoader.load_path(config["floor"])
+	# 층 묶음(M3 A1): 전투는 첫 층(B1F)의 출현 표에서 뽑는다.
+	var fr := FloorLoader.load_set(config["labyrinth"])
 	errors.append_array(fr.errors)
-	floor_def = fr.floor_def
+	floor_def = fr.floors[0] if fr.ok() else null
 	var tp: Variant = JSON.parse_string(FileAccess.get_file_as_string(config["party_template"]))
 	if typeof(tp) != TYPE_DICTIONARY or typeof(tp.get("members")) != TYPE_ARRAY:
 		errors.append("%s: 파티 틀을 읽지 못했다" % config["party_template"])
@@ -74,12 +75,15 @@ func load_all(config_path: String = CONFIG_PATH) -> bool:
 	if not errors.is_empty():
 		return false
 	for pid in config["parties"]:
-		var r := GameDefs.from_parts(floor_def, PartyData.parse_dict(party_dict(pid), "sim:%s" % pid), db)
+		var r := GameDefs.from_parts(fr.floors, PartyData.parse_dict(party_dict(pid), "sim:%s" % pid), db)
 		if not r.ok():
 			errors.append_array(r.errors)
 			continue
 		defs_by_party[pid] = r.defs
-	data_files = _data_files(data_dir, [config["floor"], config["party_template"]])
+	var extra := [config["labyrinth"], config["party_template"]]
+	for f in fr.floors:
+		extra.append(str(config["labyrinth"]).get_base_dir().path_join(f.id + ".json"))
+	data_files = _data_files(data_dir, extra)
 	return errors.is_empty()
 
 
@@ -112,7 +116,7 @@ static func check_config_shape(c: Dictionary) -> Array[String]:
 			out.append("%s: %s 정수여야 한다" % [k, "0 이상" if k == "base_seed" else "1 이상"])
 		else:
 			c[k] = int(c[k])
-	for k in ["floor", "party_template", "data_dir"]:
+	for k in ["labyrinth", "party_template", "data_dir"]:
 		if typeof(c.get(k)) != TYPE_STRING or str(c[k]).is_empty():
 			out.append("%s: 비지 않은 문자열이어야 한다" % k)
 	if typeof(c.get("parties")) != TYPE_DICTIONARY or c["parties"].is_empty():
@@ -334,7 +338,7 @@ func data_hash() -> String:
 	return ctx.finish().hex_encode().substr(0, 16)
 
 
-## 읽은 data/ 파일: 전투 정의 폴더의 JSON 전부 + 층·파티 틀. 경로(data/ 아래 상대 경로) 순.
+## 읽은 data/ 파일: 전투 정의 폴더의 JSON 전부 + 층 묶음·그 층 파일들·파티 틀. 경로(data/ 아래 상대 경로) 순.
 static func _data_files(data_dir: String, extra: Array) -> Array[String]:
 	var rel := []
 	for kind in BattleDb.KINDS:
