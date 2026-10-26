@@ -431,7 +431,7 @@ func test_locked_node_plus_shows_reason_without_change() -> void:
 	var j: int = s.state.defs.class_of(DUELIST_A).tree_index[QUICK_DRAW]
 	await kit.tap(kit.center_of(st.nodes[j]))
 	check_eq(st.cursor, j, "노드 누르기 → 그 노드")
-	check_eq(st._desc_title.text, texts.t(QUICK_DRAW), "설명 칸이 그 스킬")
+	check_eq(st.desc.title, texts.t(QUICK_DRAW), "설명 칸이 그 스킬")
 	check_eq([st.nodes[j].status_kind, st.nodes[j].status_line], ["locked", "잠김"], "잠긴 노드")
 	check(st.desc_text().contains("미충족") and st.desc_text().contains("Lv 5 이상"), "선행·관문 줄: %s" % st.desc_text())
 	var why := GrowthRules.learn_block(s.state.defs, DUELIST_A, s.state.party.members[DUELIST_A], {}, QUICK_DRAW)
@@ -559,11 +559,20 @@ func test_tree_area_edge_nodes_are_inside_and_pressable() -> void:
 		var area := st.tree_rect()
 		var row := st.desc_rect()
 		if sz == BASE:
-			check_eq(area, Rect2(60, 150, 1160, 353), "1280×720 트리 영역 = 트리 창 안(x 60~1220, y 150~503, P3)")
-		check(st.tree_window_rect().encloses(area) and area.end.y <= row.position.y, "%s: 트리 영역은 트리 창 안, 설명 띠 위" % str(sz))
+			check_eq(area, Rect2(60, 141, 1148, 358), "1280×720 트리 영역 = 트리 판 안(x 60~1208, y 141~499, E2-d: 오른쪽은 스크롤 막대)")
+		check(st.tree_window_rect().encloses(area) and area.end.y <= row.position.y, "%s: 트리 영역은 트리 판 안, 설명 상자 위" % str(sz))
+		# E2-d(행 피치 100): 다섯 행 트리는 1280×720 에서 넘쳐 끌어 내린다(조정자 결정). 스크롤 막대 손잡이가 길보다 짧다.
+		check(st.tree_area.max_scroll() > 0.0, "%s: 다섯 행은 넘친다(내용 %.0f > 영역 %.0f)" % [str(sz), st.tree_area.content_height, area.size.y])
+		var track := st.scroll_rect()
+		var thumb := ListParts.thumb_rect(track, st.tree_area.scroll, st.tree_area.content_height, st.tree_area.size.y)
+		check(thumb.size.y < track.size.y - 1.0, "%s: 스크롤 막대 손잡이 %s 가 길 %s 보다 짧다" % [str(sz), str(thumb), str(track)])
 		for sid in [EDGE_LEFT, EDGE_RIGHT]:
 			var j: int = defs.class_of(WIZARD).tree_index[sid]
 			var nd := st.nodes[j]
+			# 맨 아래 행 노드가 보이게 끌어 내린 뒤(손으로 내린 것과 같다) 그 노드를 본다.
+			var nr := st.node_rect(j)
+			st.tree_area.ensure_visible(nr.position.y - PartySkillTab.FIRST.y, nr.end.y + PartySkillTab.FIRST.y)
+			await kit.frames(1)
 			var full := Rect2(nd.get_global_position() - pm.get_global_position(), nd.size)
 			check(area.encloses(full), "%s %s: 노드 %s 가 트리 영역 %s 안" % [str(sz), sid, str(full), str(area)])
 			check(not full.intersects(row), "%s %s: 조작 줄과 겹치지 않는다" % [str(sz), sid])
@@ -571,7 +580,41 @@ func test_tree_area_edge_nodes_are_inside_and_pressable() -> void:
 			check_eq(full.size, st.node_size(), "%s %s: 노드 크기" % [str(sz), sid])
 			await kit.tap(kit.center_of(nd))
 			check_eq(st.cursor, j, "%s %s: 가운데 누르기 → 그 노드" % [str(sz), sid])
-			check_eq(st._desc_title.text, texts.t(sid), "%s %s: 설명 칸이 그 스킬" % [str(sz), sid])
+			check_eq(st.desc.title, texts.t(sid), "%s %s: 설명 칸이 그 스킬" % [str(sz), sid])
+
+
+## 다섯 행 트리(E2-d 검토 L2): 1280×960 에서 맨 아래 행 노드를 고른 뒤 1280×720 으로 줄이면 커서 노드가 다시 보인다(실제 크기 바뀜 뒤 한 번).
+## 손으로 내리지 않고 본다. 보통 다시 그리기는 손으로 내린 자리를 지킨다(캠프 목록과 같은 규칙, 07 §9.9 D28-a).
+func test_tree_resize_reveals_the_cursor_node_once() -> void:
+	kit = Kit.new(tree)
+	texts = TextDb.load_path("res://data/text/ko.json")
+	var defs := _edge_defs()
+	check(defs != null, "준비: 다섯 행 시험 트리")
+	if defs == null:
+		return
+	var pm := await _host_menu(defs, Vector2(1280, 960))
+	await _step(pm, "tab", 1)
+	await _step(pm, "member", WIZARD)
+	var st := pm.skill_tab
+	var j: int = defs.class_of(WIZARD).tree_index[EDGE_LEFT]
+	await _step(pm, "node", j)
+	await kit.frames(2)
+	check(st.tree_area.shows(st.node_rect(j)) and st.tree_area.max_scroll() == 0.0, "1280×960: 다섯 행이 다 들고 커서 노드가 보인다")
+	host.size = Vector2(1280, 720)
+	await kit.frames(3)
+	check(st.tree_area.max_scroll() > 0.0, "1280×720: 넘친다")
+	check_eq(st.cursor, j, "커서 그대로")
+	check(st.tree_area.shows(st.node_rect(j)), "줄인 뒤 커서 노드 %s 가 보인다(스크롤 %.0f)" % [str(st.node_rect(j)), st.tree_area.scroll])
+	# 손으로 맨 위로 올린 뒤 보통 다시 그리기는 그 자리를 지킨다.
+	st.tree_area.scroll_to(0.0)
+	pm.refresh_view()
+	await kit.frames(2)
+	check_eq(st.tree_area.scroll, 0.0, "보통 다시 그리기는 손으로 올린 자리 그대로")
+	check(not st.tree_area.shows(st.node_rect(j)), "그래서 커서 노드는 가려진 채")
+	# 다시 크기가 바뀌면 한 번 되돌린다.
+	host.size = Vector2(1280, 721)
+	await kit.frames(3)
+	check(st.tree_area.shows(st.node_rect(j)), "크기가 또 바뀌면 커서 노드를 다시 보인다")
 
 
 # ---- 장비 (07 §5.7, §9.2) ----
@@ -1110,11 +1153,11 @@ func test_layout_no_overlap_and_min_size_per_tab() -> void:
 		_check_layout(pm, sz, tag + " 스킬")
 		var st := pm.skill_tab
 		check(st.tree_window_rect().end.y <= st.desc_rect().position.y, tag + ": 트리 창은 설명 띠 위")
-		check_eq([st.desc_rect().position.x, st.desc_rect().end.x, st.desc_rect().end.y], [216.0, sz.x - 48, sz.y - 8], tag + ": 설명 띠는 아래 넓게(x 216 부터: 왼쪽 아래는 방향 십자, P3)")
+		check_eq([st.desc_rect().position.x, st.desc_rect().end.x, st.desc_rect().end.y], [216.0, sz.x - 48, sz.y - 8], tag + ": 설명 상자는 아래 넓게(x 216 부터: 왼쪽 아래는 방향 십자, P3)")
 		await _step(pm, "plus")
 		await _step(pm, "commit")
 		check_eq(pm.dialog_kind, "commit", tag + " 준비: 확정 창")
-		check_eq(pm.dialog_rect().size, Vector2(560, 240), tag + ": 확인 창 560×240")
+		check_eq(pm.dialog_rect().size, Vector2(844, 200), tag + ": 확인 창(알림 띠) 844×200(E2-d)")
 		_check_layout(pm, sz, tag + " 확인 창")
 		await _step(pm, "dialog_back")
 		await _step(pm, "revert")

@@ -987,65 +987,126 @@ func test_status_sheet_fits_text_shows_kind_icons_and_has_no_yellow_fill() -> vo
 		check(SheetParts.text_width(c, t.t(hk), SheetParts.SPLIT_HEAD_FS) <= cw, "내역 머리 %s 가 칸에 든다" % hk)
 
 
-# ---- 스킬 트리 화면(R2-b, 원작 jp_guide2_img3·img2) ----
+# ---- 스킬 트리 화면(07 §9.9 E2-d, research 08 §6.1: 원작 I HD 스킬 트리 yt_eo1hd_b_03, 알림 띠 b_04) ----
 
-func test_skill_screen_follows_the_reference_table() -> void:
+## 스킬 화면 준비: 듀얼리스트 A(칸 1, Lv 3: 초안을 만들 SP).
+func _skills_open() -> DungeonScreen:
 	var s := await _open()
-	var pm := s.party_menu
 	GrowthRules.grant_exp(s.state, 1, s.state.defs.battle.growth.cum(3))
 	await kit.press_key(KEY_P)
 	await kit.press_key(KEY_4)
 	await kit.press_key(KEY_RIGHT)
 	await kit.press_key(KEY_ENTER)
+	await kit.frames(1)
+	return s
+
+
+## 층 표(E2-d 설계 §2.1·§2.2): 자리·앵커·허용한 겹침만·화면 안·트리 차례.
+func _check_skill_layers(pm: PartyMenu, size: Vector2, tag: String) -> void:
+	var st := pm.skill_tab
+	await kit.frames(1)
+	var band := _rect(st.top)
+	var win := st.tree_window_rect()
+	var area := st.tree_rect()
+	var ct := st.class_tab_rect()
+	var desc := st.desc_rect()
+	var dir := _rect(pm.dir_pad)
+	var keys := _rect(pm.key_pad)
+	check_eq(band, Rect2(0, 0, size.x, MemberHeader.H), tag + ": 대원 띠 전체 폭")
+	check_eq(win, Rect2(48, 137, size.x - 96, size.y - 217 - 137), tag + ": 트리 판 x 48 ~ W − 48, y 137(원작) ~ H − 217(방향 십자 위 8)")
+	check_eq(area, Rect2(60, 141, size.x - 132, size.y - 221 - 141), tag + ": 트리 영역은 판 안(왼쪽 12, 오른쪽 24 = 스크롤 막대, 위아래 4)")
+	check_eq(ct, Rect2(72, 103, 220, 34), tag + ": 직업 탭 x 72~292, y 103~137(원작 100~137)")
+	check_eq(ct.end.y, win.position.y, tag + ": 직업 탭 아래 끝 = 트리 판 위(붙는다, 겹치지 않음)")
+	check_eq(desc, Rect2(216, size.y - 209, size.x - 264, 201), tag + ": 설명 상자 x 216 ~ W − 48, y H − 209 ~ H − 8")
+	check_eq([dir, keys], [Rect2(8, size.y - 209, 200, 200), Rect2(size.x - 567, size.y - 88, 227, 72)], tag + ": 키패드(07 §9.7 그대로)")
+	check(desc.position.x >= dir.end.x + 8.0, tag + ": 설명 상자는 방향 십자 오른쪽 + 8 부터(원작 48 에서 비킴)")
+	check(win.end.y + 8.0 <= dir.position.y + 0.5 and win.end.y <= desc.position.y, tag + ": 트리 판은 방향 십자·설명 상자 위에서 끝난다")
+	var sb := st.scroll_rect()
+	var sbg := Rect2(win.position + sb.position, sb.size)
+	check(win.encloses(sbg) and not sbg.intersects(area), tag + ": 스크롤 막대 %s 는 판 안, 트리 영역 밖(오른쪽)" % str(sbg))
+	# 겹침: 허용한 것만. (c) 직업 탭이 띠의 빈 왼쪽 끝 앞, (a) 「취소」「선택」이 설명 상자 안(07 §9.7).
+	var parts := {"band": band, "class_tab": ct, "panel": win, "desc": desc, "dir": dir, "keys": keys}
+	var names := parts.keys()
+	for i in names.size():
+		check(Rect2(Vector2.ZERO, size).encloses(parts[names[i]]), "%s: %s %s 가 화면 안" % [tag, names[i], str(parts[names[i]])])
+		for j in range(i + 1, names.size()):
+			var inter: Rect2 = (parts[names[i]] as Rect2).intersection(parts[names[j]])
+			if not inter.has_area():
+				continue
+			var pair := [names[i], names[j]]
+			if pair == ["band", "class_tab"]:
+				check_eq(inter, Rect2(72, 103, 220, 15), tag + ": 직업 탭 ∩ 띠 = 띠 왼쪽 빈 곳(x 72~292, y 103~118)만")
+			elif pair == ["desc", "keys"]:
+				check(desc.encloses(keys), tag + ": 「취소」「선택」은 설명 상자 안")
+			else:
+				check(false, "%s: 허용하지 않은 겹침 %s %s" % [tag, str(pair), str(inter)])
+	# 직업 탭은 띠의 안내(x 400~)와 남은 SP 글에 닿지 않는다.
+	var note := _rect(st._note_label)
+	var sp := _rect(st._sp_label)
+	check(note.position.x >= 400.0 and ct.end.x < note.position.x and ct.end.x < sp.position.x, tag + ": 직업 탭 %s 은 안내 %s·남은 SP %s 왼쪽" % [str(ct), str(note), str(sp)])
+	# 설명 상자 안: 레벨 탭 → 「Lv n」 막대(머리 오른쪽), 그 아래 「−」「+」, 아래 줄 「되돌리기」「확정」, 그 왼쪽 「취소」「선택」.
+	var ctrl := {"−": _rect(st.minus_button), "+": _rect(st.plus_button), "되돌리기": _rect(st.revert_button), "확정": _rect(st.commit_button),
+		"취소": _rect(pm.key_pad.button("back")), "선택": _rect(pm.key_pad.button("ok"))}
+	var cn := ctrl.keys()
+	for i in cn.size():
+		var r: Rect2 = ctrl[cn[i]]
+		check(desc.encloses(r) and r.size.x >= 64.0 and r.size.y >= 64.0, "%s: %s %s 는 설명 상자 안, 64 이상" % [tag, cn[i], str(r)])
+		for j in range(i + 1, cn.size()):
+			check(not r.intersects(ctrl[cn[j]]), "%s: %s 와 %s 가 겹친다" % [tag, cn[i], cn[j]])
+	var head := ListParts.tree_head_rect(Rect2(desc.position, desc.size))
+	var bar := Rect2(desc.position + st.lv_bar_rect().position, st.lv_bar_rect().size)
+	check(head.encloses(bar) and bar.end.y <= ctrl["−"].position.y and bar.position.x >= desc.position.x + st.level_box_rect(10).end.x,
+		tag + ": 「Lv n」 막대 %s 는 머리 안 오른쪽, 레벨 탭 10 오른쪽, 「−」 위" % str(bar))
+	check(ctrl["−"].position.y >= head.end.y, tag + ": 「−」「+」 는 머리 아래")
+	var body_end := desc.position.x + PartySkillTab.DESC_PAD + st.body_width()
+	check(body_end <= keys.position.x - 8.0 + 0.5, "%s: 설명 줄 자리 끝 %s 는 키패드 「취소」 왼쪽 − 8" % [tag, body_end])
+	check_eq([ctrl["되돌리기"].size, ctrl["확정"].size], [Vector2(120, 64), Vector2(140, 64)], tag + ": 「되돌리기」 120·「확정」 140")
+	# 노드: 트리 영역 안, 넓은 알약(원작 36 → 64), 행 피치 100(선의 「Lv n」 자리).
+	var inner := Rect2(Vector2.ZERO, area.size)
+	for i in st.nodes.size():
+		if st.nodes[i].visible:
+			check(inner.encloses(st.node_rect(i)), "%s: 노드 %d %s 가 트리 영역 안" % [tag, i, str(st.node_rect(i))])
+			check_eq(st.nodes[i].size, st.node_size(), "%s: 노드 %d 크기" % [tag, i])
+	check(st.node_size().x >= 240.0 and st.node_size().y >= 64.0 and st.pitch().y == 100.0, tag + ": 노드 ≥ 240×64, 행 피치 100")
+	# 트리 차례(뒤 → 앞): 판 → 하위 화면(띠 → 트리 판 → 직업 탭 → 트리 영역 → 설명 상자) → 확인 창 층 → 키패드.
+	var order := [st.top, st.tree_window, st.class_tab, st.tree_area, st.desc]
+	for i in order.size() - 1:
+		check((order[i] as Control).get_index() < (order[i + 1] as Control).get_index(), "%s: %s 는 %s 뒤" % [tag, order[i].name, order[i + 1].name])
+	check(pm.backdrop_board.get_index() < st.get_index() and st.get_index() < pm.dialog_layer.get_index() and pm.dialog_layer.get_index() < pm.dir_pad.get_index(),
+		tag + ": 판 → 스킬 → 확인 창 층 → 키패드")
+	for d in [st.top, st.tree_window, st.class_tab, st.desc]:
+		check_eq((d as Control).mouse_filter, Control.MOUSE_FILTER_IGNORE, "%s: %s 는 장식" % [tag, d.name])
+	_check_targets(pm, size, tag + " 스킬")
+
+
+func test_skill_screen_follows_the_reference_table() -> void:
+	var s := await _skills_open()
+	var pm := s.party_menu
 	var st := pm.skill_tab
 	check_eq([pm.page, pm.tab, pm.member], ["sub", 1, 1], "준비: 듀얼리스트 A 스킬")
 	for n in ["Close", "Tab_status", "Member_0", "TitlePlate", "Notice"]:
 		check(pm.find_child(n, false, false) == null, "앞 파티 메뉴 틀 부품 %s 은 없다(R2-d 에서 지움)" % n)
 	var first := {}
-	for px in WINDOWS + [WINDOWS[0]]:
+	for px in WINDOWS + [Vector2(1280, 960), WINDOWS[0]]:
 		var size: Vector2 = await _window(px)
 		var tag := "%s(논리 %s)" % [str(px), str(size)]
 		check_eq(_rect(s.view_container), Rect2(Vector2.ZERO, size), tag + ": 바탕은 줄지 않는다")
-		check_eq(st.top.size, Vector2(size.x, MemberHeader.H), tag + ": 위 줄(이름 칸·Lv 띠·SKILL POINT 띠) 전체 폭")
 		check_eq([_rect(st.top.prev_button), _rect(st.top.next_button)], [Rect2(0, 0, 64, 64), Rect2(266, 0, 64, 64)], tag + ": 앞·다음 대원")
 		check(pm.find_child("SkillBack", true, false) == null and not s.debug_snapshot()["buttons"].has("SkillBack"), tag + ": 「뒤로」 단추 없음(E1 ⑤)")
-		var win := st.tree_window_rect()
-		var desc := st.desc_rect()
-		check_eq(win, Rect2(48, 150, size.x - 96, 353), tag + ": 트리 창 x 48 ~ 오른쪽 48, y 150~503(P3, 원작 138~548)")
-		check_eq(desc, Rect2(216, size.y - 209, size.x - 264, 201), tag + ": 설명 띠 x 216 → 오른쪽 48, y 511~712(P3: 왼쪽 아래는 방향 십자)")
-		check(win.end.y <= desc.position.y, tag + ": 트리 창은 설명 띠 위")
-		var ct := st.class_tab_rect()
-		check(ct.position.y >= MemberHeader.H and ct.position.y < win.position.y and ct.end.y > win.position.y, tag + ": 직업 탭은 트리 창 위 가장자리에 걸친다")
-		check(win.encloses(st.tree_rect()), tag + ": 트리 영역은 창 안")
-		var area := Rect2(Vector2.ZERO, st.tree_rect().size)
-		for i in st.nodes.size():
-			check(area.encloses(st.node_rect(i)), "%s: 노드 %d %s 가 트리 영역 안" % [tag, i, str(st.node_rect(i))])
-			check_eq(st.nodes[i].size, st.node_size(), "%s: 노드 %d 크기" % [tag, i])
-		check(st.node_size().x >= 240.0 and st.node_size().y >= 64.0, tag + ": 노드는 넓은 알약(원작 323×32 → 64 높이)")
-		var ctrl := [st.minus_button, st.plus_button, st.revert_button, st.commit_button]
-		for b in ctrl:
-			check(_rect(st.desc).encloses(_rect(b)), "%s: %s 는 설명 띠 안" % [tag, b.name])
-		for i in ctrl.size():
-			for j in range(i + 1, ctrl.size()):
-				check(not _rect(ctrl[i]).intersects(_rect(ctrl[j])), "%s: %s 와 %s 가 겹친다" % [tag, ctrl[i].name, ctrl[j].name])
-		var boxes_end := st.level_box_rect(10).end.x
-		check(boxes_end < st.minus_button.position.x, tag + ": 레벨 칸 1~10 은 「−」 왼쪽")
-		var body_end := desc.position.x + PartySkillTab.DESC_PAD + st.body_width()
-		check(body_end <= _rect(pm.key_pad).position.x - 8.0 + 0.5, "%s: 설명 줄 자리 끝 %s 는 키패드 「취소」 왼쪽 − 8" % [tag, body_end])
-		check_eq(_rect(pm.key_pad), Rect2(size.x - 567, 632, 227, 72), tag + ": 키패드 「취소」「선택」은 설명 띠 안 「되돌리기」 왼쪽(P3)")
-		check_eq([_rect(st.revert_button).size, _rect(st.commit_button).size], [Vector2(120, 64), Vector2(140, 64)], tag + ": 「되돌리기」 120·「확정」 140")
-		for d in [st.top, st.tree_window, st.class_tab, st.desc]:
-			check_eq((d as Control).mouse_filter, Control.MOUSE_FILTER_IGNORE, "%s: %s 는 장식" % [tag, d.name])
-		_check_targets(pm, size, tag + " 스킬")
-		var snap := [win, desc, _rect(st.commit_button), st.node_rect(st.nodes.size() - 1)]
+		await _check_skill_layers(pm, size, tag)
+		var snap := [st.tree_window_rect(), st.desc_rect(), _rect(st.commit_button), st.node_rect(st.nodes.size() - 1)]
 		if first.has(px):
 			check_eq(snap, first[px], tag + ": 크기를 바꿨다 돌아와도 같은 자리(앵커)")
 		first[px] = snap
-	# 노드 표시: 커서 = 밝은 알약, 다른 노드 = 짙은 파랑, 못 배움 = 어두운 회청.
+	# 높은 화면(1280×960): 트리 판이 아래로 늘어 설명 상자 위 8 까지, 설명 상자·키패드는 아래.
+	var tall: Vector2 = await _window(Vector2(1280, 960))
+	check_eq([st.tree_window_rect().end.y, st.desc_rect().end.y, _rect(pm.dir_pad).end.y], [tall.y - 217.0, tall.y - 8.0, tall.y - 9.0], "1280×960: 트리 판이 늘어난다")
+	await _window(WINDOWS[0])
+	# 노드 표시: 커서 = 하늘색 알약, 다른 노드 = 남색, 못 배움 = 회색.
 	check_eq(st.nodes[st.cursor].theme_state(), "tree:selected", "커서 노드")
 	var other := 1 if st.cursor != 1 else 0
 	check(st.nodes[other].theme_state() in ["tree:normal", "tree:disabled"], "다른 노드 %s" % st.nodes[other].theme_state())
-	# 초안 → 레벨 칸, 남은 SP 줄, 확정 창.
+	# 초안 → 레벨 탭, 남은 SP 줄, 확정 창.
 	var before := st.top.level_text
 	await kit.tap(kit.center_of(st.plus_button))
 	check_eq(st.draft.size(), 1, "「+」 → 초안")
@@ -1076,6 +1137,420 @@ func test_skill_screen_follows_the_reference_table() -> void:
 	check_eq(pm.member, 2, "→ 단추 → 다음 대원")
 	await kit.tap(kit.center_of(pm.key_pad.buttons["back"]))
 	check_eq([pm.page, pm.camp_cursor], ["root", SKILLS], "키패드 「취소」 → 캠프 뿌리(커서 스킬)")
+
+
+## 노드 nd 의 그린 채움(알약 전체)과 바깥 테들(그리기 기록).
+static func _node_fill(nd: SkillNode) -> Variant:
+	for e in SheetParts.record(nd):
+		if e["kind"] == "fill" and e["rect"] == Rect2(Vector2.ZERO, nd.size):
+			return e["color"]
+	return null
+
+
+static func _node_outlines(nd: SkillNode) -> Array:
+	return _drawn_entries(nd, "outline").map(func(e: Dictionary) -> Array: return [e["color"], int(e.get("width", 0))])
+
+
+## 노드 색은 그린 것으로 본다(원작 잼): 보통 #044C76, 잠김·SP 부족 #24333C, 커서 하늘색 #3EC0CC(노랑 채움 아님), 잠긴 노드 위 커서는 회색에 하늘색 테,
+## 초안 노드는 어느 모양이든 금색 테와 「+n」(채움은 그대로).
+func test_skill_node_colours_are_read_from_what_is_drawn() -> void:
+	var s := await _skills_open()
+	var pm := s.party_menu
+	var st := pm.skill_tab
+	GrowthRules.grant_exp(s.state, 1, s.state.defs.battle.growth.cum(4) - s.state.defs.battle.growth.cum(3))  # 초안 둘 뒤에도 SP 가 남게
+	pm.refresh_view()
+	var tree := s.state.defs.class_of(1).tree
+	var normal := -1
+	var locked := -1
+	for j in tree.size():
+		var k := st.nodes[j].status_kind
+		if k == "learnable" and normal < 0 and j != st.cursor:
+			normal = j
+		if k == "locked" and locked < 0:
+			locked = j
+	check(normal >= 0 and locked >= 0 and st.cursor != locked, "준비: 보통 노드 %d·잠긴 노드 %d(커서 %d)" % [normal, locked, st.cursor])
+	await kit.frames(2)
+	check_eq(_node_fill(st.nodes[normal]), Color("044c76"), "보통 노드 채움 #044C76(원작)")
+	check_eq(_node_fill(st.nodes[locked]), Color("24333c"), "잠긴 노드 채움 회색 #24333C(원작, 남색 아님)")
+	var cur := st.cursor
+	check_eq(_node_fill(st.nodes[cur]), Color("3ec0cc"), "커서 노드 채움 하늘색 #3EC0CC(원작)")
+	check(not _is_yellow(_node_fill(st.nodes[cur])), "커서 채움은 노랑이 아니다")
+	check(_node_outlines(st.nodes[normal]).all(func(o: Array) -> bool: return o[0] != UiTheme.BTN_PICK), "초안 없는 노드에 금색 테가 없다")
+	# 잠긴 노드 위 커서: 회색 그대로, 하늘색 테 3.
+	await kit.tap(kit.center_of(st.nodes[locked]))
+	await kit.frames(2)
+	check_eq(st.cursor, locked, "잠긴 노드 누르기 → 커서")
+	check_eq(st.nodes[locked].theme_state(), "tree:disabled_selected", "잠긴 노드 위 커서 모양")
+	check_eq(_node_fill(st.nodes[locked]), Color("24333c"), "잠긴 노드 위 커서: 채움은 회색 그대로")
+	check(_node_outlines(st.nodes[locked]).has([Color("3ec0cc"), 3]), "잠긴 노드 위 커서: 하늘색 테 3 %s" % str(_node_outlines(st.nodes[locked])))
+	# 초안: 커서가 있는 노드와 없는 노드 모두 금색 테와 「+1」, 채움은 그대로.
+	await kit.tap(kit.center_of(st.nodes[normal]))
+	await kit.tap(kit.center_of(st.plus_button))
+	await kit.tap(kit.center_of(st.nodes[cur]))
+	await kit.tap(kit.center_of(st.plus_button))
+	await kit.frames(2)
+	check(st.draft.size() == 2 and not st.nodes[normal].is_dim() and not st.nodes[cur].is_dim(), "준비: 초안 둘 %s, 두 노드 모두 배울 수 있음" % str(st.draft))
+	for j in [normal, cur]:
+		var nd := st.nodes[j]
+		var want := Color("3ec0cc") if j == st.cursor else Color("044c76")
+		check_eq(_node_fill(nd), want, "초안 노드 %d 채움은 그대로" % j)
+		check(_node_outlines(nd).has([UiTheme.BTN_PICK, int(UiTheme.BTN_PICK_W)]), "초안 노드 %d 에 금색 테 %s" % [j, str(_node_outlines(nd))])
+		check(_drawn_entries(nd, "text").any(func(e: Dictionary) -> bool: return e["text"] == "+1"), "초안 노드 %d 에 「+1」" % j)
+		_check_drawn_text(nd, "초안 노드 %d" % j)
+	_check_drawn_text(st.nodes[locked], "잠긴 노드")
+
+
+## 노드 이름은 초안 「+n」과 함께여도 잘리지 않는다(E2-d 검토 M1): 실제 다섯 대원(네 직업)의 모든 노드 × 초안 1 과 그 노드가 보일 수 있는 가장 큰 「+n」
+## (최대 − 배운 레벨), 1280·1728 에서. 그린 글자 크기로 잰 폭 ≤ 그린 폭(이름·「+n」·상태·Lv 상자 글 모두).
+func test_skill_node_names_fit_with_every_real_draft() -> void:
+	var s := await _skills_open()
+	var pm := s.party_menu
+	var st := pm.skill_tab
+	var seen := 0
+	var tightest := 1e9
+	for px in WINDOWS:
+		var size: Vector2 = await _window(px)
+		for i in s.state.party.members.size():
+			st.draft = {}  # 초안이 남아 있으면 대원 바꾸기가 버리기 창을 띄운다
+			pm.handle("member", i)
+			await kit.frames(2)
+			check_eq([pm.member, pm.dialog_kind], [i, ""], "준비: 대원 %d" % i)
+			var m := s.state.party.members[i]
+			var tree := s.state.defs.class_of(i).tree
+			for j in tree.size():
+				var sid := str(tree[j]["skill"])
+				var room := s.state.defs.battle.skill(sid).max_level() - int(m.skills.get(sid, 0))
+				for d in ([1, room] if room > 1 else [room]):
+					if d <= 0:
+						continue
+					st.draft = {sid: d}
+					st.refresh()
+					await kit.frames(1)
+					var nd := st.nodes[j]
+					var tag := "%s 대원 %d %s +%d" % [str(size), i, sid, d]
+					var texts := _drawn_entries(nd, "text")
+					check(texts.any(func(e: Dictionary) -> bool: return e["text"] == "+%d" % d), tag + ": 「+n」 을 그렸다")
+					for e in texts:
+						var w := SheetParts.text_width(nd, e["text"], e["fs"])
+						if e["text"] == nd.text:
+							tightest = minf(tightest, e["rect"].size.x - w)
+						check(w <= e["rect"].size.x + 0.5, "%s: 「%s」 %dpx 폭 %.1f ≤ 그린 폭 %.1f" % [tag, e["text"], e["fs"], w, e["rect"].size.x])
+					seen += 1
+	st.draft = {}
+	st.refresh()
+	check(seen >= 40, "본 경우 %d, 이름 여유 가장 작은 것 %.1f px" % [seen, tightest])
+	pm.handle("member", 1)
+
+
+## 누르고 있는 보통 노드(커서 아님)는 누름 채움 #0A5E8E 로 그린다(E2-d 검토 L1, 그린 기록).
+func test_held_skill_node_draws_the_pressed_fill() -> void:
+	var s := await _skills_open()
+	var pm := s.party_menu
+	var st := pm.skill_tab
+	var j := -1
+	for k in st.nodes.size():
+		if st.nodes[k].visible and k != st.cursor and st.nodes[k].status_kind == "learnable":
+			j = k
+			break
+	check(j >= 0, "준비: 커서가 아닌 배울 수 있는 노드")
+	var nd := st.nodes[j]
+	kit.touch(FINGER, kit.center_of(nd), true)
+	await kit.frames(2)
+	check_eq([nd.held, nd.selected, nd.theme_state()], [true, false, "tree:pressed"], "누르는 중, 커서 아님")
+	check_eq(_node_fill(nd), Color("0a5e8e"), "누름 채움 #0A5E8E(보통 #044C76 과 다르다)")
+	_check_drawn_text(nd, "누른 노드")
+	kit.touch(FINGER, Vector2(-500, -500), false)
+	await kit.frames(2)
+	check_eq(_node_fill(nd), Color("044c76"), "뗀 뒤 보통 채움")
+
+
+## 설명 상자 머리(공용 DescBox "tree" 모양): 머리 #2C78A6 에 이름, 레벨 탭(배움·초안 = 짙은 탭, 초안은 금색 테, 노랑 채움 없음), 오른쪽 「Lv n」 막대(n = 배움 + 초안,
+## 채움 폭 = 비 × 길). 몸 줄은 스킬 줄 그대로(첫 줄 시안).
+func test_skill_desc_head_shows_level_tabs_and_lv_bar() -> void:
+	var s := await _skills_open()
+	var pm := s.party_menu
+	var st := pm.skill_tab
+	check(st.desc is DescBox and st.desc.look == "tree", "설명 상자는 공용 DescBox 의 tree 모양")
+	var box := Rect2(Vector2.ZERO, st.desc.size)
+	for step in 3:
+		await kit.frames(2)
+		var sid := st.cursor_skill()
+		var learned: int = st.level_boxes[0]
+		var drafted: int = st.level_boxes[1]
+		var mx: int = st.level_boxes[2]
+		var tag := "%s 배움 %d 초안 %d" % [sid, learned, drafted]
+		check_eq([learned, drafted, mx], [int(s.state.party.members[1].skills.get(sid, 0)), int(st.draft.get(sid, 0)), s.state.defs.battle.skill(sid).max_level()], tag + ": 레벨 칸 값")
+		var fills := _drawn_entries(st.desc, "fill")
+		var at := func(r: Rect2) -> Array: return fills.filter(func(e: Dictionary) -> bool: return e["rect"] == r).map(func(e: Dictionary) -> Color: return e["color"])
+		check_eq(at.call(ListParts.tree_head_rect(box)), [Color("2c78a6")], tag + ": 머리 채움 #2C78A6")
+		var texts := _drawn_entries(st.desc, "text").map(func(e: Dictionary) -> String: return e["text"])
+		check(texts.has(s.texts.t(s.state.defs.battle.skill(sid).name_key)), tag + ": 머리에 이름")
+		for k in range(1, mx + 1):
+			var want := ListParts.TREE_TAB_ON if k <= learned + drafted else ListParts.TREE_TAB_OFF
+			check_eq(at.call(ListParts.tree_tab_rect(box, k)), [want], "%s: 레벨 탭 %d" % [tag, k])
+			var edged := _drawn_entries(st.desc, "outline").any(func(e: Dictionary) -> bool: return e["rect"] == ListParts.tree_tab_rect(box, k))
+			check_eq(edged, k > learned and k <= learned + drafted, "%s: 레벨 탭 %d 금색 테는 초안 칸만" % [tag, k])
+		check(at.call(ListParts.tree_tab_rect(box, mx + 1)).is_empty(), tag + ": 최대 레벨 다음 탭은 없다")
+		# 「Lv n」 막대.
+		check(texts.has(s.texts.t("party.level", {"level": learned + drafted})), tag + ": 막대 글 「Lv %d」" % (learned + drafted))
+		check_eq(at.call(ListParts.tree_bar_label_rect(box)), [ListParts.TREE_BAR_LABEL], tag + ": 막대 글 칸")
+		check_eq(at.call(ListParts.tree_bar_track_rect(box)), [ListParts.TREE_BAR_TRACK], tag + ": 막대 길")
+		var t := ListParts.tree_bar_track_rect(box).grow(-4.0)
+		var lw := fills.filter(func(e: Dictionary) -> bool: return e["color"] == ListParts.TREE_BAR_LEARNED)
+		var dw := fills.filter(func(e: Dictionary) -> bool: return e["color"] == ListParts.TREE_BAR_DRAFT)
+		check_eq(lw.size(), 1 if learned > 0 else 0, tag + ": 배운 몫 채움")
+		check_eq(dw.size(), 1 if drafted > 0 else 0, tag + ": 초안 몫 채움")
+		if learned > 0:
+			check(is_equal_approx(lw[0]["rect"].size.x, t.size.x * learned / mx) and lw[0]["rect"].position.x == t.position.x, "%s: 배운 몫 폭 %s = %d/%d" % [tag, str(lw[0]["rect"]), learned, mx])
+		if drafted > 0:
+			check(is_equal_approx(dw[0]["rect"].size.x, t.size.x * drafted / mx), "%s: 초안 몫 폭 %s = %d/%d" % [tag, str(dw[0]["rect"]), drafted, mx])
+		for e in fills:
+			check(not _is_yellow(e["color"]), "%s: 설명 상자에 노랑 채움 없음(%s)" % [tag, (e["color"] as Color).to_html(false)])
+		# 몸 줄: 스킬 줄 그대로, 첫 줄 시안.
+		var head_end := ListParts.tree_head_rect(box).end.y
+		var body := _drawn_entries(st.desc, "text").filter(func(e: Dictionary) -> bool: return e["rect"].position.y + e["fs"] > head_end)
+		check_eq(body.map(func(e: Dictionary) -> String: return e["text"]), st.desc_lines, tag + ": 몸 줄")
+		if not body.is_empty():
+			check_eq(body[0]["color"], ListParts.TREE_DESC_ACCENT, tag + ": 첫 줄 시안")
+			check_eq(Vector2(body[0]["rect"].position.x, body[0]["rect"].position.y + body[0]["fs"]), st.desc_line_pos(0), tag + ": 첫 줄 자리")
+		_check_drawn_text(st.desc, tag)
+		await kit.tap(kit.center_of(st.plus_button))
+
+
+## 소지품·장비의 설명 상자("bag", 선택지 없음)는 E2-b·E2-c 그대로 그린다: 굽은 끝 테, 머리·몸 채움, 줄 간격 30 에 넷까지, 18px. tree 모양의 것은 하나도 없다.
+func test_desc_box_bag_look_is_unchanged() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var d := DescBox.new()
+	s.add_child(d)
+	d.position = Vector2(300, 300)
+	d.size = Vector2(702, 182)
+	var ls: Array[String] = ["첫째 줄", "둘째 줄", "셋째 줄", "넷째 줄", "다섯째 줄"]
+	d.show_desc("이름", "", ls)
+	await kit.frames(2)
+	check_eq(d.look, "bag", "기본 모양은 bag")
+	var r := Rect2(Vector2.ZERO, d.size)
+	var rec := SheetParts.record(d)
+	var fp := ListParts.frame_polygon(r)
+	check_eq([rec[0]["kind"], rec[0]["rect"], rec[0]["color"]], ["poly", SheetParts._bounds(fp), ListParts.FRAME], "테 다각형(END_W 24)")
+	check(fp[6].x == r.end.x and fp[0].x == r.end.x - ListParts.END_W, "테 오른쪽 끝은 END_W 24 로 굽는다")
+	var fills := rec.filter(func(e: Dictionary) -> bool: return e["kind"] == "fill")
+	check_eq(fills.map(func(e: Dictionary) -> Array: return [e["rect"], e["color"]]),
+		[[ListParts.head_rect(r), ListParts.DESC_HEAD], [ListParts.body_rect(r), ListParts.DESC_BODY]], "머리·몸 채움")
+	var texts := rec.filter(func(e: Dictionary) -> bool: return e["kind"] == "text")
+	check_eq(texts.map(func(e: Dictionary) -> String: return e["text"]), ["이름", "첫째 줄", "둘째 줄", "셋째 줄", "넷째 줄"], "이름과 줄 넷까지")
+	check_eq([texts[0]["fs"], texts[0]["rect"].position.x], [ListParts.HEAD_FS, r.position.x + ListParts.END_W + ListParts.DESC_TEXT_PAD], "이름 20px, 테 + 16")
+	var b := ListParts.body_rect(r)
+	for i in 4:
+		var e: Dictionary = texts[i + 1]
+		check_eq([e["fs"], e["rect"].position.x, e["rect"].position.y + e["fs"]], [18, b.position.x + 16.0, b.position.y + 6.0 + (i + 1) * 30.0 - 8.0],
+			"줄 %d: 18px, 몸 + 16, 간격 30" % i)
+	var tree_cols := [ListParts.TREE_DESC_OUTER, ListParts.TREE_DESC_EDGE, ListParts.TREE_DESC_BODY, ListParts.TREE_DESC_HEAD, ListParts.TREE_TAB_ON,
+		ListParts.TREE_TAB_OFF, ListParts.TREE_BAR_LABEL, ListParts.TREE_BAR_TRACK]
+	check(rec.all(func(e: Dictionary) -> bool: return not tree_cols.has(e["color"]) and e["kind"] != "outline"), "tree 모양의 칠·테가 없다")
+	# 실제 소지품·장비 설명 상자도 bag 이고 같은 꼴(테·머리·몸)로 시작한다.
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_1)
+	await kit.frames(2)
+	var idesc: DescBox = pm.items_tab.desc
+	var ir := Rect2(Vector2.ZERO, idesc.size)
+	var irec := SheetParts.record(idesc)
+	check(idesc.look == "bag" and idesc.opts.is_empty(), "소지품 설명 상자: bag, 선택지 없음")
+	check_eq([irec[0]["kind"], irec[0]["rect"], irec[0]["color"]], ["poly", SheetParts._bounds(ListParts.frame_polygon(ir)), ListParts.FRAME], "소지품 설명 상자 테")
+	check(irec.any(func(e: Dictionary) -> bool: return e["kind"] == "fill" and e["rect"] == ListParts.head_rect(ir) and e["color"] == ListParts.DESC_HEAD), "소지품 머리")
+	d.queue_free()
+
+
+## 캠프 확인 창 = 알림 띠(부품 K, BannerBox): 스킬의 확정·버리기와 기록의 새 게임. 844×200 가운데, 양 끝이 굽은 꼴, 몸 #0C5C52 에 흰 글자(두 줄까지),
+## 단추 둘은 몸 안 오른쪽(원작 Ⓐ 자리), 키패드에 닿지 않는다. 처음 고른 쪽은 「돌아가기」.
+func _check_banner(pm: PartyMenu, size: Vector2, tag: String) -> void:
+	await kit.frames(2)
+	var bp := pm.dialog_panel
+	check(bp is BannerBox and bp.is_visible_in_tree(), tag + ": 창은 BannerBox")
+	var br := _rect(bp)
+	check_eq(br, Rect2(((size - Vector2(844, 200)) / 2.0).round(), Vector2(844, 200)), tag + ": 알림 띠 844×200 가운데")
+	var local := Rect2(Vector2.ZERO, bp.size)
+	var rec := SheetParts.record(bp)
+	var polys := rec.filter(func(e: Dictionary) -> bool: return e["kind"] == "poly")
+	check(polys.size() == 4, tag + ": 알림 띠 다각형 넷(바깥·호·선·몸) %d" % polys.size())
+	if polys.size() == 4:
+		check_eq([polys[0]["rect"], polys[0]["color"]], [local, ListParts.BANNER_EDGE], tag + ": 바깥 다각형 = 띠 전체")
+		check_eq([polys[3]["rect"], polys[3]["color"]], [ListParts.banner_body_rect(local), Color("0c5c52")], tag + ": 몸 #0C5C52")
+	var bpts := ListParts.banner_polygon(local)
+	check(bpts.size() > 8 and is_equal_approx(bpts[0].x, local.end.x - ListParts.BANNER_END) and is_equal_approx(bpts[6].x, local.end.x)
+		and is_equal_approx(bpts[19].x, local.position.x), tag + ": 양 끝이 괄호처럼 굽는다(위아래 끝은 40 안, 가운데는 바깥 끝)")
+	var body := Rect2(br.position + ListParts.banner_body_rect(local).position, ListParts.banner_body_rect(local).size)
+	var tx := _rect(pm._dialog_text)
+	check(body.encloses(tx), tag + ": 글 %s 은 몸 %s 안" % [str(tx), str(body)])
+	var lt := pm._dialog_text
+	check(lt.get_line_count() <= 2 and lt.get_line_count() * lt.get_line_height() <= tx.size.y + 0.5,
+		"%s: 글 「%s」 두 줄 안(%d 줄 × %d ≤ %.0f)" % [tag, lt.text, lt.get_line_count(), lt.get_line_height(), tx.size.y])
+	var fg: Color = pm._dialog_text.get_theme_color("font_color")
+	check(contrast(fg, polys[3]["color"] if polys.size() == 4 else Color.BLACK) >= 4.5, tag + ": 글자 %s 대비 ≥ 4.5" % fg.to_html(false))
+	var pads := [_rect(pm.dir_pad), _rect(pm.active_key_pad())]
+	for b in pm.dialog_buttons:
+		var r := _rect(b)
+		check(body.encloses(r) and r.size.x >= 64.0 and r.size.y >= 64.0 and not r.intersects(tx), "%s: %s %s 는 몸 안, 글 밖, 64 이상" % [tag, b.name, str(r)])
+	check(_rect(pm.dialog_buttons[0]).end.x <= _rect(pm.dialog_buttons[1]).position.x and _rect(pm.dialog_buttons[1]).end.x > br.get_center().x,
+		tag + ": 「돌아가기」 → 둘째 단추, 오른쪽(Ⓐ 자리)")
+	for p in pads:
+		check(not br.intersects(p), "%s: 알림 띠 %s 는 키패드 %s 에 닿지 않는다" % [tag, str(br), str(p)])
+	check_eq(pm.dialog_pick, 0, tag + ": 처음 고른 쪽 「돌아가기」")
+
+
+## 노랑 채움(07 §9.9 노랑 하나): 스킬 화면이 그린 채움·다각형과 보이는 단추 모양의 채움. 확인 창이 떠 있으면 창 층 밖은 어둡게 하는 판과 겹친 색으로 센다.
+func _camp_yellow(pm: PartyMenu) -> Array:
+	var out := []
+	var dim := pm.dialog_layer.is_visible_in_tree()
+	var dimmed := func(c: Color, behind: bool) -> Color: return c.lerp(Color(0, 0, 0), PartyMenu.DIALOG_DIM.a) if dim and behind else c
+	var cs: Array = []
+	if pm.tab == 1 and pm.page == "sub":
+		var st := pm.skill_tab
+		cs = [st.tree_window, st.class_tab, st.tree_area.content, st.desc]
+		for nd in st.nodes:
+			if nd.is_visible_in_tree():
+				cs.append(nd)
+	if dim:
+		cs.append(pm.dialog_panel)
+	for ci in cs:
+		for e in SheetParts.record(ci):
+			if (e["kind"] == "fill" or e["kind"] == "poly") and _is_yellow(dimmed.call(e["color"], not pm.dialog_layer.is_ancestor_of(ci))):
+				out.append(str((ci as Node).name))
+	for n in pm.find_children("*", "PartyButton", true, false):
+		var b := n as PartyButton
+		if b is SkillNode or not b.is_visible_in_tree():
+			continue
+		var lk := UiTheme.look(b.theme_state())
+		if lk["fill"] and _is_yellow(dimmed.call(lk["bottom"], not pm.dialog_layer.is_ancestor_of(b))):
+			out.append(str(b.name))
+	return out
+
+
+func test_camp_dialog_is_the_banner_for_skills_and_records() -> void:
+	var s := await _skills_open()
+	var pm := s.party_menu
+	var st := pm.skill_tab
+	for px in WINDOWS + [Vector2(1280, 960)]:
+		var size: Vector2 = await _window(px)
+		var tag := "%s(논리 %s)" % [str(px), str(size)]
+		await kit.tap(kit.center_of(st.plus_button))
+		await kit.press_key(KEY_F)
+		check_eq(pm.dialog_kind, "commit", tag + ": 확정 창")
+		await _check_banner(pm, size, tag + " 확정")
+		check_eq(_camp_yellow(pm), ["DialogBack"], tag + " 확정: 노랑 채움은 창의 커서 단추 하나(트리 0)")
+		await kit.press_key(KEY_RIGHT)
+		check_eq(pm.dialog_pick, 1, tag + ": → 둘째 단추")
+		await kit.press_key(KEY_ESCAPE)
+		check_eq([pm.dialog_kind, st.draft.size()], ["", 1], tag + ": Esc = 돌아가기, 초안 그대로")
+		await kit.press_key(KEY_ESCAPE)
+		check_eq(pm.dialog_kind, "discard", tag + ": 초안 중 뒤로 → 버리기 창")
+		await _check_banner(pm, size, tag + " 버리기")
+		await kit.press_key(KEY_ESCAPE)
+		await kit.press_key(KEY_R)
+	# 가장 긴 실제 글이 두 줄 안: 확정 창 SP 두 자리(99), 버리기, 새 게임.
+	await _window(WINDOWS[0])
+	await kit.tap(kit.center_of(st.plus_button))
+	await kit.press_key(KEY_F)
+	for t in [s.texts.t("party.dialog.commit_text", {"n": 99}), s.texts.t("party.dialog.discard_text"), s.texts.t("menu.confirm_new_game")]:
+		pm._dialog_text.text = t
+		await kit.frames(2)
+		var lt := pm._dialog_text
+		check(lt.get_line_count() <= 2 and lt.get_line_count() * lt.get_line_height() <= lt.size.y + 0.5 and lt.get_visible_line_count() == lt.get_line_count(),
+			"가장 긴 글 「%s」 두 줄 안(%d 줄 × %d)" % [t, lt.get_line_count(), lt.get_line_height()])
+	await kit.press_key(KEY_ESCAPE)
+	await kit.press_key(KEY_R)
+	# 기록의 새 게임 창도 같은 띠. 기록의 커서 단추는 뒤에서 고른 그대로이고 어둡게 하는 판과 겹쳐 노랑이 아니다.
+	await kit.press_key(KEY_5)
+	for px in WINDOWS + [Vector2(1280, 960)]:
+		var size: Vector2 = await _window(px)
+		var tag := "%s(논리 %s) 기록" % [str(px), str(size)]
+		pm.handle("record_new_game")
+		await kit.frames(1)
+		check_eq(pm.dialog_kind, "new_game", tag + ": 새 게임 창")
+		await _check_banner(pm, size, tag + " 새 게임")
+		check_eq(_camp_yellow(pm), ["DialogBack"], tag + " 새 게임: 어둡게 하는 판 앞의 노랑은 창의 커서 단추 하나")
+		await kit.press_key(KEY_ESCAPE)
+		check_eq([pm.dialog_kind, pm.tab], ["", 4], tag + ": Esc = 돌아가기(기록 그대로)")
+	await _window(WINDOWS[0])
+
+
+## 노랑 채움은 스킬 트리에 없고, 확정·버리기 창이 뜨면 창의 커서 단추 하나다(커서 노드·초안 노드·레벨 탭·막대 모두 채움 노랑 아님).
+func test_skill_screen_has_at_most_one_yellow_fill() -> void:
+	var s := await _skills_open()
+	var pm := s.party_menu
+	var st := pm.skill_tab
+	await kit.frames(2)
+	check_eq(_camp_yellow(pm), [], "트리(초안 없음): 노랑 채움 0")
+	await kit.tap(kit.center_of(st.plus_button))
+	await kit.press_key(KEY_RIGHT)
+	await kit.tap(kit.center_of(st.plus_button))
+	await kit.frames(2)
+	check(not st.draft.is_empty(), "준비: 초안")
+	check_eq(_camp_yellow(pm), [], "트리(초안·커서): 노랑 채움 0")
+	for j in st.nodes.size():
+		if st.nodes[j].visible and st.nodes[j].status_kind == "locked":
+			await kit.tap(kit.center_of(st.nodes[j]))
+			break
+	await kit.frames(2)
+	check_eq(_camp_yellow(pm), [], "트리(잠긴 노드 위 커서): 노랑 채움 0")
+	await kit.press_key(KEY_F)
+	await kit.frames(2)
+	check_eq(_camp_yellow(pm), ["DialogBack"], "확정 창: 노랑 채움 하나(창의 커서 단추)")
+	await kit.press_key(KEY_RIGHT)
+	await kit.frames(1)
+	check_eq(_camp_yellow(pm), ["DialogOk"], "확정 창 → : 노랑 채움 하나(옮긴 커서 단추)")
+	await kit.press_key(KEY_ESCAPE)
+	await kit.press_key(KEY_ESCAPE)
+	await kit.frames(1)
+	check_eq(pm.dialog_kind, "discard", "준비: 버리기 창")
+	check_eq(_camp_yellow(pm), ["DialogBack"], "버리기 창: 노랑 채움 하나")
+
+
+## 선의 「Lv n」(원작 「Lv1」「Lv3」): 실제 네 직업 트리 × 세 크기에서 선행마다 하나, 그 레벨, 트리 영역 안, 노드·다른 글·다른 선에 걸리지 않고, 판 위 대비 4.5 이상.
+func test_condition_labels_name_the_required_level() -> void:
+	var s := await _skills_open()
+	var pm := s.party_menu
+	var st := pm.skill_tab
+	var seen := 0
+	for px in WINDOWS + [Vector2(1280, 960)]:
+		var size: Vector2 = await _window(px)
+		for i in s.state.party.members.size():
+			pm.handle("member", i)
+			await kit.frames(2)
+			var tag := "%s 대원 %d" % [str(size), i]
+			var c := s.state.defs.class_of(i)
+			var want := []
+			for j in c.tree.size():
+				for r in c.tree[j].get("requires", []):
+					want.append([int(c.tree_index[r["skill"]]), j, s.texts.t("party.level", {"level": r["level"]})])
+			var got := st.condition_labels.map(func(l: Dictionary) -> Array: return [l["from"], l["to"], l["text"]])
+			check_eq(got, want, tag + ": 선행마다 「Lv n」 하나")
+			var content := Rect2(0, 0, st.tree_rect().size.x, st.tree_area.content_height)
+			var paths: Array[PackedVector2Array] = []
+			for l in st.condition_labels:
+				paths.append(PartySkillTab.connector_path(st.node_rect(l["from"]), st.node_rect(l["to"]), st.pitch() - st.node_size()))
+			for k in st.condition_labels.size():
+				var lr: Rect2 = st.condition_labels[k]["rect"]
+				seen += 1
+				check(content.encloses(lr), "%s: 「%s」 %s 는 트리 영역 안" % [tag, st.condition_labels[k]["text"], str(lr)])
+				for j in c.tree.size():
+					check(not lr.intersects(st.node_rect(j)), "%s: 「%s」 %s 가 노드 %d 에 걸린다" % [tag, st.condition_labels[k]["text"], str(lr), j])
+				for k2 in st.condition_labels.size():
+					if k2 != k:
+						check(not lr.intersects(st.condition_labels[k2]["rect"]), "%s: 「Lv」 글 %d 와 %d 가 겹친다" % [tag, k, k2])
+						check(not PartySkillTab.path_hits(paths[k2], lr), "%s: 「Lv」 글 %d 가 다른 선 %d 에 걸린다" % [tag, k, k2])
+			var drawn := _drawn_entries(st.tree_area.content, "text")
+			check_eq(drawn.map(func(e: Dictionary) -> String: return e["text"]), want.map(func(w: Array) -> String: return w[2]), tag + ": 그린 「Lv n」")
+			for e in drawn:
+				check(contrast(e["color"], PartySkillTab.PANEL) >= 4.5, "%s: 「%s」 %s on 판 대비" % [tag, e["text"], (e["color"] as Color).to_html(false)])
+				check(SheetParts.text_width(st.tree_area.content, e["text"], e["fs"]) <= e["rect"].size.x + 0.5, "%s: 「%s」 가 글 상자에 든다" % [tag, e["text"]])
+	check(seen >= 24, "본 「Lv n」 %d 개" % seen)
+	# 판 채움은 그린 것으로 #0C6A9E(원작).
+	await _window(WINDOWS[0])
+	await kit.frames(2)
+	var panel := _drawn_entries(st.tree_window, "fill").filter(func(e: Dictionary) -> bool: return e["color"] == Color("0c6a9e"))
+	check_eq(panel.size(), 1, "트리 판 채움 #0C6A9E 를 그렸다")
+	pm.handle("member", 1)
 
 
 # ---- 장비(07 §9.9 E2-c, D27 ③, research 08 §5.1: 원작 I HD 장비 yt_eo1hd_04 를 좌우 그대로) ----
@@ -2772,10 +3247,17 @@ func test_camp_and_status_colours_meet_contrast() -> void:
 		# 스킬 트리 화면(파랑): 위 줄, 직업 탭, 트리 창·설명 띠(반투명 창은 불투명으로 본다), 레벨 칸.
 		["직업 탭", UiTheme.TEXT, [UiTheme.TREE_TAB]],
 		["설명 글", UiTheme.TEXT, [Color(UiTheme.TREE_WIN_TOP, 1.0), Color(UiTheme.TREE_WIN_BOTTOM, 1.0)]],
-		["설명 종류 줄", UiTheme.TREE_KIND_TEXT, [Color(UiTheme.TREE_WIN_TOP, 1.0), Color(UiTheme.TREE_WIN_BOTTOM, 1.0)]],
-		["레벨 칸(배움)", UiTheme.TREE_LV_BOX_TEXT, [UiTheme.TREE_BOX_LEARNED, UiTheme.TREE_LV_BOX]],
-		["레벨 칸(초안)", UiTheme.TREE_LV_BOX_TEXT, [UiTheme.TREE_BOX_DRAFT]],
-		["레벨 칸(빈)", UiTheme.TREE_BOX_EMPTY_TEXT, [UiTheme.TREE_BOX_EMPTY]],
+		# 스킬 트리(E2-d, 원작 b_03): 설명 상자 tree 모양(머리는 원작 #3285B1 → #2C78A6), 레벨 탭, 「Lv n」 막대, 노드 Lv 상자, 선의 「Lv n」, 알림 띠.
+		["스킬 설명 머리", ListParts.TREE_DESC_TEXT, [ListParts.TREE_DESC_HEAD]],
+		["스킬 설명 몸", ListParts.TREE_DESC_TEXT, [ListParts.TREE_DESC_BODY]],
+		["스킬 설명 첫 줄", ListParts.TREE_DESC_ACCENT, [ListParts.TREE_DESC_BODY]],
+		["레벨 탭(안 배움)", ListParts.TREE_TAB_OFF_TEXT, [ListParts.TREE_TAB_OFF]],
+		["레벨 탭(배움·초안)", ListParts.TREE_TAB_ON_TEXT, [ListParts.TREE_TAB_ON]],
+		["Lv 막대 글", ListParts.TREE_DESC_TEXT, [ListParts.TREE_BAR_LABEL]],
+		["노드 Lv 상자", UiTheme.TREE_LV_BOX_TEXT, [UiTheme.TREE_LV_BOX]],
+		["흐린 노드 Lv 상자", UiTheme.TREE_LV_BOX_OFF_TEXT, [UiTheme.TREE_LV_BOX_OFF]],
+		["선의 Lv", PartySkillTab.LABEL_COLOR, [PartySkillTab.PANEL]],
+		["알림 띠 글", ListParts.BANNER_TEXT, [ListParts.BANNER_BODY]],
 		# 상점 짜임(장비·소지품): 목록·설명 창(반투명은 불투명으로 본다), 설명 머리 띠, 인물 판의 능력치·장비 줄.
 		["상점 창 글", UiTheme.TEXT, [Color(UiTheme.SHOP_WIN_TOP, 1.0), Color(UiTheme.SHOP_WIN_BOTTOM, 1.0), UiTheme.SHOP_DESC_HEAD]],
 		["상점 창 묶음 이름", UiTheme.SHOP_SECTION_TEXT, [Color(UiTheme.SHOP_WIN_TOP, 1.0), Color(UiTheme.SHOP_WIN_BOTTOM, 1.0)]],

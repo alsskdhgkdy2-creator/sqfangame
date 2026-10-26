@@ -44,8 +44,15 @@ signal changed(events: Array)
 
 ## 안내 글자(스킬 정보 띠 위, 07 §9.2).
 const NOTICE_TEXT := Color(1.0, 0.85, 0.55)
-const DIALOG_SIZE := Vector2(560, 240)
+## 확인 창 = 알림 띠(부품 K, BannerBox, 07 §9.9 E2-d: 원작 I HD 스킬 배움 알림 x 218~1062 · y 290~428 을 단추 둘이 들게 높였다).
+## 글은 띠 왼쪽 + 120 부터 왼쪽 맞춤(두 줄까지), 단추 둘은 원작 Ⓐ 자리인 오른쪽 아래.
+const DIALOG_SIZE := Vector2(844, 200)
 const DIALOG_BUTTON := Vector2(200, 64)
+const DIALOG_TEXT := Rect2(120, 24, 604, 76)
+const DIALOG_TEXT_FS := 22
+const DIALOG_BUTTONS_RIGHT := 80.0
+const DIALOG_BUTTONS_TOP := 112.0
+const DIALOG_BUTTON_GAP := 16.0
 ## 확인 창 바로 뒤에서 화면 전체를 어둡게 하는 판 색(dialog_dim).
 const DIALOG_DIM := Color(0, 0, 0, 0.6)
 const NOTICE_SEC := 2.5
@@ -117,7 +124,7 @@ var tabs: Array[Control] = []
 ## 확인 창 층(떠 있을 때만 보인다): 어둡게 하는 판(dialog_dim, 화면 전체) → 창(dialog_panel) → 글 → 단추 둘.
 var dialog_layer: Control
 var dialog_dim: ColorRect
-var dialog_panel: Control
+var dialog_panel: BannerBox
 var dialog_buttons: Array[PartyButton] = []
 ## 가상 키패드(P3, 전투와 같은 부품 VirtualPad): 방향 십자, 「취소」「선택」 가로 한 쌍과 세로 한 쌍(쪽·화면마다 하나만 보인다).
 ## 확인 창 층 뒤(트리 순서 = 그리는·누르는 순서)라 확인 창에서도 누를 수 있고, 층 3 창보다는 아래다.
@@ -306,14 +313,13 @@ func _build_dialog() -> void:
 	dialog_dim.mouse_filter = MOUSE_FILTER_STOP
 	dialog_layer.add_child(dialog_dim)
 	dialog_dim.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	dialog_panel = Control.new()
+	# 창은 양 끝이 굽은 알림 띠(불투명, 스킬의 확정·버리기와 기록의 새 게임이 같이 쓴다).
+	dialog_panel = BannerBox.new()
 	dialog_panel.name = "DialogPanel"
-	dialog_panel.mouse_filter = MOUSE_FILTER_IGNORE
-	# 확인 창은 뒤 노드가 비치지 않게 불투명.
-	dialog_panel.draw.connect(func() -> void: UiTheme.draw_tree_window(dialog_panel, Rect2(Vector2.ZERO, dialog_panel.size), true))
 	dialog_layer.add_child(dialog_panel)
-	_dialog_text.add_theme_font_size_override("font_size", 22)
-	_dialog_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_dialog_text.add_theme_font_size_override("font_size", DIALOG_TEXT_FS)
+	_dialog_text.add_theme_color_override("font_color", ListParts.BANNER_TEXT)
+	_dialog_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_dialog_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_dialog_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dialog_layer.add_child(_dialog_text)
@@ -1035,11 +1041,11 @@ func _layout() -> void:
 	var dr := Rect2(((s - DIALOG_SIZE) / 2.0).round(), DIALOG_SIZE)
 	dialog_panel.position = dr.position
 	dialog_panel.size = dr.size
-	_dialog_text.position = dr.position + Vector2(24, 20)
-	_dialog_text.size = Vector2(DIALOG_SIZE.x - 48, DIALOG_SIZE.y - DIALOG_BUTTON.y - 56)
-	var by := dr.end.y - DIALOG_BUTTON.y - 24
-	dialog_buttons[0].position = Vector2(dr.position.x + 40, by)
-	dialog_buttons[1].position = Vector2(dr.end.x - 40 - DIALOG_BUTTON.x, by)
+	_dialog_text.position = dr.position + DIALOG_TEXT.position
+	_dialog_text.size = DIALOG_TEXT.size
+	var by := dr.position.y + DIALOG_BUTTONS_TOP
+	dialog_buttons[1].position = Vector2(dr.end.x - DIALOG_BUTTONS_RIGHT - DIALOG_BUTTON.x, by)
+	dialog_buttons[0].position = Vector2(dialog_buttons[1].position.x - DIALOG_BUTTON_GAP - DIALOG_BUTTON.x, by)
 	_place_pads()
 	queue_redraw()
 

@@ -233,35 +233,34 @@ const SHOP_BADGE_ON := Color("7fe3f0")
 const SHOP_BADGE_ON_TEXT := Color("06142a")
 const SHOP_BADGE_OFF := Color("0a1838")
 const SHOP_BADGE_OFF_TEXT := Color("5a6f90")
-## 스킬 트리 화면(원작 HD jp_guide2_img2·img3, gw_14): 파랑 계열. 위 줄은 대원 띠 한 벌(MEMBER_*), 직업 폴더 탭,
-## 반투명 파랑 창(트리·아래 설명 띠·확인 창), 노드 알약(짙은 파랑 + 밝은 글자, 커서는 밝은 하늘색 + 짙은 글자, 오른쪽 Lv 상자),
-## 설명 띠의 레벨 칸(배운 레벨 시안·초안 노랑·남은 칸 짙은 파랑).
-const TREE_TAB := Color("0f3f54")
+## 스킬 트리 화면(원작 I HD yt_eo1hd_b_03 잼, 07 §9.9 E2-d): 위 줄은 대원 띠 한 벌(MEMBER_*). 반투명 파랑 창(TREE_WIN_*, draw_tree_window)은
+## 마을 상점 확인 창(ShopDialog)만 쓴다. 트리 판·직업 탭은 PartySkillTab, 설명 상자는 ListParts 의 "tree" 모양이다.
+## 노드(「tree:*」, SkillNode): 보통 #044C76 + 밝은 글자, 커서 하늘색 #3EC0CC + 짙은 글자(노랑 채움 없음), 잠김·SP 부족 회색 #24333C,
+## 잠긴 노드 위 커서는 회색 그대로 하늘색 테. 오른쪽 Lv 상자는 원작처럼 연하늘(흐린 노드는 회색).
+const TREE_TAB := Color("1c3b4a")
 const TREE_WIN_TOP := Color(0.03, 0.27, 0.5, 0.9)
 const TREE_WIN_BOTTOM := Color(0.02, 0.18, 0.37, 0.92)
 const TREE_WIN_EDGE := Color("6fd0ff")
 const TREE_WIN_OUTER := Color("021a33")
-const TREE_NODE_TOP := Color("063a76")
-const TREE_NODE := Color("02336e")
-const TREE_NODE_PRESSED := Color("0a4c94")
-const TREE_PRESSED_MUTED := Color("c3ccd6")
+const TREE_NODE_TOP := Color("044c76")
+const TREE_NODE := Color("044c76")
+const TREE_NODE_PRESSED := Color("0a5e8e")
+const TREE_PRESSED_MUTED := Color("d0d8e0")
 const TREE_NODE_TEXT := Color("bff3ff")
 const TREE_NODE_EDGE := Color("3f8fd0")
-const TREE_PICK_TOP := Color("e2f6ff")
-const TREE_PICK := Color("aae0fe")
+const TREE_PICK_TOP := Color("3ec0cc")
+const TREE_PICK := Color("3ec0cc")
+const TREE_PICK_PRESSED := Color("6fd6de")
 const TREE_PICK_TEXT := Color("04244a")
-const TREE_OFF := Color("142c47")
+const TREE_OFF := Color("24333c")
 const TREE_OFF_TEXT := Color("93a9bd")
-const TREE_LV_BOX := Color("56e6e0")
+const TREE_LV_BOX := Color("9ad1f4")
 const TREE_LV_BOX_TEXT := Color("04244a")
-const TREE_BOX_LEARNED := Color("21d8f0")
-const TREE_BOX_DRAFT := Color("ffe066")
-const TREE_BOX_EMPTY := Color("104779")
-const TREE_BOX_EMPTY_TEXT := Color("cfe8ff")
-const TREE_KIND_TEXT := Color("7fe6ff")
-## 트리 연결선(선행을 채움 / 못 채움).
+const TREE_LV_BOX_OFF := Color("46555c")
+const TREE_LV_BOX_OFF_TEXT := Color("e0e8ec")
+## 트리 연결선(선행을 채움 = 시안 / 못 채움 = 원작의 짙은 남색).
 const TREE_LINE_MET := Color("8ff4ff")
-const TREE_LINE_UNMET := Color("4d6a85")
+const TREE_LINE_UNMET := Color("00142d")
 const TOOL_TOP := Color("0f7aab")
 const TOOL_BOTTOM := Color("0b6593")
 const TOOL_PRESSED_TOP := Color("0a5a82")
@@ -368,20 +367,23 @@ static func _build_looks() -> Dictionary:
 	for st in ["pressed", "selected", "selected_pressed", "disabled", "disabled_selected", "chosen"]:
 		d["fac:" + st] = d["cmd:" + st]
 	d["fac:normal"] = _plain(_btn(CMD_TOP, CMD_BOTTOM, CMD_EDGE, BTN_OUTER_W, CMD_PRESSED_TOP, 1.0, none, FAC_TEXT, FAC_TEXT, FAC_TEXT))
-	# 스킬 트리 노드(「tree:*」): 짙은 파랑 알약(밝은 글자), 커서 = 밝은 하늘색(짙은 글자), 못 배움 = 어두운 회청(흐린 글자).
+	# 스킬 트리 노드(「tree:*」, 원작 b_03): 남색 알약(밝은 글자), 커서 = 하늘색 #3EC0CC(짙은 글자), 못 배움 = 회색(흐린 글자),
+	# 못 배우는 노드 위 커서 = 회색 그대로 하늘색 테. SkillNode 가 평평한 채움(bottom)·바깥 테(outer)·글자 몫만 쓴다.
 	d["tree:normal"] = _btn(TREE_NODE_TOP, TREE_NODE, TREE_WIN_OUTER, BTN_OUTER_W, TREE_NODE_EDGE, 1.0, none, TREE_NODE_TEXT, TREE_NODE_TEXT,
 		BTN_REASON)
-	d["tree:pressed"] = _btn(TREE_NODE_PRESSED, TREE_NODE_TOP, TREE_WIN_OUTER, BTN_OUTER_W, TREE_WIN_EDGE, 1.0, none, TREE_NODE_TEXT,
+	d["tree:pressed"] = _btn(TREE_NODE_PRESSED, TREE_NODE_PRESSED, TREE_WIN_OUTER, BTN_OUTER_W, TREE_WIN_EDGE, 1.0, none, TREE_NODE_TEXT,
 		TREE_NODE_TEXT, TREE_NODE_TEXT)
 	d["tree:selected"] = _btn(TREE_PICK_TOP, TREE_PICK, TREE_WIN_OUTER, BTN_PICK_W, Color(1, 1, 1, 0.8), 1.0, none, TREE_PICK_TEXT,
 		TREE_PICK_TEXT, TREE_PICK_TEXT)
-	d["tree:selected_pressed"] = _btn(TREE_PICK, TREE_PICK_TOP, TREE_WIN_OUTER, BTN_PICK_W, Color(1, 1, 1, 0.8), 1.0, none, TREE_PICK_TEXT,
+	d["tree:selected_pressed"] = _btn(TREE_PICK_PRESSED, TREE_PICK_PRESSED, TREE_WIN_OUTER, BTN_PICK_W, Color(1, 1, 1, 0.8), 1.0, none, TREE_PICK_TEXT,
 		TREE_PICK_TEXT, TREE_PICK_TEXT)
 	d["tree:disabled"] = _plain(_btn(TREE_OFF, TREE_OFF, TREE_WIN_OUTER, BTN_OUTER_W, TREE_NODE_EDGE, 1.0, none, TREE_OFF_TEXT, TREE_OFF_TEXT,
 		TREE_OFF_TEXT))
 	d["tree:disabled_selected"] = _plain(_btn(TREE_OFF, TREE_OFF, TREE_PICK, BTN_PICK_W, TREE_PICK_TOP, 1.0, none, TREE_OFF_TEXT, TREE_OFF_TEXT,
 		TREE_OFF_TEXT))
-	d["tree:pressed"]["muted"] = TREE_PRESSED_MUTED  # 누른 채움이 밝아 공용 흐린 글자는 4.5:1 미만
+	# 원작 남색 채움(#044C76·누름 #0A5E8E) 위에서는 공용 흐린 글자가 4.5:1 미만(3.89·4.30)이라 밝은 회청(5.9·4.85).
+	d["tree:normal"]["muted"] = TREE_PRESSED_MUTED
+	d["tree:pressed"]["muted"] = TREE_PRESSED_MUTED
 	for k in ["tree:normal", "tree:pressed", "tree:selected", "tree:selected_pressed", "tree:disabled", "tree:disabled_selected"]:
 		d[k]["chamfer"] = 20.0
 	# 상점 종류 탭(「shoptab:*」): 어두운 남색 칸. 고른 칸은 공용 checked(하늘색), 노랑 커서는 쓰지 않는다(08 §7.3).

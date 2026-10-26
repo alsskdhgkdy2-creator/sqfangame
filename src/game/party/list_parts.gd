@@ -5,6 +5,8 @@
 ## - I 설명 상자: 같은 굽은 끝의 테 안에 어두운 머리(이름·종류 아이콘, 장비 화면은 오른쪽에 직업 표)와 밝은 몸(글 줄 넷까지).
 ##   줄이 몸 폭에 안 들면 글자를 18px 에서 12px 까지 줄인다(상태 받는 배율 줄과 같은 규칙).
 ## - J 명령 알약: 원작 「使う」「捨てる」 자리의 청록 알약. 커서면 노랑, 켜짐(checked)이면 하늘색.
+## - K 알림 띠: 양 끝이 괄호처럼 굽은 청록 띠(원작 I HD 스킬 배움 알림 yt_eo1hd_b_04). 캠프 확인 창(BannerBox)이 쓴다(07 §9.9 E2-d).
+## - I 의 "tree" 모양: 스킬 트리 설명 상자(원작 yt_eo1hd_b_03). 둥근 판·청록 테, 머리에 이름·레벨 탭·「Lv n」 막대, 몸에 줄을 칸으로(E2-d).
 ## 그리기는 모두 SheetParts 의 기록 함수(_fill·_fill_round·_poly·_icon·_text)를 거쳐 같은 기록(SheetParts.record)에 남는다.
 ## 시험은 그 기록으로 노랑·아이콘·머리 채움·글자 크기를 본다. 자리 함수(*_rect·row_boxes)는 그리기와 시험이 같이 쓴다.
 class_name ListParts
@@ -88,19 +90,69 @@ const TABLE_GAP := 4.0
 const TABLE_FS := 14
 const PILL_FS := 22
 
+# ---- K 알림 띠(원작 b_04 잼: 바깥 #00020D, 굽은 끝 회청 호 #46666E, 몸 #0C5C52, 흰 글자 7.87:1) ----
+const BANNER_END := 40.0
+const BANNER_EDGE := Color("00020d")
+const BANNER_ARC := Color("46666e")
+const BANNER_BODY := Color("0c5c52")
+const BANNER_TEXT := Color.WHITE
+## 몸 다각형의 안쪽 여백(가로·세로)과 굽은 끝 폭.
+const BANNER_BODY_INSET := Vector2(19, 10)
+const BANNER_BODY_END := 30.0
+
+# ---- I 의 "tree" 모양(스킬 설명 상자, 원작 b_03 잼) ----
+## 바깥 선 #09315B, 청록 테 #1EA1DB, 몸 #174C72. 머리는 원작 #3285B1 이 흰 글자 4.10:1 이라 #2C78A6(4.83:1)으로 어둡게.
+const TREE_DESC_OUTER := Color("09315b")
+const TREE_DESC_EDGE := Color("1ea1db")
+const TREE_DESC_BODY := Color("174c72")
+const TREE_DESC_HEAD := Color("2c78a6")
+const TREE_DESC_TEXT := Color.WHITE
+## 첫 줄(종류·TP·Lv): 원작 「マスタリースキル」의 시안.
+const TREE_DESC_ACCENT := Color("7fe6ff")
+## 레벨 탭: 안 배움 #96D3F8 에 짙은 글자, 배움·초안 #184D74 에 흰 글자(초안은 금색 테, 채움 아님).
+const TREE_TAB_OFF := Color("96d3f8")
+const TREE_TAB_OFF_TEXT := Color("04244a")
+const TREE_TAB_ON := Color("184d74")
+const TREE_TAB_ON_TEXT := Color.WHITE
+const TREE_TAB_DRAFT_EDGE := UiTheme.BTN_PICK
+## 「Lv n」 막대: 글 칸 #346697, 길 #212861, 배운 몫 시안, 초안 몫 연하늘(노랑 아님).
+const TREE_BAR_LABEL := Color("346697")
+const TREE_BAR_TRACK := Color("212861")
+const TREE_BAR_LEARNED := Color("21d8f0")
+const TREE_BAR_DRAFT := Color("a8f0ff")
+const TREE_HEAD_INSET := 6.0
+const TREE_HEAD_H := 38.0
+const TREE_TEXT_PAD := 16.0
+const TREE_HEAD_FS := 20
+const TREE_HEAD_FS_MIN := 14
+const TREE_TAB := Vector2(30, 28)
+const TREE_TAB_X := 300.0
+const TREE_TAB_GAP := 4.0
+const TREE_TAB_FS := 16
+const TREE_BAR := Vector2(200, 28)
+const TREE_BAR_LABEL_W := 64.0
+const TREE_BAR_RIGHT := 16.0
+const TREE_BAR_FS := 16
+## 몸 줄: 첫 줄 자리(위에서), 기본 줄 간격·글자·칸당 줄 수·칸 수.
+const TREE_BODY_Y := 50.0
+const TREE_LINE_H := 22.0
+const TREE_LINE_FS := 16
+const TREE_PER_COL := 5
+const TREE_MAX_COLS := 3
+
 
 # ---- 굽은 끝 테(H·I 같이) ----
 
-## 테 다각형: 위아래는 곧고 양 끝은 괄호처럼 바깥으로 굽는다(끝 폭 END_W 안).
-static func frame_polygon(r: Rect2) -> PackedVector2Array:
+## 테 다각형: 위아래는 곧고 양 끝은 괄호처럼 바깥으로 굽는다(끝 폭 end_w 안, 기본 END_W). K 알림 띠는 더 넓은 끝으로 같은 꼴을 쓴다.
+static func frame_polygon(r: Rect2, end_w: float = END_W) -> PackedVector2Array:
 	var pts := PackedVector2Array()
 	var steps := 12
 	for i in steps + 1:
 		var t := float(i) / steps
-		pts.append(Vector2(r.end.x - END_W + END_W * sin(t * PI), r.position.y + r.size.y * t))
+		pts.append(Vector2(r.end.x - end_w + end_w * sin(t * PI), r.position.y + r.size.y * t))
 	for i in steps + 1:
 		var t := float(i) / steps
-		pts.append(Vector2(r.position.x + END_W - END_W * sin(t * PI), r.end.y - r.size.y * t))
+		pts.append(Vector2(r.position.x + end_w - end_w * sin(t * PI), r.end.y - r.size.y * t))
 	return pts
 
 
@@ -152,9 +204,13 @@ static func thumb_rect(track: Rect2, scroll: float, content_h: float, view_h: fl
 
 static func draw_list_window(ci: CanvasItem, r: Rect2, scroll: float, content_h: float) -> void:
 	draw_frame(ci, r)
-	var track := scroll_rect(r)
+	draw_scroll(ci, scroll_rect(r), scroll, content_h, rows_rect(r).size.y)
+
+
+## 스크롤 막대(길과 손잡이): 목록 창과 스킬 트리 판이 같이 쓴다.
+static func draw_scroll(ci: CanvasItem, track: Rect2, scroll: float, content_h: float, view_h: float) -> void:
 	SheetParts._fill_round(ci, track, SCROLL_TRACK, int(SCROLL_W / 2.0))
-	SheetParts._fill_round(ci, thumb_rect(track, scroll, content_h, rows_rect(r).size.y), SCROLL_THUMB, int(SCROLL_W / 2.0))
+	SheetParts._fill_round(ci, thumb_rect(track, scroll, content_h, view_h), SCROLL_THUMB, int(SCROLL_W / 2.0))
 
 
 ## 줄 r 의 칸: icon(정사각형) · body · mark(「E」 표 자리, 원작 I HD 장비처럼 몸 오른쪽 끝에서 MARK_INSET 안, 세로 가운데).
@@ -260,7 +316,11 @@ static func head_room(r: Rect2, table_n: int) -> float:
 
 ## 설명 상자. title·icon: 머리(빈 title 이면 머리 글 없음). lines: 몸 줄(넷까지, 줄마다 폭에 맞춰 글자를 줄인다).
 ## table: 장비 화면 직업 표 [[글, 낄 수 있는지], …](머리 오른쪽).
-static func draw_desc(ci: Control, r: Rect2, title: String, icon: String, lines: Array, table: Array = []) -> void:
+## opts: 화면별 선택지. 없으면(소지품·장비) 아래 "bag" 모양 그대로. look = "tree" 이면 스킬 설명 모양(draw_tree_desc).
+static func draw_desc(ci: Control, r: Rect2, title: String, icon: String, lines: Array, table: Array = [], opts: Dictionary = {}) -> void:
+	if str(opts.get("look", "bag")) == "tree":
+		draw_tree_desc(ci, r, title, lines, opts)
+		return
 	draw_frame(ci, r)
 	var h := head_rect(r)
 	var b := body_rect(r)
@@ -284,6 +344,130 @@ static func draw_desc(ci: Control, r: Rect2, title: String, icon: String, lines:
 		var s := str(lines[i])
 		var fs := line_fs(ci, s, w)
 		SheetParts._text(ci, Vector2(b.position.x + DESC_TEXT_PAD, b.position.y + 6.0 + (i + 1) * LINE_H - 8.0), s, fs, DESC_TEXT, w)
+
+
+# ---- I 의 "tree" 모양(스킬 설명 상자) ----
+
+static func tree_head_rect(r: Rect2) -> Rect2:
+	return Rect2(r.position.x + 5.0, r.position.y + TREE_HEAD_INSET, r.size.x - 10.0, TREE_HEAD_H)
+
+
+## 레벨 탭 k(1부터).
+static func tree_tab_rect(r: Rect2, k: int) -> Rect2:
+	return Rect2(r.position.x + TREE_TAB_X + (k - 1) * (TREE_TAB.x + TREE_TAB_GAP), r.position.y + 11.0, TREE_TAB.x, TREE_TAB.y)
+
+
+## 「Lv n」 막대 전체(머리 오른쪽), 그 글 칸과 길.
+static func tree_bar_rect(r: Rect2) -> Rect2:
+	return Rect2(r.end.x - TREE_BAR_RIGHT - TREE_BAR.x, r.position.y + 11.0, TREE_BAR.x, TREE_BAR.y)
+
+
+static func tree_bar_label_rect(r: Rect2) -> Rect2:
+	var b := tree_bar_rect(r)
+	return Rect2(b.position, Vector2(TREE_BAR_LABEL_W, b.size.y))
+
+
+static func tree_bar_track_rect(r: Rect2) -> Rect2:
+	var b := tree_bar_rect(r)
+	return Rect2(b.position.x + TREE_BAR_LABEL_W, b.position.y, b.size.x - TREE_BAR_LABEL_W, b.size.y)
+
+
+## 막대 안 채움 [배운 몫, 초안 몫](길 안쪽 4 여백, 최대 레벨에 대한 비).
+static func tree_bar_fills(r: Rect2, learned: int, drafted: int, max_level: int) -> Array[Rect2]:
+	var t := tree_bar_track_rect(r).grow(-4.0)
+	var unit := t.size.x / maxf(1.0, float(max_level))
+	var a := Rect2(t.position, Vector2(unit * clampi(learned, 0, max_level), t.size.y))
+	var b := Rect2(Vector2(a.end.x, t.position.y), Vector2(unit * clampi(drafted, 0, max_level - clampi(learned, 0, max_level)), t.size.y))
+	return [a, b]
+
+
+## 몸 줄 칸 수(1~TREE_MAX_COLS)와 칸 폭.
+static func tree_cols(n: int, opts: Dictionary) -> int:
+	return clampi(ceili(n / float(opts.get("per_col", TREE_PER_COL))), 1, int(opts.get("max_cols", TREE_MAX_COLS)))
+
+
+static func tree_col_width(n: int, opts: Dictionary) -> float:
+	return float(opts.get("room", 400.0)) / tree_cols(n, opts)
+
+
+## 몸 줄 i 의 글 시작점(기준선, 상자 r 기준이 아닌 r 과 같은 좌표계).
+static func tree_line_pos(r: Rect2, i: int, n: int, opts: Dictionary) -> Vector2:
+	var per := int(opts.get("per_col", TREE_PER_COL))
+	var lh := float(opts.get("line_h", TREE_LINE_H))
+	return Vector2(r.position.x + TREE_TEXT_PAD + (i / per) * tree_col_width(n, opts), r.position.y + TREE_BODY_Y + (i % per + 1) * lh - 5.0)
+
+
+## 머리 이름 글자 크기: TREE_HEAD_FS 에서 폭에 들 때까지(가장 작게 TREE_HEAD_FS_MIN).
+static func tree_title_fs(c: Control, title: String, room: float) -> int:
+	var fs := TREE_HEAD_FS
+	while fs > TREE_HEAD_FS_MIN and SheetParts.text_width(c, title, fs) > room:
+		fs -= 1
+	return fs
+
+
+## 스킬 설명 상자. opts: levels [배운, 초안, 최대](레벨 탭), bar [배운, 초안, 최대](「Lv n」 막대, bar_text 가 글),
+## per_col·max_cols·line_h·room(몸 줄 칸), accent_first(첫 줄 시안).
+static func draw_tree_desc(ci: Control, r: Rect2, title: String, lines: Array, opts: Dictionary) -> void:
+	SheetParts._fill_round(ci, r, TREE_DESC_OUTER, 12)
+	SheetParts._fill_round(ci, r.grow(-2.0), TREE_DESC_EDGE, 11)
+	SheetParts._fill_round(ci, r.grow(-5.0), TREE_DESC_BODY, 9)
+	var h := tree_head_rect(r)
+	SheetParts._fill(ci, h, TREE_DESC_HEAD)
+	var levels: Array = opts.get("levels", [])
+	var name_right := (tree_tab_rect(r, 1).position.x if not levels.is_empty() else tree_bar_rect(r).position.x) - 12.0
+	var room := name_right - (r.position.x + TREE_TEXT_PAD)
+	if not title.is_empty():
+		var fs := tree_title_fs(ci, title, room)
+		SheetParts._text(ci, Vector2(r.position.x + TREE_TEXT_PAD, h.get_center().y + fs * 0.36), title, fs, TREE_DESC_TEXT, room)
+	if not levels.is_empty():
+		var learned := int(levels[0])
+		var drafted := int(levels[1])
+		for k in range(1, int(levels[2]) + 1):
+			var tr := tree_tab_rect(r, k)
+			var on := k <= learned + drafted
+			SheetParts._fill(ci, tr, TREE_TAB_ON if on else TREE_TAB_OFF)
+			if k > learned and on:
+				UiTheme.draw_outline(ci, tr, TREE_TAB_DRAFT_EDGE, 2.0, 0.0)
+				SheetParts._log(ci, {"kind": "outline", "rect": tr, "color": TREE_TAB_DRAFT_EDGE})
+			SheetParts._text(ci, Vector2(tr.position.x, tr.get_center().y + TREE_TAB_FS * 0.36), str(k), TREE_TAB_FS,
+				TREE_TAB_ON_TEXT if on else TREE_TAB_OFF_TEXT, tr.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+	var bar: Array = opts.get("bar", [])
+	if not bar.is_empty():
+		var lr := tree_bar_label_rect(r)
+		SheetParts._fill_round(ci, lr, TREE_BAR_LABEL, 6)
+		SheetParts._text(ci, Vector2(lr.position.x, lr.get_center().y + TREE_BAR_FS * 0.36), str(opts.get("bar_text", "")), TREE_BAR_FS,
+			TREE_DESC_TEXT, lr.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+		SheetParts._fill_round(ci, tree_bar_track_rect(r), TREE_BAR_TRACK, 6)
+		var fills := tree_bar_fills(r, int(bar[0]), int(bar[1]), int(bar[2]))
+		if fills[0].size.x > 0.0:
+			SheetParts._fill(ci, fills[0], TREE_BAR_LEARNED)
+		if fills[1].size.x > 0.0:
+			SheetParts._fill(ci, fills[1], TREE_BAR_DRAFT)
+	var n := lines.size()
+	var cw := tree_col_width(n, opts)
+	var fs_line := int(opts.get("fs", TREE_LINE_FS))
+	for i in n:
+		var col := TREE_DESC_ACCENT if i == 0 and bool(opts.get("accent_first", false)) else TREE_DESC_TEXT
+		SheetParts._text(ci, tree_line_pos(r, i, n, opts), str(lines[i]), fs_line, col, cw - 12.0)
+
+
+# ---- K 알림 띠 ----
+
+static func banner_polygon(r: Rect2) -> PackedVector2Array:
+	return frame_polygon(r, BANNER_END)
+
+
+## 몸(글·단추가 놓이는 청록 면)의 사각형(굽은 끝 포함 경계).
+static func banner_body_rect(r: Rect2) -> Rect2:
+	return r.grow_individual(-BANNER_BODY_INSET.x, -BANNER_BODY_INSET.y, -BANNER_BODY_INSET.x, -BANNER_BODY_INSET.y)
+
+
+## 알림 띠: 어두운 바깥 → 굽은 끝의 회청 호 → 어두운 선 → 청록 몸. 모두 양 끝이 굽은 같은 꼴(frame_polygon).
+static func draw_banner(ci: CanvasItem, r: Rect2) -> void:
+	SheetParts._poly(ci, banner_polygon(r), BANNER_EDGE)
+	SheetParts._poly(ci, frame_polygon(r.grow(-4.0), BANNER_END - 2.0), BANNER_ARC)
+	SheetParts._poly(ci, frame_polygon(r.grow_individual(-15.0, -7.0, -15.0, -7.0), BANNER_BODY_END + 2.0), BANNER_EDGE)
+	SheetParts._poly(ci, frame_polygon(banner_body_rect(r), BANNER_BODY_END), BANNER_BODY)
 
 
 # ---- J 명령 알약 ----
