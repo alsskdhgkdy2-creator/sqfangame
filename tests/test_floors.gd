@@ -357,10 +357,10 @@ func test_encounter_uses_current_floor_table_and_range() -> void:
 	check_eq(s.encounter.threshold, 5, "fb 한계값 범위(5~5)로 다시 뽑음(fa 는 1000)")
 
 
-## R9: 휴식은 그 층 시작 칸에서만(시작 없는 층은 없음). 새 게임은 첫 층 기록 하나.
+## R9: 새 게임은 첫 층 기록 하나(M3 A2b: 시작 칸 휴식은 없앴다).
 func test_rest_and_new_game_floor() -> void:
 	var s := _at_fa(_pair_defs())
 	check_eq(s.floor_states.keys(), ["fa"], "새 게임은 첫 층 기록 하나")
 	s.party.at = Vector2i(2, 0)
 	ExplorationRules.apply(s, A.STAIRS, "floor")
-	check_eq(ExplorationRules.apply(s, A.REST, "floor"), [{"type": "blocked", "reason": "not_rest_point"}] as Array[Dictionary], "시작 없는 층은 쉴 수 없다")
+	check_eq([s.floor_def.id, s.floor_states.keys()], ["fb", ["fa", "fb"]], "계단으로 둘째 층(시작 없는 층), 층 기록 둘")

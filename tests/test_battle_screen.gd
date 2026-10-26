@@ -900,7 +900,7 @@ func _finish_battle(s: DungeonScreen) -> void:
 
 func _explore_ui_visible(s: DungeonScreen) -> Array[Control]:
 	var out: Array[Control] = []
-	for c in [s.map_window, s.minimap, s.orb, s.floor_plate, s.camp_button, s.map_button, s.rest_button] + s.pad.values():
+	for c in [s.map_window, s.minimap, s.orb, s.floor_plate, s.camp_button, s.map_button] + s.pad.values():
 		if (c as Control).is_visible_in_tree():
 			out.append(c)
 	return out
@@ -982,8 +982,7 @@ func test_menu_is_blocked_during_battle() -> void:
 	check(not s.party_menu.is_open(), "캠프 여는 함수도 열지 않는다(기록은 캠프 안에만 있다)")
 	check(not s.camp_button.is_visible_in_tree(), "캠프 단추 없음")
 	await kit.press_key(KEY_SPACE)
-	await kit.press_key(KEY_R)
-	check(s.state.encounter.pending, "조사·휴식 키도 전투 층이 받는다")
+	check(s.state.encounter.pending, "조사 키도 전투 층이 받는다")
 
 
 func test_wipe_opens_m1_wipe_window() -> void:
@@ -1007,34 +1006,7 @@ func test_wipe_opens_m1_wipe_window() -> void:
 	check_eq(s.modal.kind, "wipe", "M1 전멸 창")
 
 
-func test_rest_button_only_on_start_cell() -> void:
-	var s := await _screen()
-	check(s.rest_button.is_visible_in_tree(), "시작 칸에서 휴식 단추")
-	for m in s.state.party.members:
-		m.hp = 1
-		m.tp = 0
-	s.state.party.members[0].hp = 0
-	var n := s.autosave_count
-	var danger := s.state.encounter.danger
-	var rng := s.state.rng.get_state()
-	await kit.tap(kit.center_of(s.rest_button))
-	check(s.state.party.members.all(func(m: PartyState.Member) -> bool: return m.hp == m.max_hp and m.tp == m.max_tp), "HP·TP 최대(쓰러진 대원도)")
-	check_eq(s.autosave_count, n + 1, "휴식은 자동 저장")
-	check(s.state.encounter.danger == danger and s.state.rng.get_state() == rng, "위험도·난수 그대로")
-	await kit.press_key(KEY_W)
-	check(not s.rest_button.is_visible_in_tree(), "시작 칸이 아니면 단추 없음")
-	s.state.party.members[1].hp = 3
-	await kit.press_key(KEY_R)
-	check_eq(s.state.party.members[1].hp, 3, "시작 칸 밖 R 은 쉬지 않는다")
-	check_eq(s._toast.text, texts.t("msg.not_rest_point"), "쉴 수 없다는 알림")
-	await kit.press_key(KEY_S)
-	# M3 A2: 시작 칸은 마을 문이라 돌아오면 나가는 물음이 뜬다 → 「아니오」(휴식은 A2b 에서 여관으로 옮긴다).
-	check_eq(s.modal.kind, "stairs", "시작 칸으로 돌아오면 나가는 물음")
-	await kit.press_key(KEY_ESCAPE)
-	await kit.press_key(KEY_R)
-	check_eq(s.state.party.members[1].hp, s.state.party.members[1].max_hp, "시작 칸에서 R")
-	await _walk_into_battle(s)
-	check(not s.rest_button.is_visible_in_tree(), "전투 중 휴식 단추 없음")
+# M3 A2b: 시작 칸 휴식 단추·R 키는 없앴다(test_inn_screen.gd R1). 회복은 숙소 숙박.
 
 
 func test_save_failure_notice_shows_over_battle() -> void:

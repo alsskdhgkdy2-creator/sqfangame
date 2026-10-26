@@ -10,7 +10,9 @@
 ## 키보드: ↑↓ 줄(여섯, 줄을 바꾸면 칸 번호는 줄 길이로 자른다), ←→ 줄 안, Enter 누름. 단추를 누르면(포인터) 커서도 그 단추로.
 ## M3 A2(D28): 판을 여러 화면이 같이 쓴다. 주인(host)은 texts·records·state·handle(kind, arg)·open_dialog(kind, after)를 가진
 ## 아무 Control(캠프 PartyMenu, 타이틀 TitleScreen)이고, 줄 묶음(row_set)이 보일 줄과 줄마다의 알약을 정한다:
-##   camp = 위 여섯 줄 그대로, title_load = 슬롯 셋(「불러오기」만)·파일(「가져오기」만), title_settings = 자동 지도만.
+##   camp = 위 여섯 줄 그대로, title_load = 슬롯 셋(「불러오기」만)·파일(「가져오기」만), title_settings = 자동 지도만,
+##   inn_save = 슬롯 셋(「저장」만, M3 A2b 숙소 「기록한다」: 원작 숙소 Save Game 슬롯 목록).
+## 수동 저장은 숙소에서 한다(D30 = R-B): 주인 갈고리 records.can_save 가 false 면 「저장」 알약을 흐리고(도움말은 그 이유) 입력을 받지 않는다.
 ## 줄은 판 위에서부터 채운다. 단추 이름·입력 종류는 줄 묶음과 상관없이 같다(보이지 않는 단추는 누르기를 받지 않는다).
 class_name PartyRecordsTab
 extends Control
@@ -43,6 +45,7 @@ const ROW_SETS := {
 	"camp": ["slot0", "slot1", "slot2", "file", "automap", "new_game"],
 	"title_load": ["slot0", "slot1", "slot2", "file"],
 	"title_settings": ["automap"],
+	"inn_save": ["slot0", "slot1", "slot2"],
 }
 
 ## 주인(PartyMenu·TitleScreen: texts·records·state·handle·open_dialog 를 가진 Control). 타입은 일부러 두지 않는다.
@@ -130,13 +133,17 @@ func row_kinds() -> Array:
 
 ## 줄 종류 kind 의 알약(지금 줄 묶음에서 보이는 것만, 왼쪽부터).
 func row_buttons(kind: String) -> Array:
-	var title := row_set != "camp"
 	if kind.begins_with("slot"):
 		var i := int(kind.substr(4))
-		return [load_buttons[i]] if title else [save_buttons[i], load_buttons[i]]
+		match row_set:
+			"camp":
+				return [save_buttons[i], load_buttons[i]]
+			"inn_save":
+				return [save_buttons[i]]
+		return [load_buttons[i]]
 	match kind:
 		"file":
-			return [band_buttons[1]] if title else band_buttons.slice(0, 2)
+			return band_buttons.slice(0, 2) if row_set == "camp" else [band_buttons[1]]
 		"automap":
 			return band_buttons.slice(2, 2 + ExplorationRules.AUTOMAP_MODES.size())
 	return [band_buttons[band_buttons.size() - 1]]
@@ -275,7 +282,7 @@ func dispatch(kind: String, arg: Variant) -> bool:
 				return false
 			return dispatch(str(b.get_meta("kind")), _arg(b))
 		"record_save":
-			if not _shown(save_buttons, arg):
+			if not _shown(save_buttons, arg) or not save_ok():
 				return false
 			_point(save_buttons[int(arg)])
 			_dirty = true
@@ -342,6 +349,12 @@ func _point(b: ListButton) -> void:
 			return
 
 
+## 지금 수동 저장을 받는지(D30 = R-B): 주인 갈고리 can_save 가 있으면 그 답, 없으면 받는다.
+func save_ok() -> bool:
+	var c: Variant = menu.records.get("can_save") if menu != null else null
+	return not (c is Callable and (c as Callable).is_valid()) or bool((c as Callable).call())
+
+
 ## 값을 읽을 수 있는지: 갈고리가 있고, 캠프는 탐색 상태도 있어야 한다(타이틀은 상태 없이 읽는다).
 func _can_read() -> bool:
 	return menu != null and menu.records.has("slots") and (row_set != "camp" or menu.state != null)
@@ -353,9 +366,11 @@ func refresh() -> void:
 	if _dirty:
 		slots = menu.records["slots"].call()
 		_dirty = false
+	var can_save := save_ok()
 	for i in 3:
 		var ok: bool = i < slots.size() and slots[i]["ok"]
 		load_buttons[i].disabled = not ok
+		save_buttons[i].disabled = not can_save
 	var mode: String = menu.records["automap"].call()
 	for k in ExplorationRules.AUTOMAP_MODES.size():
 		band_buttons[2 + k].checked = ExplorationRules.AUTOMAP_MODES[k] == mode
@@ -402,6 +417,8 @@ func help_text() -> String:
 	var kind := str(b.get_meta("kind"))
 	match kind:
 		"record_save":
+			if b.disabled:
+				return menu.texts.t("camp.records.help.save_inn")
 			return menu.texts.t("camp.records.help.save", {"n": int(_arg(b)) + 1})
 		"record_load":
 			if b.disabled:

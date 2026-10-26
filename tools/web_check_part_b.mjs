@@ -1,12 +1,12 @@
 // web_check 부분 B(전멸·성장): 새 게임을 내보낸 저장을 바탕으로 6) 준비한 저장(전투 중, 넷 쓰러짐, 하나 HP 1 독) → 방어 → 실행 →
-// 전멸 창 7) 성장(전멸 창 「새 게임」 → 캠프(「캠프」 단추 → 명령 줄 → 대원 카드) → grant_exp → 스킬 배분 취소·확정 → supply → 장착 →
+// 전멸 창 7) 성장(전멸 창 「처음부터」 → 지도 물음 「예」(M3 A2b) → 캠프(「캠프」 단추 → 명령 줄 → 대원 카드) → grant_exp → 스킬 배분 취소·확정 → supply → 장착 →
 // 새로 고침 → 승리 경로 결과 창) 8) 상점(08 §8.12: 고정 저장 tools/web_check_shop_save.json 가져오기 → 마을 문 → 광장 「정크 공방」 → 사기 →
 // 장착 → 「팔기」·여러 개 → 입하 알림 → 닫기, 받아들인 변경마다 IndexedDB = 화면). 내보내기·가져오기는 캠프 「기록」 화면에서(M2.7 R2-d).
 import fs from 'node:fs';
 import path from 'node:path';
 import {
   W, H, outDir, page, log, check, snap, request, waitFor, waitReady, clickButton, waitIdb,
-  HIGH_SLASH, LEG_CUTTER, ION_SABER, VICTORY_SAVE, openRecords, closeCamp,
+  HIGH_SLASH, LEG_CUTTER, ION_SABER, VICTORY_SAVE, openRecords, closeCamp, answerWipeMap,
 } from './web_check_common.mjs';
 
 // 캔버스에 키 포커스: 마을 광장(목록 x 0~580·띠 y 0~100)과 미궁 시야 어디서나 아무것도 없는 곳을 누른다(M3 A2: 왼쪽 위는 광장 줄).
@@ -61,7 +61,10 @@ export async function partB() {
 async function growthChecks(s) {
   const tag = `${W}x${H}`;
   await clickButton('WipeNewGame');
+  s = await answerWipeMap(true, '성장 0', '09b_wipe_map');
   s = await waitFor((x) => x.modal === '' && !x.wiped && !x.battle?.open && !x.busy, '새 게임');
+  check(s.location === 'town' && s.day === 1 && s.town?.page === 'plaza', '성장 0: 「처음부터」 → 지도 「예」 → 마을 새 게임(1일째 광장)',
+    { location: s.location, day: s.day, town: s.town?.page });
   // 1. 「캠프」 단추를 실제로 눌러 연다 → 「상태」 줄 → 대원 카드 0.
   await clickButton('CampButton');
   s = await waitFor((x) => x.party_menu?.open && x.party_menu.page === 'root', '캠프');

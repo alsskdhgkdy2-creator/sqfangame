@@ -92,6 +92,19 @@ export async function clickButton(name) {
   if (!p) throw new Error(`단추 없음: ${name} (있는 것: ${Object.keys(s.buttons).join(',')})`);
   await page.mouse.click(p[0], p[1]);
 }
+// 전멸 뒤 지도 물음(M3 A2b, wipe_map): 「처음부터」·「마지막 기록으로 돌아간다」 다음 창. 답하기 전에는 전멸 그대로이고, 답하면 상태를 바꾸고
+// 자동 저장한다(마을 새 게임·기록한 마을은 광장). keep = 「예」(그린 지도를 남긴다).
+export async function answerWipeMap(keep, tag, shot = '') {
+  const q = await waitFor((x) => x.modal === 'wipe_map', '지도 물음');
+  check(q.wiped && q.modal_title === '지도' && q.buttons.WipeMapYes && q.buttons.WipeMapNo,
+    `${tag}: 전멸 뒤 지도 물음(답하기 전 전멸 그대로, 「예」·「아니오」)`, { wiped: q.wiped, modal_title: q.modal_title });
+  if (shot) {
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: `${outDir}/${shot}_${W}x${H}.png` });
+  }
+  await clickButton(keep ? 'WipeMapYes' : 'WipeMapNo');
+  return waitFor((x) => x.modal === '' && !x.wiped && !x.busy, '지도 물음 답');
+}
 // 캠프(M2.7 R2-d): 안내 줄 「캠프」 단추 → 캠프 뿌리 → 「기록」 줄 → 기록 화면(앞 「메뉴」 창이 하던 저장·불러오기·내보내기·
 // 가져오기·자동 지도·새 게임). 단추 이름(Export·Import·Save_·Load_·Automap_·NewGame)은 앞 메뉴 창과 같다.
 export async function openRecords() {
@@ -186,6 +199,7 @@ export async function firstBattle(s) {
     await page.screenshot({ path: `${outDir}/05e_battle_wiped.png` });
     if (!preOk) throw new Error('전멸했지만 돌아올 전투 시작 저장이 없다');
     await clickButton('WipeNewGame');
+    await answerWipeMap(false, '첫 턴 전멸');
     s = await waitFor((x) => !x.wiped && x.modal === '', '전멸 창 → 새 게임');
     s = await openRecords();
     const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import')]);

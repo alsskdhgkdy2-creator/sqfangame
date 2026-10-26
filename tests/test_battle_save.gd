@@ -333,7 +333,7 @@ func test_encounter_opens_battle_and_blocks_exploration() -> void:
 	var h := SaveCodec.state_hash(s)
 	var bh := Fx.battle_hash(s)
 	var rng := s.rng.get_state()
-	for a in [A.FORWARD, A.BACK, A.STRAFE_LEFT, A.STRAFE_RIGHT, A.TURN_LEFT, A.TURN_RIGHT, A.INVESTIGATE, A.REST]:
+	for a in [A.FORWARD, A.BACK, A.STRAFE_LEFT, A.STRAFE_RIGHT, A.TURN_LEFT, A.TURN_RIGHT, A.INVESTIGATE, A.STAIRS]:
 		var out := ExplorationRules.apply(s, a, "floor")
 		check_eq(out, [{"type": "rejected", "reason": "pending"}] as Array[Dictionary], "전투 중 행동 %d 거부" % a)
 	check_eq([SaveCodec.state_hash(s), Fx.battle_hash(s), s.rng.get_state()], [h, bh, rng], "상태·전투·난수 불변")
@@ -507,39 +507,4 @@ func test_material_cap_survives_victory_and_save() -> void:
 
 
 # ---- 휴식 ----
-
-func test_rest_only_at_start_and_restores_everyone() -> void:
-	var s := Fx.game(null, 5, "floor")
-	s.party.members[0].hp = 0
-	s.party.members[1].hp = 3
-	s.party.members[1].tp = 0
-	s.party.members[4].tp = 7
-	s.encounter.danger = 40
-	var before := [s.encounter.danger, s.encounter.threshold, s.steps, s.rng.get_state(), s.party.at, s.party.facing]
-	var ev := ExplorationRules.apply(s, A.REST, "floor")
-	check_eq(ev, [{"type": "rested"}] as Array[Dictionary], "rested")
-	check_eq([_hps(s), _tps(s)], [[60, 52, 52, 42, 40], [30, 32, 32, 54, 60]], "HP·TP 최대, 쓰러진 대원도")
-	check_eq([s.encounter.danger, s.encounter.threshold, s.steps, s.rng.get_state(), s.party.at, s.party.facing], before, "위험도·걸음·난수·위치 그대로")
-	ExplorationRules.apply(s, A.FORWARD, "floor")
-	check(s.party.at != s.floor_def.start_at and s.battle == null, "준비: 시작 칸을 떠남")
-	s.party.members[1].hp = 3
-	var h := SaveCodec.state_hash(s)
-	check_eq(ExplorationRules.apply(s, A.REST, "floor"), [{"type": "blocked", "reason": "not_rest_point"}] as Array[Dictionary], "시작 칸이 아니면 막힘")
-	check_eq(SaveCodec.state_hash(s), h, "막히면 상태 그대로")
-
-
-func test_rest_rejected_in_battle_and_when_wiped() -> void:
-	var s := Fx.battle(_defs(), "formation.f1.rats", 3)
-	check_eq(s.party.at, s.floor_def.start_at, "준비: 시작 칸에서 전투")
-	s.party.members[1].hp = 3
-	var h := SaveCodec.state_hash(s)
-	var rng := s.rng.get_state()
-	check_eq(ExplorationRules.apply(s, A.REST, "floor"), [{"type": "rejected", "reason": "pending"}] as Array[Dictionary], "전투 중 거부")
-	check_eq([SaveCodec.state_hash(s), s.rng.get_state(), s.party.members[1].hp], [h, rng, 3], "상태·난수 그대로")
-	var w := Fx.game(null, 5, "floor")
-	for m in w.party.members:
-		m.hp = 0
-	w.wiped = true
-	h = SaveCodec.state_hash(w)
-	check_eq(ExplorationRules.apply(w, A.REST, "floor"), [{"type": "rejected", "reason": "wiped"}] as Array[Dictionary], "전멸 중 거부")
-	check_eq(SaveCodec.state_hash(w), h, "전멸 상태 그대로")
+# M3 A2b: 시작 칸 휴식(REST)은 없앴다. 회복은 숙소 숙박(TownRules.stay, test_inn.gd I2·I3)이 한다.

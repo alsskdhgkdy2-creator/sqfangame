@@ -26,8 +26,6 @@ const LABYRINTH_PATH := "res://data/floors/labyrinth.json"
 const PARTY_PATH := "res://data/party/test_party.json"
 const TEXT_PATH := "res://data/text/ko.json"
 const DATA_DIR := "res://data"
-## 휴식 키(06 §8.8, 물리 키). 누르고 있기 반복은 없다.
-const REST_KEY := KEY_R
 const A := ExplorationRules.Action
 ## InputMap 동작 → 규칙 행동. 누르고 있으면 반복하는 순서이기도 하다.
 const KEY_ACTIONS := {
@@ -44,7 +42,7 @@ const EDGE := 12.0
 ## 안내 줄(원작 왼쪽 아래 CAMP·MAP 안내 자리) 단추 크기와 간격.
 const HINT_H := 64.0
 const HINT_GAP := 8.0
-## 이동 단추 묶음(3×2 + 조사·휴식 열) 크기.
+## 이동 단추 묶음(3×2 + 조사 열) 크기(휴식 칸은 M3 A2b 에서 없앴고 자리는 비워 둔다).
 const PAD_W := 3.0 * (PAD_BUTTON + PAD_GAP) + 8.0 + PAD_BUTTON + 16.0
 const PAD_H := 2.0 * PAD_BUTTON + PAD_GAP
 ## 미니맵 크기(원작 III HD gw_28: 16:9 화면의 가로 약 17%·세로 약 20%).
@@ -141,14 +139,15 @@ var pad := {}  # 규칙 행동 → TouchButton
 var map_button: TouchButton
 ## 안내 줄 「캠프」(원작 CAMP·MAP 의 CAMP).
 var camp_button: TouchButton
-## 휴식(06 §8.8): 층의 시작 칸에서만 보인다.
-var rest_button: TouchButton
 var _floor_label := Label.new()
 var _steps_label := Label.new()
 var _toast := Label.new()
 var _toast_left := 0.0
 ## 지금 알림 줄이 저장 실패 안내인지: 계단·마을 문 물음이 떠도 이것은 남긴다(05 §8.4, 다른 안내는 물음 띠와 겹치므로 지운다).
 var _toast_save := false
+## 전멸 뒤 지도 물음에 답하면 들어갈 상태(읽은 수동 저장 또는 마을 새 게임)와, 그것이 읽은 저장인지(안내·저장 실패 알림이 다르다).
+var _wipe_target: ExplorationState
+var _wipe_loaded := false
 ## 「저장 중」 표시(층 4, 화면 위 가운데). 대기가 있으면 보이고 없으면 바로 감춘다(나타날 때만 짧게 밝아진다).
 var save_chip := Control.new()
 var _flash := ColorRect.new()
@@ -435,8 +434,6 @@ func _do_action(action: int) -> void:
 	var events := ExplorationRules.apply(state, action, settings.automap)
 	if events.size() == 1 and events[0]["type"] == "rejected":
 		return
-	if action == A.REST:
-		_pad_since.erase(A.REST)
 	_action_frame = Engine.get_process_frames()
 	_stairs_ask = false  # 새 행동이 받아들여졌으면 앞의 물음은 낡았다(이 행동의 이벤트가 다시 세운다)
 	var rebuild := false
@@ -458,8 +455,6 @@ func _do_action(action: int) -> void:
 				_show_toast(texts.t("msg." + str(ev["type"])))
 			"nothing_found":
 				_show_toast(texts.t("msg.nothing_found"))
-			"rested":
-				_show_toast(texts.t("msg.rested"))
 			"damaged":
 				_show_toast(texts.t("msg.damaged"))
 				_flash_damage()
@@ -612,9 +607,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			_key_since[name] = Time.get_ticks_msec()
 			request_action(KEY_ACTIONS[name])
 			return
-	if k.physical_keycode == REST_KEY and not k.ctrl_pressed and not k.alt_pressed and not k.meta_pressed:
-		get_viewport().set_input_as_handled()
-		request_action(A.REST)
 
 
 ## 화면이 사라질 때 웹 전역 콜백(window.sqfImportResult·sqfDebug)을 걷는다.
@@ -646,7 +638,6 @@ func _clear_input() -> void:
 	if map_button != null:
 		map_button.cancel()
 		camp_button.cancel()
-		rest_button.cancel()
 
 
 # ---- 저장 ----
@@ -694,6 +685,18 @@ func _save_slot(slot: String) -> void:
 		_alert(texts.t("msg.save_failed", {"reason": why}))
 		return
 	party_menu.refresh_view()
+	town_screen.refresh_view()
+
+
+## 숙소 숙박(M3 A2b): 규칙(TownRules.stay)이 받아들였으면 자동 저장한다(05 §8.4). 이벤트 열을 숙소 화면에 돌려준다(안내는 그쪽).
+func _inn_stay() -> Array[Dictionary]:
+	if state == null:
+		return []
+	var events := TownRules.stay(state)
+	if events.size() == 1 and events[0]["type"] == "stayed":
+		_autosave()
+		_debug_dirty = true
+	return events
 
 
 ## 저장 반영 기다림을 켠다: 진짜 웹이고 user:// 가 IndexedDB 에 이어져 있을 때만(시험은 save_reader·userfs_persistent).
@@ -926,7 +929,7 @@ func _set_battle_view(on: bool) -> void:
 	_layout()
 
 
-## 탐색 HUD(층 문패·미니맵·위험 보석·이동 단추·휴식·안내 줄)와 지도 판을 감추는지(3D 시야만 남는다).
+## 탐색 HUD(층 문패·미니맵·위험 보석·이동 단추·안내 줄)와 지도 판을 감추는지(3D 시야만 남는다).
 ## 전투 층이 열린 동안(06 §9.1, U1)과 파티 메뉴가 열린 동안(M2.6 2.5단계: 메뉴 뒤에는 어둡게 한 3D 시야만 보인다).
 ## 감춘 단추는 누르기를 받지 않는다. 파티 메뉴가 열리고 닫힐 때(어느 길로 닫혀도: 키·「닫기」·상태 바꾸기) visibility_changed 로 다시 맞춘다.
 func _hud_hidden() -> bool:
@@ -1039,12 +1042,17 @@ func _open_stairs() -> bool:
 	var no := _named(ModalLayer.button(texts.t("ui.no"), _answer_stairs.bind(false)), "StairsNo")
 	var ask := texts.t("stairs.ask_town") if gate else texts.t("stairs.ask_" + str(st["way"]))
 	var rows: Array[Control] = [ModalLayer.label(ask), ModalLayer.row([yes, no] as Array[Control])]
-	# 들어올 때의 장소 안내(「시험 층 / B1F」, 층 4)는 물음 띠 아래 테두리와 겹친다: 물음이 뜨면 지운다. 저장 실패 안내는 남긴다.
-	if not _toast_save:
-		_hide_toast()
-	modal.open("stairs", texts.t("stairs.title_town" if gate else "stairs.title"), rows)
+	_open_question("stairs", texts.t("stairs.title_town" if gate else "stairs.title"), rows)
 	yes.grab_focus.call_deferred()
 	return true
+
+
+## 층 3 물음 창(계단·마을 문·전멸·지도 물음)을 연다. 알림 줄(층 4, 화면 아래쪽: 장소·「가져왔다」 같은 안내)은 창 아래 테두리와
+## 겹치므로 물음이 뜨면 지운다. 저장 실패 안내는 남긴다(05 §8.4, 저장 칩·알림 창은 따로다).
+func _open_question(kind: String, title: String, rows: Array[Control]) -> void:
+	if not _toast_save:
+		_hide_toast()
+	modal.open(kind, title, rows)
 
 
 ## 계단 확인 창의 답: 「예」면 규칙 행동 STAIRS(층 바꾸기·자동 저장), 「아니오」면 닫기만(계단 위에 그대로 선다, 저장 없음).
@@ -1056,17 +1064,71 @@ func _answer_stairs(yes: bool) -> void:
 		request_action(A.STAIRS)
 
 
+## 전멸 창(01 §4.10, M3 A2b): 「마지막 기록으로 돌아간다」(검사를 지난 가장 새 수동 저장이 있을 때만) · 「처음부터」(마을 새 게임).
+## 어느 쪽이든 지도 물음(wipe_map)이 뒤따른다. 두 창 모두 Esc 로 닫히지 않는다(고르기가 필요하다).
 func _open_wipe() -> void:
+	_wipe_target = null
 	var rows: Array[Control] = [ModalLayer.label(texts.t("msg.wiped"))]
 	var slot := store.latest_manual()
 	if not slot.is_empty():
-		var load_b := ModalLayer.button(texts.t("wipe.load_manual"), _load_slot.bind(slot))
+		var load_b := ModalLayer.button(texts.t("wipe.load_manual"), _wipe_load.bind(slot))
 		load_b.name = "WipeLoad"
 		rows.append(load_b)
-	var new_b := ModalLayer.button(texts.t("wipe.new_game"), _start_new_game)
+	var new_b := ModalLayer.button(texts.t("wipe.new_game"), _wipe_new_game)
 	new_b.name = "WipeNewGame"
 	rows.append(new_b)
-	modal.open("wipe", texts.t("wipe.title"), rows)
+	_open_question("wipe", texts.t("wipe.title"), rows)
+
+
+## 「마지막 기록으로 돌아간다」: 슬롯을 먼저 읽어 검사한다(실패하면 알림, 상태 그대로 → 알림을 닫으면 전멸 창). 그다음 지도 물음.
+func _wipe_load(slot: String) -> void:
+	if modal.kind != "wipe":
+		return
+	var l := store.load_slot(slot)
+	if not l.ok():
+		_alert(texts.t("msg.load_failed", {"reason": l.result.error}))
+		return
+	_ask_wipe_map(l.result.state, true)
+
+
+## 「처음부터」: 마을 새 게임(1일째). 그다음 지도 물음(남기면 새 게임에 합친다, §8 고름 10).
+func _wipe_new_game() -> void:
+	if modal.kind != "wipe":
+		return
+	_ask_wipe_map(_new_state(true), false)
+
+
+## 지도 물음(「이번 원정에서 그린 지도를 남길까?」, 처음 포커스 「예」 §8 고름 11). 답하기 전에는 상태를 바꾸지 않는다:
+## 그사이 새로 고치면 자동 저장(전멸)이 그대로라 타이틀 → 이어하기 → 전멸 창이 다시 뜬다.
+func _ask_wipe_map(target: ExplorationState, loaded: bool) -> void:
+	_wipe_target = target
+	_wipe_loaded = loaded
+	var yes := _named(ModalLayer.button(texts.t("ui.yes"), _answer_wipe_map.bind(true)), "WipeMapYes")
+	var no := _named(ModalLayer.button(texts.t("ui.no"), _answer_wipe_map.bind(false)), "WipeMapNo")
+	var rows: Array[Control] = [ModalLayer.label(texts.t("wipe.map_ask")), ModalLayer.row([yes, no] as Array[Control])]
+	_open_question("wipe_map", texts.t("wipe.map_title"), rows)
+	yes.grab_focus.call_deferred()
+
+
+## 지도 물음의 답: 남기면 전멸한 상태의 지도 그림을 새 상태에 합친다(TownRules.keep_map). 그다음 상태 바꾸기 → 자동 저장 → 안내.
+## 수동 저장은 숙소에서 하므로 돌아가면 보통 마을 광장이다(마을 저장이면 _set_state 가 광장을 연다).
+func _answer_wipe_map(keep: bool) -> void:
+	if modal.kind != "wipe_map" or _wipe_target == null or state == null:
+		return
+	var target := _wipe_target
+	_wipe_target = null
+	if keep:
+		TownRules.keep_map(target, state)
+	modal.close()
+	_set_state(target)
+	if not _wipe_loaded:
+		_autosave()
+		return
+	if _autosave(true):
+		_show_toast(texts.t("msg.loaded"))
+		_check_windows()
+	else:
+		_alert(texts.t("msg.loaded_save_failed", {"reason": last_autosave_error}))
 
 
 ## 캠프 「기록」 화면의 슬롯 카드 값(07 §9.2): 검사를 지난 저장이면 대표 대원(파티 칸 0)·Lv, 층 · 걸음, 저장 시각(저장에 이미 있는 값).
@@ -1311,6 +1373,7 @@ func _build_ui() -> void:
 	town_screen.camp_requested.connect(_open_party)
 	town_screen.shop_requested.connect(_open_shop)
 	town_screen.enter_requested.connect(_enter_labyrinth)
+	town_screen.stay_hook = _inn_stay
 	town_screen.opened.connect(func() -> void:
 		_clear_input()
 		_debug_dirty = true
@@ -1325,6 +1388,10 @@ func _build_ui() -> void:
 	party_menu.save_hook = _on_party_save
 	party_menu.records = {"slots": record_slots, "save": _save_slot, "load": _load_slot, "export": _export, "import": _import,
 		"automap": func() -> String: return settings.automap, "set_automap": _set_automap, "new_game": _start_new_game}
+	# 수동 저장은 숙소에서(D30 = R-B): 캠프 「기록」의 「저장」은 숙소 쪽(숙소·숙소 기록)에서 연 캠프에서만 받는다.
+	party_menu.records["can_save"] = func() -> bool: return _in_town() and town_screen.page in ["inn", "inn_save"]
+	town_screen.records = party_menu.records.duplicate()
+	town_screen.records["can_save"] = func() -> bool: return true  # 숙소 「기록한다」 쪽
 	party_menu.blocked_hook = func() -> bool: return modal.is_open()
 	# 마을에서 연 캠프(research 07 §2.2): 장소 띠는 그 장소 이름, 문패는 날(「n일째」). 미궁에서는 빈 글(층 이름·걸음 그대로).
 	party_menu.place_hook = func() -> String: return town_screen.place_text() if _in_town() else ""
@@ -1456,7 +1523,7 @@ func _layer_root(layer_name: String, n: int) -> Control:
 
 
 ## 층 1 HUD(원작 탐색 화면 gw_28·gs_683213·nin_02). 부품은 시야 영역(view_area: 지도 판이 덮지 않는 곳)의 모서리에 앵커로 붙는다.
-## 미니맵·위험 보석·층 문패는 장식(IGNORE). 이동 단추·조사·휴식은 원작에 없다(휴대폰 조작): 안내 줄 바로 위에 둔다.
+## 미니맵·위험 보석·층 문패는 장식(IGNORE). 이동 단추·조사는 원작에 없다(휴대폰 조작): 안내 줄 바로 위에 둔다.
 func _build_hud() -> void:
 	view_area = Control.new()
 	view_area.name = "ViewArea"
@@ -1555,13 +1622,6 @@ func _build_hud() -> void:
 	var inv: TouchButton = pad[A.INVESTIGATE]
 	inv.position = Vector2(side_x, PAD_BUTTON + PAD_GAP)
 	inv.size = Vector2(PAD_BUTTON + 16.0, PAD_BUTTON)
-	rest_button = TouchButton.new().setup("", texts.t("action.rest"))
-	rest_button.name = "Pad_rest"
-	rest_button.activated.connect(_on_pad.bind(A.REST))
-	rest_button.released.connect(func() -> void: _pad_since.erase(A.REST))
-	rest_button.position = Vector2(side_x, 0)
-	rest_button.size = Vector2(PAD_BUTTON + 16.0, PAD_BUTTON)
-	pad_box.add_child(rest_button)
 
 
 ## 모드(지도 판 열림·전투·파티 메뉴)와 화면 폭에 따라 바뀌는 것만 맞춘다. 자리는 앵커가 정하고 여기서는
@@ -1605,7 +1665,6 @@ func _layout() -> void:
 		_toast.offset_top = _toast.offset_bottom - 36.0
 	if _view_on:
 		view.set_lens_cover(cover / w if w > 0.0 else 0.0)
-	_refresh_rest_button()
 	map.refresh()
 	_debug_dirty = true
 	_debug_settle = 2
@@ -1622,20 +1681,7 @@ func _refresh_hud() -> void:
 	_steps_label.text = texts.t("hud.steps", {"steps": state.steps})
 	orb.gauge = state.encounter.gauge()
 	minimap.refresh()
-	_refresh_rest_button()
 	_refresh_toolbar()
-
-
-## 휴식 단추는 층의 시작 칸에서, 전투·전멸이 아닐 때만 보인다(06 §8.8).
-func _refresh_rest_button() -> void:
-	if rest_button == null:
-		return
-	var show := not _hud_hidden() and state != null and ExplorationRules.can_act(state) and state.party.at == state.floor_def.start_at
-	if rest_button.visible != show:
-		rest_button.visible = show
-		if not show:
-			rest_button.cancel()
-		_debug_dirty = true
 
 
 func _show_toast(text: String, save_note: bool = false) -> void:
@@ -1760,7 +1806,7 @@ func debug_snapshot() -> Dictionary:
 	elif town_screen.is_open():
 		buttons.merge(town["buttons"])  # 마을: 탐색 HUD 는 감췄다
 	else:
-		for b in pad.values() + [rest_button, map_button, camp_button, map_window.back_button]:
+		for b in pad.values() + [map_button, camp_button, map_window.back_button]:
 			if (b as TouchButton).is_visible_in_tree():
 				buttons[b.name] = _css(b.size / 2.0, b)
 		for key in toolbar.buttons:

@@ -1,9 +1,9 @@
-// web_check 부분 C(마을 고리, M3 A2a): 빈 IndexedDB 의 타이틀(이어하기 없음) → 「새 게임」 → 마을 광장(줄·흐림·띠·1일째) → 캠프 장소 띠 →
+// web_check 부분 C(마을 고리, M3 A2): 빈 IndexedDB 의 타이틀(이어하기 없음) → 「새 게임」 → 마을 광장(줄·흐림·띠·1일째) → 캠프 장소 띠 →
 // 「아보르 입구」 → 「탐사 시작」 → B1F 시작 칸 → 한 칸 나갔다 돌아옴 → 마을 문 물음 「예」 → 광장(IndexedDB = 화면) → 「정크 공방」 → 뒤로 광장
-// → 캠프 「기록」 슬롯 1 저장 → 새로 고침 → 타이틀 「이어하기」(같은 해시) → 새로 고침 → 타이틀 「불러오기」 → 슬롯 1(같은 해시).
-// A2b(숙소 숙박·기록)는 다음 단계에서 이 부분에 더한다.
+// → 「캡슐 숙소」(A2b): 숙박 확인 「예」 → 2일째(IndexedDB) → 「기록한다」 슬롯 1 → 나간다 → 광장에서 연 캠프 「기록」은 「저장」 흐림(D30 = R-B)
+// → 새로 고침 → 타이틀 「이어하기」(같은 해시) → 새로 고침 → 타이틀 「불러오기」 → 슬롯 1(같은 해시).
 import {
-  W, H, outDir, page, log, check, snap, waitFor, clickButton, waitIdb, waitTitle, enterLabyrinth, openRecords,
+  W, H, outDir, page, log, check, snap, waitFor, clickButton, waitIdb, waitTitle, enterLabyrinth, openRecords, closeCamp,
 } from './web_check_common.mjs';
 
 const PLAZA = ['Plaza_inn', 'Plaza_shop', 'Plaza_pub', 'Plaza_guild', 'Plaza_council', 'Plaza_entrance'];
@@ -21,10 +21,10 @@ export async function partC() {
   await clickButton('TitleNewGame');
   let s = await waitFor((x) => x.location === 'town' && x.town?.open && !x.busy, '새 게임 → 광장');
   check(s.town.page === 'plaza' && JSON.stringify(s.town.rows) === JSON.stringify(PLAZA)
-    && JSON.stringify(s.town.dim) === JSON.stringify([true, false, true, true, true, false]) && s.town.band[0] === '묵어서 쉬고, 진행을 기록한다'
+    && JSON.stringify(s.town.dim) === JSON.stringify([false, false, true, true, true, false]) && s.town.band[0] === '묵어서 쉬고, 진행을 기록한다'
     && s.day === 1 && s.town.day === '1일째' && s.autosaves === 1 && s.town.art === 'plaza' && !s.buttons.MapButton && !s.buttons.Pad_forward
     && s.buttons.CampButton && PLAZA.every((n) => s.buttons[n]),
-  '마을 1: 광장 — 원작 차례 여섯 줄·흐림(숙소·정보상 바·길드·관리국)·띠·1일째, 새 게임 자동 저장, 탐색 HUD 없음',
+  '마을 1: 광장 — 원작 차례 여섯 줄·흐림(정보상 바·길드·관리국)·띠·1일째, 새 게임 자동 저장, 탐색 HUD 없음',
   { town: s.town, day: s.day, autosaves: s.autosaves, buttons: Object.keys(s.buttons) });
   let idb = await waitIdb(s);
   check(!idb.timeout, '마을 1: 새 게임 자동 저장이 IndexedDB 에 반영', idb);
@@ -80,15 +80,49 @@ export async function partC() {
   s = await waitFor((x) => !x.shop?.open && x.town?.open && !x.town.covered, '상점 닫힘');
   check(s.town.page === 'plaza' && s.town.cursor === 1 && s.buttons.Plaza_shop, '마을 3: 상점 닫기 → 광장, 커서 「정크 공방」', { town: s.town });
 
-  // 4. 캠프 「기록」 슬롯 1 저장(A2b 에서 숙소 「기록한다」로 옮긴다) → 닫기.
-  s = await openRecords();
+  // 4. 캡슐 숙소(M3 A2b): 줄 넷(대화 흐림)·띠(설명 / 숙박비)·그림 → 숙박 확인(「예」 먼저) → 「예」 = 2일째·돈 −10·자동 저장(IndexedDB)
+  //    → 「기록한다」 = 기록 판(「저장」만) → 슬롯 1 → 취소 → 나간다. 광장에서 연 캠프 「기록」은 「저장」이 흐리다(D30 = R-B).
+  const INN = ['Inn_stay', 'Inn_save', 'Inn_talk', 'Inn_leave'];
+  await clickButton('Plaza_inn');
+  s = await waitFor((x) => x.town?.page === 'inn', '캡슐 숙소');
+  check(JSON.stringify(s.town.rows) === JSON.stringify(INN) && JSON.stringify(s.town.dim) === JSON.stringify([false, false, true, false])
+    && s.town.band[0] === '하룻밤 묵어 모두의 HP·TP를 회복하고 날을 넘긴다' && s.town.band[1] === '숙박비 10엔' && s.town.price === 10
+    && s.town.art === 'inn' && s.town.place === '캡슐 숙소' && INN.every((n) => s.buttons[n]) && s.buttons.CampButton && !s.buttons.Plaza_inn,
+  '마을 4: 캡슐 숙소 — 줄 넷(대화 흐림)·띠(설명 / 숙박비 10엔)·숙소 그림', { town: s.town, buttons: Object.keys(s.buttons) });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${outDir}/c07_inn_${tag}.png` });
+  const money0 = s.town.money;
+  const saves0 = s.autosaves;
+  await clickButton('Inn_stay');
+  s = await waitFor((x) => x.town?.dialog?.mode === 'confirm', '숙박 확인');
+  check(s.town.dialog.pick === 0 && s.town.dialog.text === '10엔에 하룻밤 묵을까?' && s.buttons.Yes && s.buttons.No && !s.buttons.Inn_stay,
+    '마을 4: 숙박 확인 창 — 「예」 먼저(D25), 창 단추만', { dialog: s.town.dialog, buttons: Object.keys(s.buttons) });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${outDir}/c08_inn_confirm_${tag}.png` });
+  await clickButton('Yes');
+  s = await waitFor((x) => x.town?.dialog?.mode === '' && x.day === 2 && !x.busy, '묵음');
+  check(s.town.money === money0 - 10 && s.autosaves === saves0 + 1 && s.town.day === '2일째' && s.town.band[1] === '하룻밤 묵었다. HP·TP가 모두 회복됐다',
+    '마을 4: 「예」 → 2일째·돈 −10·안내·자동 저장', { money: s.town.money, autosaves: s.autosaves, day: s.town.day, band: s.town.band });
+  idb = await waitIdb(s);
+  check(!idb.timeout, '마을 4: 숙박 자동 저장이 IndexedDB 에 반영', idb);
+  await clickButton('Inn_save');
+  s = await waitFor((x) => x.town?.page === 'inn_save', '숙소 기록');
+  check(s.town.records?.rows === 'inn_save' && s.buttons.Save_slot1 && s.buttons.Save_slot3 && !s.buttons.Load_slot1 && !s.buttons.Export && !s.buttons.Inn_stay,
+    '마을 4: 「기록한다」 → 기록 판(「저장」만)', { town: s.town, buttons: Object.keys(s.buttons) });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${outDir}/c09_inn_save_${tag}.png` });
   await clickButton('Save_slot1');
-  s = await waitFor((x) => x.party_menu?.records?.cards?.[0]?.[1] !== '', '슬롯 1 저장');
+  s = await waitFor((x) => x.town?.records?.cards?.[0]?.[1] !== '', '슬롯 1 기록');
   const slotHash = s.hash;
+  check(s.town.records.cards[0][1].startsWith('뿌리마을 광장 · 걸음'), '마을 4: 슬롯 1 기록(장소 = 광장)', { cards: s.town.records.cards });
   await clickButton('VPad_back');
-  await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');
-  await clickButton('VPad_back');
-  s = await waitFor((x) => !x.party_menu?.open && x.town?.open, '캠프 닫힘');
+  s = await waitFor((x) => x.town?.page === 'inn' && x.town.cursor === 1, '숙소로');
+  await clickButton('Inn_leave');
+  s = await waitFor((x) => x.town?.page === 'plaza' && x.town.cursor === 0, '광장');
+  s = await openRecords();
+  check(!s.party_menu.records.save_ok && s.party_menu.records.help === '기록은 캡슐 숙소에서 한다',
+    '마을 4: 광장에서 연 캠프 「기록」 — 「저장」 흐림, 도움말 = 숙소에서 기록', { records: s.party_menu.records });
+  s = await closeCamp();
   idb = await waitIdb(s);
 
   // 5. 새로 고침 → 타이틀 「이어하기」 → 광장, 같은 해시.

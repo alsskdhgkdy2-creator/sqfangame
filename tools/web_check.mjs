@@ -22,7 +22,8 @@
 // 두 부분으로 나뉜다(한 번 실행을 이 기기 5분 한도 아래로): A = 1)~5) 탐색·전투(web_check_part_a.mjs),
 // B = 6)~7) 전멸·성장(web_check_part_b.mjs, 새 게임을 내보낸 저장으로 전멸 저장을 만든다). 공통 준비는 web_check_common.mjs.
 // 부분마다 새 브라우저(빈 IndexedDB)로 돈다. 확인 이름과 개수는 나누기 전과 같다(A + B).
-// M3 A2: 시작은 타이틀이다(waitReady 가 「이어하기」 또는 「새 게임」으로 지난다, 새 게임은 마을 광장). C = 마을 고리(web_check_part_c.mjs).
+// M3 A2: 시작은 타이틀이다(waitReady 가 「이어하기」 또는 「새 게임」으로 지난다, 새 게임은 마을 광장). C = 마을 고리(web_check_part_c.mjs, A2b 숙소 포함).
+// M3 A2b: 전멸 창 「처음부터」 뒤에는 지도 물음(answerWipeMap)이 있다.
 // 실행: flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/web_check.mjs [너비x높이] [a|b|c|all]  (기본 all = A, B, C 차례)
 // 결과: build/check/ 에 캡처·내보낸 파일, 부분마다 report_a.json·report_b.json, 이번 실행 전체 report.json.
 import { runPart, finish } from './web_check_common.mjs';

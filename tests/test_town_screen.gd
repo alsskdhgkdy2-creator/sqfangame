@@ -49,8 +49,8 @@ func test_plaza() -> void:
 	check_eq(t.plaza_list.rows.map(func(r: ListRow) -> String: return str(r.name)), PLAZA, "줄 차례(원작 차례)")
 	check_eq(t.plaza_list.rows.map(func(r: ListRow) -> String: return r.text),
 		["1  캡슐 숙소", "2  정크 공방", "3  정보상 바", "4  모험가 길드", "5  관리국", "6  아보르 입구"], "줄 글")
-	check_eq(t.plaza_list.rows.map(func(r: ListRow) -> bool: return r.dimmed), [true, false, true, true, true, false],
-		"흐린 줄: 숙소(A2b)·정보상 바·길드·관리국")
+	check_eq(t.plaza_list.rows.map(func(r: ListRow) -> bool: return r.dimmed), [false, false, true, true, true, false],
+		"흐린 줄: 정보상 바·길드·관리국(숙소는 A2b 에서 연다)")
 	check(not s.hud_root.visible and _view_off(s) and s.town_backdrop.visible and s.town_backdrop.place == "plaza", "HUD·시야 감춤, 광장 바탕")
 	check_eq(t.banner.lines(), [s.texts.t("town.desc.inn"), "", false], "띠 첫 줄 = 커서 시설 설명")
 	check_eq(t.place_plate.first, s.texts.t("town.plaza"), "장소 문패")
@@ -247,8 +247,12 @@ func test_plaza_keys() -> void:
 	await kit.press_key(KEY_P)
 	check(s.party_menu.is_open(), "P → 캠프")
 	await kit.press_key(KEY_ESCAPE)
+	await kit.press_key(KEY_3)
+	check_eq([t.plaza_cursor, t.notice, t.page], [2, s.texts.t("town.why.later"), "plaza"], "3 → 정보상 바(흐림: 이유)")
 	await kit.press_key(KEY_1)
-	check_eq([t.plaza_cursor, t.notice], [0, s.texts.t("town.why.later")], "1 → 숙소(흐림: 이유)")
+	check_eq([t.plaza_cursor, t.page], [0, "inn"], "1 → 숙소 쪽(A2b)")
+	await kit.press_key(KEY_ESCAPE)
+	check_eq([t.page, t.plaza_cursor], ["plaza", 0], "숙소 취소 → 광장(커서 숙소)")
 	await kit.press_key(KEY_6)
 	check_eq(t.page, "entrance", "6 → 입구")
 	await kit.press_key(KEY_3)
@@ -367,7 +371,9 @@ func _sweep_prep(s: DungeonScreen, where: String, steps: Array) -> Control:
 ## R1 (Mr1 타이틀 확인 창이 키패드를 덮음, Mpad 타이틀 키패드 표가 움직일 수 없는 ←→·↑↓를 켬): 새 화면의 모든 쪽·창 상태에서 켜진
 ## 키패드 단추를 실제 터치(InputEventScreenTouch)로 누르면 그 입력이 받아지고(받은 입력 +1), 흐린 단추는 아무 일 없다.
 ## 키패드 표(pad_state)와 실제 터치 전달이 어긋나지 않게 한다. 커서는 끝이 아닌 자리에 둔다(끝은 켜 둔 채 움직이지 않는다, 캠프와 같다).
-## A2b 숙소(확인 창 포함)도 이 표에 더한다.
+## 단추가 둘뿐인 창(숙박 확인)은 끝이 없을 수 없어 「예」·「아니오」 두 상태로 나눠, 움직일 자리가 있는 쪽에서 누른다(건너뛴 쪽도 켜짐은 본다).
+## M3 A2b(Mpad2 숙소 기록 쪽 ←→ 를 켬, Mr2 숙박 확인 창을 키패드 뒤에 붙임): 숙소·숙박 확인 두 상태·숙소 기록 쪽을 더했다.
+## 전멸 창·지도 물음(층 3)은 탐색 HUD 키패드를 덮는다(키패드가 살아 있지 않다): 이 표에 없다.
 func test_every_enabled_pad_button_acts_on_touch() -> void:
 	await _town()  # 자동 저장(마을 새 게임) → 타이틀에 「이어하기」
 	kit.close_screen()
@@ -383,26 +389,29 @@ func test_every_enabled_pad_button_acts_on_touch() -> void:
 		["타이틀 설정(가운데 칸)", "title", [["row", 3], ["cursor_x", 1]], ["left", "right", "ok", "back"]],
 		["광장", "town", [], ["up", "down", "ok"]],
 		["아보르 입구", "town", [["row", 5]], ["up", "down", "ok", "back"]],
+		["캡슐 숙소(커서 기록)", "town", [["row", 0], ["cursor", 1]], ["up", "down", "ok", "back"]],
+		["숙박 확인(「예」)", "town", [["row", 0], ["row", 0]], ["left", "right", "ok", "back"], ["left"]],
+		["숙박 확인(「아니오」)", "town", [["row", 0], ["row", 0], ["dialog", ["pick", 1]]], ["left", "right", "ok", "back"], ["right"]],
+		["숙소 기록(둘째 줄)", "town", [["row", 0], ["row", 1], ["cursor", 1]], ["up", "down", "ok", "back"]],
 	]
+	var pages := {"타이틀 메뉴(커서 설정)": ["menu", false], "타이틀 새 게임 확인": ["menu", true], "타이틀 불러오기(둘째 줄, 빈 슬롯)": ["load", false],
+		"타이틀 설정(가운데 칸)": ["settings", false], "광장": ["plaza", false], "아보르 입구": ["entrance", false], "캡슐 숙소(커서 기록)": ["inn", false],
+		"숙박 확인(「예」)": ["inn", true], "숙박 확인(「아니오」)": ["inn", true], "숙소 기록(둘째 줄)": ["inn_save", false]}
 	for c in cases:
+		var skip: Array = c[4] if c.size() > 4 else []
 		for k in TitleScreen.PAD_KEYS:
 			var scr: Control = await _sweep_prep(s, c[1], c[2])
 			if k == "up":
-				var t0 := scr as TitleScreen
-				check_eq([t0.page, t0.dialog.is_open()] if t0 != null else [scr.get("page"), false],
-					{"타이틀 메뉴(커서 설정)": ["menu", false], "타이틀 새 게임 확인": ["menu", true], "타이틀 불러오기(둘째 줄, 빈 슬롯)": ["load", false],
-					"타이틀 설정(가운데 칸)": ["settings", false], "광장": ["plaza", false], "아보르 입구": ["entrance", false]}[c[0]], "%s: 준비된 쪽" % c[0])
-			var vp: VirtualPad
-			if dirs.has(k):
-				vp = scr.get("dir_pad")
-			else:
-				vp = scr.call("active_key_pad") if scr is TitleScreen else scr.get("key_pad")
+				check_eq([scr.get("page"), bool(scr.get("dialog").call("is_open"))], pages[c[0]], "%s: 준비된 쪽" % c[0])
+			var vp: VirtualPad = scr.get("dir_pad") if dirs.has(k) else scr.call("active_key_pad")
 			var b := vp.button(k)
 			var on: bool = scr.call("pad_state")[k]
 			var tag := "%s: 키패드 %s" % [c[0], k]
 			check_eq(on, (c[3] as Array).has(k), tag + " 켜짐")
 			check_eq(not b.disabled, on, tag + " 단추 흐림 = 키패드 표")
 			check(b.is_visible_in_tree(), tag + " 보임")
+			if skip.has(k):
+				continue  # 끝: 다른 상태에서 누른다
 			var n: int = scr.get("accepted_inputs")
 			await kit.tap(kit.center_of(b), FINGER)
 			await kit.frames(1)

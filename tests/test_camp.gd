@@ -36,6 +36,18 @@ func _open() -> DungeonScreen:
 	return s
 
 
+## 숙소 쪽에서 연 캠프로 시험한다(D30 = R-B, M3 A2b: 수동 저장 「저장」은 숙소에서 연 캠프에서만 산다).
+## 마을 새 게임(1일째, 자동 저장) → 광장 「캡슐 숙소」. 캠프는 여기서 P 로 연다.
+func _open_at_inn() -> DungeonScreen:
+	var s := await _open()
+	s._start_new_game()
+	await kit.frames(2)
+	await kit.tap(kit.center_of(s.town_screen.plaza_list.rows[0]))
+	await kit.frames(1)
+	check_eq([s.state.in_town(), s.town_screen.page], [true, "inn"], "준비: 숙소")
+	return s
+
+
 func _window(px: Vector2) -> Vector2:
 	if _root_size == Vector2i.ZERO:
 		_root_size = tree.root.size
@@ -2922,7 +2934,7 @@ func _check_records_layers(pm: PartyMenu, size: Vector2, tag: String) -> void:
 
 
 func test_records_screen_follows_the_option_table() -> void:
-	var s := await _open()
+	var s := await _open_at_inn()  # 「저장」이 사는 캠프(R-B)
 	var pm := s.party_menu
 	var rt := pm.records_tab
 	s._save_slot("slot1")
@@ -2960,7 +2972,8 @@ func test_records_screen_follows_the_option_table() -> void:
 	pm._clear_notice()
 	check_eq([pm.notice_line_text(), pm.notice_line.is_visible_in_tree()], [s.texts.t("camp.cmd.records"), true], "알림이 지나면 「기록」")
 	# 슬롯 값(저장에 있는 값)은 이름 알약 두 줄에, 버튼 이름은 앞 메뉴 창과 같다(web_check 가 누른다).
-	check_eq(rt.card_lines(0)[1], "%s / B1F · 걸음 %d" % [s.texts.t(s.state.floor_def.name_key), s.state.steps], "슬롯 1: 장소(층 이름 / B1F) · 걸음")
+	# R-B: 숙소(마을)에서 기록한 슬롯이라 장소는 광장(마을 저장의 슬롯 줄, M3 A2a).
+	check_eq(rt.card_lines(0)[1], "%s · 걸음 %d" % [s.texts.t("town.plaza"), s.state.steps], "슬롯 1: 장소(마을 = 광장) · 걸음")
 	check_eq(rt.row_label_lines(0), ["1  " + rt.card_lines(0)[0], "%s   %s" % [rt.card_lines(0)[1], rt.card_lines(0)[2]]], "슬롯 1 이름 알약: 대표·Lv, 층 · 걸음 · 시각")
 	check_eq(rt.row_label_lines(1), ["2  " + s.texts.t("menu.empty_slot")], "빈 슬롯 이름 알약: 한 줄")
 	check_eq([rt.row_label_lines(3), rt.row_label_lines(4)], [[s.texts.t("camp.records.file")], [s.texts.t("menu.automap")]], "파일·자동 지도 이름 알약")
@@ -3193,7 +3206,7 @@ func _check_automap_drawn(rt: PartyRecordsTab, mode: String, tag: String) -> voi
 
 ## 도움말 줄은 커서 단추가 할 일을 말한다(키·누르기 모두, 빈 슬롯 불러오기는 「빈 슬롯」).
 func test_records_help_line_follows_the_cursor() -> void:
-	var s := await _open()
+	var s := await _open_at_inn()  # 「저장」이 사는 캠프(R-B)
 	var pm := s.party_menu
 	var rt := pm.records_tab
 	s._save_slot("slot1")
@@ -3333,7 +3346,7 @@ func _dismiss_alert(s: DungeonScreen) -> void:
 ## 기록의 「저장」「불러오기」를 누른 채 바깥 알림이 뜬다: 알림이 덮은 채 떼도, 다른 손가락으로 알림을 닫은 뒤 떼도 아무 일도 없다
 ## (있던 수동 저장을 덮어쓰거나 불러오지 않는다). 실제 손가락 누르기·떼기(scene kit), 저장은 시험 임시 폴더에만.
 func test_held_records_button_does_nothing_after_an_external_alert() -> void:
-	var s := await _open()
+	var s := await _open_at_inn()  # 「저장」이 사는 캠프(R-B)
 	var pm := s.party_menu
 	var rt := pm.records_tab
 	s._save_slot("slot1")
@@ -3846,6 +3859,7 @@ func test_records_enter_on_file_and_new_game_pills() -> void:
 		for i in c:
 			await kit.press_key(KEY_RIGHT)
 		check_eq(rt.cursor_button().name, ["Export", "Import"][c], "준비: 커서 파일 줄 %d" % c)
+		check(pm.pad_state()["left"] and pm.pad_state()["right"], "파일 줄(알약 둘): ←→ 산다")
 		await kit.press_key(KEY_ENTER)
 		check(s.modal.kind == "file" and pm.is_open(), "Enter %s → 파일 고르기 창(캠프는 뒤에)" % rt.cursor_button().name)
 		s._finish_file_request()
@@ -3854,6 +3868,10 @@ func test_records_enter_on_file_and_new_game_pills() -> void:
 	for i in 2:
 		await kit.press_key(KEY_DOWN)
 	check_eq(rt.cursor_button().name, "NewGame", "준비: 커서 새 게임")
+	# M3 A2b(Mpad3 ←→ 를 켬): 알약 하나뿐인 새 게임 줄은 ←→ 흐림(타이틀 기록과 같은 규칙), ↑ 는 산다. 둘인 파일 줄은 ←→ 산다.
+	var pad := pm.pad_state()
+	check(not pad["left"] and not pad["right"] and pad["up"] and pad["ok"], "새 게임 줄: ←→ 흐림 %s" % str(pad))
+	check(pm.dir_pad.button("left").disabled and pm.dir_pad.button("right").disabled, "새 게임 줄: ←→ 단추 흐림")
 	var h := kit.hash_now()
 	await kit.press_key(KEY_ENTER)
 	check_eq([pm.dialog_kind, pm.dialog_pick], ["new_game", 0], "Enter 새 게임 → 확인 창(「돌아가기」)")

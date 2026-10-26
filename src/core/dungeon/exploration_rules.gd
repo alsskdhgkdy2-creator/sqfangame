@@ -5,12 +5,13 @@ extends RefCounted
 
 ## STAIRS(M3 A1): 서 있는 계단으로 층을 바꾼다(화면이 확인 창 「예」 뒤에 부른다). B1F 마을 문 위면 마을로 나간다(M3 A2).
 ## ENTER(M3 A2): 마을에서 미궁 B1F 시작 칸으로 들어간다(아보르 입구 「탐사 시작」). 값이 바뀌지 않게 새 행동은 맨 뒤에 둔다.
-enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, REST, STAIRS, ENTER }
+## 7 은 비어 있다: 시작 칸 휴식(REST, 06 §8.8 자리표시)은 숙소 숙박(M3 A2b, TownRules.stay)으로 바뀌어 없앴고 STAIRS 는 8 그대로다.
+enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, STAIRS = 8, ENTER }
 
 ## 행동 이름(공략 행동열 파일·디버그용) → Action.
 const ACTION_NAMES := {
 	"forward": Action.FORWARD, "back": Action.BACK, "strafe_left": Action.STRAFE_LEFT, "strafe_right": Action.STRAFE_RIGHT,
-	"turn_left": Action.TURN_LEFT, "turn_right": Action.TURN_RIGHT, "investigate": Action.INVESTIGATE, "rest": Action.REST,
+	"turn_left": Action.TURN_LEFT, "turn_right": Action.TURN_RIGHT, "investigate": Action.INVESTIGATE,
 	"stairs": Action.STAIRS, "enter": Action.ENTER,
 }
 const AUTOMAP_OFF := "off"
@@ -75,8 +76,6 @@ static func apply(s: ExplorationState, action: int, automap: String) -> Array[Di
 			events.append({"type": "turned", "facing": s.party.facing})
 		Action.INVESTIGATE:
 			_investigate(s, events, automap)
-		Action.REST:
-			_rest(s, events)
 		Action.STAIRS:
 			_take_stairs(s, events, automap)
 		Action.ENTER:
@@ -282,17 +281,6 @@ static func _enter(s: ExplorationState, events: Array[Dictionary], automap: Stri
 	s.encounter.danger = 0
 	record_cell(s, f.start_at, automap)
 	events.append({"type": "entered", "floor": f.id, "at": f.start_at, "facing": f.start_facing})
-
-
-## 휴식(06 §8.8, M3 여관 자리표시): 층의 시작 칸에서만. 모든 대원 HP·TP 최대(쓰러진 대원도). 위험도·걸음·난수 그대로.
-static func _rest(s: ExplorationState, events: Array[Dictionary]) -> void:
-	if s.party.at != s.floor_def.start_at:
-		events.append({"type": "blocked", "reason": "not_rest_point"})
-		return
-	for m in s.party.members:
-		m.hp = m.max_hp
-		m.tp = m.max_tp
-	events.append({"type": "rested"})
 
 
 static func _cell_effect(s: ExplorationState, c: Vector2i, events: Array[Dictionary]) -> void:

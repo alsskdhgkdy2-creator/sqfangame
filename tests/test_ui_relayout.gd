@@ -589,11 +589,11 @@ func test_closed_map_lets_the_view_fill_the_screen() -> void:
 
 # ---- 파티 메뉴 뒤 탐색 HUD ----
 
-## 탐색 HUD(전투 중에 감추는 것과 같은 묶음: 지도 판·이동 단추·휴식·안내 줄 단추·층 문패·위험 보석).
+## 탐색 HUD(전투 중에 감추는 것과 같은 묶음: 지도 판·이동 단추·안내 줄 단추·층 문패·위험 보석).
 ## 미니맵은 지도 판이 열리면 따로 감추므로(원작) 이 묶음에 넣지 않는다.
 static func _hud(s: DungeonScreen) -> Dictionary:
 	var out := {"map": s.map_window, "camp": s.camp_button, "map_button": s.map_button,
-		"floor": s.floor_plate, "orb": s.orb, "rest": s.rest_button}
+		"floor": s.floor_plate, "orb": s.orb}
 	for a in s.pad:
 		out["pad_%d" % int(a)] = s.pad[a]
 	return out

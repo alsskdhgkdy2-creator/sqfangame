@@ -107,7 +107,6 @@ func test_yes_changes_floor_and_view() -> void:
 	check_eq(s.autosave_count, saves + 1, "층 바꾸기 자동 저장")
 	var l := s.store.load_slot(SaveStore.AUTO)
 	check(l.ok() and l.result.state.floor_def.id == "f2_test" and SaveCodec.state_hash(l.result.state) == kit.hash_now(), "자동 저장 = 지금 상태(f2)")
-	check(not s.rest_button.visible, "f2 에는 휴식 단추 없음")
 	# 내려섰다 다시 밟으면 위로 올라가는 물음.
 	await kit.press_key(KEY_W)
 	await kit.press_key(KEY_S)

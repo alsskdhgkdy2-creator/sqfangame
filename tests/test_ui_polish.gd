@@ -440,6 +440,12 @@ static func contrast(a: Color, b: Color) -> float:
 func test_menu_buttons_have_borders_and_clear_checked_and_selected_states() -> void:
 	_kit()
 	var s := await kit.open("native", 7)
+	# D30 = R-B(M3 A2b): 「저장」 알약이 사는 캠프는 숙소에서 연 캠프다(마을 새 게임 → 광장 「캡슐 숙소」).
+	s._start_new_game()
+	await kit.frames(2)
+	await kit.tap(kit.center_of(s.town_screen.plaza_list.rows[0]))
+	await kit.frames(1)
+	check_eq(s.town_screen.page, "inn", "준비: 숙소")
 	s._save_slot("slot1")
 	await kit.frames(2)
 	await kit.press_key(KEY_P)
@@ -481,7 +487,7 @@ func test_menu_buttons_have_borders_and_clear_checked_and_selected_states() -> v
 		var ab: PartyButton = rt.find_child("Automap_" + m, true, false)
 		check_eq(ab.checked, m == mode, "자동 지도 %s 켜짐 = 지금 설정" % m)
 	check_eq(rt.card_lines(0), [s.texts.t(s.state.defs.party.name_keys[0]) + "  " + s.texts.t("party.level", {"level": s.state.party.members[0].level}),
-		"%s / B1F · 걸음 %d" % [texts.t(s.floor_def.name_key), s.state.steps], rt.slots[0]["time"]], "채운 칸: 대표 대원·Lv, 장소(층 이름 / B1F)·걸음(저장에 있는 값), 저장 시각")
+		"%s · 걸음 %d" % [texts.t("town.plaza"), s.state.steps], rt.slots[0]["time"]], "채운 칸: 대표 대원·Lv, 장소(숙소에서 기록 = 광장)·걸음(저장에 있는 값), 저장 시각")
 	check(not str(rt.slots[0]["time"]).is_empty() and not rt.load_buttons[0].disabled, "채운 칸은 불러올 수 있다")
 	check_eq(rt.card_lines(1), ["비어 있음", "", ""], "빈 칸: 「비어 있음」")
 	check(rt.load_buttons[1].disabled, "빈 칸 불러오기: 못 누름")

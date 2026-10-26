@@ -439,6 +439,9 @@ func test_wiped_is_saved_and_reopened() -> void:
 	await kit.press_key(KEY_ESCAPE)
 	check_eq(s.modal.kind, "wipe", "Esc 로 전멸 창을 닫지 않는다")
 	await kit.click(kit.center_of(kit.modal_button(s.texts.t("wipe.new_game"))))
+	# M3 A2b: 「처음부터」 뒤에 지도 물음(답하기 전에는 전멸 그대로). 「아니오」 = 새 게임 그대로.
+	check_eq([s.modal.kind, s.state.wiped], ["wipe_map", true], "새 게임 → 지도 물음")
+	await kit.click(kit.center_of(s.modal.find_child("WipeMapNo", true, false)))
 	check(not s.state.wiped, "새 게임")
 	check_eq(s.state.party.at, START, "시작 칸")
 	_check_auto_matches(s, "전멸 뒤 새 게임")

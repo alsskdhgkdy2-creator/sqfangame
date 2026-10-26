@@ -134,7 +134,7 @@ var dialog_buttons: Array[PartyButton] = []
 var dir_pad: VirtualPad
 var key_pad: VirtualPad
 var key_pad_stacked: VirtualPad
-var _dialog_text := Label.new()
+var _dialog_text: Label
 var _notice_left := 0.0
 ## 확인 창의 둘째 단추 뒤에 할 일(버리기 뒤 탭·대원 바꾸기·닫기, 새 게임).
 var _after_discard: Callable
@@ -304,37 +304,18 @@ func _place_pads() -> void:
 
 
 func _build_dialog() -> void:
-	dialog_layer = Control.new()
-	dialog_layer.name = "Dialog"
-	dialog_layer.mouse_filter = MOUSE_FILTER_STOP  # 떠 있는 동안 뒤 화면은 포인터를 받지 않는다
-	dialog_layer.visible = false
-	add_child(dialog_layer)
-	# 창 바로 뒤에서 창 아래 화면 전체를 어둡게 하고 누르기를 막는다(07 §9.9 E1 ①, 원작 알림 띠도 뒤를 어둡게 한다: research 08 §6.1).
-	dialog_dim = ColorRect.new()
-	dialog_dim.name = "DialogDim"
-	dialog_dim.color = DIALOG_DIM
-	dialog_dim.mouse_filter = MOUSE_FILTER_STOP
-	dialog_layer.add_child(dialog_dim)
-	dialog_dim.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	# 창은 양 끝이 굽은 알림 띠(불투명, 스킬의 확정·버리기와 기록의 새 게임이 같이 쓴다).
-	dialog_panel = BannerBox.new()
-	dialog_panel.name = "DialogPanel"
-	dialog_layer.add_child(dialog_panel)
-	_dialog_text.add_theme_font_size_override("font_size", DIALOG_TEXT_FS)
-	_dialog_text.add_theme_color_override("font_color", ListParts.BANNER_TEXT)
-	_dialog_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_dialog_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_dialog_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	dialog_layer.add_child(_dialog_text)
-	for i in 2:
-		var b := PartyButton.new()
-		b.name = "DialogBack" if i == 0 else "DialogOk"
-		b.skin = "cmd"  # 원작 습득 확인 창(jp_guide2_img2): 커서 쪽 노랑 알약, 다른 쪽 청록
-		b.size = DIALOG_BUTTON
-		b.activated.connect(func() -> void: handle("dialog_pick", i))
-		dialog_layer.add_child(b)
-		dialog_buttons.append(b)
-
+	# 공용 확인 창 부품 K(ConfirmBand, D28: 타이틀 새 게임 확인과 같은 부품). 노드 이름(Dialog·DialogDim·DialogPanel·DialogText·
+	# DialogBack·DialogOk)·자리·크기는 그대로다. 창 바로 뒤에서 아래 화면 전체를 어둡게 하고 누르기를 막는다(07 §9.9 E1 ①,
+	# 원작 알림 띠도 뒤를 어둡게 한다: research 08 §6.1). 창은 양 끝이 굽은 알림 띠(스킬의 확정·버리기와 기록의 새 게임이 같이 쓴다).
+	# 단추는 원작 습득 확인 창(jp_guide2_img2)처럼 커서 쪽 노랑 알약, 다른 쪽 청록. 고름·글은 이 메뉴가 정한다(dialog_kind·dialog_pick).
+	var band := ConfirmBand.new()
+	band.route = func(i: int) -> void: handle("dialog_pick", i)
+	add_child(band)
+	dialog_layer = band
+	dialog_dim = band.dim
+	dialog_panel = band.panel
+	dialog_buttons = band.buttons
+	_dialog_text = band.label
 
 func reason_text(code: String) -> String:
 	return texts.t("growth.reason." + code)
@@ -826,6 +807,8 @@ func pad_state() -> Dictionary:
 func _may_accept(a: Array) -> bool:
 	if page == "sub" and dialog_kind.is_empty() and tab == 3 and a[0] == "cursor":
 		return items_tab.can_move()  # 소지품: 커서 칸이 없으면(디버그 아님, 빈 가방) ↑↓ 흐림. 끝에서는 켜 둔다
+	if page == "sub" and dialog_kind.is_empty() and tab == 4 and a[0] == "cursor_x":
+		return (records_tab.grid()[records_tab.cur_row] as Array).size() > 1  # 기록: 알약 하나뿐인 줄(새 게임)은 ←→ 흐림(타이틀과 같다)
 	if page == "sub" and dialog_kind.is_empty() and a[0] == "confirm":
 		match tab:
 			3:
@@ -1041,16 +1024,7 @@ func _layout() -> void:
 		s = get_viewport_rect().size
 	for t in tabs:
 		t.call("place", s)  # 하위 화면은 모두 앵커로 화면 전체에 붙는다
-	dialog_layer.position = Vector2.ZERO
-	dialog_layer.size = s
-	var dr := Rect2(((s - DIALOG_SIZE) / 2.0).round(), DIALOG_SIZE)
-	dialog_panel.position = dr.position
-	dialog_panel.size = dr.size
-	_dialog_text.position = dr.position + DIALOG_TEXT.position
-	_dialog_text.size = DIALOG_TEXT.size
-	var by := dr.position.y + DIALOG_BUTTONS_TOP
-	dialog_buttons[1].position = Vector2(dr.end.x - DIALOG_BUTTONS_RIGHT - DIALOG_BUTTON.x, by)
-	dialog_buttons[0].position = Vector2(dialog_buttons[1].position.x - DIALOG_BUTTON_GAP - DIALOG_BUTTON.x, by)
+	(dialog_layer as ConfirmBand).fit(s)
 	_place_pads()
 	queue_redraw()
 
@@ -1137,7 +1111,8 @@ func debug_info(css: Callable) -> Dictionary:
 			"list_row": equip_tab.list_cursor if equip_tab.list_open else -1, "items": items_tab.cursor},
 		"dialog": dialog_kind, "dialog_pick": dialog_pick, "sp_line": skill_tab._sp_label.text if tab == 1 else "",
 		"notice": notice, "strip": notice_line_text() if notice_line.visible else "", "debug": debug, "supply_open": items_tab.supply_open, "equip_rows": rows,
-		"records": {"cursor": [records_tab.cur_row, records_tab.cur_col], "cards": [0, 1, 2].map(records_tab.card_lines)} if tab == 4 else {},
+		"records": {"cursor": [records_tab.cur_row, records_tab.cur_col], "cards": [0, 1, 2].map(records_tab.card_lines),
+			"save_ok": records_tab.save_ok(), "help": records_tab.help_text()} if tab == 4 else {},
 		"buttons": buttons, "nodes": nodes, "pad": pad_state(),
 	}
 
