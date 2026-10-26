@@ -1,0 +1,137 @@
+{
+  "id": "encounter.b3f",
+  "formations": [
+    {
+      "id": "formation.b3.beetles_serpent",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.clamp_beetle",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.clamp_beetle",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        }
+      ]
+    },
+    {
+      "id": "formation.b3.moles_moths",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.cable_moth",
+          "row": "back"
+        },
+        {
+          "enemy": "enemy.cable_moth",
+          "row": "back"
+        }
+      ]
+    },
+    {
+      "id": "formation.b3.serpents_bloom",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.spore_bloom",
+          "row": "back"
+        },
+        {
+          "enemy": "enemy.spore_bloom",
+          "row": "back"
+        }
+      ]
+    },
+    {
+      "id": "formation.b3.beetle_moles",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.clamp_beetle",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.spore_bloom",
+          "row": "back"
+        }
+      ]
+    },
+    {
+      "id": "formation.b3.full_mix",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.neon_rat",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.cable_moth",
+          "row": "back"
+        },
+        {
+          "enemy": "enemy.spore_bloom",
+          "row": "back"
+        }
+      ]
+    }
+  ],
+  "table": [
+    {
+      "formation": "formation.b3.beetles_serpent",
+      "weight": 25
+    },
+    {
+      "formation": "formation.b3.moles_moths",
+      "weight": 25
+    },
+    {
+      "formation": "formation.b3.serpents_bloom",
+      "weight": 20
+    },
+    {
+      "formation": "formation.b3.beetle_moles",
+      "weight": 15
+    },
+    {
+      "formation": "formation.b3.full_mix",
+      "weight": 15
+    }
+  ]
+}

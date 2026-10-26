@@ -47,7 +47,7 @@ func test_keep_map_rules() -> void:
 	check_eq(_rest(target.floor_states["f1_test"]), tf1_rest, "가: f1 세계·방문 기록은 대상 것")
 	var tf2: FloorState = target.floor_states["f2_test"]
 	check_eq(_ann(tf2), _ann(wiped.floor_states["f2_test"]), "가: f2 그림 = 전멸 쪽(메모 「아래층」)")
-	check_eq(_rest(tf2), [{"passages_found": [], "shortcuts_open": []}, {"edges": {}, "visited": []}], "가: 더한 f2 의 세계·방문 기록은 비었다")
+	check_eq(_rest(tf2), [{"passages_found": [], "shortcuts_open": [], "locks_open": [], "chests_opened": []}, {"edges": {}, "visited": []}], "가: 더한 f2 의 세계·방문 기록은 비었다")
 	var r := SaveCodec.decode(SaveCodec.encode(target), defs)
 	check(r.ok() and SaveCodec.state_hash(r.state) == SaveCodec.state_hash(target), "가: 저장 → 읽기 같은 해시 %s" % r.error)
 	check_eq(SaveCodec.state_hash(wiped), wiped_hash, "가: 전멸 쪽 상태는 그대로")

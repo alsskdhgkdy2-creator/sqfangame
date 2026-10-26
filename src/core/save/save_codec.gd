@@ -1,12 +1,14 @@
-## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
+## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
 class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 6
-const RULES := "m3t"
-## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~5판은 읽을 때 6판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1·A2).
-const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t"}
+const SCHEMA := 7
+const RULES := "m3k"
+## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~6판은 읽을 때 7판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1·A2·A3).
+const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k"}
+## 7판 층 기록의 world 키(M3 A3: 연 잠긴 문·연 보물상자가 더해졌다). 6판까지는 앞의 둘만 보고 다른 키는 보지 않는다.
+const WORLD_KEYS := ["shortcuts_open", "passages_found", "locks_open", "chests_opened"]
 ## 5판 층 기록(floor_states.<층 ID>)의 키. 1~4판은 이 셋이 state 바로 아래에 있다(층 하나).
 const FLOOR_STATE_KEYS := ["world", "knowledge", "annotation"]
 ## 1판 검사에 쓰는 옛 대원 표(06 §8.6 2단계): [id, 최대 HP], 칸 순서.
@@ -27,8 +29,10 @@ class LoadResult:
 	var error := ""
 	var saved_at := ""
 	var generation := 0
-	## 읽은 원본의 schema(1~4 이면 이전한 결과다).
+	## 읽은 원본의 schema(1~6 이면 이전한 결과다).
 	var from_schema := 0
+	## 은퇴한 층(시험 층)에 있던 저장을 새 미궁으로 옮겼는지(M3 A3, 화면이 한 번 알린다).
+	var relocated := false
 
 	func ok() -> bool:
 		return error.is_empty() and state != null
@@ -109,7 +113,7 @@ static func now_utc() -> String:
 
 
 ## 5판 state(M3 A1): 지금 층(floor)·위치는 전체 몫이고, 세계 상태·방문 기록·지도 그림은 들어가 본 층마다 floor_states.<층 ID> 에 둔다.
-## 6판(M3 A2): 파티가 있는 곳(location: town·labyrinth)과 날(day)을 더한다.
+## 6판(M3 A2): 파티가 있는 곳(location: town·labyrinth)과 날(day)을 더한다. 7판(M3 A3): 귀중품(key_items, 정렬한 집합 배열).
 static func state_to_dict(s: ExplorationState) -> Dictionary:
 	var members: Array = []
 	for m in s.party.members:
@@ -129,6 +133,7 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 		"encounter": {"danger": s.encounter.danger, "threshold": s.encounter.threshold, "pending": s.encounter.pending},
 		"materials": s.materials.duplicate(),
 		"gear_bag": s.gear_bag.duplicate(),
+		"key_items": _str_set(s.key_items),
 		"money": s.money,
 		"shop": {"sold": s.shop.sold.duplicate(), "pool": s.shop.pool.duplicate(), "bought": s.shop.bought_list()},
 		"battle": s.battle.to_dict() if s.battle != null else null,
@@ -138,7 +143,7 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 	}
 
 
-## 한 층 기록 → {world, knowledge, annotation}(4판까지의 같은 이름 객체와 모양이 같다).
+## 한 층 기록 → {world, knowledge, annotation}(4판까지의 같은 이름 객체와 모양이 같다). 7판 world 는 연 잠긴 문·연 상자 id 도 쓴다.
 static func floor_state_to_dict(r: FloorState) -> Dictionary:
 	var k_edges := {}
 	for e in r.knowledge.edges:
@@ -158,7 +163,8 @@ static func floor_state_to_dict(r: FloorState) -> Dictionary:
 	for c in a.memos:
 		memos[GridKey.cell(c)] = a.memos[c]
 	return {
-		"world": {"shortcuts_open": _edge_set(r.world.shortcuts_open), "passages_found": _edge_set(r.world.passages_found)},
+		"world": {"shortcuts_open": _edge_set(r.world.shortcuts_open), "passages_found": _edge_set(r.world.passages_found),
+			"locks_open": _edge_set(r.world.locks_open), "chests_opened": _str_set(r.world.chests_opened)},
 		"knowledge": {"visited": _cell_set(r.knowledge.visited), "edges": k_edges},
 		"annotation": {"floors": a_floors, "edges": a_edges, "auto_edges": _edge_set(a.auto_edges), "icons": icons, "memos": memos},
 	}
@@ -166,6 +172,13 @@ static func floor_state_to_dict(r: FloorState) -> Dictionary:
 
 static func _edge_set(d: Dictionary) -> Array[String]:
 	return GridKey.sorted(d.keys().map(func(e: Vector3i) -> String: return GridKey.edge(e)))
+
+
+static func _str_set(d: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	out.assign(d.keys())
+	out.sort()
+	return out
 
 
 static func _cell_set(d: Dictionary) -> Array[String]:
@@ -185,10 +198,17 @@ static func decode(text: String, defs: GameDefs) -> LoadResult:
 	if typeof(json.data) != TYPE_DICTIONARY:
 		r.error = "맨 위가 객체가 아니다"
 		return r
-	var doc: Dictionary = json.data
+	return _decode_doc(json.data, defs)
+
+
+## 머리 검사부터 끝까지(decode 의 몸). 옛 저장이 은퇴한 층을 가리키면 새 미궁으로 옮긴다(M3 A3, _relocate).
+static func _decode_doc(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
 	r.error = _check_header(doc)
 	if not r.error.is_empty():
 		return r
+	if _names_retired(doc, defs):
+		return _relocate(doc, defs)
 	match to_int(doc["schema"]):
 		1:
 			return migrate_v1(doc, defs)
@@ -200,6 +220,8 @@ static func decode(text: String, defs: GameDefs) -> LoadResult:
 			return migrate_v4(doc, defs)
 		5:
 			return migrate_v5(doc, defs)
+		6:
+			return migrate_v6(doc, defs)
 	var s := ExplorationState.new()
 	r.error = _read_state(doc["state"], defs, [], SCHEMA, s)
 	if not r.error.is_empty():
@@ -330,6 +352,71 @@ static func migrate_v5(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
+## 6판 → 7판(M3 A3). doc 은 머리 검사를 통과한 6판 문서. ① 6판 규칙으로 다 검사 ② 원본 saved_at·generation 으로 7판 encode
+## (6판 저장에는 열쇠·잠긴 문·상자가 없다: 빈 key_items·빈 locks_open·chests_opened) ③ 7판 읽기를 그대로 거친 결과만 돌려준다.
+static func migrate_v6(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, [], 6, old)
+	if not err.is_empty():
+		r.error = "6판 검사 실패: " + err
+		return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "6판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 6
+	return again
+
+
+## 문서의 지금 층이 지금 묶음에는 없고 은퇴한 묶음(defs.retired)에 있는지(M3 A3). 두 묶음의 층 ID 는 겹치지 않는다(GameDefs 가 본다).
+static func _names_retired(doc: Dictionary, defs: GameDefs) -> bool:
+	if defs.retired == null:
+		return false
+	var fv: Variant = doc["state"].get("floor")
+	return typeof(fv) == TYPE_STRING and defs.floor_by_id(fv) == null and defs.retired.floor_by_id(fv) != null
+
+
+## 은퇴한 층(시험 층)의 저장을 새 미궁으로 옮긴다(M3 A3, 설계 §4.3).
+## ① 은퇴한 묶음의 정의로 그 판의 길(1~6판 이전 포함)을 그대로 다 검사한다 — 실패하면 「옛 시험 층 저장 검사 실패」, 아무것도 바꾸지 않는다.
+## ② 새 상태: 대원(레벨·경험치·스킬·장비·HP·TP)·소지금·소재·가방·상점·귀중품·날·난수·걸음·한계값은 그대로, 위험도 0, 전투 대기는 버린다.
+##    마을(첫 층 시작 칸)에 둔다. 전멸한 저장은 첫 층 시작 칸에서 전멸 그대로(전멸 창이 뜬다). 층 기록은 첫 층의 빈 것 하나 —
+##    시험 층의 세계·방문 기록·지도 그림은 남지 않는다(화면이 알린다).
+## ③ 원본 saved_at·generation 으로 지금 판 encode → 지금 정의로 다시 읽은 결과만 돌려준다(from_schema 는 원본 판, relocated 참).
+static func _relocate(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var old := _decode_doc(doc, defs.retired)
+	if not old.ok():
+		r.error = "옛 시험 층 저장 검사 실패: " + old.error
+		return r
+	var o := old.state
+	var n := ExplorationState.new()
+	var first := defs.first_floor()
+	n.defs = defs
+	n.enter_floor(first)
+	n.party.at = first.start_at
+	n.party.facing = first.start_facing
+	n.party.members = o.party.members
+	n.materials = o.materials.duplicate()
+	n.gear_bag = o.gear_bag.duplicate()
+	n.money = o.money
+	n.shop = o.shop
+	n.key_items = o.key_items.duplicate()
+	n.day = o.day
+	n.rng.set_state(o.rng.get_state())
+	n.steps = o.steps
+	n.encounter.threshold = o.encounter.threshold
+	n.wiped = o.wiped
+	n.location = ExplorationState.LABYRINTH if o.wiped else ExplorationState.TOWN
+	var again := decode(encode(n, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "옛 시험 층 저장 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = old.from_schema
+	again.relocated = true
+	return again
+
+
 ## 3판 → 5판(08 §4, 4판 문서를 거치지 않는다). doc 은 머리 검사를 통과한 3판 문서.
 ## ① 3판 원본을 3판 규칙으로 다 검사(전투 객체도 만든다) ② 통과한 임시 상태에 시작 소지금·빈 상점
 ## ③ 원본 saved_at·generation 으로 5판 encode ④ 5판 읽기를 그대로 거친 결과만 돌려준다.
@@ -378,6 +465,7 @@ static func _check_header(doc: Dictionary) -> String:
 ## schema 4: gear_bag 다음에 money·shop 을 읽는다(08 §4).
 ## schema 5: 층 기록이 floor_states.<층 ID> 에 있다(M3 A1). 1~4판은 state 바로 아래의 world·knowledge·annotation 이 state.floor 층의 기록이다.
 ## schema 6: location·day(M3 A2). 마을이면 층이 첫 층·위치가 그 시작 칸이고 전투 대기·전투·전멸이 아니다. 5판 이하는 미궁·1일째.
+## schema 7: key_items(M3 A3), 층 기록 world 의 locks_open·chests_opened(키가 정확히 WORLD_KEYS), 열쇠·상자·잠긴 문 맞물림(_check_keys).
 ## 위치(party.at)와 전투 편성은 지금 층(state.floor)으로, 층 기록은 각자 그 층으로 검사한다.
 ## schema 2 의 battle 은 검사만 하고 만들지 않는다(옮긴 대원으로 migrate_v2 가 만든다).
 static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int, s: ExplorationState) -> String:
@@ -411,6 +499,12 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 		err = _read_money(d, s)
 		if err.is_empty():
 			err = _read_shop(d, defs, s)
+		if not err.is_empty():
+			return err
+	if schema >= 7:
+		err = _read_key_items(d, defs, s)
+		if err.is_empty():
+			err = _check_keys(s)
 		if not err.is_empty():
 			return err
 	if not d.has("battle"):
@@ -530,7 +624,7 @@ static func _read_part(part: String, d: Dictionary, s: ExplorationState) -> Stri
 ## 값은 키가 정확히 world·knowledge·annotation 인 객체이며 각자 그 층 정의로 검사한다.
 static func _read_floor_states(d: Dictionary, s: ExplorationState, schema: int) -> String:
 	if schema < 5:
-		return _read_floor_state(d, s.floor_states[s.floor_def.id])
+		return _read_floor_state(d, s.floor_states[s.floor_def.id], schema)
 	var v: Variant = d.get("floor_states")
 	if typeof(v) != TYPE_DICTIONARY:
 		return "floor_states 가 객체가 아니다"
@@ -551,14 +645,14 @@ static func _read_floor_states(d: Dictionary, s: ExplorationState, schema: int) 
 				return "floor_states.%s.%s 는 모르는 필드다" % [id, str(k)]
 		if not s.floor_states.has(id):
 			s.floor_states[id] = FloorState.new(g)
-		var err := _read_floor_state(rv, s.floor_states[id])
+		var err := _read_floor_state(rv, s.floor_states[id], schema)
 		if not err.is_empty():
 			return "floor_states.%s.%s" % [id, err]
 	return ""
 
 
-static func _read_floor_state(d: Dictionary, r: FloorState) -> String:
-	var err := _read_world(d, r)
+static func _read_floor_state(d: Dictionary, r: FloorState, schema: int = SCHEMA) -> String:
+	var err := _read_world(d, r, schema)
 	if err.is_empty():
 		err = _read_knowledge(d, r)
 	if err.is_empty():
@@ -679,13 +773,74 @@ static func _read_members_v3(p: Dictionary, s: ExplorationState) -> String:
 	return ""
 
 
-static func _read_world(d: Dictionary, s: FloorState) -> String:
+static func _read_world(d: Dictionary, s: FloorState, schema: int = SCHEMA) -> String:
 	var w := _dict(d, "world")
+	if schema >= 7:
+		if typeof(d.get("world")) != TYPE_DICTIONARY:
+			return "world 가 객체가 아니다"
+		for k in WORLD_KEYS:
+			if not w.has(k):
+				return "world.%s 가 없다" % k
+		for k in w:
+			if not WORLD_KEYS.has(k):
+				return "world.%s 는 모르는 필드다" % str(k)
 	var err := _read_edge_set(w.get("shortcuts_open"), s.floor_def, FloorModel.Edge.SHORTCUT, s.world.shortcuts_open)
 	if not err.is_empty():
 		return "world.shortcuts_open: " + err
 	err = _read_edge_set(w.get("passages_found"), s.floor_def, FloorModel.Edge.PASSAGE, s.world.passages_found)
-	return "" if err.is_empty() else "world.passages_found: " + err
+	if not err.is_empty() or schema < 7:
+		return "" if err.is_empty() else "world.passages_found: " + err
+	err = _read_edge_set(w["locks_open"], s.floor_def, FloorModel.Edge.LOCK, s.world.locks_open)
+	if not err.is_empty():
+		return "world.locks_open: " + err
+	for e in s.world.locks_open:
+		if s.floor_def.is_sealed(e):
+			return "world.locks_open: %s 는 봉인 문이라 열릴 수 없다" % GridKey.edge(e)
+	if typeof(w["chests_opened"]) != TYPE_ARRAY:
+		return "world.chests_opened: 배열이 아니다"
+	for id in w["chests_opened"]:
+		if typeof(id) != TYPE_STRING or not s.floor_def.chests.has(id):
+			return "world.chests_opened: %s 는 이 층의 상자가 아니다" % str(id)
+		if s.world.chests_opened.has(id):
+			return "world.chests_opened: %s 가 두 번 있다" % id
+		s.world.chests_opened[id] = true
+	return ""
+
+
+## 7판 key_items(M3 A3): 서로 겹치지 않는 아는 귀중품 ID 문자열의 배열(차례는 보지 않는다. 쓸 때 정렬한다).
+static func _read_key_items(d: Dictionary, defs: GameDefs, s: ExplorationState) -> String:
+	if typeof(d.get("key_items")) != TYPE_ARRAY:
+		return "key_items 가 배열이 아니다"
+	for id in d["key_items"]:
+		if typeof(id) != TYPE_STRING or not defs.battle.key_items.has(id):
+			return "key_items 의 %s 는 모르는 귀중품이다" % str(id)
+		if s.key_items.has(id):
+			return "key_items 에 %s 가 두 번 있다" % id
+		s.key_items[id] = true
+	return ""
+
+
+## 열쇠·상자·잠긴 문 맞물림(M3 A3, 규칙이 늘 지키므로 손으로 고친 저장만 걸린다): ① 열쇠를 가졌다 ⇔ 그 열쇠가 든 상자를 열었다
+## (그 층 기록이 없으면 연 것이 아니다) ② 연 잠긴 문의 열쇠를 가졌다.
+static func _check_keys(s: ExplorationState) -> String:
+	for k in s.key_items:
+		var home := s.defs.key_chest(k)
+		if home.is_empty():
+			return "key_items 의 %s 가 든 상자가 묶음에 없다" % k
+		var rec: FloorState = s.floor_states.get(home[0].id)
+		if rec == null or not rec.world.is_chest_opened(home[1].id):
+			return "key_items 에 %s 가 있는데 그 상자 %s:%s 를 열지 않았다" % [k, home[0].id, home[1].id]
+	for id in s.floor_states:
+		var rec: FloorState = s.floor_states[id]
+		for cid in rec.world.chests_opened:
+			var c: FloorModel.Chest = rec.floor_def.chests[cid]
+			if c.item.begins_with("key.") and not s.key_items.has(c.item):
+				return "floor_states.%s.world.chests_opened 의 %s 를 열었는데 열쇠 %s 가 없다" % [id, cid, c.item]
+		for e in rec.world.locks_open:
+			var k := rec.floor_def.lock_key(e)
+			if not s.key_items.has(k):
+				return "floor_states.%s.world.locks_open 의 %s 가 열렸는데 열쇠 %s 가 없다" % [id, GridKey.edge(e), k]
+	return ""
 
 
 static func _read_knowledge(d: Dictionary, s: FloorState) -> String:

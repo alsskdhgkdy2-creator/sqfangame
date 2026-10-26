@@ -6,13 +6,14 @@ extends RefCounted
 ## STAIRS(M3 A1): 서 있는 계단으로 층을 바꾼다(화면이 확인 창 「예」 뒤에 부른다). B1F 마을 문 위면 마을로 나간다(M3 A2).
 ## ENTER(M3 A2): 마을에서 미궁 B1F 시작 칸으로 들어간다(아보르 입구 「탐사 시작」). 값이 바뀌지 않게 새 행동은 맨 뒤에 둔다.
 ## 7 은 비어 있다: 시작 칸 휴식(REST, 06 §8.8 자리표시)은 숙소 숙박(M3 A2b, TownRules.stay)으로 바뀌어 없앴고 STAIRS 는 8 그대로다.
-enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, STAIRS = 8, ENTER }
+## OPEN(M3 A3): 서 있는 칸의 닫힌 보물상자를 연다(화면이 상자 물음 「예」 뒤에 부른다).
+enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, STAIRS = 8, ENTER, OPEN }
 
 ## 행동 이름(공략 행동열 파일·디버그용) → Action.
 const ACTION_NAMES := {
 	"forward": Action.FORWARD, "back": Action.BACK, "strafe_left": Action.STRAFE_LEFT, "strafe_right": Action.STRAFE_RIGHT,
 	"turn_left": Action.TURN_LEFT, "turn_right": Action.TURN_RIGHT, "investigate": Action.INVESTIGATE,
-	"stairs": Action.STAIRS, "enter": Action.ENTER,
+	"stairs": Action.STAIRS, "enter": Action.ENTER, "open": Action.OPEN,
 }
 const AUTOMAP_OFF := "off"
 const AUTOMAP_FLOOR := "floor"
@@ -80,6 +81,8 @@ static func apply(s: ExplorationState, action: int, automap: String) -> Array[Di
 			_take_stairs(s, events, automap)
 		Action.ENTER:
 			events.append({"type": "blocked", "reason": "not_town"})
+		Action.OPEN:
+			_open_chest(s, events)
 		_:
 			_move(s, _move_dir(s.party.facing, action), action == Action.FORWARD, events, automap)
 	return events
@@ -98,13 +101,17 @@ static func look_of(floor_def: FloorModel, world: WorldState, e: Vector3i) -> St
 			return "oneway"
 		FloorModel.Edge.PASSAGE:
 			return "passage" if world.is_passage_found(e) else "wall"
+		FloorModel.Edge.LOCK:
+			return "door" if world.is_lock_open(e) else "locked"
 		_:
 			return "wall"
 
 
 ## 칸 at에서 d 방향으로 한 칸 나갈 수 있는지. 지나가면 "", 아니면 막힘 사유.
 ## 닫힌 지름길은 열 수 있는 쪽이면 shortcut_closed(정면 전진·조사는 따로 연다), 반대쪽이면 shortcut_locked.
-static func block_reason(floor_def: FloorModel, world: WorldState, at: Vector2i, d: int) -> String:
+## 닫힌 잠긴 문(M3 A3)은 봉인이면 sealed, 그 열쇠를 가졌으면(keys) lock_closed(정면 전진·조사가 연다), 아니면 locked.
+## 지나갈 수 있는지는 keys 와 상관없다(keys 는 사유 글만 가른다).
+static func block_reason(floor_def: FloorModel, world: WorldState, at: Vector2i, d: int, keys: Dictionary = {}) -> String:
 	var e := FloorModel.edge_of(at, d)
 	if not floor_def.is_cell(at + Dir.vec(d)):
 		return "wall"
@@ -119,6 +126,12 @@ static func block_reason(floor_def: FloorModel, world: WorldState, at: Vector2i,
 			if world.is_shortcut_open(e):
 				return ""
 			return "shortcut_closed" if floor_def.shortcut_opener(e) == at else "shortcut_locked"
+		FloorModel.Edge.LOCK:
+			if world.is_lock_open(e):
+				return ""
+			if floor_def.is_sealed(e):
+				return "sealed"
+			return "lock_closed" if keys.has(floor_def.lock_key(e)) else "locked"
 		_:
 			return "wall"
 
@@ -166,7 +179,7 @@ static func _observe(s: ExplorationState, e: Vector3i, automap: String) -> void:
 		return
 	if look == "wall":
 		s.annotation.auto_edge(e, "wall")
-	elif look == "door" or look == "shortcut":
+	elif look == "door" or look == "shortcut" or look == "locked":
 		s.annotation.auto_edge(e, "door")
 
 
@@ -181,6 +194,17 @@ static func _try_open_shortcut(s: ExplorationState, e: Vector3i, events: Array[D
 	return true
 
 
+## 바라본 닫힌 열쇠 문을 그 열쇠로 연다(M3 A3, 어느 쪽에서든). 열쇠는 남는다.
+static func _try_open_lock(s: ExplorationState, e: Vector3i, events: Array[Dictionary], automap: String) -> bool:
+	var f := s.floor_def
+	if f.edge_kind(e) != FloorModel.Edge.LOCK or s.world.is_lock_open(e) or f.is_sealed(e) or not s.key_items.has(f.lock_key(e)):
+		return false
+	s.world.open_lock(e)
+	_observe(s, e, automap)
+	events.append({"type": "lock_opened", "edge": e, "key": f.lock_key(e)})
+	return true
+
+
 static func _investigate(s: ExplorationState, events: Array[Dictionary], automap: String) -> void:
 	var e := FloorModel.edge_of(s.party.at, s.party.facing)
 	if s.floor_def.edge_kind(e) == FloorModel.Edge.PASSAGE and not s.world.is_passage_found(e):
@@ -190,6 +214,20 @@ static func _investigate(s: ExplorationState, events: Array[Dictionary], automap
 		events.append({"type": "passage_found", "edge": e})
 		return
 	if _try_open_shortcut(s, e, events, automap):
+		return
+	if _try_open_lock(s, e, events, automap):
+		return
+	# 바라본 닫힌 잠긴 문(열쇠가 없거나 봉인)은 그 사유를 알린다(M3 A3).
+	if s.floor_def.edge_kind(e) == FloorModel.Edge.LOCK and not s.world.is_lock_open(e):
+		events.append({"type": "blocked", "reason": block_reason(s.floor_def, s.world, s.party.at, s.party.facing, s.key_items)})
+		return
+	# 상자 칸에서 조사하면 닫힌 상자는 다시 묻고, 연 상자는 「빈 상자」(M3 A3).
+	var chest := s.floor_def.chest_at(s.party.at)
+	if chest != null:
+		if s.world.is_chest_opened(chest.id):
+			events.append({"type": "chest_empty", "chest": chest.id})
+		else:
+			events.append({"type": "chest", "chest": chest.id})
 		return
 	# 계단 위에서 조사하면 계단 확인을 다시 묻는다(거절·전투·새로고침 뒤, M3 A1).
 	if _stairs_event(s, events):
@@ -201,9 +239,11 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 	var f := s.floor_def
 	if forward and _try_open_shortcut(s, FloorModel.edge_of(s.party.at, d), events, automap):
 		return
+	if forward and _try_open_lock(s, FloorModel.edge_of(s.party.at, d), events, automap):
+		return
 	var path := move_path(f, s.world, s.party.at, d)
 	if path.is_empty():
-		events.append({"type": "blocked", "reason": block_reason(f, s.world, s.party.at, d)})
+		events.append({"type": "blocked", "reason": block_reason(f, s.world, s.party.at, d, s.key_items)})
 		return
 	for i in path.size():
 		var from := s.party.at
@@ -223,8 +263,12 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 		BattleRules.start(s, formation)
 		events.append({"type": "encounter", "formation": formation})
 		return
-	# 계단 칸에서 멈췄으면(전멸·인카운트가 아닐 때만) 화면이 확인 창을 띄운다(M3 A1).
-	_stairs_event(s, events)
+	# 계단 칸에서 멈췄으면(전멸·인카운트가 아닐 때만) 화면이 확인 창을 띄운다(M3 A1). 닫힌 상자 칸이면 상자 물음(M3 A3).
+	# 계단과 상자는 한 칸에 겹치지 않는다(층 형식 검사).
+	if not _stairs_event(s, events):
+		var chest := f.chest_at(s.party.at)
+		if chest != null and not s.world.is_chest_opened(chest.id):
+			events.append({"type": "chest", "chest": chest.id})
 
 
 ## 서 있는 칸의 계단: {way, to}(계단이면 짝 층 ID, B1F 마을 문이면 to = "town", M3 A2). 아니면 빈 사전.
@@ -237,6 +281,55 @@ static func stair_here(s: ExplorationState) -> Dictionary:
 	if s.defs != null and s.defs.is_gate(s.floor_def, s.party.at):
 		return {"way": "up", "to": ExplorationState.TOWN}
 	return {}
+
+
+## 서 있는 칸의 물음(M3 A3): 계단(마을 문 포함)이면 {kind: "stairs", way, to}, 닫힌 상자면 {kind: "chest", chest: id}, 아니면 빈 사전.
+## 화면이 남은 물음이 아직 맞는지 볼 때 쓴다.
+static func question_here(s: ExplorationState) -> Dictionary:
+	var st := stair_here(s)
+	if not st.is_empty():
+		st["kind"] = "stairs"
+		return st
+	if s.in_town():
+		return {}
+	var chest := s.floor_def.chest_at(s.party.at)
+	if chest != null and not s.world.is_chest_opened(chest.id):
+		return {"kind": "chest", "chest": chest.id}
+	return {}
+
+
+## 서 있는 칸의 닫힌 상자를 연다(M3 A3). 상자가 없거나 이미 열었으면 막힘 not_chest. 넣을 자리가 없으면(소재 9999·가방 99·소지금 상한)
+## 아무것도 바꾸지 않고 chest_full(상자는 닫힌 채 남는다, 일부만 꺼내지 않는다). 걸음·위험도·난수는 그대로다.
+static func _open_chest(s: ExplorationState, events: Array[Dictionary]) -> void:
+	var chest := s.floor_def.chest_at(s.party.at)
+	if chest == null or s.world.is_chest_opened(chest.id):
+		events.append({"type": "blocked", "reason": "not_chest"})
+		return
+	if chest.item.is_empty():
+		if s.money + chest.money > BattleLimits.MONEY_MAX:
+			events.append({"type": "chest_full", "chest": chest.id, "item": "", "money": chest.money})
+			return
+		s.money += chest.money
+		s.world.open_chest(chest.id)
+		events.append({"type": "chest_opened", "chest": chest.id, "money": chest.money})
+		return
+	var item := chest.item
+	if item.begins_with("key."):
+		s.key_items[item] = true
+	elif item.begins_with("equip."):
+		var have: int = s.gear_bag.get(item, 0)
+		if have + chest.count > BattleLimits.BAG_MAX:
+			events.append({"type": "chest_full", "chest": chest.id, "item": item})
+			return
+		s.gear_bag[item] = have + chest.count
+	else:
+		var have: int = s.materials.get(item, 0)
+		if have + chest.count > BattleLimits.MATERIAL_MAX:
+			events.append({"type": "chest_full", "chest": chest.id, "item": item})
+			return
+		s.materials[item] = have + chest.count
+	s.world.open_chest(chest.id)
+	events.append({"type": "chest_opened", "chest": chest.id, "item": item, "count": chest.count})
 
 
 ## 서 있는 칸이 계단(마을 문 포함)이면 stairs 이벤트(way·to)를 더하고 true.

@@ -1,0 +1,14 @@
+{
+  "key_items": [
+    {
+      "id": "key.moss_card",
+      "name_key": "key.moss_card",
+      "desc_key": "key.moss_card.desc"
+    },
+    {
+      "id": "key.relay_fuse",
+      "name_key": "key.relay_fuse",
+      "desc_key": "key.relay_fuse.desc"
+    }
+  ]
+}

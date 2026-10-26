@@ -25,6 +25,8 @@ const CLASS_KEYS := ["id", "name_key", "levels", "attack", "resist", "ailment_vu
 const TREE_KEYS := ["skill", "pos", "requires", "min_level"]
 const EQUIP_KEYS := ["id", "name_key", "kind", "price", "atk", "matk", "def", "mdef", "stats", "resist", "ailment_vuln", "bind_vuln"]
 const MATERIAL_KEYS := ["id", "name_key", "sell"]
+## 귀중품(열쇠, M3 A3, data/items/key_items.json): 값이 없고 팔 수 없다.
+const KEY_ITEM_KEYS := ["id", "name_key", "desc_key"]
 ## 상점 파일(08 §1.2): 위 단계 키는 모두 필수, 진열 줄은 item 필수·unlock·limited 선택.
 const SHOP_KEYS := ["id", "name_key", "stock"]
 const STOCK_KEYS := ["item"]
@@ -267,6 +269,8 @@ var encounters := {}
 var materials := {}
 ## 소재 ID → 판매값(08 §1.1)
 var material_sell := {}
+## 귀중품(열쇠) ID → {name_key, desc_key}(M3 A3)
+var key_items := {}
 ## 상점 ID → ShopDef
 var shops := {}
 ## 장비 ID → EquipDef
@@ -279,6 +283,7 @@ var formation_ids: Array[String] = []
 var encounter_ids: Array[String] = []
 var material_ids: Array[String] = []
 var equipment_ids: Array[String] = []
+var key_item_ids: Array[String] = []
 var shop_ids: Array[String] = []
 var errors: Array[String] = []
 var warnings: Array[String] = []
@@ -350,6 +355,8 @@ static func parse(files: Dictionary) -> BattleDb:
 			"items":
 				if data.has("equipment"):
 					db._read_list(ck, data, "equipment", db._read_equipment)
+				elif data.has("key_items"):
+					db._read_list(ck, data, "key_items", db._read_key_item)
 				else:
 					db._read_list(ck, data, "materials", db._read_material)
 			"shop":
@@ -380,7 +387,7 @@ func shop(id: String) -> ShopDef:
 	return shops.get(id)
 
 
-## 모든 name_key(직업·스킬·적·소재·장비·상점). GameDefs 가 ko.json 에 있는지 본다.
+## 모든 name_key(직업·스킬·적·소재·장비·귀중품(이름·설명)·상점). GameDefs 가 ko.json 에 있는지 본다.
 func name_keys() -> Array[String]:
 	var out: Array[String] = []
 	for id in class_ids:
@@ -393,6 +400,9 @@ func name_keys() -> Array[String]:
 		out.append(materials[id])
 	for id in equipment_ids:
 		out.append(equipment[id].name_key)
+	for id in key_item_ids:
+		out.append(key_items[id]["name_key"])
+		out.append(key_items[id]["desc_key"])
 	for id in shop_ids:
 		out.append(shops[id].name_key)
 	return out
@@ -475,6 +485,18 @@ func _read_list(ck: _Ck, d: Dictionary, key: String, reader: Callable) -> void:
 			ck.err(path, "객체여야 한다")
 			continue
 		reader.call(ck, item, path)
+
+
+func _read_key_item(ck: _Ck, d: Dictionary, path: String) -> void:
+	if not ck.keys(d, path, KEY_ITEM_KEYS, []):
+		return
+	var id := ck.id_of(d, "id", path, "key.")
+	var nk := ck.str_of(d, "name_key", path)
+	var dk := ck.str_of(d, "desc_key", path)
+	if id.is_empty() or not _claim(ck, id, path):
+		return
+	key_items[id] = {"name_key": nk, "desc_key": dk}
+	key_item_ids.append(id)
 
 
 func _read_material(ck: _Ck, d: Dictionary, path: String) -> void:

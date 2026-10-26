@@ -1,0 +1,117 @@
+{
+  "id": "encounter.b2f",
+  "formations": [
+    {
+      "id": "formation.b2.serpents_moth",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.cable_moth",
+          "row": "back"
+        }
+      ]
+    },
+    {
+      "id": "formation.b2.moles_bloom",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.spore_bloom",
+          "row": "back"
+        }
+      ]
+    },
+    {
+      "id": "formation.b2.moths_beetle",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.clamp_beetle",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.cable_moth",
+          "row": "back"
+        },
+        {
+          "enemy": "enemy.cable_moth",
+          "row": "back"
+        }
+      ]
+    },
+    {
+      "id": "formation.b2.serpent_moles",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        }
+      ]
+    },
+    {
+      "id": "formation.b2.beetles",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.clamp_beetle",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.clamp_beetle",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.cable_moth",
+          "row": "back"
+        }
+      ]
+    }
+  ],
+  "table": [
+    {
+      "formation": "formation.b2.serpents_moth",
+      "weight": 25
+    },
+    {
+      "formation": "formation.b2.moles_bloom",
+      "weight": 20
+    },
+    {
+      "formation": "formation.b2.moths_beetle",
+      "weight": 20
+    },
+    {
+      "formation": "formation.b2.serpent_moles",
+      "weight": 20
+    },
+    {
+      "formation": "formation.b2.beetles",
+      "weight": 15
+    }
+  ]
+}

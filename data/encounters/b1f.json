@@ -1,0 +1,109 @@
+{
+  "id": "encounter.b1f",
+  "formations": [
+    {
+      "id": "formation.b1.rats",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.neon_rat",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.neon_rat",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.neon_rat",
+          "row": "front"
+        }
+      ]
+    },
+    {
+      "id": "formation.b1.rats_moth",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.neon_rat",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.neon_rat",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.cable_moth",
+          "row": "back"
+        }
+      ]
+    },
+    {
+      "id": "formation.b1.mole_rat_bloom",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.neon_rat",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.spore_bloom",
+          "row": "back"
+        }
+      ]
+    },
+    {
+      "id": "formation.b1.beetle_rat",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.clamp_beetle",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.neon_rat",
+          "row": "front"
+        }
+      ]
+    },
+    {
+      "id": "formation.b1.serpent_rat",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.neon_rat",
+          "row": "front"
+        }
+      ]
+    }
+  ],
+  "table": [
+    {
+      "formation": "formation.b1.rats",
+      "weight": 30
+    },
+    {
+      "formation": "formation.b1.rats_moth",
+      "weight": 25
+    },
+    {
+      "formation": "formation.b1.mole_rat_bloom",
+      "weight": 20
+    },
+    {
+      "formation": "formation.b1.beetle_rat",
+      "weight": 15
+    },
+    {
+      "formation": "formation.b1.serpent_rat",
+      "weight": 10
+    }
+  ]
+}

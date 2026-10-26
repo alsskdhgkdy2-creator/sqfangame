@@ -6,6 +6,8 @@ const F1_PATH := "res://data/floors/f1_test.json"
 const F2_PATH := "res://data/floors/f2_test.json"
 ## 실제 층 묶음(M3 A1): f1_test(B1F) · f2_test(B2F).
 const LABYRINTH_PATH := "res://data/floors/labyrinth.json"
+## 게임 층 묶음(M3 A3): b1f·b2f·b3f, 은퇴한 묶음 labyrinth.json.
+const ARBOR_PATH := "res://data/floors/arbor.json"
 const PARTY_PATH := "res://data/party/test_party.json"
 const SAVE_DIR := "user://test_saves"
 
@@ -14,6 +16,7 @@ static var _f2: FloorModel
 static var _party: PartyData
 static var _db: BattleDb
 static var _defs_by_floor := {}
+static var _arbor: GameDefs
 
 
 static func f1() -> FloorModel:
@@ -56,6 +59,13 @@ static func defs(f: FloorModel = null) -> GameDefs:
 	var d := GameDefs.assemble(set_of(f), _party, _db)
 	_defs_by_floor[f] = d
 	return d
+
+
+## 게임 층 묶음 정의(arbor.json, 은퇴한 묶음 포함, 화면 문구 검사까지). 한 번 읽어 나눠 쓴다. 오류가 있으면 null.
+static func arbor() -> GameDefs:
+	if _arbor == null:
+		_arbor = GameDefs.load_paths(ARBOR_PATH, PARTY_PATH, DATA_DIR, TextDb.load_path("res://data/text/ko.json")).defs
+	return _arbor
 
 
 static func members() -> Array[PartyState.Member]:

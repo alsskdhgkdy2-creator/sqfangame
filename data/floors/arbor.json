@@ -1,0 +1,6 @@
+{
+  "id": "labyrinth.arbor",
+  "floors": ["b1f", "b2f", "b3f"],
+  "entrance": "b1f",
+  "retired": "labyrinth.json"
+}

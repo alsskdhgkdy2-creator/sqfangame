@@ -2,7 +2,8 @@
 class_name ExplorationKnowledge
 extends RefCounted
 
-const LOOKS := ["wall", "open", "door", "shortcut", "oneway", "passage"]
+## locked(M3 A3): 닫힌 잠긴 문(열쇠 문·봉인 문). 연 열쇠 문은 door.
+const LOOKS := ["wall", "open", "door", "shortcut", "oneway", "passage", "locked"]
 
 var visited := {}  # Vector2i → true
 var edges := {}  # Vector3i → 겉모습 문자열

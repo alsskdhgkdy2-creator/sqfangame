@@ -1,0 +1,252 @@
+{
+  "floor": "b1f",
+  "note": "게임 묶음(arbor) 고정 공략. 미궁 새 게임(B1F 시작 칸 (9,18) 북쪽)에서 출발한다. 전투 대기가 되면 해결한 뒤 다음 행동을 한다. 위치는 시드와 상관없다. checkpoints 의 after 는 그때까지 한 행동 수, floor·at 은 그 뒤 층과 파티 위치. open 은 상자 열기, stairs 는 계단 오르내리기.",
+  "actions": [
+    "forward",
+    "forward",
+    "strafe_right",
+    "open",
+    "strafe_left",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "forward",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "stairs",
+    "turn_left",
+    "forward",
+    "forward",
+    "strafe_right",
+    "forward",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "back",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "strafe_right",
+    "strafe_right",
+    "open",
+    "back",
+    "strafe_left",
+    "strafe_left",
+    "strafe_left",
+    "strafe_left",
+    "strafe_left",
+    "strafe_left",
+    "back",
+    "back",
+    "back",
+    "back",
+    "back",
+    "back",
+    "back",
+    "back",
+    "back",
+    "back",
+    "strafe_left",
+    "strafe_left",
+    "strafe_left",
+    "strafe_left",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "strafe_left",
+    "stairs",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "strafe_right",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "back",
+    "strafe_left",
+    "forward",
+    "strafe_right",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "strafe_left",
+    "strafe_left",
+    "strafe_left",
+    "strafe_left",
+    "open",
+    "turn_right",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "strafe_right",
+    "forward",
+    "strafe_left",
+    "forward",
+    "forward",
+    "forward",
+    "forward",
+    "turn_left",
+    "strafe_right",
+    "forward",
+    "forward",
+    "forward",
+    "forward"
+  ],
+  "checkpoints": [
+    {
+      "after": 3,
+      "floor": "b1f",
+      "at": [
+        10,
+        16
+      ],
+      "note": "B1F 입구 상자 c1"
+    },
+    {
+      "after": 28,
+      "floor": "b1f",
+      "at": [
+        17,
+        1
+      ],
+      "note": "B1F 내려가는 계단"
+    },
+    {
+      "after": 29,
+      "floor": "b2f",
+      "at": [
+        17,
+        1
+      ],
+      "note": "B2F 도착"
+    },
+    {
+      "after": 34,
+      "floor": "b2f",
+      "at": [
+        16,
+        3
+      ],
+      "note": "B2F 잠긴 문 앞(열쇠 없음, 막힘)"
+    },
+    {
+      "after": 57,
+      "floor": "b2f",
+      "at": [
+        6,
+        14
+      ],
+      "note": "B2F 열쇠 상자"
+    },
+    {
+      "after": 80,
+      "floor": "b2f",
+      "at": [
+        16,
+        3
+      ],
+      "note": "B2F 잠긴 문을 연다(움직이지 않음)"
+    },
+    {
+      "after": 95,
+      "floor": "b2f",
+      "at": [
+        17,
+        17
+      ],
+      "note": "B2F 내려가는 계단"
+    },
+    {
+      "after": 96,
+      "floor": "b3f",
+      "at": [
+        17,
+        18
+      ],
+      "note": "B3F 도착"
+    },
+    {
+      "after": 123,
+      "floor": "b3f",
+      "at": [
+        1,
+        12
+      ],
+      "note": "B3F 열쇠 상자(얼음·피해 바닥 지나)"
+    },
+    {
+      "after": 139,
+      "floor": "b3f",
+      "at": [
+        12,
+        3
+      ],
+      "note": "B3F 관문을 연다"
+    },
+    {
+      "after": 145,
+      "floor": "b3f",
+      "at": [
+        9,
+        2
+      ],
+      "note": "B3F 봉인 문 앞(막힘)"
+    }
+  ]
+}

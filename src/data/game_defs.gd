@@ -23,6 +23,8 @@ var floor_ids: Array[String] = []
 var entrance := ""
 var party: PartyData
 var battle: BattleDb
+## 은퇴한 층 묶음(M3 A3, 층 묶음의 "retired"): 옛 저장이 가리키는 층(f1_test 등)을 읽어 새 미궁으로 옮길 때만 쓴다(SaveCodec). 없으면 null.
+var retired: GameDefs
 
 
 ## 층 묶음 파일·파티 파일·전투 정의 폴더(res://data)를 읽는다. text_db 가 있으면 name_key 가 거기 있는지 본다.
@@ -38,6 +40,29 @@ static func load_paths(labyrinth_path: String, party_path: String, data_dir: Str
 	else:
 		errs.append_array(r.errors.filter(func(e: String) -> bool: return e != "층 정의가 없다"))
 	r.errors = errs
+	if not fr.retired.is_empty():
+		var rr := _load_retired(fr.retired, party_path, db, text_db, fr.floors)
+		r.errors.append_array(rr.errors)
+		if r.defs != null and rr.ok():
+			r.defs.retired = rr.defs
+	if not r.errors.is_empty():
+		r.defs = null
+	return r
+
+
+## 은퇴한 층 묶음을 읽는다(M3 A3): 같은 전투 정의·새로 읽은 파티로 묶고, 층 ID 가 지금 묶음과 겹치지 않고 그 묶음에 retired 가 없어야 한다.
+static func _load_retired(path: String, party_path: String, db: BattleDb, text_db: TextDb, game_floors: Array[FloorModel]) -> Result:
+	var fr := FloorLoader.load_set(path)
+	var r := from_parts(fr.floors, PartyData.read_path(party_path), db, text_db, true, fr.entrance) if fr.ok() else Result.new()
+	var errs: Array[String] = []
+	errs.append_array(fr.errors)
+	errs.append_array(r.errors)
+	if not fr.retired.is_empty():
+		errs.append("retired: 은퇴한 묶음 %s 에 retired 가 또 있다" % path.get_file())
+	for f in fr.floors:
+		if game_floors.any(func(g: FloorModel) -> bool: return g.id == f.id):
+			errs.append("retired: 은퇴한 층 %s 가 지금 묶음에도 있다" % f.id)
+	r.errors.assign(errs.map(func(e: String) -> String: return e if e.begins_with("retired: ") else "retired: " + e))
 	if not r.errors.is_empty():
 		r.defs = null
 	return r
@@ -68,6 +93,8 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 					r.errors.append("%s: encounter.table: 층에 출현 표가 없다" % f.id)
 			elif not db.encounters.has(f.encounter_table):
 				r.errors.append("%s: encounter.table: 없는 출현 표 %s" % [f.id, f.encounter_table])
+	if db.ok():
+		r.errors.append_array(check_chests_and_locks(floor_list, db))
 	if text_db != null and db.ok():
 		var keys := db.name_keys()
 		keys.append_array(party.name_keys)
@@ -86,6 +113,50 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 		d.battle = db
 		r.defs = d
 	return r
+
+
+## 상자·잠긴 문 참조(M3 A3): 상자의 물건이 있는 소재·장비·귀중품인지, 열쇠는 묶음 전체에서 한 상자에만 있는지,
+## 열쇠 문의 열쇠가 귀중품이고 같은 층 상자에 있는지(층마다의 도달 분석이 실제와 같으려면 열쇠와 그 문이 한 층에 있어야 한다).
+static func check_chests_and_locks(floor_list: Array[FloorModel], db: BattleDb) -> Array[String]:
+	var out: Array[String] = []
+	var key_home := {}  # 열쇠 ID → "층:상자"
+	for f in floor_list:
+		for c in f.chest_list():
+			if c.item.is_empty():
+				continue
+			var known: bool
+			if c.item.begins_with("key."):
+				known = db.key_items.has(c.item)
+			elif c.item.begins_with("equip."):
+				known = db.equip(c.item) != null
+			else:
+				known = db.materials.has(c.item)
+			if not known:
+				out.append("%s: chests: 상자 %s 의 물건 %s 가 정의에 없다" % [f.id, c.id, c.item])
+			elif c.item.begins_with("key."):
+				if key_home.has(c.item):
+					out.append("%s: chests: 열쇠 %s 가 상자 둘에 있다(%s, %s:%s)" % [f.id, c.item, key_home[c.item], f.id, c.id])
+				else:
+					key_home[c.item] = "%s:%s" % [f.id, c.id]
+	for f in floor_list:
+		for e in f.edges_of_kind(FloorModel.Edge.LOCK):
+			var k := f.lock_key(e)
+			if k.is_empty():
+				continue
+			if not db.key_items.has(k):
+				out.append("%s: locks: 잠긴 문 %s 의 열쇠 %s 가 귀중품 정의에 없다" % [f.id, GridKey.edge(e), k])
+			elif not f.chest_list().any(func(c: FloorModel.Chest) -> bool: return c.item == k):
+				out.append("%s: locks: 잠긴 문 %s 의 열쇠 %s 가 같은 층 상자에 없다" % [f.id, GridKey.edge(e), k])
+	return out
+
+
+## 열쇠 k 가 든 상자의 [층, 상자](묶음 전체에서 하나). 없으면 [].
+func key_chest(k: String) -> Array:
+	for id in floor_ids:
+		for c in floors[id].chest_list():
+			if c.item == k:
+				return [floors[id], c]
+	return []
 
 
 ## 시험용: 검사 없이 묶는다(층 사이 검사·참조를 보지 않는다). 시험 정의(tests/fixtures.gd)만 쓴다.

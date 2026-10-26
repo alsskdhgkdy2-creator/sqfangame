@@ -114,11 +114,11 @@ func _expect_reject(mutate: Callable, needle: String, label: String) -> void:
 
 func test_rejects_bad_header() -> void:
 	_expect_reject(func(d): d["format"] = "other", "format", "형식")
-	_expect_reject(func(d): d["schema"] = 7, "schema", "새 schema")
-	_expect_reject(func(d): d["schema"] = 1, "rules", "schema 1 + rules m3t 쌍")
-	_expect_reject(func(d): d["schema"] = 3, "rules", "schema 3 + rules m3t 쌍")
-	_expect_reject(func(d): d["schema"] = 4, "rules", "schema 4 + rules m3t 쌍")
-	_expect_reject(func(d): d["schema"] = 5, "rules", "schema 5 + rules m3t 쌍")
+	_expect_reject(func(d): d["schema"] = 8, "schema", "새 schema")
+	_expect_reject(func(d): d["schema"] = 1, "rules", "schema 1 + rules m3k 쌍")
+	_expect_reject(func(d): d["schema"] = 3, "rules", "schema 3 + rules m3k 쌍")
+	_expect_reject(func(d): d["schema"] = 4, "rules", "schema 4 + rules m3k 쌍")
+	_expect_reject(func(d): d["schema"] = 5, "rules", "schema 5 + rules m3k 쌍")
 	_expect_reject(func(d): d["rules"] = "m3f", "rules", "schema 6 + rules m3f 쌍")
 	_expect_reject(func(d): d["rules"] = "m3s", "rules", "schema 6 + rules m3s 쌍")
 	_expect_reject(func(d): d["rules"] = "m2g", "rules", "schema 6 + rules m2g 쌍")

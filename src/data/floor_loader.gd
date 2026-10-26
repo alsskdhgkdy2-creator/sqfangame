@@ -6,13 +6,21 @@ extends RefCounted
 
 ## 층 ID(파일 이름이 된다).
 const FLOOR_ID_PATTERN := "^[a-z][a-z0-9_]*$"
-const SET_KEYS := ["id", "floors", "entrance"]
+const SET_KEYS := ["id", "floors", "entrance", "retired"]
+## 층 파일 맨 위 키(M3 A3부터 모르는 키는 오류: 오타로 상자·잠긴 문이 소리 없이 빠지지 않게).
+const FLOOR_KEYS := ["id", "name_key", "theme", "size", "grid", "start", "stairs", "shortcuts", "encounter", "zones", "damage_floor",
+	"locks", "chests", "reserved"]
+## 상자 ID(층 안에서 하나, 저장 키가 된다)·내용 범위(M3 A3, 기능 값).
+const CHEST_ID_PATTERN := "^[a-z0-9_]+$"
+const CHEST_COUNT_MAX := 99
+const CHEST_MONEY_MAX := 99999
+const CHEST_ITEM_PREFIXES := ["item.", "equip.", "key."]
 const STAIR_WAYS := ["up", "down"]
 
 const MAX_SIZE := 64
 const CELL_CHARS := {".": FloorModel.Cell.FLOOR, "#": FloorModel.Cell.VOID, "~": FloorModel.Cell.DAMAGE, "=": FloorModel.Cell.ICE}
-const H_CHARS := {"-": FloorModel.Edge.WALL, " ": FloorModel.Edge.OPEN, "D": FloorModel.Edge.DOOR, "L": FloorModel.Edge.SHORTCUT, "H": FloorModel.Edge.PASSAGE, "v": FloorModel.Edge.ONEWAY, "^": FloorModel.Edge.ONEWAY}
-const V_CHARS := {"|": FloorModel.Edge.WALL, " ": FloorModel.Edge.OPEN, "D": FloorModel.Edge.DOOR, "L": FloorModel.Edge.SHORTCUT, "H": FloorModel.Edge.PASSAGE, ">": FloorModel.Edge.ONEWAY, "<": FloorModel.Edge.ONEWAY}
+const H_CHARS := {"-": FloorModel.Edge.WALL, " ": FloorModel.Edge.OPEN, "D": FloorModel.Edge.DOOR, "L": FloorModel.Edge.SHORTCUT, "H": FloorModel.Edge.PASSAGE, "v": FloorModel.Edge.ONEWAY, "^": FloorModel.Edge.ONEWAY, "K": FloorModel.Edge.LOCK}
+const V_CHARS := {"|": FloorModel.Edge.WALL, " ": FloorModel.Edge.OPEN, "D": FloorModel.Edge.DOOR, "L": FloorModel.Edge.SHORTCUT, "H": FloorModel.Edge.PASSAGE, ">": FloorModel.Edge.ONEWAY, "<": FloorModel.Edge.ONEWAY, "K": FloorModel.Edge.LOCK}
 const ONEWAY_DIRS := {"v": Dir.S, "^": Dir.N, ">": Dir.E, "<": Dir.W}
 
 
@@ -31,6 +39,8 @@ class SetResult:
 	var floors: Array[FloorModel] = []
 	## 마을로 나가는 문이 있는 층 ID(M3 A2, "entrance"): 그 층의 시작 칸이 마을 입구다. 없으면 "".
 	var entrance := ""
+	## 옛 저장이 가리킬 수 있는 은퇴한 층 묶음 파일 경로(M3 A3, "retired": 같은 폴더의 파일 이름). 없으면 "".
+	var retired := ""
 	var errors: Array[String] = []
 
 	func ok() -> bool:
@@ -60,6 +70,12 @@ static func load_set(path: String) -> SetResult:
 			r.errors.append("%s: entrance 는 층 ID 문자열이어야 한다" % file)
 		else:
 			r.entrance = data["entrance"]
+	if data.has("retired"):
+		var rv: Variant = data["retired"]
+		if typeof(rv) != TYPE_STRING or not str(rv).ends_with(".json") or str(rv).contains("/") or str(rv).contains("\\") or str(rv) == file:
+			r.errors.append("%s: retired 는 같은 폴더의 다른 층 묶음 파일 이름(….json)이어야 한다" % file)
+		else:
+			r.retired = path.get_base_dir().path_join(rv)
 	if typeof(data.get("floors")) != TYPE_ARRAY or data["floors"].is_empty():
 		r.errors.append("%s: floors 는 층 ID 가 하나 이상인 배열이어야 한다" % file)
 		return r
@@ -169,7 +185,9 @@ const MAX_ANALYSIS_NODES := 50000
 enum Reach { NO, YES, UNKNOWN }
 
 
-## 도달·갇힘 분석 경고 목록. 세계 상태는 찾은 숨은 통로·연 지름길의 집합(비트)이고 늘기만 한다.
+## 도달·갇힘 분석 경고 목록. 세계 상태는 찾은 숨은 통로·연 지름길·연 열쇠 문·가진 열쇠의 집합(비트)이고 늘기만 한다(M3 A3: 열쇠는
+## 쓰지 않고 남으며, 열쇠 문과 그 열쇠 상자는 같은 층에 있다 — GameDefs 가 본다. 그래서 층마다의 분석이 실제 규칙과 같다).
+## 봉인 문은 비트가 아니라 벽이고, 예약 구역(reserved) 칸은 닿지 않아도 경고하지 않으며 닿으면 경고한다.
 ## 들어오는 곳(entries: 시작 칸, 계단 칸 — 계단으로 오면 그 계단 칸에 선다)에서 닿을 수 없는 칸(미끄러져 지나간 칸은 닿은 것),
 ## 어떤 상태로도 나가는 곳(exits: 시작 칸, 올라가는 계단)에 가지 못하는 (칸, 상태)(갇힘). 내려가는 계단만 닿는 곳은 갇힘이다:
 ## 내려갔다 올라오면 같은 계단 칸에 다시 선다.
@@ -178,7 +196,7 @@ static func analyze(f: FloorModel, source: String = "", budget: int = MAX_ANALYS
 	var out: Array[String] = []
 	var bits := _world_bits(f)
 	if bits.size() > MAX_WORLD_BITS:
-		out.append("%s: 분석 미완료: 숨은 통로·지름길이 %d개라 세계 상태가 4096 을 넘는다" % [source, bits.size()])
+		out.append("%s: 분석 미완료: 숨은 통로·지름길·잠긴 문·열쇠가 %d개라 세계 상태가 4096 을 넘는다" % [source, bits.size()])
 		return out
 	var g := _explore(f, entries(f), 0, bits, budget, {})
 	if not g["complete"]:
@@ -186,6 +204,10 @@ static func analyze(f: FloorModel, source: String = "", budget: int = MAX_ANALYS
 		return out
 	var touched: Dictionary = g["touched"]
 	for c in f.cells():
+		if f.is_reserved(c):
+			if touched.has(c):
+				out.append("%s: 예약 칸 %d:%d 에 닿는다" % [source, c.x, c.y])
+			continue
 		if not touched.has(c):
 			out.append("%s: 칸 %d:%d 에 %s 닿을 수 없다" % [source, c.x, c.y, "시작 칸에서" if f.stairs.is_empty() else "들어오는 곳(시작 칸·계단)에서"])
 	var back := _returning(f, g, exits(f))
@@ -220,9 +242,9 @@ static func exits(f: FloorModel) -> Dictionary:
 	return out
 
 
-## 칸 at 에 세계 상태 world 로 서 있을 때 나가는 곳(시작 칸·올라가는 계단)으로 갈 길이 있는지(조사·지름길 열기 포함).
-## analyze 와 같은 한도를 쓰고, 넘으면 Reach.UNKNOWN.
-static func can_return(f: FloorModel, at: Vector2i, world: WorldState, budget: int = MAX_ANALYSIS_NODES) -> Reach:
+## 칸 at 에 세계 상태 world 로, 열쇠 keys(열쇠 ID → true)를 가지고 서 있을 때 나가는 곳(시작 칸·올라가는 계단)으로 갈 길이 있는지
+## (조사·지름길 열기·열쇠 줍기·잠긴 문 열기 포함). analyze 와 같은 한도를 쓰고, 넘으면 Reach.UNKNOWN.
+static func can_return(f: FloorModel, at: Vector2i, world: WorldState, budget: int = MAX_ANALYSIS_NODES, keys: Dictionary = {}) -> Reach:
 	var goals := exits(f)
 	if goals.has(at):
 		return Reach.YES
@@ -231,7 +253,9 @@ static func can_return(f: FloorModel, at: Vector2i, world: WorldState, budget: i
 		return Reach.UNKNOWN
 	var mask := 0
 	for i in bits.size():
-		if world.is_passage_found(bits[i]) or world.is_shortcut_open(bits[i]):
+		var b: Variant = bits[i]
+		var on: bool = keys.has(b) if b is String else (world.is_passage_found(b) or world.is_shortcut_open(b) or world.is_lock_open(b))
+		if on:
 			mask |= 1 << i
 	var starts: Array[Vector2i] = [at]
 	var g := _explore(f, starts, mask, bits, budget, goals)
@@ -240,16 +264,27 @@ static func can_return(f: FloorModel, at: Vector2i, world: WorldState, budget: i
 	return Reach.NO if g["complete"] else Reach.UNKNOWN
 
 
-## 세계 상태 비트에 대응하는 경계: 숨은 통로 다음 지름길.
-static func _world_bits(f: FloorModel) -> Array[Vector3i]:
-	var bits := f.edges_of_kind(FloorModel.Edge.PASSAGE)
+## 세계 상태 비트: 숨은 통로·지름길·열쇠 문(경계 Vector3i) 다음 이 층 열쇠 문들의 열쇠(ID String, 정렬). 봉인 문은 넣지 않는다.
+static func _world_bits(f: FloorModel) -> Array:
+	var bits: Array = []
+	bits.append_array(f.edges_of_kind(FloorModel.Edge.PASSAGE))
 	bits.append_array(f.edges_of_kind(FloorModel.Edge.SHORTCUT))
+	var keys: Array[String] = []
+	for e in f.edges_of_kind(FloorModel.Edge.LOCK):
+		var k := f.lock_key(e)
+		if k.is_empty():
+			continue
+		bits.append(e)
+		if not keys.has(k):
+			keys.append(k)
+	keys.sort()
+	bits.append_array(keys)
 	return bits
 
 
 ## (칸들, 상태)에서 닿는 노드와 전이. next: 노드 → 다음 노드 목록, touched: 지나간 칸 포함.
 ## 노드가 budget 개를 넘으면(budget < 1 이면 탐색 없이) complete=false 로 멈춘다. goals 칸에 멈추는 노드가 나오면 found=true 로 바로 멈춘다.
-static func _explore(f: FloorModel, starts: Array[Vector2i], start_mask: int, bits: Array[Vector3i], budget: int, goals: Dictionary) -> Dictionary:
+static func _explore(f: FloorModel, starts: Array[Vector2i], start_mask: int, bits: Array, budget: int, goals: Dictionary) -> Dictionary:
 	if budget < 1:
 		return {"next": {}, "touched": {}, "complete": false, "found": false}
 	var worlds := {}
@@ -277,7 +312,7 @@ static func _explore(f: FloorModel, starts: Array[Vector2i], start_mask: int, bi
 			if not path.is_empty():
 				targets.append(_node(f, path[-1], mask))
 		for i in bits.size():
-			if mask & (1 << i) == 0 and _can_unlock(f, bits[i], c):
+			if mask & (1 << i) == 0 and _can_unlock(f, bits, i, c, mask):
 				targets.append(_node(f, c, mask | (1 << i)))
 		next[key] = targets
 		for t in targets:
@@ -317,22 +352,36 @@ static func _returning(f: FloorModel, g: Dictionary, goals: Dictionary) -> Dicti
 	return back
 
 
-## 칸 c 에서 그 경계를 바꿀 수 있는지: 맞닿은 숨은 통로 조사, 열 수 있는 쪽 칸의 지름길.
-static func _can_unlock(f: FloorModel, e: Vector3i, c: Vector2i) -> bool:
-	if f.edge_kind(e) == FloorModel.Edge.PASSAGE:
-		return FloorModel.cells_of_edge(e).has(c)
+## 칸 c(세계 상태 mask)에서 비트 i 를 켤 수 있는지: 맞닿은 숨은 통로 조사, 열 수 있는 쪽 칸의 지름길,
+## 그 열쇠를 가지고 맞닿은 잠긴 문(어느 쪽이든), 그 열쇠가 든 상자 칸(열쇠 상자는 늘 열린다: 열쇠는 하나뿐이고 「가득」이 없다).
+static func _can_unlock(f: FloorModel, bits: Array, i: int, c: Vector2i, mask: int) -> bool:
+	var b: Variant = bits[i]
+	if b is String:
+		var chest := f.chest_at(c)
+		return chest != null and chest.item == b
+	var e: Vector3i = b
+	match f.edge_kind(e):
+		FloorModel.Edge.PASSAGE:
+			return FloorModel.cells_of_edge(e).has(c)
+		FloorModel.Edge.LOCK:
+			var k := bits.find(f.lock_key(e))
+			return k >= 0 and mask & (1 << k) != 0 and FloorModel.cells_of_edge(e).has(c)
 	return f.shortcut_opener(e) == c
 
 
-## mask 가 가리키는 세계 상태(찾은 통로·연 지름길). mask 마다 한 번 만들어 둔다.
-static func _world_of(f: FloorModel, mask: int, bits: Array[Vector3i], cache: Dictionary) -> WorldState:
+## mask 가 가리키는 세계 상태(찾은 통로·연 지름길·연 잠긴 문, 열쇠 비트는 이동과 상관없다). mask 마다 한 번 만들어 둔다.
+static func _world_of(f: FloorModel, mask: int, bits: Array, cache: Dictionary) -> WorldState:
 	if not cache.has(mask):
 		var w := WorldState.new()
 		for i in bits.size():
-			if mask & (1 << i) != 0:
-				if f.edge_kind(bits[i]) == FloorModel.Edge.PASSAGE:
+			if mask & (1 << i) == 0 or bits[i] is String:
+				continue
+			match f.edge_kind(bits[i]):
+				FloorModel.Edge.PASSAGE:
 					w.find_passage(bits[i])
-				else:
+				FloorModel.Edge.LOCK:
+					w.open_lock(bits[i])
+				_:
 					w.open_shortcut(bits[i])
 		cache[mask] = w
 	return cache[mask]
@@ -351,17 +400,27 @@ static func _node_mask(f: FloorModel, key: int) -> int:
 	return key / (f.width * f.height)
 
 
-static func _describe(bits: Array[Vector3i], mask: int) -> String:
+static func _describe(bits: Array, mask: int) -> String:
 	var keys: Array[String] = []
+	var held: Array[String] = []
 	for i in bits.size():
 		if mask & (1 << i) != 0:
-			keys.append(GridKey.edge(bits[i]))
-	return "바뀐 경계 없음" if keys.is_empty() else "찾거나 연 경계 " + ", ".join(keys)
+			if bits[i] is String:
+				held.append(bits[i])
+			else:
+				keys.append(GridKey.edge(bits[i]))
+	var out := "바뀐 경계 없음" if keys.is_empty() else "찾거나 연 경계 " + ", ".join(keys)
+	if not held.is_empty():
+		out += ", 가진 열쇠 " + ", ".join(held)
+	return out
 
 
 # ---- 구조 검사 ----
 
 static func _build(ctx: _Ctx, d: Dictionary) -> FloorModel:
+	for k in d:
+		if not FLOOR_KEYS.has(k):
+			ctx.fail_key(str(k), "%s 는 모르는 키다" % str(k))
 	var id := ctx.string_field(d, "id")
 	var name_key := ctx.string_field(d, "name_key")
 	var theme := ctx.string_field(d, "theme")
@@ -378,8 +437,11 @@ static func _build(ctx: _Ctx, d: Dictionary) -> FloorModel:
 		return f
 	_check_border_and_void(ctx, f)
 	_read_shortcuts(ctx, d, f)
+	_read_locks(ctx, d, f)
 	_read_start(ctx, d, f)
 	_read_stairs(ctx, d, f)
+	_read_chests(ctx, d, f)
+	_read_reserved(ctx, d, f)
 	_read_encounter(ctx, d, f)
 	_read_zones(ctx, d, f)
 	_read_damage(ctx, d, f)
@@ -492,6 +554,183 @@ static func _read_shortcuts(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 			var r := 2 * e.y if e.z == 0 else 2 * e.y + 1
 			var c := 2 * e.x + 1 if e.z == 0 else 2 * e.x
 			ctx.fail_grid(r, c, "격자 %d줄 %d열: 지름길 문 L 에 맞는 shortcuts 항목이 없다" % [r, c])
+
+
+## 잠긴 문(M3 A3): K 경계마다 하나 {"at", "dir", "key": 열쇠 ID} 또는 {"at", "dir", "seal": 이유}. at·dir 은 경계를 가리킬 뿐(어느 쪽 칸이든 된다).
+## 열쇠가 실제 열쇠 물건인지·같은 층 상자에 있는지는 GameDefs 가 본다(전투 정의가 필요하다).
+static func _read_locks(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
+	var list: Array = []
+	if d.has("locks"):
+		if typeof(d["locks"]) != TYPE_ARRAY:
+			ctx.fail_key("locks", "locks는 배열이어야 한다")
+			return
+		list = d["locks"]
+	var id_re := RegEx.create_from_string(BattleDb.ID_PATTERN)
+	for i in list.size():
+		var item: Variant = list[i]
+		var label := "locks[%d]" % i
+		if typeof(item) != TYPE_DICTIONARY:
+			ctx.fail_key("locks", "%s 는 객체여야 한다" % label)
+			continue
+		var bad := false
+		for k in item:
+			if not ["at", "dir", "key", "seal"].has(k):
+				ctx.fail_key("locks", "%s.%s 는 모르는 필드다" % [label, str(k)])
+				bad = true
+		var at := ctx.cell_value(item.get("at"), "locks", label + ".at")
+		var dir := Dir.from_name(item.get("dir"))
+		if dir < 0:
+			ctx.fail_key("locks", "%s.dir 는 N·E·S·W 중 하나여야 한다" % label)
+			bad = true
+		var key := ""
+		var seal := ""
+		if item.has("key") == item.has("seal"):
+			ctx.fail_key("locks", "%s 는 key 와 seal 가운데 하나만 가져야 한다" % label)
+			bad = true
+		elif item.has("key"):
+			var kv: Variant = item["key"]
+			if typeof(kv) != TYPE_STRING or not str(kv).begins_with("key.") or id_re.search(kv) == null:
+				ctx.fail_key("locks", "%s.key 는 key. 로 시작하는 ID 문자열이어야 한다" % label)
+				bad = true
+			else:
+				key = kv
+		else:
+			var sv: Variant = item["seal"]
+			if typeof(sv) != TYPE_STRING or str(sv).is_empty():
+				ctx.fail_key("locks", "%s.seal 은 빈 문자열이 아닌 문자열이어야 한다" % label)
+				bad = true
+			else:
+				seal = sv
+		if bad or at == GridKey.BAD_CELL:
+			continue
+		if not f.in_bounds(at):
+			ctx.fail_key("locks", "%s.at 이 층 밖이다" % label)
+			continue
+		var e := FloorModel.edge_of(at, dir)
+		if f.edge_kind(e) != FloorModel.Edge.LOCK:
+			ctx.fail_key("locks", "%s 의 경계 %s 가 격자의 K 가 아니다" % [label, GridKey.edge(e)])
+		elif f.has_lock_entry(e):
+			ctx.fail_key("locks", "%s 의 경계 %s 가 중복이다" % [label, GridKey.edge(e)])
+		else:
+			f.set_lock(e, key, seal)
+	for e in f.edges_of_kind(FloorModel.Edge.LOCK):
+		if not f.has_lock_entry(e):
+			var r := 2 * e.y if e.z == 0 else 2 * e.y + 1
+			var c := 2 * e.x + 1 if e.z == 0 else 2 * e.x
+			ctx.fail_grid(r, c, "격자 %d줄 %d열: 잠긴 문 K 에 맞는 locks 항목이 없다" % [r, c])
+
+
+## 보물상자(M3 A3): [{"id", "at", "item", "count"(선택, 1)} 또는 {"id", "at", "money"}]. id 는 층 안에서 하나(저장 키).
+## 칸은 바닥(.)이고 시작 칸·계단·다른 상자 칸이 아니다. 물건 ID 가 있는지·열쇠가 묶음에서 한 상자에만 있는지는 GameDefs 가 본다.
+static func _read_chests(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
+	if not d.has("chests"):
+		return
+	if typeof(d["chests"]) != TYPE_ARRAY:
+		ctx.fail_key("chests", "chests는 배열이어야 한다")
+		return
+	var cid_re := RegEx.create_from_string(CHEST_ID_PATTERN)
+	var id_re := RegEx.create_from_string(BattleDb.ID_PATTERN)
+	var list: Array = d["chests"]
+	for i in list.size():
+		var item: Variant = list[i]
+		var label := "chests[%d]" % i
+		if typeof(item) != TYPE_DICTIONARY:
+			ctx.fail_key("chests", "%s 는 객체여야 한다" % label)
+			continue
+		var bad := false
+		for k in item:
+			if not ["id", "at", "item", "count", "money"].has(k):
+				ctx.fail_key("chests", "%s.%s 는 모르는 필드다" % [label, str(k)])
+				bad = true
+		var c := FloorModel.Chest.new()
+		var idv: Variant = item.get("id")
+		if typeof(idv) != TYPE_STRING or cid_re.search(idv) == null:
+			ctx.fail_key("chests", "%s.id 는 %s 꼴 문자열이어야 한다" % [label, CHEST_ID_PATTERN])
+			bad = true
+		else:
+			c.id = idv
+		c.at = ctx.cell_value(item.get("at"), "chests", label + ".at")
+		if item.has("item") == item.has("money"):
+			ctx.fail_key("chests", "%s 는 item 과 money 가운데 하나만 가져야 한다" % label)
+			bad = true
+		elif item.has("item"):
+			var iv: Variant = item["item"]
+			if typeof(iv) != TYPE_STRING or id_re.search(iv) == null or not CHEST_ITEM_PREFIXES.any(func(p: String) -> bool: return str(iv).begins_with(p)):
+				ctx.fail_key("chests", "%s.item 은 item.·equip.·key. 로 시작하는 ID 문자열이어야 한다" % label)
+				bad = true
+			else:
+				c.item = iv
+				c.count = 1
+				if item.has("count"):
+					var n: Variant = SaveCodec.to_int(item["count"]) if typeof(item["count"]) != TYPE_BOOL else null
+					if n == null or n < 1 or n > CHEST_COUNT_MAX:
+						ctx.fail_key("chests", "%s.count 는 1~%d 정수여야 한다" % [label, CHEST_COUNT_MAX])
+						bad = true
+					else:
+						c.count = n
+				if c.item.begins_with("key.") and c.count != 1:
+					ctx.fail_key("chests", "%s: 열쇠는 한 개(count 1)다" % label)
+					bad = true
+		else:
+			if item.has("count"):
+				ctx.fail_key("chests", "%s: money 상자에는 count 가 없다" % label)
+				bad = true
+			var m: Variant = SaveCodec.to_int(item["money"]) if typeof(item["money"]) != TYPE_BOOL else null
+			if m == null or m < 1 or m > CHEST_MONEY_MAX:
+				ctx.fail_key("chests", "%s.money 는 1~%d 정수여야 한다" % [label, CHEST_MONEY_MAX])
+				bad = true
+			else:
+				c.money = m
+		if bad or c.at == GridKey.BAD_CELL:
+			continue
+		var where := "%s %d:%d" % [label, c.at.x, c.at.y]
+		if f.cell_kind(c.at) != FloorModel.Cell.FLOOR:
+			ctx.fail_key("chests", "%s 이 바닥 칸(.)이 아니다" % where)
+		elif f.has_start() and c.at == f.start_at:
+			ctx.fail_key("chests", "%s 이 시작 칸이다" % where)
+		elif f.stairs.has(c.at):
+			ctx.fail_key("chests", "%s 에 계단이 있다" % where)
+		elif f.chest_at(c.at) != null:
+			ctx.fail_key("chests", "%s 에 상자가 이미 있다" % where)
+		elif f.chests.has(c.id):
+			ctx.fail_key("chests", "%s 의 id %s 가 중복이다" % [label, c.id])
+		else:
+			f.add_chest(c)
+
+
+## 예약 구역(M3 A3): [[x0, y0, x1, y1], …] 양 끝 포함. 시작 칸·계단·상자를 담을 수 없다.
+static func _read_reserved(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
+	if not d.has("reserved"):
+		return
+	if typeof(d["reserved"]) != TYPE_ARRAY:
+		ctx.fail_key("reserved", "reserved는 배열이어야 한다")
+		return
+	var list: Array = d["reserved"]
+	for i in list.size():
+		var rect := ctx.coords(list[i], 4, "reserved", "reserved[%d]" % i)
+		if rect.size() != 4:
+			continue
+		var lo := Vector2i(rect[0], rect[1])
+		var hi := Vector2i(rect[2], rect[3])
+		if not f.in_bounds(lo) or not f.in_bounds(hi) or hi.x < lo.x or hi.y < lo.y:
+			ctx.fail_key("reserved", "reserved[%d] 가 층 범위를 벗어나거나 뒤집혔다" % i)
+			continue
+		var r := Rect2i(lo, hi - lo + Vector2i.ONE)
+		var inside := []
+		if f.has_start() and r.has_point(f.start_at):
+			inside.append("시작 칸")
+		for st in f.stair_list():
+			if r.has_point(st.at):
+				inside.append("계단")
+				break
+		for c in f.chest_list():
+			if r.has_point(c.at):
+				inside.append("상자")
+				break
+		if not inside.is_empty():
+			ctx.fail_key("reserved", "reserved[%d] 에 %s 가 있다" % [i, "·".join(inside)])
+			continue
+		f.reserved.append(r)
 
 
 ## start: 계단이 있는 층은 없어도 된다(GridKey.BAD_CELL). 층 묶음의 첫 층에 있는지는 check_set 이 본다.

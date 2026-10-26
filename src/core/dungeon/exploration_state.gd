@@ -31,6 +31,8 @@ var battle: BattleState
 var materials := {}
 ## 장비 가방(07 §5.6): 장착하지 않은 장비 ID → 개수(1~99, 0개는 키를 두지 않는다).
 var gear_bag := {}
+## 귀중품(열쇠, M3 A3): 열쇠 ID → true. 쓰지 않고 남는다(문을 열어도 그대로). 상자에서만 얻는다.
+var key_items := {}
 ## 소지금(08 §2): 0~MONEY_MAX. 새 게임과 1·2·3판 이전은 START_MONEY 다.
 var money := 0
 ## 상점 상태(08 §2). 상점 규칙(ShopRules)만 바꾼다.

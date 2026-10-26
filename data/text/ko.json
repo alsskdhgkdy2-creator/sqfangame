@@ -1,6 +1,11 @@
 {
   "floor.f1_test": "시험 층",
   "floor.f2_test": "시험 층 2",
+  "floor.stratum1": "네온 이끼숲",
+  "key.moss_card": "이끼 낀 출입 카드",
+  "key.moss_card.desc": "B2F의 잠긴 문을 여는 카드. 이끼가 단자에 엉겨 붙었다",
+  "key.relay_fuse": "중계 퓨즈",
+  "key.relay_fuse.desc": "B3F의 잠긴 문에 맞는 퓨즈",
   "floor.label": "B{depth}F",
   "floor.place": "{name} / {label}",
   "stairs.title": "계단",
