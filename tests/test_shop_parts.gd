@@ -801,3 +801,43 @@ func test_route_hands_row_and_tab_presses_to_the_screen_untouched() -> void:
 	await kit.tap(kit.center_of(list.rows[1]))
 	await kit.tap(kit.center_of(tabs.buttons[1]))
 	check_eq([got, list.cursor, tabs.current], [[["row", 1], ["tab", 1]], 1, 1], "route 없음: 고르고 picked")
+
+
+## D28-b: 상점 줄 모양(ShopRowLook, 공용 목록의 모양 갈고리). 줄 = ShopRow 64·사이 4, 줄 모델 → NEW·고름·품절·개수·흐림,
+## 커서 모양 cursor(노랑)·chosen(밝은 시안)·none(표시 없음). ShopList 는 그 모양을 쓰는 공용 목록을 틀로 감싼다(Scroll 안 Empties → Row_k).
+func test_shop_row_look_paints_rows_and_marks_the_cursor_modes() -> void:
+	var look := ShopRowLook.new()
+	look.new_text = "새것"
+	check_eq([look.row_h, look.gap], [ShopList.ROW_H, ShopList.ROW_GAP], "줄 64, 사이 4")
+	var r := look.make_row()
+	check(r is ShopRow, "줄 = ShopRow")
+	var sr := r as ShopRow
+	look.paint(r, {"icon": "kind_shield", "name": "이지스 플레이트", "new": true, "right": "품절", "count": "3개", "dim": true, "checked": true})
+	check_eq([sr.kind_icon, sr.text, sr.is_new, sr.new_text, sr.right, sr.count, sr.dimmed, sr.checked],
+		["kind_shield", "이지스 플레이트", true, "새것", "품절", "3개", true, true], "칸마다: 아이콘·이름·NEW(글)·품절·개수·흐림·고름")
+	look.paint(r, {"name": "빈 칸"})
+	check_eq([sr.kind_icon, sr.is_new, sr.right, sr.count, sr.dimmed, sr.checked], ["", false, "", "", false, false], "없는 칸은 끈다")
+	var marks := []
+	for mode in ["cursor", "chosen", "none"]:
+		for at in [true, false]:
+			look.mark(r, at, mode)
+			marks.append([mode, at, sr.selected, sr.chosen])
+	check_eq(marks, [["cursor", true, true, false], ["cursor", false, false, false], ["chosen", true, false, true], ["chosen", false, false, false],
+		["none", true, false, false], ["none", false, false, false]], "커서 칸만: cursor = 노랑, chosen = 밝은 시안, none = 없음")
+	look.mark(r, true, "chosen")
+	check_eq(sr.theme_state(), "cmd:chosen", "chosen 그림")
+	look.paint(r, {"name": "고른 줄", "checked": true})
+	look.mark(r, true, "cursor")
+	check_eq([sr.theme_state(), sr.icon_edge()], ["cmd:selected", [UiTheme.BTN_CHECKED, 3.0]], "고른 줄의 커서: 노랑 + 고름 테두리")
+	r.free()
+	await _compose("weapon")
+	var rows := _many_rows(3)
+	rows[1]["new"] = true
+	list.new_text = "새것"
+	list.set_rows(rows)
+	await kit.frames(1)
+	check(list.inv.look is ShopRowLook and list.inv.reveal_on_change, "ShopList = 공용 목록 + 상점 모양, 줄이 바뀌면 커서 줄을 보인다")
+	check_eq(list.scroll.content.get_children().map(func(n: Node) -> String: return str(n.name)), ["Empties", "Row_0", "Row_1", "Row_2"],
+		"이름·차례: Scroll 안 Empties → Row_k")
+	check_eq([list.rows[1].is_new, list.rows[1].new_text, list.rows[0].size, list.rows[1].position.y],
+		[true, "새것", Vector2(list.row_width(), 64.0), 68.0], "줄 칸·크기·자리(막대 자리를 뺀 폭)")

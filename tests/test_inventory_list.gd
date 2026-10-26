@@ -267,6 +267,29 @@ func test_confirm_guard_matches_the_keypad() -> void:
 	check(not inv.move(1) and not inv.confirm(press), "↑↓·Enter 모두 받지 않는다")
 
 
+## D28-b ③: reveal_on_change 는 기본 꺼짐(캠프: 새 줄을 놓아도 손으로 내린 자리 그대로). 켜면(상점) 다른 줄을 놓을 때마다 커서 줄이
+## 보이게 내리고, 같은 줄을 다시 놓으면 내리지 않는다.
+func test_reveal_on_change_is_off_by_default_and_reveals_changed_rows_when_on() -> void:
+	await _host()
+	check(not inv.reveal_on_change, "기본은 꺼짐(캠프)")
+	inv.set_rows(_models(10))
+	inv.set_cursor(8)
+	window.list.scroll_to(0.0)
+	check(not inv.shown_at(8), "준비: 손으로 올려 커서 줄이 가려졌다")
+	inv.set_rows(_models(10, "새"))
+	check_eq([window.list.scroll, inv.cursor], [0.0, 8], "꺼짐: 다른 줄을 놓아도 손으로 내린 자리 그대로")
+	inv.reveal_on_change = true
+	var same := _models(10, "새")
+	inv.set_rows(same)
+	check_eq(window.list.scroll, 0.0, "켜짐: 같은 줄 다시 놓기는 내리지 않는다")
+	var changed := _models(10, "새")
+	changed[3]["right"] = "99개"
+	inv.set_rows(changed)
+	check_eq([inv.cursor, inv.shown_at(8)], [8, true], "켜짐: 줄이 바뀌면 커서 줄이 보인다")
+	inv.set_rows(_models(0))
+	check_eq(inv.cursor, -1, "켜짐: 빈 목록 = 커서 -1, 내릴 것 없음(오류 없음)")
+
+
 func test_one_cursor_mark_and_cursor_modes() -> void:
 	await _host(4, ModeLook.new())
 	var lines := _models(5)
@@ -381,8 +404,8 @@ func test_bag_rows_order_and_kinds() -> void:
 	want_mat_id.sort()
 	check(want_mat_id != want_mat_data, "준비: 자료 차례와 ID 차례가 다르다")
 	var got := BagRows.bag(s)
-	check_eq(got.map(func(l: Dictionary) -> String: return l["item"]), want_gear + want_mat_id, "기본: 장비(자료 차례) → 소재(ID 차례), 0 개 빠짐")
-	check_eq(BagRows.bag(s, ["material"], "data").map(func(l: Dictionary) -> String: return l["item"]), want_mat_data, "소재 자료 차례(상점 판매)")
+	check_eq(got.map(func(l: Dictionary) -> String: return l["item"]), want_gear + want_mat_data, "기본: 장비(자료 차례) → 소재(정의 자료 차례), 0 개 빠짐")
+	check_eq(BagRows.bag(s, ["material"]).map(func(l: Dictionary) -> String: return l["item"]), want_mat_data, "소재만: 정의 자료 차례(캠프·상점 판매 같음)")
 	check_eq(BagRows.bag(s, ["gear"]).map(func(l: Dictionary) -> String: return l["item"]), want_gear, "장비만")
 	var g: Dictionary = got[0]
 	check_eq([g["count"], g["kind"], g["icon"]], [s.gear_bag[g["item"]], s.defs.battle.equip(g["item"]).kind, SheetParts.kind_icon(s.defs, g["item"])],

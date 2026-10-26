@@ -5,8 +5,8 @@ extends RefCounted
 
 
 ## 가방 줄 [{item, count, kind, icon}, …]. kinds 차례로: "gear" = 장비(자료 차례, gear_bag 1 이상),
-## "material" = 소재(1 이상). mat_order: "id" = 소재 ID 차례(캠프 소지품), "data" = 정의 자료 차례(마을 상점 판매).
-static func bag(state: ExplorationState, kinds: Array = ["gear", "material"], mat_order := "id") -> Array[Dictionary]:
+## "material" = 소재(정의 자료 차례 = data/items/materials.json, 몬스터 차례를 따른다, 1 이상). 캠프 소지품과 상점 판매가 같은 차례(D28-b).
+static func bag(state: ExplorationState, kinds: Array = ["gear", "material"]) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var defs := state.defs
 	for kind in kinds:
@@ -17,13 +17,7 @@ static func bag(state: ExplorationState, kinds: Array = ["gear", "material"], ma
 					if n >= 1:
 						out.append({"item": id, "count": n, "kind": defs.battle.equip(id).kind, "icon": SheetParts.kind_icon(defs, id)})
 			"material":
-				var ids: Array = []
-				if mat_order == "data":
-					ids = defs.battle.materials.keys()
-				else:
-					ids = state.materials.keys()
-					ids.sort()
-				for id in ids:
+				for id in defs.battle.material_ids:
 					var n := int(state.materials.get(id, 0))
 					if n >= 1:
 						out.append({"item": str(id), "count": n, "kind": "material", "icon": str(ShopTabs.ICONS["material"])})

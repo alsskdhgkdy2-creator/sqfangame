@@ -1,11 +1,13 @@
-## 상점 칸 목록(08 §7.4, 원작 HD 상점 jp_guide3_img1·2): 끌어 내리는 영역(PartyScroll) 안에 ShopRow 줄(64, 사이 4)을 두고,
-## 목록 창에 보이는 줄 수만큼 칸을 채운다(남는 칸은 어두운 빈 줄 + 빈 아이콘 칸, 장식이라 누르기를 받지 않는다).
-## 줄이 넘치면 오른쪽에 가는 위치 막대(BattleLogView.scroll_bar_rect 와 같은 그림). 막대 자리는 늘 비워 둬서 줄 폭이 바뀌지 않는다.
-## 커서 줄 하나만 노랑(selected)이다. 줄을 누르면(뗄 때) 커서를 그 줄로 옮기고 picked 를 낸다. 끌기는 고르기가 아니다(PartyButton).
+## 상점 칸 목록의 틀(08 §7.4, 원작 HD 상점 jp_guide3_img1·2): 끌어 내리는 영역(PartyScroll) 하나를 두고, 그 안의 줄은 공용 목록(InventoryList,
+## D28-b)이 ShopRowLook 모양(ShopRow 줄 64, 사이 4)으로 놓는다. 틀이 맡는 것: 영역 크기(오른쪽 위치 막대 자리를 늘 비워 둬서 줄 폭이
+## 바뀌지 않는다), 목록 창에 보이는 줄 수만큼 남는 칸(어두운 빈 줄 + 빈 아이콘 칸, 장식이라 누르기를 받지 않는다), 줄이 넘치면 가는 위치 막대
+## (BattleLogView.scroll_bar_rect 와 같은 그림).
+## 공용 목록이 맡는 것: 줄 단추(Row_k)·커서(노랑 하나, 칸이 없으면 -1)·커서 모양·route·picked·끌기와 눌림 버림·끝에서 가려진 커서 되돌림.
 ## route 가 있으면 줄 누르기는 route(i) 만 부른다(커서도 picked 도 그대로): 입력을 받을지 정하는 화면(S3)이 받은 뒤 커서를 옮긴다.
 ## cursor_mode 로 커서 줄 모양을 바꾼다(노랑은 화면에 하나, 07 §9.2): 창이 그 줄에 대해 떠 있으면 「chosen」(밝은 시안), 여러 줄
 ## 팔기 확인처럼 줄 하나에 대한 창이 아니면 「none」, 창이 닫히면 「cursor」. 바꾸는 쪽은 화면(S3)이다.
-## set_rows 가 다른 줄을 놓으면 눌려 있던 줄·끌기를 버린다(같은 줄을 다시 놓으면 아무것도 바꾸지 않는다).
+## set_rows 가 다른 줄을 놓으면 눌려 있던 줄·끌기를 버리고 커서 줄을 보이게 한다(reveal_on_change). 같은 줄을 다시 놓으면 아무것도 바꾸지 않는다.
+## 아래 rows·cursor·route 등은 공용 목록을 그대로 읽고 쓰는 이름이다(화면·시험·디버그가 쓰던 이름).
 class_name ShopList
 extends Control
 
@@ -18,18 +20,38 @@ const BAR_W := 4.0
 const BAR_GAP := 4.0
 
 var scroll: PartyScroll
-## 쓰는 줄(앞 row_count 개가 보인다).
-var rows: Array[ShopRow] = []
-var row_count := 0
-var cursor := 0
-var new_text := "NEW"
+var look: ShopRowLook
+## 공용 목록(D28-b): 줄·커서·내림·되돌림·누르기.
+var inv: InventoryList
+## 줄 단추(앞 row_count 개가 보인다).
+var rows: Array[ShopRow]:
+	get:
+		var out: Array[ShopRow] = []
+		out.assign(inv.rows)
+		return out
+var row_count: int:
+	get:
+		return inv.used
+## 커서 줄. 줄이 없으면 -1.
+var cursor: int:
+	get:
+		return inv.cursor
+var new_text: String:
+	get:
+		return look.new_text
+	set(v):
+		look.new_text = v
 ## "cursor"(커서 줄 노랑) · "chosen"(커서 줄 밝은 시안, 노랑은 창 단추) · "none"(커서 줄 표시 없음, 커서 자리는 그대로).
-var cursor_mode := "cursor"
+var cursor_mode: String:
+	get:
+		return inv.cursor_mode
 ## 입력 입구(08 §7.4·§8.11, ShopDialog.route 와 같은 방식). 비어 있으면 S2 그대로.
-var route: Callable
+var route: Callable:
+	get:
+		return inv.route
+	set(v):
+		inv.route = v
 var _empties: Control
-## 지금 보이는 줄 자료(set_rows 가 같은 자료면 아무것도 하지 않는다).
-var _data: Array = []
 
 
 func _init() -> void:
@@ -44,6 +66,11 @@ func _init() -> void:
 	_empties.draw.connect(_draw_empties)
 	scroll.content.add_child(_empties)
 	scroll.content.item_rect_changed.connect(queue_redraw)  # 내리면 위치 막대를 다시 그린다
+	look = ShopRowLook.new()
+	inv = InventoryList.new(scroll, look, "Row_")
+	inv.reveal_on_change = true  # 진열·값이 바뀌면 커서 줄을 보이게 한다(D28-b ③)
+	inv.picked.connect(func(i: int) -> void: picked.emit(i))
+	inv.watch_resize(func() -> void: inv.set_rows(inv.data))  # 새 폭으로 줄을 놓고 커서 줄을 한 번 보이게 한다
 
 
 func _notification(what: int) -> void:
@@ -58,98 +85,42 @@ func row_width() -> float:
 
 func _layout() -> void:
 	scroll.position = Vector2.ZERO
-	scroll.size = Vector2(row_width(), size.y)
-	for i in rows.size():
-		rows[i].position = Vector2(0, i * PITCH)
-		rows[i].size = Vector2(row_width(), ROW_H)
+	scroll.size = Vector2(row_width(), size.y)  # 크기가 바뀌면 공용 목록이 줄을 다시 놓는다(watch_resize)
+	_frame()
+
+
+## 틀 그림(빈 칸·위치 막대)을 지금 줄 수에 맞춘다.
+func _frame() -> void:
 	_empties.position = Vector2.ZERO
-	_empties.size = Vector2(row_width(), maxf(size.y, row_count * PITCH))
-	scroll.set_content_height(maxf(0.0, row_count * PITCH - ROW_GAP))
-	_show_cursor()
+	_empties.size = Vector2(row_width(), maxf(size.y, row_count * inv.pitch()))
 	_empties.queue_redraw()
 	queue_redraw()
 
 
 ## 줄마다 {icon, name, new, right, count, dim, checked}. 커서는 줄 수 안으로 맞춘다.
 func set_rows(data: Array) -> void:
-	if data == _data and row_count == data.size():
-		return
-	cancel()  # 다른 줄이 놓인다: 눌려 있던 줄·끌기가 새 줄을 고르거나 내리지 않게(07 §9.4)
-	_data = data.duplicate(true)
-	row_count = data.size()
-	while rows.size() < row_count:
-		var r := ShopRow.new()
-		var k := rows.size()
-		r.name = "Row_%d" % k
-		r.scroller = scroll
-		r.activated.connect(func() -> void: _on_row(k))
-		scroll.content.add_child(r)
-		rows.append(r)
-	for i in rows.size():
-		var r := rows[i]
-		r.visible = i < row_count
-		if i >= row_count:
-			r.cancel()
-			continue
-		var d: Dictionary = data[i]
-		r.kind_icon = str(d.get("icon", ""))
-		r.text = str(d.get("name", ""))
-		r.is_new = bool(d.get("new", false))
-		r.new_text = new_text
-		r.right = str(d.get("right", ""))
-		r.count = str(d.get("count", ""))
-		r.dimmed = bool(d.get("dim", false))
-		r.checked = bool(d.get("checked", false))
-		r.queue_redraw()
-	cursor = clampi(cursor, 0, maxi(0, row_count - 1))
-	_layout()
+	inv.set_rows(data)
+	_frame()
 
 
 ## 커서를 줄 i 로(줄 수 안으로 맞추고, 그 줄이 보이게 내린다).
 func set_cursor(i: int) -> void:
-	cursor = clampi(i, 0, maxi(0, row_count - 1))
-	_show_cursor()
+	inv.set_cursor(i)
 
 
 ## 커서 줄 모양을 바꾼다(커서 자리·내림은 그대로).
 func set_cursor_mode(m: String) -> void:
-	cursor_mode = m
-	_mark_cursor()
-
-
-func _mark_cursor() -> void:
-	for i in rows.size():
-		var at := i < row_count and i == cursor
-		rows[i].selected = at and cursor_mode == "cursor"
-		rows[i].chosen = at and cursor_mode == "chosen"
-
-
-func _show_cursor() -> void:
-	_mark_cursor()
-	if row_count > 0:
-		scroll.ensure_visible(cursor * PITCH, cursor * PITCH + ROW_H)
-
-
-func _on_row(i: int) -> void:
-	if i >= row_count:
-		return
-	if route.is_valid():
-		route.call(i)
-		return
-	set_cursor(i)
-	picked.emit(i)
+	inv.set_cursor_mode(m)
 
 
 ## 눌려 있던 포인터를 모두 버린다(문맥이 바뀔 때, 07 §9.4).
 func cancel() -> void:
-	scroll.cancel()
-	for r in rows:
-		r.cancel()
+	inv.cancel()
 
 
 ## 목록 창에 보이는 줄 수(다 들어가는 줄만).
 func visible_slots() -> int:
-	return maxi(1, int(floor((size.y + ROW_GAP) / PITCH)))
+	return maxi(1, int(floor((size.y + look.gap) / inv.pitch())))
 
 
 ## 그리는 빈 칸 수.
@@ -159,7 +130,7 @@ func empty_count() -> int:
 
 ## 칸 i(줄·빈 칸 공통)의 사각형(끌어 내리는 내용 좌표).
 func slot_rect(i: int) -> Rect2:
-	return Rect2(0, i * PITCH, row_width(), ROW_H)
+	return Rect2(0, inv.line_y(i), row_width(), look.row_h)
 
 
 func _draw_empties() -> void:

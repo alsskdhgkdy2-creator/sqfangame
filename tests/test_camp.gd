@@ -1840,10 +1840,12 @@ func test_items_rows_show_kind_icons_and_fit_with_the_largest_counts() -> void:
 	var want_ids: Array[String] = []
 	want_ids.append_array(defs.battle.equipment_ids)
 	var mats: Array = Array(defs.battle.material_ids)
-	mats.sort()
+	var by_id := mats.duplicate()
+	by_id.sort()
+	check(by_id != mats, "준비: 정의 자료 차례와 ID 차례가 다르다")
 	for id in mats:
 		want_ids.append(str(id))
-	check_eq(it.row_items, want_ids, "장비(자료 차례) 다음 소재(ID 차례), 묶음 머리 줄 없음")
+	check_eq(it.row_items, want_ids, "장비(자료 차례) 다음 소재(정의 자료 차례, D28-b), 묶음 머리 줄 없음")
 	for px in WINDOWS:
 		var size: Vector2 = await _window(px)
 		var tag := "%s(논리 %s)" % [str(px), str(size)]

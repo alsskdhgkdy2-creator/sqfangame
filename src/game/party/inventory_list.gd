@@ -40,6 +40,9 @@ var data: Array = []
 var cursor := 0
 ## "cursor"(노랑) · "chosen"(그 줄에 대한 창이 떠 있다) · "none"(표시 없음, 커서 자리는 그대로).
 var cursor_mode := "cursor"
+## 참이면 set_rows 가 다른 줄을 놓을 때마다 커서 칸을 보이게 한다(마을 상점: 진열·값이 바뀌면 커서 줄로, D28-b).
+## 거짓(기본, 캠프)이면 보통 다시 그리기는 손으로 내린 자리를 그대로 둔다. 같은 줄을 다시 놓으면 어느 쪽이든 내리지 않는다.
+var reveal_on_change := false
 var _lines := 0
 var _reveal := false
 var _view_size := Vector2.ZERO
@@ -92,7 +95,7 @@ func _on_resized(refresh: Callable) -> void:
 
 
 ## 줄을 놓는다. 자료가 바뀌었으면 눌려 있던 줄·끌기를 버리고(07 §9.4) 다시 그리고, 같으면 그림은 그대로 둔다.
-## 자리·내용 높이·커서 맞춤·커서 표시는 늘 다시 하고, 크기가 바뀐 뒤라면 커서 칸을 한 번 보이게 한다.
+## 자리·내용 높이·커서 맞춤·커서 표시는 늘 다시 하고, 크기가 바뀐 뒤라면(reveal_on_change 면 줄이 바뀌어도) 커서 칸을 한 번 보이게 한다.
 func set_rows(models: Array) -> void:
 	var fresh := models != data
 	if fresh:
@@ -122,7 +125,7 @@ func set_rows(models: Array) -> void:
 	var st := stops()
 	cursor = -1 if st.is_empty() else clampi(cursor, 0, st.size() - 1)
 	_mark(st)
-	if _reveal and cursor >= 0:
+	if (_reveal or (reveal_on_change and fresh)) and cursor >= 0:
 		show(st[cursor])
 	_reveal = false
 	_tell(fresh)

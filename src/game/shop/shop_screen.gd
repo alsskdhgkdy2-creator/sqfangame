@@ -451,7 +451,7 @@ func _ask_sell_multi() -> void:
 ## 팔기(§8.8 끝난 뒤 상태 F1). 거부: 이유만(고름·여러 개 그대로, 저장 없음). 받아들임: 저장 한 번, 고름을 지우고 여러 개를 끄고,
 ## 커서는 같은 물건(없어졌으면 앞 줄 번호와 새 마지막 줄 가운데 작은 곳). 풀림이 있으면 입하 알림 한 번.
 func _do_sell(sell: Array) -> void:
-	var cur_item: String = lines[buy_list.cursor]["item"] if buy_list.cursor < lines.size() else ""
+	var cur_item: String = lines[buy_list.cursor]["item"] if buy_list.cursor >= 0 and buy_list.cursor < lines.size() else ""
 	var cur_i := buy_list.cursor
 	var events := ShopRules.sell(state, SHOP_ID, sell)
 	if not _apply_shop(events):
@@ -516,13 +516,13 @@ func _dispatch_branch(kind: String, arg: Variant) -> bool:
 func _dispatch_buy(kind: String, arg: Variant) -> bool:
 	match kind:
 		"cursor":
-			if lines.is_empty():
+			# 돌지 않는 ↑↓(공용 목록): 끝에서는 옮기지 않고, 커서 줄이 손으로 내려 가려져 있으면 보이게만 한다(입력 하나, 07 §9.7).
+			var d := int(arg) if arg != null else 1
+			var at := buy_list.cursor
+			if lines.is_empty() or at < 0 or d == 0:
 				return false
-			var to := clampi(buy_list.cursor + (int(arg) if arg != null else 1), 0, lines.size() - 1)
-			if to == buy_list.cursor:
-				return false
-			buy_list.set_cursor(to)
-			return true
+			var to := clampi(at + d, 0, lines.size() - 1)
+			return buy_list.inv.move(to - at if to != at else d)
 		"row":
 			return _buy_row(int(arg) if arg != null else -1)
 		"confirm":
@@ -829,22 +829,15 @@ func rows_of(ls: Array[Dictionary]) -> Array:
 	return out
 
 
-## 판매 줄(§8.8): 소재 탭 = 가진 소재(자료 차례), 장비 탭 = 가방 장비(자료 차례), 소모품 탭 = 빈 목록.
+## 판매 줄(§8.8): 가방 줄(BagRows, 캠프 소지품과 같은 곳·같은 차례)에 판매값을 붙인다. 소재 탭 = 가진 소재(정의 자료 차례),
+## 장비 탭 = 가방 장비(자료 차례), 소모품 탭 = 빈 목록.
 func sell_lines() -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	var defs := state.defs
-	match str(SELL_KINDS[clampi(tab, 0, SELL_KINDS.size() - 1)]):
-		"material":
-			for id in defs.battle.materials:
-				var n := int(state.materials.get(id, 0))
-				if n > 0:
-					out.append({"item": id, "count": n, "price": ShopRules.sell_price(defs, id), "kind": "material", "icon": "kind_material"})
-		"gear":
-			for id in defs.battle.equipment_ids:
-				var n := int(state.gear_bag.get(id, 0))
-				if n > 0:
-					out.append({"item": id, "count": n, "price": ShopRules.sell_price(defs, id), "kind": defs.battle.equip(id).kind,
-						"icon": icon_of(id)})
+	var k := str(SELL_KINDS[clampi(tab, 0, SELL_KINDS.size() - 1)])
+	if k == "consumable":
+		return [] as Array[Dictionary]
+	var out := BagRows.bag(state, [k])
+	for line in out:
+		line["price"] = ShopRules.sell_price(state.defs, str(line["item"]))
 	return out
 
 
@@ -1155,11 +1148,12 @@ func _refresh_buy() -> void:
 		buy_tabs.select(tab)
 	lines = buy_lines()
 	buy_list.set_rows(rows_of(lines))
-	if lines.is_empty():
+	var at := buy_list.cursor
+	if at < 0 or at >= lines.size():  # 빈 목록(커서 -1)
 		frame.panel.show_member(state, texts, member, null, -1)
 		frame.show_desc("", [] as Array[String])
 		return
-	var item: String = lines[buy_list.cursor]["item"]
+	var item: String = lines[at]["item"]
 	# 본문 = 값 줄. 바뀌는 값은 판이 보이므로 되풀이하지 않고, 둘째 줄은 이유가 있을 때만(§8.5).
 	var desc: Array[String] = [values_text(item)]
 	if not can_wear(item, member):
@@ -1185,10 +1179,11 @@ func _refresh_sell() -> void:
 	lines = sell_lines()
 	buy_list.set_rows(sell_rows_of(lines))
 	frame.panel.show_member(state, texts, member, null, -1)
-	if lines.is_empty():
+	var at := buy_list.cursor
+	if at < 0 or at >= lines.size():  # 빈 목록(커서 -1)
 		frame.show_desc("", [] as Array[String])
 		return
-	var line := lines[buy_list.cursor]
+	var line := lines[at]
 	var item: String = line["item"]
 	if line["kind"] == "material":
 		frame.show_desc(sell_name(item), [texts.t("shop.tab.material")] as Array[String])

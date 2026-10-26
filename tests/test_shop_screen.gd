@@ -1394,3 +1394,149 @@ func test_batch_sale_of_lines_no_longer_owned_is_rejected() -> void:
 	await _step(sc, "dialog", ["confirm", 0])
 	check_eq([SaveCodec.state_hash(s), saves, s.money], [h, 0, 1000], "없어짐 → 거부: 상태·저장·소지금 그대로")
 	check_eq([sc.notice, sc.multi, sc.marked.keys()], [texts.t("shop.why.not_now"), true, ["equip.twin_edge"]], "이유, 여러 개·고름 그대로")
+
+
+# ---- D28-b: 공용 목록(InventoryList) 위의 상점 목록 ----
+
+## 판매 상태: 가방에 장비 전부(목록이 넘친다), 소재 전부(정의 자료 차례와 ID 차례가 다르다).
+func _full_bag_state() -> ExplorationState:
+	var s := _state(1000)
+	for id in s.defs.battle.equipment_ids:
+		s.gear_bag[id] = 1
+	for id in s.defs.battle.material_ids:
+		s.materials[id] = 2
+	return s
+
+
+static func _shown(sc: ShopScreen) -> bool:
+	return sc.buy_list.inv.shown_at(sc.buy_list.cursor)
+
+
+## D28-b ①: 판매 소재 줄은 캠프 소지품과 같은 곳(BagRows)·같은 차례(정의 자료 차례 = data/items/materials.json).
+func test_sell_materials_follow_the_definition_order_like_the_camp() -> void:
+	_kit()
+	var s := _full_bag_state()
+	var ids: Array = Array(s.defs.battle.material_ids)
+	var by_id := ids.duplicate()
+	by_id.sort()
+	check(by_id != ids, "준비: 정의 자료 차례와 ID 차례가 다르다")
+	var sc := await _fresh(s)
+	await _step(sc, "root", 1)
+	check_eq(sc.lines.map(func(l: Dictionary) -> String: return l["item"]), ids, "판매 소재 줄 = 정의 자료 차례")
+	check_eq(sc.lines.map(func(l: Dictionary) -> String: return l["item"]),
+		BagRows.bag(s, ["material"]).map(func(l: Dictionary) -> String: return l["item"]), "캠프 소지품과 같은 가방 줄")
+	check_eq(sc.debug_info(_no_css)["rows"].map(func(r: Dictionary) -> String: return r["name"]),
+		ids.map(func(id: String) -> String: return texts.t(str(s.defs.battle.materials[id]))), "snapshot 줄 이름도 같은 차례")
+	check_eq([int(sc.lines[0]["price"]), str(sc.lines[0]["icon"])], [ShopRules.sell_price(s.defs, ids[0]), "kind_material"], "판매값·아이콘은 상점이 붙인다")
+
+
+## D28-b ②: 끝에서 ↑↓ 는 옮기지 않는다. 커서 줄을 손으로 내려 가렸으면 한 번 눌러 보이게만 하고(입력 하나), 다 보이면 아무 일 없다.
+## 키와 키패드가 같다.
+func test_list_end_reveals_a_hidden_cursor_by_keys_and_keypad() -> void:
+	_kit()
+	var sc := await _fresh(_full_bag_state())
+	await _step(sc, "root", 1)
+	await _step(sc, "tab", 1)
+	var last := sc.lines.size() - 1
+	check(sc.buy_list.scroll.max_scroll() > 0.0 and last > 8, "준비: 장비 판매 목록이 넘친다(%d 줄)" % (last + 1))
+	sc.buy_list.set_cursor(last)
+	await kit.frames(1)
+	for how in ["key", "pad"]:
+		sc.buy_list.scroll.scroll_to(0.0)
+		await kit.frames(1)
+		check(not _shown(sc), how + " 준비: 손으로 올려 끝 커서가 가려졌다")
+		check(sc.pad_state()["down"] and not _pad_button(sc, "down").disabled, how + ": 끝에서도 ↓ 는 켜져 있다")
+		var n := sc.accepted_inputs
+		if how == "key":
+			await kit.press_key(KEY_DOWN)
+		else:
+			await kit.tap(kit.center_of(_pad_button(sc, "down")), FINGER)
+		check_eq([sc.buy_list.cursor, _shown(sc), sc.accepted_inputs], [last, true, n + 1], how + ": 끝 ↓ = 되돌림(입력 하나), 커서 그대로")
+		await kit.frames(1)
+		var pre := _sig(sc)
+		var scroll := sc.buy_list.scroll.scroll
+		if how == "key":
+			await kit.press_key(KEY_DOWN)
+		else:
+			await kit.tap(kit.center_of(_pad_button(sc, "down")), FINGER)
+		check_eq([_sig(sc), sc.buy_list.scroll.scroll], [pre, scroll], how + ": 다 보이면 끝 ↓ 는 아무 일 없음")
+	# 첫 줄: ↑ 도 같다.
+	sc.buy_list.set_cursor(0)
+	sc.buy_list.scroll.scroll_to(sc.buy_list.scroll.max_scroll())
+	await kit.frames(1)
+	check(not _shown(sc), "준비: 손으로 내려 첫 줄 커서가 가려졌다")
+	var m := sc.accepted_inputs
+	await kit.press_key(KEY_UP)
+	check_eq([sc.buy_list.cursor, _shown(sc), sc.accepted_inputs], [0, true, m + 1], "첫 줄 ↑ = 되돌림")
+	await kit.frames(1)
+	var pre0 := _sig(sc)
+	await kit.tap(kit.center_of(_pad_button(sc, "up")), FINGER)
+	check_eq(_sig(sc), pre0, "다 보이면 첫 줄 ↑(키패드)는 아무 일 없음")
+
+
+## D28-b ③: 줄 자료(값·흐림·진열)가 바뀌면 커서 줄을 보이게 한다(지금 상점). 같은 줄로 다시 그리기는 손으로 내린 자리를 지킨다.
+func test_list_reveals_the_cursor_when_its_rows_change() -> void:
+	_kit()
+	var s := _sold_state()
+	var sc := await _fresh(s)
+	await _to_list(sc, 1)
+	var last := sc.lines.size() - 1
+	check(sc.buy_list.scroll.max_scroll() > 0.0, "준비: 방어구 목록이 넘친다(%d 줄)" % (last + 1))
+	sc.buy_list.set_cursor(last)
+	sc.buy_list.scroll.scroll_to(0.0)
+	await kit.frames(1)
+	check(not _shown(sc), "준비: 손으로 올려 커서 줄이 가려졌다")
+	sc.refresh_view()
+	await kit.frames(1)
+	check_eq([sc.buy_list.scroll.scroll, sc.buy_list.cursor], [0.0, last], "같은 줄 다시 그리기: 손으로 내린 자리 그대로")
+	# 값이 바뀜(소지금 0 → 흐림).
+	s.money = 0
+	sc.refresh_view()
+	await kit.frames(1)
+	check(sc.buy_list.rows[0].dimmed, "준비: 소지금 0 → 줄이 흐려졌다")
+	check_eq([sc.buy_list.cursor, _shown(sc)], [last, true], "소지금이 바뀌어 줄이 바뀜 → 커서 줄이 보인다")
+	# 진열이 바뀜(꼬리를 팔아 바이저 입하, 줄이 는다).
+	sc.buy_list.scroll.scroll_to(0.0)
+	await kit.frames(1)
+	var hidden := not _shown(sc)
+	var n := sc.lines.size()
+	s.materials["item.neon_rat_tail"] = 3
+	var ev := ShopRules.sell(s, JUNK, [{"item": "item.neon_rat_tail", "qty": 3}])
+	check(ev.any(func(e: Dictionary) -> bool: return e["type"] == "unlocked"), "준비: 꼬리를 팔아 풀림")
+	sc.refresh_view()
+	await kit.frames(1)
+	check_eq(sc.lines.size(), n + 1, "준비: 진열 줄이 하나 늘었다")
+	check(hidden and _shown(sc), "진열이 바뀌어 줄이 바뀜 → 커서 줄이 보인다")
+
+
+## D28-b ④: 빈 목록은 커서 -1. 선택·↑↓·줄·키·키패드가 아무것도 바꾸지 않고 오류도 없다(판매 소모품 탭, 소재가 없는 판매, 구매 「아이템」).
+func test_empty_lists_have_cursor_minus_one_and_take_no_input() -> void:
+	_kit()
+	var cases := [
+		["구매 아이템", func() -> ExplorationState: return _state(), [["root", 0], ["branch", 3]]],
+		["판매 소모품 탭", func() -> ExplorationState: return _sell_state(), [["root", 1], ["tab", 2]]],
+		["판매 소재 없음", func() -> ExplorationState:
+			var s := _state()
+			s.materials = {}
+			return s, [["root", 1]]],
+	]
+	for c in cases:
+		var tag: String = c[0]
+		var sc := await _fresh((c[1] as Callable).call())
+		for st in c[2]:
+			await _step(sc, st[0], st[1])
+		check(sc.lines.is_empty() and sc.buy_list.row_count == 0, tag + ": 준비: 빈 목록")
+		check_eq([sc.buy_list.cursor, sc.debug_info(_no_css)["cursor"]["row"]], [-1, -1], tag + ": 커서 -1(snapshot 도)")
+		check_eq(sc.frame.desc_title, "", tag + ": 설명 비움")
+		var pad := sc.pad_state()
+		check(not pad["ok"] and not pad["up"] and not pad["down"], tag + ": 선택·↑↓ 흐림")
+		var pre := _sig(sc)
+		for a in [["confirm", null], ["cursor", 1], ["cursor", -1], ["row", 0], ["row", -1]]:
+			check(not sc.handle(a[0], a[1]), "%s: %s 거부" % [tag, str(a)])
+			await kit.frames(1)
+		for k in [KEY_ENTER, KEY_DOWN, KEY_UP]:
+			await kit.press_key(k)
+		for k in ["ok", "up", "down"]:
+			await kit.tap(kit.center_of(_pad_button(sc, k)), FINGER)
+		check_eq(_sig(sc), pre, tag + ": 아무것도 바뀌지 않는다")
+		check_eq([sc.buy_list.cursor, sc.dialog.mode, sc.notice], [-1, "", ""], tag + ": 커서 -1·창 없음·알림 없음")
