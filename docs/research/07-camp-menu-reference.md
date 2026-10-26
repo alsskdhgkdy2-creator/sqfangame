@@ -21,7 +21,7 @@ research 05 §4의 「실물 화면을 찾으면 견주어 고친다」를 이�
 | B | 동영상 「【世界樹の迷宮Ⅲ HD REMASTER】初見プレイ #1」 https://www.youtube.com/watch?v=osidGZ4RYqg | III HD 다섯 명 카드, BOOK 하위 목록 |
 | C | 동영상 「世界樹の迷宮I HD REMASTER #2 シリカ商店の顧客になる」 https://www.youtube.com/watch?v=j9I0UJBHdac (2023-06-02, research 06 출처 B) | I HD 미궁 뿌리, 대원 고르기 |
 | D | 동영상 「Etrian Odyssey II HD」 https://www.youtube.com/watch?v=0b1FH57UGJw (research 06 출처 D, Steam 영어판) | 영어판 뿌리(MAIN)와 명령 이름 |
-| E | 동영상 https://www.youtube.com/watch?v=KrZLifglE_U (I HD), https://www.youtube.com/watch?v=EuVQiWVt-fY (II HD, research 06 출처 C), 리뷰 https://al-gest.com/2023/06/03/sekaiju-hd-remaster/ (2023-06-03) | 마을 광장 뿌리, PARTY·BOOK 흐림, 중단 세이브 창(모두 보고만) |
+| E | 동영상 https://www.youtube.com/watch?v=KrZLifglE_U (I HD), https://www.youtube.com/watch?v=EuVQiWVt-fY (II HD, research 06 출처 C), 리뷰 https://al-gest.com/2023/06/03/sekaiju-hd-remaster/ (2023-06-03) | 마을 광장 뿌리, PARTY·BOOK 흐림, 중단 세이브 창(모두 보고만). **정정(2026-10-26, M3 A2)**: 보고서가 「광장」이라 한 프레임(`yt_eo1hd_b_01`·`yt_eo3hd_b_01`, B의 BOOK 둘 `yt_eo3hd_b_02`·`b_03`도)은 띠가 「第1階層 / B1F」인 미궁 캠프다. 광장의 다이얼 아래 OPTION + SAVE는 어느 프레임으로도 확인하지 못했다. 중단 세이브 창 `blog_algest_02`는 I HD 여관 「Save Game」 슬롯 목록이다 |
 
 조정자가 본 프레임은 일곱 장이다. A의 미궁 뿌리, 마을 뿌리, 대원 고르기 둘, B의 BOOK 하위 목록, C의 대원 고르기, D의 영어판 뿌리다.
 
@@ -54,6 +54,7 @@ III HD 기준이고, I·II HD와 다른 곳은 비고에 적는다. 차례는 �
 - 장소 띠에 장소 이름(「ネイピア商会」「アーモロード」)이 나온다.
 - 그림 창에 그 장소 그림(가게 안·도시)이 나온다.
 - 시설 안에서는 SAVE 단축이 없고 OPTION만 있다.
+- **정정(2026-10-26, M3 A2)**: 띠의 「アーモロード」는 본 프레임으로 확인하지 못했다(보고서의 「アーモロード 広場」 프레임은 미궁 B1F다, §1 E). 직접 본 마을 뿌리는 `yt_eo3hd_02` 「ネイピア商会」(OPTION만) 하나다.
 
 ### 2.3. 대원 고르기 (봄: C, A 둘)
 
