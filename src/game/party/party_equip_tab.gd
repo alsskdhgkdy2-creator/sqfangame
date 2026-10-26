@@ -34,11 +34,22 @@ const NOTE_X := 400.0
 const NOTE_EDGE := 20.0
 
 var menu: PartyMenu
-## 칸 커서(0~3).
-var cursor := 0
+## 공용 목록(D28) 둘이 한 목록 창을 번갈아 쓴다: 칸 줄 Slot_k(칸 고르기)와 후보 줄 Row_j(목록). 보이는 쪽만 set_rows, 다른 쪽은 hide.
+var slots: InventoryList
+var cands: InventoryList
+## 칸 커서(0~3). 목록이 열려 있으면 연 칸.
+var cursor: int:
+	get:
+		return slots.cursor if slots != null else 0
+	set(v):
+		slots.cursor = v
 var list_open := false
 ## 목록 줄 커서.
-var list_cursor := 0
+var list_cursor: int:
+	get:
+		return cands.cursor if cands != null else 0
+	set(v):
+		cands.cursor = v
 var top: MemberHeader
 var portrait: Control
 var left: Control
@@ -46,8 +57,18 @@ var window: ListWindow
 var list: PartyScroll
 var desc: DescBox
 var note_label: Label
-var slot_rows: Array[ListButton] = []
-var rows: Array[ListButton] = []
+var slot_rows: Array[ListButton]:
+	get:
+		var out: Array[ListButton] = []
+		if slots != null:
+			out.assign(slots.rows)
+		return out
+var rows: Array[ListButton]:
+	get:
+		var out: Array[ListButton] = []
+		if cands != null:
+			out.assign(cands.rows)
+		return out
 ## 목록 줄 → 장비 ID("" = 빼기). 「E」 줄은 지금 낀 장비.
 var row_items: Array[String] = []
 ## 목록 줄 → 막는 이유(growth.reason 코드, "" = 고를 수 있음). 「E」 줄은 "".
@@ -57,7 +78,6 @@ var equipped_row := -1
 ## 마지막으로 그린 값(시험·디버그): name, class, class_color, level, hp, tp, stats{키: [지금, 바꾸면, 막대 비율]}, gear{키: [지금, 바꾸면]},
 ## equip[[아이콘, 이름, 비었는지]], mark(표지 칸), preview(바꾸면 값을 보이는지).
 var drawn := {}
-var _view_size := Vector2.ZERO
 
 
 func setup(m: PartyMenu) -> void:
@@ -78,12 +98,17 @@ func setup(m: PartyMenu) -> void:
 	add_child(window)
 	list = window.list
 	list.name = "EquipList"
-	list.resized.connect(_on_list_resized)
-	for slot in BattleLimits.EQUIP_SLOTS:
-		var b := _row_button("Slot_%d" % slot)
-		b.activated.connect(func() -> void: menu.handle("slot", slot))
-		b.position = window.row_rect(slot).position
-		slot_rows.append(b)
+	slots = InventoryList.new(list, InventoryLook.new(), "Slot_")
+	slots.route = func(k: int) -> void: menu.handle("slot", k)
+	slots.ensure(BattleLimits.EQUIP_SLOTS)  # 칸 줄은 만들 때부터 있다(내용의 앞)
+	slots.changed.connect(_refresh_desc)
+	cands = InventoryList.new(list, InventoryLook.new(), "Row_")
+	cands.route = func(j: int) -> void: menu.handle("row", j)
+	cands.changed.connect(_refresh_desc)
+	# 보이는 곳 크기가 바뀌면(높은 화면 ↔ 낮은 화면) 줄을 다시 놓고 커서 줄을 보이게 한다(칸 줄은 늘 다 보인다).
+	cands.watch_resize(func() -> void:
+		if menu.state != null and visible:
+			refresh())
 	desc = DescBox.new()
 	desc.name = "EquipDesc"
 	add_child(desc)
@@ -107,25 +132,6 @@ func _deco(n: String, a0: Vector2, a1: Vector2, off: Vector4, painter: Callable)
 	PartyMenu.place(c, a0, a1, off)
 	c.draw.connect(painter.bind(c))
 	return c
-
-
-func _row_button(n: String) -> ListButton:
-	var b := ListButton.new()
-	b.name = n
-	b.scroller = list
-	list.content.add_child(b)
-	return b
-
-
-## 보이는 곳 크기가 바뀌면(높은 화면 ↔ 낮은 화면) 줄을 다시 놓고 커서 줄을 보이게 한다.
-func _on_list_resized() -> void:
-	if list.size == _view_size:
-		return
-	_view_size = list.size
-	if menu.state != null and visible:
-		refresh()
-		if list_open:
-			_show(list_cursor)
 
 
 func reset() -> void:
@@ -224,8 +230,7 @@ func dispatch(kind: String, arg: Variant) -> bool:
 			return _move(int(arg) if arg != null else 1)
 		"confirm":
 			if list_open:
-				_show(list_cursor)
-				return _choose_row(list_cursor)
+				return cands.confirm(func(_c: Control) -> bool: return _choose_row(list_cursor))
 			_open_list()
 			return true
 		"unequip":
@@ -242,46 +247,24 @@ func dispatch(kind: String, arg: Variant) -> bool:
 
 ## ↑↓ 하나(돌지 않음). 목록이면 커서 줄이 보이게 내린다. 끝에서는 커서를 옮기지 않고, 손으로 내려 커서 줄이 가려져 있으면 보이게만 한다.
 func _move(d: int) -> bool:
-	if not list_open:
-		var to_slot := clampi(cursor + d, 0, BattleLimits.EQUIP_SLOTS - 1)
-		if to_slot == cursor:
-			return false
-		cursor = to_slot
-		return true
-	var to := list_cursor + d
-	if to < 0 or to >= row_items.size():
-		if shown(list_cursor):
-			return false
-		_show(list_cursor)
-		return true
-	list_cursor = to
-	_show(to)
-	return true
-
-
-func _show(j: int) -> void:
-	var r := window.row_rect(j)
-	list.ensure_visible(r.position.y, r.end.y)
+	return cands.move(d) if list_open else slots.move(d)
 
 
 ## 목록 줄 j 가 보이는 곳 안에 다 있는지.
 func shown(j: int) -> bool:
-	return list.shows(window.row_rect(j))
+	return cands.shown_at(j)
 
 
 func _open_list() -> void:
 	list_open = true
 	_build_rows()
-	list_cursor = maxi(equipped_row, 0)
-	list.scroll_to(0.0)
-	_show(list_cursor)
+	cands.reset(maxi(equipped_row, 0))
 
 
 func close_list() -> void:
 	list_open = false
-	list_cursor = 0
-	if list != null:
-		list.scroll_to(0.0)
+	if cands != null:
+		cands.reset(0)
 
 
 ## 줄 j 고르기: 「E」 줄이면 바꾸지 않고 닫는다(규칙을 부르지 않는다). 못 끼는 줄이면 이유만 알린다(목록 그대로).
@@ -301,39 +284,13 @@ func _choose_row(j: int) -> bool:
 	return true
 
 
-## 지금 칸의 목록 줄(원작 차례): 「E」(지금 낀 것) → 그 칸 종류의 가방 장비(낄 수 있는 것, 다음에 못 끼는 것) → 「빼기」.
+## 지금 칸의 목록 줄(원작 차례, BagRows.for_slot): 「E」(지금 낀 것) → 그 칸 종류의 가방 장비(낄 수 있는 것, 다음에 못 끼는 것) → 「빼기」.
 ## 칸 종류가 다른 장비(칸 0 에 무기 아닌 것·칸 1~3 에 무기)는 넣지 않는다. 판정은 GrowthRules.equip_block.
 func _build_rows() -> void:
-	row_items.clear()
-	row_block.clear()
-	equipped_row = -1
-	var defs := menu.state.defs
-	var i := menu.member
-	var m := menu.current_member()
-	var bag := menu.state.gear_bag
-	var cur: String = m.equip[cursor]
-	if not cur.is_empty():
-		equipped_row = 0
-		row_items.append(cur)
-		row_block.append("")
-	var dim_items: Array[String] = []
-	var dim_why: Array[String] = []
-	for id in defs.battle.equipment_ids:
-		if int(bag.get(id, 0)) < 1:
-			continue
-		if GrowthRules.slot_block(defs.battle, defs.class_of(i), m.equip, cursor, id) == "slot_kind":
-			continue
-		var why := GrowthRules.equip_block(defs, i, m, bag, cursor, id)
-		if why.is_empty():
-			row_items.append(id)
-			row_block.append("")
-		else:
-			dim_items.append(id)
-			dim_why.append(why)
-	row_items.append_array(dim_items)
-	row_block.append_array(dim_why)
-	row_items.append("")
-	row_block.append(GrowthRules.equip_block(defs, i, m, bag, cursor, ""))
+	var c := BagRows.for_slot(menu.state, menu.member, cursor)
+	row_items.assign(c["items"])
+	row_block.assign(c["block"])
+	equipped_row = int(c["equipped"])
 	list_cursor = clampi(list_cursor, 0, row_items.size() - 1)
 
 
@@ -391,54 +348,32 @@ func refresh() -> void:
 		"level": top.level_text, "hp": top.hp_text, "tp": top.tp_text,
 		"stats": stats, "gear": gear, "equip": equip, "mark": cursor, "preview": preview,
 	}
-	_refresh_rows()
-	_refresh_desc()
+	_refresh_rows()  # 설명 상자는 커서 칸·줄이 바뀔 때 공용 목록이 부른다(changed → _refresh_desc)
 	for d in [top, left, portrait, window]:
 		(d as Control).queue_redraw()
 
 
-## 목록 창 줄: 칸 고르기면 Slot_k 넷, 목록이면 Row_j(쓰지 않는 줄은 감춘다). 노랑 커서는 지금 단계의 커서 줄 하나.
+## 목록 창 줄: 칸 고르기면 Slot_k 넷, 목록이면 Row_j(다른 쪽은 감춘다). 노랑 커서는 지금 단계의 커서 줄 하나.
+## 줄 모델의 id·block 은 그리지 않고 설명 상자 연결에 쓴다(같은 줄이면 설명도 같다).
 func _refresh_rows() -> void:
 	var defs := menu.state.defs
 	var m := menu.current_member()
 	var t := menu.texts
-	for slot in slot_rows.size():
-		var b := slot_rows[slot]
-		var id: String = m.equip[slot]
-		b.visible = not list_open
-		if list_open:
-			b.cancel()
-		var sr := window.row_rect(slot)
-		b.position = sr.position
-		b.size = sr.size
-		b.icon_name = SheetParts.kind_icon(defs, id)
-		b.equipped = false
-		b.show_row(t.t("party.slot.empty") if id.is_empty() else menu.item_name(id), "", "", false)
-		b.selected = slot == cursor and not list_open
-	while rows.size() < row_items.size() and list_open:
-		var j := rows.size()
-		var r := _row_button("Row_%d" % j)
-		r.activated.connect(func() -> void: menu.handle("row", j))
-		rows.append(r)
-	for j in rows.size():
-		var r := rows[j]
-		if not list_open or j >= row_items.size():
-			if r.visible:
-				r.cancel()
-			r.visible = false
-			continue
-		var id := row_items[j]
-		r.visible = true
-		var rr := window.row_rect(j)
-		r.position = rr.position
-		r.size = rr.size
-		r.icon_name = SheetParts.kind_icon(defs, id)
-		r.equipped = j == equipped_row
-		var count := "" if id.is_empty() or j == equipped_row else t.t("party.count", {"n": int(menu.state.gear_bag.get(id, 0))})
-		r.show_row(t.t("party.unequip") if id.is_empty() else menu.item_name(id), count, "", not row_block[j].is_empty())
-		r.selected = j == list_cursor
-	var n := row_items.size() if list_open else slot_rows.size()
-	list.set_content_height(ListWindow.content_height(n))
+	var models := []
+	if not list_open:
+		for slot in BattleLimits.EQUIP_SLOTS:
+			var id: String = m.equip[slot]
+			models.append({"icon": SheetParts.kind_icon(defs, id), "name": t.t("party.slot.empty") if id.is_empty() else menu.item_name(id), "id": id})
+		cands.hide()
+		slots.set_rows(models)
+	else:
+		for j in row_items.size():
+			var id := row_items[j]
+			var count := "" if id.is_empty() or j == equipped_row else t.t("party.count", {"n": int(menu.state.gear_bag.get(id, 0))})
+			models.append({"icon": SheetParts.kind_icon(defs, id), "name": t.t("party.unequip") if id.is_empty() else menu.item_name(id),
+				"right": count, "dim": not row_block[j].is_empty(), "equipped": j == equipped_row, "id": id, "block": row_block[j]})
+		slots.hide()
+		cands.set_rows(models)
 	window.queue_redraw()
 
 
