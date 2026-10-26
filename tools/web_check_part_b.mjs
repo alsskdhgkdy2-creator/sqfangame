@@ -1,6 +1,6 @@
 // web_check 부분 B(전멸·성장): 새 게임을 내보낸 저장을 바탕으로 6) 준비한 저장(전투 중, 넷 쓰러짐, 하나 HP 1 독) → 방어 → 실행 →
 // 전멸 창 7) 성장(전멸 창 「새 게임」 → 캠프(「캠프」 단추 → 명령 줄 → 대원 카드) → grant_exp → 스킬 배분 취소·확정 → supply → 장착 →
-// 새로 고침 → 승리 경로 결과 창) 8) 상점(08 §8.12: 고정 저장 tools/web_check_shop_save.json 가져오기 → 디버그 「상점」 → 사기 →
+// 새로 고침 → 승리 경로 결과 창) 8) 상점(08 §8.12: 고정 저장 tools/web_check_shop_save.json 가져오기 → 마을 문 → 광장 「정크 공방」 → 사기 →
 // 장착 → 「팔기」·여러 개 → 입하 알림 → 닫기, 받아들인 변경마다 IndexedDB = 화면). 내보내기·가져오기는 캠프 「기록」 화면에서(M2.7 R2-d).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,9 +9,12 @@ import {
   HIGH_SLASH, LEG_CUTTER, ION_SABER, VICTORY_SAVE, openRecords, closeCamp,
 } from './web_check_common.mjs';
 
+// 캔버스에 키 포커스: 마을 광장(목록 x 0~580·띠 y 0~100)과 미궁 시야 어디서나 아무것도 없는 곳을 누른다(M3 A2: 왼쪽 위는 광장 줄).
+const focusCanvas = () => page.mouse.click(Math.round(W * 0.6), Math.round(H * 0.3));
+
 export async function partB() {
   let s = await waitReady();
-  await page.mouse.click(Math.round(W * 0.3), Math.round(H * 0.3));  // 캔버스에 키 포커스
+  await focusCanvas();  // 캔버스에 키 포커스
   // 준비(확인 아님): 새 게임 상태를 내보내 전멸 저장의 바탕으로 쓴다.
   s = await openRecords();
   const [download] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), clickButton('Export', s)]);
@@ -24,6 +27,7 @@ export async function partB() {
   const enemyDefs = JSON.parse(fs.readFileSync('data/enemies/stratum1.json', 'utf8')).enemies;
   const ratHp = enemyDefs.find((e) => e.id === 'enemy.neon_rat').max_hp;
   const st = wipeDoc.state;
+  st.location = 'labyrinth';  // M3 A2: 새 게임은 마을에서 시작한다(마을에서는 전투 대기일 수 없다). 시작 칸 (2,18) 그대로 미궁으로
   st.encounter.danger = st.encounter.threshold;
   st.encounter.pending = true;
   st.party.members.forEach((m, i) => { m.hp = i < 4 ? 0 : 1; });
@@ -177,7 +181,7 @@ async function growthChecks(s) {
   s = await waitReady();
   check(s.hash === before.hash && !s.party_menu?.open && s.members[1].level === 3 && s.members[1].skills[LEG_CUTTER] === 1
     && s.members[1].equip[0] === ION_SABER, '성장 6: 새로 고침 → 같은 해시·메뉴 닫힘·성장 그대로', { before: before.hash.slice(0, 12), after: s.hash.slice(0, 12) });
-  await page.mouse.click(Math.round(W * 0.3), Math.round(H * 0.3));
+  await focusCanvas();
   // 7. 승리 경로: 고정 저장 가져오기 → 전투 중 「캠프」 없음·P 무시 → battle_finish → 결과 창 줄 → 상태 화면.
   s = await openRecords();
   const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import', s)]);
@@ -233,11 +237,19 @@ async function shopChecks(s) {
   const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), clickButton('Import', s)]);
   await chooser.setFiles(SHOP_SAVE);
   s = await waitFor((x) => !x.party_menu?.open && x.materials?.[TAIL] === 3 && x.money === 200 && !x.busy, '상점 저장 가져오기', 10000);
-  // 1. 디버그 HUD 「상점」 → 뿌리.
-  await clickButton('ShopButton');
+  // 1. M3 A2(R4 S4): 상점은 마을 광장에서 연다. 가져온 저장은 B1F 시작 칸(마을 문) → 조사 → 물음 「예」 → 광장 → 「정크 공방」.
+  await focusCanvas();  // 캔버스에 키 포커스
+  await page.keyboard.press('Space');
+  s = await waitFor((x) => x.modal === 'stairs', '마을 문 물음(조사)');
+  check(s.modal_title === '아보르 입구', '상점 1: 시작 칸 조사 → 마을 문 물음', { modal_title: s.modal_title });
+  await clickButton('StairsYes');
+  s = await waitFor((x) => x.location === 'town' && x.town?.open && x.town.page === 'plaza' && x.modal === '' && !x.busy, '광장');
+  let idb0 = await waitIdb(s);
+  check(!idb0.timeout && !s.buttons.ShopButton, '상점 1: 「예」 → 마을 광장, 자동 저장이 IndexedDB 에 반영(안내 줄 「상점」 없음)', idb0);
+  await clickButton('Plaza_shop');
   s = await waitFor((x) => x.shop?.open && x.shop.page === 'root', '상점 뿌리');
-  check(!s.buttons.ShopButton && !s.buttons.CampButton && s.buttons.Root_buy && s.buttons.Root_sell && s.shop.money === 200,
-    '상점 1: 디버그 「상점」 단추 → 상점 뿌리(덮인 탐색 단추는 요약에 없다)', { page: s.shop.page, buttons: Object.keys(s.buttons) });
+  check(!s.buttons.Plaza_shop && !s.buttons.CampButton && s.buttons.Root_buy && s.buttons.Root_sell && s.shop.money === 200,
+    '상점 1: 광장 「정크 공방」 → 상점 뿌리(덮인 마을 단추는 요약에 없다)', { page: s.shop.page, buttons: Object.keys(s.buttons) });
   await page.screenshot({ path: `${outDir}/15_shop_root_${tag}.png` });
   // 2. 「사기」 → 「무기」 → 트윈 엣지 줄 → 확인 창 「예」.
   await clickButton('Root_buy');
@@ -290,7 +302,8 @@ async function shopChecks(s) {
   s = await waitFor((x) => x.shop?.page === 'root', '뿌리로');
   await clickButton('VPad_back');
   s = await waitFor((x) => !x.shop?.open, '상점 닫힘');
-  check(!s.shop.open && s.buttons.ShopButton && s.buttons.CampButton && s.generation === g + 1,
-    '상점 5: 알림 닫기 → 「뒤로」 → 「취소」 → 상점 닫힘(탐색 단추 다시), 저장은 받아들인 변경마다 한 번', { generation: s.generation });
+  check(!s.shop.open && s.buttons.Plaza_shop && s.buttons.CampButton && s.town?.page === 'plaza' && s.town.cursor === 1 && s.generation === g + 1,
+    '상점 5: 알림 닫기 → 「뒤로」 → 「취소」 → 상점 닫힘(광장, 커서 「정크 공방」), 저장은 받아들인 변경마다 한 번',
+    { generation: s.generation, town: s.town });
   return s;
 }

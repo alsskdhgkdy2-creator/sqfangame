@@ -43,7 +43,9 @@ func test_v5_roundtrip_two_floors() -> void:
 	var s := _two_floors()
 	check_eq([s.floor_def.id, s.party.at], ["f2_test", Vector2i(3, 1)], "준비: f2 (3,1)")
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	check_eq([doc["schema"], doc["rules"], doc["state"]["floor"]], [5.0, "m3f", "f2_test"], "5판 머리·지금 층")
+	# M3 A2: 지금 쓰는 판은 6판(층 기록 짜임은 5판 그대로, 장소·날이 더해졌다).
+	check_eq([doc["schema"], doc["rules"], doc["state"]["floor"], doc["state"]["location"], doc["state"]["day"]],
+		[6.0, "m3t", "f2_test", "labyrinth", 1.0], "6판 머리·지금 층·장소·날")
 	check_eq(doc["state"]["floor_states"].keys(), ["f1_test", "f2_test"], "층 기록 둘(키 정렬)")
 	for k in ["world", "knowledge", "annotation"]:
 		check(not doc["state"].has(k), "%s 는 state 바로 아래에 없다" % k)
@@ -53,7 +55,7 @@ func test_v5_roundtrip_two_floors() -> void:
 	check(r.ok(), "읽기 %s" % r.error)
 	if not r.ok():
 		return
-	check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.state.floor_def.id, r.state.party.at], [SaveCodec.state_hash(s), 5, "f2_test", Vector2i(3, 1)], "같은 해시·지금 층·위치")
+	check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.state.floor_def.id, r.state.party.at], [SaveCodec.state_hash(s), 6, "f2_test", Vector2i(3, 1)], "같은 해시·지금 층·위치")
 	check(r.state.world == r.state.floor_states["f2_test"].world, "지금 층 기록이 f2")
 	check_eq(r.state.annotation.memos, {Vector2i(4, 1): "아래층"}, "f2 메모")
 	# 읽은 상태로 계단을 올라가면 f1 기록이 이어진다.
@@ -137,9 +139,11 @@ func _migrates(text: String, from: int, label: String) -> SaveCodec.LoadResult:
 		return r
 	check_eq([r.from_schema, r.saved_at, r.generation, r.state.generation], [from, orig["saved_at"], int(orig["generation"]), int(orig["generation"])], "%s: from_schema·saved_at·generation" % label)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
-	check_eq([doc["schema"], doc["rules"], doc["state"]["floor"], doc["state"]["floor_states"].keys()], [5.0, "m3f", "f1_test", ["f1_test"]], "%s: 5판으로 쓴다(층 하나)" % label)
+	# M3 A2: 지금 판은 6판. 옛 저장은 미궁(층 기록 짜임은 5판 그대로)·1일째로 옮긴다.
+	check_eq([doc["schema"], doc["rules"], doc["state"]["floor"], doc["state"]["floor_states"].keys(), doc["state"]["location"], doc["state"]["day"]],
+		[6.0, "m3t", "f1_test", ["f1_test"], "labyrinth", 1.0], "%s: 6판으로 쓴다(층 하나, 미궁·1일째)" % label)
 	var again := SaveCodec.decode(JSON.stringify(doc), _defs())
-	check(again.ok() and again.from_schema == 5 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 5판 다시 읽기 같은 해시" % label)
+	check(again.ok() and again.from_schema == 6 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 6판 다시 읽기 같은 해시" % label)
 	if from >= 2:
 		# 층 기록은 옛 문서의 world·knowledge·annotation 그대로(정규화해 견줌).
 		var o: Dictionary = orig["state"]

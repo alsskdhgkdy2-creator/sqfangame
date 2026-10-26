@@ -6,7 +6,7 @@ extends RefCounted
 
 ## 층 ID(파일 이름이 된다).
 const FLOOR_ID_PATTERN := "^[a-z][a-z0-9_]*$"
-const SET_KEYS := ["id", "floors"]
+const SET_KEYS := ["id", "floors", "entrance"]
 const STAIR_WAYS := ["up", "down"]
 
 const MAX_SIZE := 64
@@ -29,13 +29,16 @@ class Result:
 class SetResult:
 	extends RefCounted
 	var floors: Array[FloorModel] = []
+	## 마을로 나가는 문이 있는 층 ID(M3 A2, "entrance"): 그 층의 시작 칸이 마을 입구다. 없으면 "".
+	var entrance := ""
 	var errors: Array[String] = []
 
 	func ok() -> bool:
 		return errors.is_empty()
 
 
-## 층 묶음 파일({"id", "floors": [층 ID, …]})과 같은 폴더의 <층 ID>.json 을 읽고 층 사이 검사(check_set)까지 한다.
+## 층 묶음 파일({"id", "floors": [층 ID, …], "entrance": 층 ID(선택)})과 같은 폴더의 <층 ID>.json 을 읽고 층 사이 검사(check_set)까지 한다.
+## entrance(M3 A2)는 마을과 이어진 층이다(첫 층이어야 한다, GameDefs.from_parts 가 본다). 그 층의 시작 칸이 마을로 나가는 문이다.
 static func load_set(path: String) -> SetResult:
 	var r := SetResult.new()
 	var file := path.get_file()
@@ -52,6 +55,11 @@ static func load_set(path: String) -> SetResult:
 			r.errors.append("%s: %s 는 모르는 키다" % [file, str(k)])
 	if typeof(data.get("id")) != TYPE_STRING or str(data["id"]).is_empty():
 		r.errors.append("%s: id 는 빈 문자열이 아닌 문자열이어야 한다" % file)
+	if data.has("entrance"):
+		if typeof(data["entrance"]) != TYPE_STRING or str(data["entrance"]).is_empty():
+			r.errors.append("%s: entrance 는 층 ID 문자열이어야 한다" % file)
+		else:
+			r.entrance = data["entrance"]
 	if typeof(data.get("floors")) != TYPE_ARRAY or data["floors"].is_empty():
 		r.errors.append("%s: floors 는 층 ID 가 하나 이상인 배열이어야 한다" % file)
 		return r
@@ -80,7 +88,7 @@ static func load_set(path: String) -> SetResult:
 	return r
 
 
-## 층 사이 검사: ID 가 겹치지 않음, 첫 층에 시작 칸, 첫 층이 아니면 올라가는 계단이 하나 이상,
+## 층 사이 검사: ID 가 겹치지 않음, 첫 층에 시작 칸·첫 층이 아니면 시작 칸 없음(M3 A2: 시작 칸은 마을 입구 자리다), 첫 층이 아니면 올라가는 계단이 하나 이상,
 ## 계단은 다른 층의 계단과 짝(서로 가리킴), 내려가는 계단은 바로 아래층·올라가는 계단은 바로 위층, 짝과 방향이 반대.
 static func check_set(floors: Array[FloorModel]) -> Array[String]:
 	var out: Array[String] = []
@@ -120,6 +128,8 @@ static func check_set(floors: Array[FloorModel]) -> Array[String]:
 				out.append("%s 과 짝 계단의 방향(way)이 같다" % where)
 		if i > 0 and ups == 0:
 			out.append("%s: 첫 층이 아니면 올라가는 계단(up)이 있어야 한다" % f.id)
+		if i > 0 and f.has_start():
+			out.append("%s: start 는 첫 층에만 둔다(시작 칸은 마을 입구 자리다)" % f.id)
 	return out
 
 

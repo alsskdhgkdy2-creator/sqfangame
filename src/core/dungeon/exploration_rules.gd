@@ -3,14 +3,15 @@
 class_name ExplorationRules
 extends RefCounted
 
-## STAIRS(M3 A1): 서 있는 계단으로 층을 바꾼다(화면이 확인 창 「예」 뒤에 부른다). 값이 바뀌지 않게 맨 뒤에 둔다.
-enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, REST, STAIRS }
+## STAIRS(M3 A1): 서 있는 계단으로 층을 바꾼다(화면이 확인 창 「예」 뒤에 부른다). B1F 마을 문 위면 마을로 나간다(M3 A2).
+## ENTER(M3 A2): 마을에서 미궁 B1F 시작 칸으로 들어간다(아보르 입구 「탐사 시작」). 값이 바뀌지 않게 새 행동은 맨 뒤에 둔다.
+enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, REST, STAIRS, ENTER }
 
 ## 행동 이름(공략 행동열 파일·디버그용) → Action.
 const ACTION_NAMES := {
 	"forward": Action.FORWARD, "back": Action.BACK, "strafe_left": Action.STRAFE_LEFT, "strafe_right": Action.STRAFE_RIGHT,
 	"turn_left": Action.TURN_LEFT, "turn_right": Action.TURN_RIGHT, "investigate": Action.INVESTIGATE, "rest": Action.REST,
-	"stairs": Action.STAIRS,
+	"stairs": Action.STAIRS, "enter": Action.ENTER,
 }
 const AUTOMAP_OFF := "off"
 const AUTOMAP_FLOOR := "floor"
@@ -19,8 +20,9 @@ const AUTOMAP_MODES := ["off", "floor", "full"]
 
 
 ## 새 게임: 첫 층(B1F)의 시작 칸을 방문·관찰·자동 기록하고 한계값을 처음 뽑는다. 대원은 HP·TP 가득(defs.members()), 시작 소지금, 빈 상점(08 §2).
-## 층 기록은 첫 층 것 하나만 있다(M3 A1).
-static func new_game(defs: GameDefs, seed_value: int, automap: String) -> ExplorationState:
+## 층 기록은 첫 층 것 하나만 있다(M3 A1). in_town(M3 A2, 게임 화면의 새 게임)이면 마을(광장)에서 시작하고 시작 칸은 기록하지 않는다
+## (ENTER 가 기록한다). 한계값은 같은 난수로 뽑으므로 난수 상태는 미궁 새 게임과 같다. 1일째.
+static func new_game(defs: GameDefs, seed_value: int, automap: String, in_town: bool = false) -> ExplorationState:
 	var s := ExplorationState.new()
 	var floor_def := defs.first_floor()
 	s.defs = defs
@@ -31,7 +33,10 @@ static func new_game(defs: GameDefs, seed_value: int, automap: String) -> Explor
 	s.party.members = defs.members()
 	s.money = ExplorationState.START_MONEY
 	s.encounter.roll_threshold(s.rng, floor_def.threshold_min, floor_def.threshold_max)
-	record_cell(s, floor_def.start_at, automap)
+	if in_town:
+		s.location = ExplorationState.TOWN
+	else:
+		record_cell(s, floor_def.start_at, automap)
 	return s
 
 
@@ -52,10 +57,17 @@ static func can_act(s: ExplorationState) -> bool:
 	return not s.wiped and not s.encounter.pending
 
 
+## 마을(M3 A2)에서는 ENTER 만 받고 나머지는 rejected town(상태 그대로). 미궁에서 ENTER 는 막힘 not_town.
 static func apply(s: ExplorationState, action: int, automap: String) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	if s.wiped or s.encounter.pending:
 		events.append({"type": "rejected", "reason": "wiped" if s.wiped else "pending"})
+		return events
+	if s.in_town():
+		if action == Action.ENTER:
+			_enter(s, events, automap)
+		else:
+			events.append({"type": "rejected", "reason": "town"})
 		return events
 	match action:
 		Action.TURN_LEFT, Action.TURN_RIGHT:
@@ -67,6 +79,8 @@ static func apply(s: ExplorationState, action: int, automap: String) -> Array[Di
 			_rest(s, events)
 		Action.STAIRS:
 			_take_stairs(s, events, automap)
+		Action.ENTER:
+			events.append({"type": "blocked", "reason": "not_town"})
 		_:
 			_move(s, _move_dir(s.party.facing, action), action == Action.FORWARD, events, automap)
 	return events
@@ -214,18 +228,35 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 	_stairs_event(s, events)
 
 
-## 서 있는 칸이 계단이면 stairs 이벤트(way·to)를 더하고 true.
-static func _stairs_event(s: ExplorationState, events: Array[Dictionary]) -> bool:
+## 서 있는 칸의 계단: {way, to}(계단이면 짝 층 ID, B1F 마을 문이면 to = "town", M3 A2). 아니면 빈 사전.
+static func stair_here(s: ExplorationState) -> Dictionary:
+	if s.in_town():
+		return {}
 	var st := s.floor_def.stair_at(s.party.at)
-	if st == null:
+	if st != null:
+		return {"way": st.way, "to": st.to_floor}
+	if s.defs != null and s.defs.is_gate(s.floor_def, s.party.at):
+		return {"way": "up", "to": ExplorationState.TOWN}
+	return {}
+
+
+## 서 있는 칸이 계단(마을 문 포함)이면 stairs 이벤트(way·to)를 더하고 true.
+static func _stairs_event(s: ExplorationState, events: Array[Dictionary]) -> bool:
+	var st := stair_here(s)
+	if st.is_empty():
 		return false
-	events.append({"type": "stairs", "way": st.way, "to": st.to_floor})
+	events.append({"type": "stairs", "way": st["way"], "to": st["to"]})
 	return true
 
 
 ## 계단으로 층 바꾸기(M3 A1): 짝 계단이 있는 층으로 들어가 그 계단 칸에 서서 계단의 exit 쪽을 본다. 계단 칸을 방문·관찰·자동 기록한다.
 ## 걸음·위험도·한계값·난수는 그대로이고 인카운트 판정도 없다(위험도는 층과 상관없이 이어진다). 계단이 아니면 막힘 not_stairs.
+## B1F 마을 문(M3 A2)이면 마을로 나간다: 층·칸·방향·걸음·위험도·한계값·난수는 그대로이고 이벤트 to_town.
 static func _take_stairs(s: ExplorationState, events: Array[Dictionary], automap: String) -> void:
+	if s.defs != null and s.defs.is_gate(s.floor_def, s.party.at):
+		s.location = ExplorationState.TOWN
+		events.append({"type": "to_town"})
+		return
 	var st := s.floor_def.stair_at(s.party.at)
 	if st == null:
 		events.append({"type": "blocked", "reason": "not_stairs"})
@@ -238,6 +269,19 @@ static func _take_stairs(s: ExplorationState, events: Array[Dictionary], automap
 	s.party.facing = t.exit
 	record_cell(s, t.at, automap)
 	events.append({"type": "floor_changed", "from": from, "to": target.id, "at": t.at, "facing": t.exit})
+
+
+## 마을에서 미궁으로(M3 A2, 아보르 입구 「탐사 시작」): 첫 층의 시작 칸에 서서 시작 방향을 보고 그 칸을 기록한다.
+## 새 원정이라 위험도는 0(한계값은 그대로, 난수를 쓰지 않는다). 걸음 그대로. 도착에는 계단 물음이 없다(A1 계단과 같다).
+static func _enter(s: ExplorationState, events: Array[Dictionary], automap: String) -> void:
+	var f := s.defs.first_floor()
+	s.location = ExplorationState.LABYRINTH
+	s.enter_floor(f)
+	s.party.at = f.start_at
+	s.party.facing = f.start_facing
+	s.encounter.danger = 0
+	record_cell(s, f.start_at, automap)
+	events.append({"type": "entered", "floor": f.id, "at": f.start_at, "facing": f.start_facing})
 
 
 ## 휴식(06 §8.8, M3 여관 자리표시): 층의 시작 칸에서만. 모든 대원 HP·TP 최대(쓰러진 대원도). 위험도·걸음·난수 그대로.

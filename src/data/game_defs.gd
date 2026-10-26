@@ -19,6 +19,8 @@ class Result:
 ## 층 ID → FloorModel, 그리고 깊이 차례(첫 층 = B1F). 지금 층은 ExplorationState.floor_def 다.
 var floors := {}
 var floor_ids: Array[String] = []
+## 마을과 이어진 층 ID(M3 A2, 층 묶음의 "entrance"): 그 층의 시작 칸이 마을로 나가는 문이다. 없으면 ""(시험 묶음은 마을 문이 없다).
+var entrance := ""
 var party: PartyData
 var battle: BattleDb
 
@@ -28,7 +30,7 @@ static func load_paths(labyrinth_path: String, party_path: String, data_dir: Str
 	var fr := FloorLoader.load_set(labyrinth_path)
 	var party := PartyData.read_path(party_path)
 	var db := BattleDb.load_dir(data_dir)
-	var r := from_parts(fr.floors, party, db, text_db)
+	var r := from_parts(fr.floors, party, db, text_db, true, fr.entrance)
 	var errs: Array[String] = []
 	errs.append_array(fr.errors)
 	if fr.ok():
@@ -43,7 +45,9 @@ static func load_paths(labyrinth_path: String, party_path: String, data_dir: Str
 
 ## 이미 읽은 조각을 묶고 참조를 본다. floors 는 깊이 차례의 층 묶음(층 사이 검사 check_set 도 여기서 한다).
 ## require_table 이 참이면(게임용) 층마다 출현 표가 있어야 한다. party 는 이 함수가 resolve 한다(같은 PartyData 를 두 GameDefs 에 넘기지 않는다).
-static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: BattleDb, text_db: TextDb = null, require_table: bool = true) -> Result:
+## entrance(M3 A2)는 마을 문이 있는 층 ID 이고, 있으면 첫 층이어야 한다.
+static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: BattleDb, text_db: TextDb = null, require_table: bool = true,
+		entrance: String = "") -> Result:
 	var r := Result.new()
 	r.errors.append_array(db.errors)
 	r.warnings.append_array(db.warnings)
@@ -52,6 +56,8 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 		r.errors.append("층 정의가 없다")
 	else:
 		r.errors.append_array(FloorLoader.check_set(floor_list))
+		if not entrance.is_empty() and entrance != floor_list[0].id:
+			r.errors.append("entrance: 마을 문은 첫 층(%s)에 있어야 하는데 %s 다" % [floor_list[0].id, entrance])
 	if db.ok() and party.errors.is_empty():
 		party.resolve(db)
 		r.errors.append_array(party.errors)
@@ -75,6 +81,7 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 		for f in floor_list:
 			d.floors[f.id] = f
 			d.floor_ids.append(f.id)
+		d.entrance = entrance
 		d.party = party
 		d.battle = db
 		r.defs = d
@@ -92,7 +99,7 @@ static func assemble(floor_list: Array[FloorModel], party: PartyData, db: Battle
 	return d
 
 
-## 첫 층(B1F, 미궁 입구가 있는 층). 새 게임이 여기서 시작한다.
+## 첫 층(B1F, 미궁 입구가 있는 층). 마을에서 들어오면 여기 시작 칸에 선다.
 func first_floor() -> FloorModel:
 	return floors[floor_ids[0]]
 
@@ -100,6 +107,11 @@ func first_floor() -> FloorModel:
 ## 층 ID → FloorModel. 묶음에 없으면 null.
 func floor_by_id(id: String) -> FloorModel:
 	return floors.get(id)
+
+
+## 층 f 의 칸 c 가 마을로 나가는 문인지(M3 A2): 묶음의 entrance 층의 시작 칸.
+func is_gate(f: FloorModel, c: Vector2i) -> bool:
+	return not entrance.is_empty() and f != null and f.id == entrance and f.has_start() and c == f.start_at
 
 
 ## 깊이(첫 층 1). 묶음에 없으면 0.

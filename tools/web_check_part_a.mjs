@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { idbMatches } from './web_check_lib.mjs';
 import {
   W, H, SEED, outDir, route, FOLLOW_UP, page, log, check, snap, request, waitFor, waitReady, clickButton, waitIdb,
-  IDB_WAIT_MS, battles, battleTurns, reloadChecked, act, openRecords, closeCamp,
+  IDB_WAIT_MS, battles, battleTurns, reloadChecked, act, openRecords, closeCamp, enterLabyrinth,
 } from './web_check_common.mjs';
 
 // 한 번의 페이지 호출 안에서 상태 요약(글)을 먼저 읽고 그다음 IndexedDB 의 자동 저장을 읽는다(순서 고정, 표본 간격을 줄인다).
@@ -37,7 +37,11 @@ export async function partA() {
   let s = await waitReady();
   check(s.user_dir === '/userfs/sqfangame', 'user:// 경로', { user_dir: s.user_dir });
   check(s.seed === SEED, `새 게임 시드 = 주소의 seed ${SEED}`, { seed: s.seed });
-  check(s.autosaves === 1 && s.modal === '', '새 게임 자동 저장', { autosaves: s.autosaves, modal: s.modal });
+  // M3 A2: 처음 실행 → 타이틀 「새 게임」 → 마을 광장(새 게임 자동 저장 하나) → 「아보르 입구」 → 「탐사 시작」(자동 저장 둘째).
+  check(s.autosaves === 1 && s.modal === '' && s.location === 'town' && s.day === 1 && s.town?.page === 'plaza', '새 게임 자동 저장(마을 광장·1일째)',
+    { autosaves: s.autosaves, modal: s.modal, location: s.location, day: s.day, town: s.town?.page });
+  s = await enterLabyrinth();
+  check(s.autosaves === 2 && s.at[0] === 2 && s.at[1] === 18 && s.modal === '', '탐사 시작 → B1F 시작 칸(물음 없음), 자동 저장', { autosaves: s.autosaves, at: s.at, modal: s.modal });
   // M2.7 R1: 기본은 지도 닫힘(시야 전체 + HUD), 지도 도구는 보이지 않는다.
   check(s.map_open === false && s.lens_cover === 0 && !s.buttons.Tool_wall && !!s.buttons.MapButton, '시작: 지도 닫힘·렌즈 가운데', { map_open: s.map_open, lens_cover: s.lens_cover });
   await page.screenshot({ path: `${outDir}/01_start.png` });
@@ -65,6 +69,12 @@ export async function partA() {
       await page.screenshot({ path: `${outDir}/cp${String(cp.after).padStart(2, '0')}.png` });
     }
   }
+  // 공략의 마지막 행동은 시작 칸(마을 문)에서 끝난다(M3 A2): 마을로 나가는 물음이 뜬다 → 「아니오」.
+  s = await waitFor((x) => x.modal === 'stairs', '마을 문 물음');
+  check(s.modal_title === '아보르 입구' && s.at[0] === 2 && s.at[1] === 18 && s.buttons.StairsYes && s.buttons.StairsNo,
+    '공략 끝 시작 칸: 마을 문 물음(「아보르 입구」)', { modal_title: s.modal_title, at: s.at });
+  await clickButton('StairsNo');
+  s = await waitFor((x) => x.modal === '' && x.location === 'labyrinth', '「아니오」 → 그대로');
   check(s.shortcuts_open === 1, '공략 끝: 지름길 열림', { at: s.at, shortcuts_open: s.shortcuts_open, passages_found: s.passages_found, battles, battleTurns, ms: Date.now() - t0 });
   const restOk = simRest && Array.isArray(simRest.hashes) && simRest.hashes.length === simRest.actions && realRest.length === simRest.actions
     && simRest.hashes.every((h, k) => typeof h === 'string' && h === realRest[k]);

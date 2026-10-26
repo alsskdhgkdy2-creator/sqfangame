@@ -8,6 +8,10 @@
 ## 노랑 채움은 하나: 커서 줄의 이름 알약(새 게임 줄은 그 알약). 커서 값 알약은 제 채움 그대로 노란 고리만. 그림은 공용 ListParts(판·줄·알약).
 ## 값·일은 바깥(탐색 화면)이 menu.records 갈고리로 준다: slots·save·load·export·import·automap·set_automap·new_game.
 ## 키보드: ↑↓ 줄(여섯, 줄을 바꾸면 칸 번호는 줄 길이로 자른다), ←→ 줄 안, Enter 누름. 단추를 누르면(포인터) 커서도 그 단추로.
+## M3 A2(D28): 판을 여러 화면이 같이 쓴다. 주인(host)은 texts·records·state·handle(kind, arg)·open_dialog(kind, after)를 가진
+## 아무 Control(캠프 PartyMenu, 타이틀 TitleScreen)이고, 줄 묶음(row_set)이 보일 줄과 줄마다의 알약을 정한다:
+##   camp = 위 여섯 줄 그대로, title_load = 슬롯 셋(「불러오기」만)·파일(「가져오기」만), title_settings = 자동 지도만.
+## 줄은 판 위에서부터 채운다. 단추 이름·입력 종류는 줄 묶음과 상관없이 같다(보이지 않는 단추는 누르기를 받지 않는다).
 class_name PartyRecordsTab
 extends Control
 
@@ -34,8 +38,17 @@ const VALUE_X := TRACK_X + ListParts.OPT_TRACK_INSET + LABEL_W + PILL_GAP
 const VALUE_W := TRACK_X + TRACK_W - ListParts.OPT_TRACK_INSET - VALUE_X
 ## 「새 게임」: 오른쪽 열(두 알약 줄의 둘째 칸)과 같은 x·폭, 판 아래 끝에서 16 위.
 const NEW_GAME_BOTTOM := 16.0
+## 줄 묶음 → 줄 종류 차례(slot0~2 · file · automap · new_game). new_game 은 길이 아니라 판 오른쪽 아래 알약 하나다.
+const ROW_SETS := {
+	"camp": ["slot0", "slot1", "slot2", "file", "automap", "new_game"],
+	"title_load": ["slot0", "slot1", "slot2", "file"],
+	"title_settings": ["automap"],
+}
 
-var menu: PartyMenu
+## 주인(PartyMenu·TitleScreen: texts·records·state·handle·open_dialog 를 가진 Control). 타입은 일부러 두지 않는다.
+var menu
+## 지금 줄 묶음(ROW_SETS 열쇠).
+var row_set := "camp"
 ## 커서(줄, 칸): 줄 0~2 = 슬롯(0 저장·1 불러오기), 줄 3 = 파일(내보내기·가져오기), 줄 4 = 자동 지도 셋, 줄 5 = 새 게임.
 var cur_row := 0
 var cur_col := 0
@@ -53,7 +66,7 @@ var _centred: Array = []
 var shift := 0.0
 
 
-func setup(m: PartyMenu) -> void:
+func setup(m: Control, rows: String = "camp") -> void:
 	menu = m
 	mouse_filter = MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
@@ -82,6 +95,56 @@ func setup(m: PartyMenu) -> void:
 	_anchor(b, Vector2(0.5, 1), Vector2(0.5, 1),
 		Vector4(-PANEL_W / 2.0 + ng.position.x, bottom - PILL_H, -PANEL_W / 2.0 + ng.end.x, bottom))
 	band_buttons.append(b)
+	set_rows(rows)
+
+
+## 줄 묶음을 바꾼다: 보일 단추만 보이고, 길 k 의 알약을 그 줄의 단추 수로 다시 나눈다(위에서부터 채움). 커서는 맨 위.
+func set_rows(rows: String) -> void:
+	assert(ROW_SETS.has(rows), "모르는 줄 묶음: " + rows)
+	row_set = rows
+	var shown := {}
+	var k := 0
+	for kind in row_kinds():
+		var bs := row_buttons(kind)
+		for b in bs:
+			shown[b] = true
+		if kind == "new_game":
+			continue
+		var pr := pill_rects(k, bs.size())
+		for i in bs.size():
+			var r: Rect2 = pr[i]
+			_anchor(bs[i], Vector2(0.5, 0), Vector2(0.5, 0),
+				Vector4(-PANEL_W / 2.0 + r.position.x, PANEL_TOP + r.position.y, -PANEL_W / 2.0 + r.end.x, PANEL_TOP + r.end.y))
+		k += 1
+	for b in save_buttons + load_buttons + band_buttons:
+		(b as ListButton).visible = shown.has(b)
+		if not shown.has(b):
+			(b as ListButton).cancel()
+	reset()
+
+
+## 지금 줄 묶음의 줄 종류 차례.
+func row_kinds() -> Array:
+	return ROW_SETS[row_set]
+
+
+## 줄 종류 kind 의 알약(지금 줄 묶음에서 보이는 것만, 왼쪽부터).
+func row_buttons(kind: String) -> Array:
+	var title := row_set != "camp"
+	if kind.begins_with("slot"):
+		var i := int(kind.substr(4))
+		return [load_buttons[i]] if title else [save_buttons[i], load_buttons[i]]
+	match kind:
+		"file":
+			return [band_buttons[1]] if title else band_buttons.slice(0, 2)
+		"automap":
+			return band_buttons.slice(2, 2 + ExplorationRules.AUTOMAP_MODES.size())
+	return [band_buttons[band_buttons.size() - 1]]
+
+
+## 길로 그리는 줄 수(new_game 알약 줄은 빼고).
+func track_count() -> int:
+	return row_kinds().filter(func(k: String) -> bool: return k != "new_game").size()
 
 
 ## 슬롯 i 의 저장 이름(SaveStore 수동 슬롯).
@@ -137,7 +200,7 @@ func place(s: Vector2) -> void:
 	for e in _centred:
 		var off: Vector4 = e[3]
 		PartyMenu.place(e[0], e[1], e[2], off + Vector4(shift, 0, shift, 0))
-	if menu.state != null and visible:
+	if visible and _can_read():
 		refresh()
 
 
@@ -175,14 +238,11 @@ func window_rect() -> Rect2:
 
 # ---- 커서 ----
 
-## 커서 순서의 단추 줄(줄 0~2 슬롯, 3 파일, 4 자동 지도, 5 새 게임).
+## 커서 순서의 단추 줄(camp: 줄 0~2 슬롯, 3 파일, 4 자동 지도, 5 새 게임. 다른 묶음은 ROW_SETS 차례).
 func grid() -> Array:
 	var out := []
-	for i in 3:
-		out.append([save_buttons[i], load_buttons[i]])
-	out.append(band_buttons.slice(0, 2))
-	out.append(band_buttons.slice(2, 2 + ExplorationRules.AUTOMAP_MODES.size()))
-	out.append([band_buttons[band_buttons.size() - 1]])
+	for kind in row_kinds():
+		out.append(row_buttons(kind))
 	return out
 
 
@@ -213,13 +273,17 @@ func dispatch(kind: String, arg: Variant) -> bool:
 			var b := cursor_button()
 			if b.disabled:
 				return false
-			return dispatch(str(b.get_meta("kind")), b.get_meta("arg"))
+			return dispatch(str(b.get_meta("kind")), _arg(b))
 		"record_save":
+			if not _shown(save_buttons, arg):
+				return false
 			_point(save_buttons[int(arg)])
 			_dirty = true
 			menu.records["save"].call(_slot_id(int(arg)))
 			return true
 		"record_load":
+			if not _shown(load_buttons, arg):
+				return false
 			var i := int(arg)
 			_point(load_buttons[i])
 			if i >= slots.size() or not slots[i]["ok"]:
@@ -227,27 +291,44 @@ func dispatch(kind: String, arg: Variant) -> bool:
 			menu.records["load"].call(_slot_id(i))
 			return true
 		"record_export":
+			if not band_buttons[0].visible:
+				return false
 			_point(band_buttons[0])
 			menu.records["export"].call()
 			return true
 		"record_import":
+			if not band_buttons[1].visible:
+				return false
 			_point(band_buttons[1])
 			menu.records["import"].call()
 			return true
 		"record_automap":
 			var mode := str(arg)
 			var k := ExplorationRules.AUTOMAP_MODES.find(mode)
-			if k < 0:
+			if k < 0 or not band_buttons[2 + k].visible:
 				return false
 			_point(band_buttons[2 + k])
 			menu.records["set_automap"].call(mode)
 			return true
 		"record_new_game":
+			if not band_buttons[band_buttons.size() - 1].visible:
+				return false
 			_point(band_buttons[band_buttons.size() - 1])
 			var start: Callable = menu.records["new_game"]
 			menu.open_dialog("new_game", start)
 			return true
 	return false
+
+
+## 슬롯 단추 줄 bs 의 arg 번 단추가 있고 지금 줄 묶음에서 보이는지(타이틀에서 「저장」·「내보내기」·「새 게임」은 일하지 않는다).
+static func _shown(bs: Array[ListButton], arg: Variant) -> bool:
+	var i := int(arg) if arg != null else -1
+	return i >= 0 and i < bs.size() and bs[i].visible
+
+
+## 알약의 값(슬롯 번호·자동 지도 모드). 값이 null 이면(내보내기·가져오기·새 게임) set_meta 가 열쇠를 지우므로 열쇠가 없으면 null.
+static func _arg(b: ListButton) -> Variant:
+	return b.get_meta("arg") if b.has_meta("arg") else null
 
 
 ## 포인터로 누른 단추로 커서를 옮긴다.
@@ -261,8 +342,13 @@ func _point(b: ListButton) -> void:
 			return
 
 
+## 값을 읽을 수 있는지: 갈고리가 있고, 캠프는 탐색 상태도 있어야 한다(타이틀은 상태 없이 읽는다).
+func _can_read() -> bool:
+	return menu != null and menu.records.has("slots") and (row_set != "camp" or menu.state != null)
+
+
 func refresh() -> void:
-	if menu.state == null or not menu.records.has("slots"):
+	if not _can_read():
 		return
 	if _dirty:
 		slots = menu.records["slots"].call()
@@ -275,7 +361,7 @@ func refresh() -> void:
 		band_buttons[2 + k].checked = ExplorationRules.AUTOMAP_MODES[k] == mode
 	var cb := cursor_button()
 	for b in save_buttons + load_buttons + band_buttons:
-		(b as ListButton).selected = b == cb
+		(b as ListButton).selected = b == cb and (b as ListButton).visible
 		(b as ListButton).queue_redraw()
 	window.queue_redraw()
 
@@ -290,15 +376,17 @@ func card_lines(i: int) -> Array[String]:
 	return ["%s  %s" % [d["leader"], d["level"]], str(d["where"]), str(d["time"])]
 
 
-## 줄 k(0~4)의 이름 알약 글 줄. 슬롯: 「n  대표 Lv k」와 「층 · 걸음   저장 시각」(빈 칸은 「n  비어 있음」 한 줄).
+## 길 k 의 이름 알약 글 줄. 슬롯: 「n  대표 Lv k」와 「층 · 걸음   저장 시각」(빈 칸은 「n  비어 있음」 한 줄).
 func row_label_lines(k: int) -> Array[String]:
-	if k < 3:
-		var c := card_lines(k)
-		var head := "%d  %s" % [k + 1, c[0]]
+	var kind: String = row_kinds()[k]
+	if kind.begins_with("slot"):
+		var i := int(kind.substr(4))
+		var c := card_lines(i)
+		var head := "%d  %s" % [i + 1, c[0]]
 		if c[1].is_empty():
 			return [head]
 		return [head, "%s   %s" % [c[1], c[2]]]
-	if k == 3:
+	if kind == "file":
 		return [menu.texts.t("camp.records.file")]
 	return [menu.texts.t("menu.automap")]
 
@@ -314,11 +402,11 @@ func help_text() -> String:
 	var kind := str(b.get_meta("kind"))
 	match kind:
 		"record_save":
-			return menu.texts.t("camp.records.help.save", {"n": int(b.get_meta("arg")) + 1})
+			return menu.texts.t("camp.records.help.save", {"n": int(_arg(b)) + 1})
 		"record_load":
 			if b.disabled:
 				return menu.texts.t("camp.records.help.load_empty")
-			return menu.texts.t("camp.records.help.load", {"n": int(b.get_meta("arg")) + 1})
+			return menu.texts.t("camp.records.help.load", {"n": int(_arg(b)) + 1})
 		"record_export":
 			return menu.texts.t("camp.records.help.export")
 		"record_import":
@@ -333,5 +421,5 @@ func _draw_window() -> void:
 	ListParts.draw_panel(window, Rect2(Vector2.ZERO, window.size), "option")
 	SheetParts._text(window, Vector2(HELP.position.x, HELP.get_center().y + HELP_FS * 0.36), help_text(), HELP_FS, ListParts.PANEL_OPT_TEXT,
 		HELP.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-	for k in ROWS:
+	for k in track_count():
 		ListParts.draw_option_row(window, track_rect(k), LABEL_W, row_label_lines(k), label_state(k))

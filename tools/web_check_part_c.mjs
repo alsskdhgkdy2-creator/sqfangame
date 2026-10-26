@@ -1,0 +1,122 @@
+// web_check 부분 C(마을 고리, M3 A2a): 빈 IndexedDB 의 타이틀(이어하기 없음) → 「새 게임」 → 마을 광장(줄·흐림·띠·1일째) → 캠프 장소 띠 →
+// 「아보르 입구」 → 「탐사 시작」 → B1F 시작 칸 → 한 칸 나갔다 돌아옴 → 마을 문 물음 「예」 → 광장(IndexedDB = 화면) → 「정크 공방」 → 뒤로 광장
+// → 캠프 「기록」 슬롯 1 저장 → 새로 고침 → 타이틀 「이어하기」(같은 해시) → 새로 고침 → 타이틀 「불러오기」 → 슬롯 1(같은 해시).
+// A2b(숙소 숙박·기록)는 다음 단계에서 이 부분에 더한다.
+import {
+  W, H, outDir, page, log, check, snap, waitFor, clickButton, waitIdb, waitTitle, enterLabyrinth, openRecords,
+} from './web_check_common.mjs';
+
+const PLAZA = ['Plaza_inn', 'Plaza_shop', 'Plaza_pub', 'Plaza_guild', 'Plaza_council', 'Plaza_entrance'];
+
+export async function partC() {
+  const tag = `${W}x${H}`;
+  await page.waitForFunction(() => window.sqfDebug && window.sqfDebug.ready, null, { timeout: 60000 });
+  // 1. 타이틀(이어하기 없음) → 새 게임 → 광장.
+  let t = await waitTitle();
+  check(t.hash === '' && t.title.page === 'menu' && !t.title.continue && JSON.stringify(t.title.rows) === JSON.stringify(['load', 'new_game', 'settings'])
+    && !t.buttons.TitleContinue && t.buttons.TitleLoad && t.buttons.TitleNewGame && t.buttons.TitleSettings && !t.buttons.CampButton,
+  '마을 1: 빈 저장소 타이틀 = 불러오기·새 게임·설정(이어하기 없음, 상태 없음)', { title: t.title, buttons: Object.keys(t.buttons) });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${outDir}/c01_title_${tag}.png` });
+  await clickButton('TitleNewGame');
+  let s = await waitFor((x) => x.location === 'town' && x.town?.open && !x.busy, '새 게임 → 광장');
+  check(s.town.page === 'plaza' && JSON.stringify(s.town.rows) === JSON.stringify(PLAZA)
+    && JSON.stringify(s.town.dim) === JSON.stringify([true, false, true, true, true, false]) && s.town.band[0] === '묵어서 쉬고, 진행을 기록한다'
+    && s.day === 1 && s.town.day === '1일째' && s.autosaves === 1 && s.town.art === 'plaza' && !s.buttons.MapButton && !s.buttons.Pad_forward
+    && s.buttons.CampButton && PLAZA.every((n) => s.buttons[n]),
+  '마을 1: 광장 — 원작 차례 여섯 줄·흐림(숙소·정보상 바·길드·관리국)·띠·1일째, 새 게임 자동 저장, 탐색 HUD 없음',
+  { town: s.town, day: s.day, autosaves: s.autosaves, buttons: Object.keys(s.buttons) });
+  let idb = await waitIdb(s);
+  check(!idb.timeout, '마을 1: 새 게임 자동 저장이 IndexedDB 에 반영', idb);
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${outDir}/c02_plaza_${tag}.png` });
+  await clickButton('Plaza_pub');
+  s = await waitFor((x) => x.town?.notice !== '', '흐린 줄 이유');
+  check(s.town.band[1] === '아직 문을 열지 않았다' && s.town.page === 'plaza' && s.town.cursor === 2 && !s.shop?.open && s.autosaves === 1,
+    '마을 1: 흐린 줄 「정보상 바」 → 띠 둘째 줄에 이유만', { town: s.town });
+  await clickButton('CampButton');
+  s = await waitFor((x) => x.party_menu?.open && x.party_menu.page === 'root', '캠프(광장)');
+  check(s.party_menu.ribbon === '뿌리마을 광장' && !s.buttons.Plaza_shop && s.town.covered,
+    '마을 1: 다이얼 자리 「캠프」 → 캠프 장소 띠 「뿌리마을 광장」(광장 줄은 덮임)', { ribbon: s.party_menu.ribbon, covered: s.town.covered });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${outDir}/c03_camp_in_town_${tag}.png` });
+  await clickButton('VPad_back');
+  s = await waitFor((x) => !x.party_menu?.open && x.town?.open && !x.town.covered, '캠프 닫힘');
+
+  // 2. 입구 → 탐사 시작 → 한 칸 나갔다 돌아옴 → 마을 문 물음 「예」 → 광장.
+  await clickButton('Plaza_entrance');
+  s = await waitFor((x) => x.town?.page === 'entrance', '아보르 입구');
+  check(s.town.band[0] === '아보르 B1F로 내려간다' && s.buttons.Entrance_start && s.buttons.Entrance_back && !s.buttons.Plaza_shop,
+    '마을 2: 아보르 입구 — 띠·줄 둘', { town: s.town });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${outDir}/c04_entrance_${tag}.png` });
+  await clickButton('VPad_back');
+  s = await waitFor((x) => x.town?.page === 'plaza' && x.town.cursor === 5, '입구 취소 → 광장');
+  s = await enterLabyrinth();
+  check(s.at[0] === 2 && s.at[1] === 18 && s.modal === '' && s.autosaves === 2 && s.buttons.MapButton && s.buttons.Pad_forward && !s.town.open,
+    '마을 2: 탐사 시작 → B1F 시작 칸(물음 없음), 탐색 HUD, 자동 저장', { at: s.at, modal: s.modal, autosaves: s.autosaves });
+  await page.mouse.click(Math.round(W * 0.3), Math.round(H * 0.3));  // 캔버스에 키 포커스
+  let g = s.generation;
+  await page.keyboard.press('KeyW');
+  s = await waitFor((x) => x.generation > g && !x.busy, '한 칸 나감');
+  g = s.generation;
+  await page.keyboard.press('KeyS');
+  s = await waitFor((x) => x.generation > g && x.modal === 'stairs', '문으로 돌아옴 → 물음');
+  check(s.modal_title === '아보르 입구' && s.at[0] === 2 && s.at[1] === 18, '마을 2: 시작 칸으로 돌아오면 마을 문 물음', { modal_title: s.modal_title, at: s.at });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${outDir}/c05_gate_prompt_${tag}.png` });
+  g = s.generation;
+  await clickButton('StairsYes');
+  s = await waitFor((x) => x.generation > g && x.location === 'town' && x.town?.open && x.modal === '' && !x.busy, '「예」 → 광장');
+  idb = await waitIdb(s);
+  check(s.town.page === 'plaza' && s.town.cursor === 0 && !s.buttons.MapButton && !idb.timeout, '마을 2: 「예」 → 광장, 자동 저장이 IndexedDB 에 반영',
+    { town: s.town, idb });
+
+  // 3. 정크 공방 → 뒤로 → 광장(커서 그대로).
+  await clickButton('Plaza_shop');
+  s = await waitFor((x) => x.shop?.open && x.shop.page === 'root', '상점 뿌리');
+  check(!s.buttons.Plaza_shop && s.buttons.Root_buy && s.town.covered && s.town.art === 'plaza', '마을 3: 「정크 공방」 → 상점(광장 덮임)', { town: s.town });
+  await clickButton('VPad_back');
+  s = await waitFor((x) => !x.shop?.open && x.town?.open && !x.town.covered, '상점 닫힘');
+  check(s.town.page === 'plaza' && s.town.cursor === 1 && s.buttons.Plaza_shop, '마을 3: 상점 닫기 → 광장, 커서 「정크 공방」', { town: s.town });
+
+  // 4. 캠프 「기록」 슬롯 1 저장(A2b 에서 숙소 「기록한다」로 옮긴다) → 닫기.
+  s = await openRecords();
+  await clickButton('Save_slot1');
+  s = await waitFor((x) => x.party_menu?.records?.cards?.[0]?.[1] !== '', '슬롯 1 저장');
+  const slotHash = s.hash;
+  await clickButton('VPad_back');
+  await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');
+  await clickButton('VPad_back');
+  s = await waitFor((x) => !x.party_menu?.open && x.town?.open, '캠프 닫힘');
+  idb = await waitIdb(s);
+
+  // 5. 새로 고침 → 타이틀 「이어하기」 → 광장, 같은 해시.
+  const before = s;
+  await page.reload();
+  await page.waitForFunction(() => window.sqfDebug && window.sqfDebug.ready, null, { timeout: 60000 });
+  t = await waitTitle();
+  check(t.title.continue && t.title.rows[0] === 'continue' && t.buttons.TitleContinue, '마을 5: 새로 고침 → 타이틀(이어하기 첫 줄)', { title: t.title });
+  await clickButton('TitleContinue');
+  s = await waitFor((x) => x.town?.open && !x.busy, '이어하기 → 광장');
+  check(s.hash === before.hash && s.location === 'town' && s.town.page === 'plaza' && s.autosaves === 0, '마을 5: 이어하기 → 광장, 같은 해시(저장 안 함)',
+    { before: before.hash.slice(0, 12), after: s.hash.slice(0, 12), autosaves: s.autosaves });
+
+  // 6. 새로 고침 → 타이틀 「불러오기」 → 슬롯 1 → 같은 해시.
+  await page.reload();
+  await page.waitForFunction(() => window.sqfDebug && window.sqfDebug.ready, null, { timeout: 60000 });
+  t = await waitTitle();
+  await clickButton('TitleLoad');
+  await page.waitForTimeout(150);
+  t = await snap();
+  check(t.title.page === 'load' && t.buttons.Load_slot1 && t.buttons.Import && !t.buttons.Save_slot1 && !t.buttons.Export && !t.buttons.NewGame,
+    '마을 6: 타이틀 불러오기 = 슬롯 「불러오기」·「가져오기」만', { title: t.title, buttons: Object.keys(t.buttons) });
+  await page.screenshot({ path: `${outDir}/c06_title_load_${tag}.png` });
+  await clickButton('Load_slot1');
+  s = await waitFor((x) => x.town?.open && !x.busy && !x.title?.open, '슬롯 1 불러오기');
+  check(s.hash === slotHash && s.location === 'town' && s.autosaves === 1, '마을 6: 슬롯 1 → 광장, 같은 해시(불러오기 자동 저장)',
+    { slot: slotHash.slice(0, 12), now: s.hash.slice(0, 12), autosaves: s.autosaves });
+  idb = await waitIdb(s);
+  check(!idb.timeout, '마을 6: 불러오기 자동 저장이 IndexedDB 에 반영', idb);
+  log('부분 C 끝');
+}

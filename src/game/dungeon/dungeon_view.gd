@@ -146,10 +146,23 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_on_viewport_resized)
 
 
+## 멈춘 동안 놓친 화면 크기 바뀜이 있다(다시 켜질 때 _on_viewport_resized 를 한 번 부른다).
+var _resize_missed := false
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_ENABLED and _resize_missed:
+		_resize_missed = false
+		_on_viewport_resized()
+
+
 ## 화면 크기가 바뀌면 보정 반경이 바뀔 수 있다. 정지 중이면 정지 해를 바로 다시 계산한다.
 ## 연출 중이면 정지 해를 끼워 넣지 않는다. 먼저 새 반경에서 이번 프레임의 δ 를 정하고(지금 δ 가 새 조건에서도 안전하면
 ## 그대로, 아니면 그에 가장 가까운 안전한 값, solve_near), 그 실제로 보인 값에서 남은 연출을 다시 계획한다.
 func _on_viewport_resized() -> void:
+	if not can_process():
+		_resize_missed = true  # 시야를 멈춘 동안(타이틀·마을, M3 A2)은 카메라 보정을 풀지 않는다: 다시 켜질 때 한 번
+		return
 	_update_lens()
 	_last_pose = Transform3D()
 	if _index == null:

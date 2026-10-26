@@ -1,12 +1,12 @@
-## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
+## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
 class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 5
-const RULES := "m3f"
-## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~4판은 읽을 때 5판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1).
-const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f"}
+const SCHEMA := 6
+const RULES := "m3t"
+## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~5판은 읽을 때 6판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1·A2).
+const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t"}
 ## 5판 층 기록(floor_states.<층 ID>)의 키. 1~4판은 이 셋이 state 바로 아래에 있다(층 하나).
 const FLOOR_STATE_KEYS := ["world", "knowledge", "annotation"]
 ## 1판 검사에 쓰는 옛 대원 표(06 §8.6 2단계): [id, 최대 HP], 칸 순서.
@@ -109,6 +109,7 @@ static func now_utc() -> String:
 
 
 ## 5판 state(M3 A1): 지금 층(floor)·위치는 전체 몫이고, 세계 상태·방문 기록·지도 그림은 들어가 본 층마다 floor_states.<층 ID> 에 둔다.
+## 6판(M3 A2): 파티가 있는 곳(location: town·labyrinth)과 날(day)을 더한다.
 static func state_to_dict(s: ExplorationState) -> Dictionary:
 	var members: Array = []
 	for m in s.party.members:
@@ -120,6 +121,8 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 	for id in s.floor_states:
 		floor_states[id] = floor_state_to_dict(s.floor_states[id])
 	return {
+		"location": s.location,
+		"day": s.day,
 		"floor": s.floor_def.id,
 		"party": {"at": [s.party.at.x, s.party.at.y], "facing": Dir.name_of(s.party.facing), "members": members},
 		"floor_states": floor_states,
@@ -172,7 +175,7 @@ static func _cell_set(d: Dictionary) -> Array[String]:
 # ---- 읽기 ----
 
 ## 저장 문서를 읽어 새 상태를 만든다. 실패하면 error만 있고 state는 null.
-## 입력 글과 defs 만 읽고 공유 상태를 바꾸지 않는다. 1~4판은 07 §8.4·08 §4·M3 A1 순서로 옮긴 뒤 5판 검사를 다시 거친다.
+## 입력 글과 defs 만 읽고 공유 상태를 바꾸지 않는다. 1~5판은 07 §8.4·08 §4·M3 A1·A2 순서로 옮긴 뒤 6판 검사를 다시 거친다.
 static func decode(text: String, defs: GameDefs) -> LoadResult:
 	var r := LoadResult.new()
 	var json := JSON.new()
@@ -195,6 +198,8 @@ static func decode(text: String, defs: GameDefs) -> LoadResult:
 			return migrate_v3(doc, defs)
 		4:
 			return migrate_v4(doc, defs)
+		5:
+			return migrate_v5(doc, defs)
 	var s := ExplorationState.new()
 	r.error = _read_state(doc["state"], defs, [], SCHEMA, s)
 	if not r.error.is_empty():
@@ -308,6 +313,23 @@ static func migrate_v4(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
+## 5판 → 6판(M3 A2). doc 은 머리 검사를 통과한 5판 문서. ① 5판 규칙으로 다 검사 ② 원본 saved_at·generation 으로 6판 encode
+## (5판 저장은 모두 미궁 안이다: location labyrinth, day 1) ③ 6판 읽기를 그대로 거친 결과만 돌려준다.
+static func migrate_v5(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, [], 5, old)
+	if not err.is_empty():
+		r.error = "5판 검사 실패: " + err
+		return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "5판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 5
+	return again
+
+
 ## 3판 → 5판(08 §4, 4판 문서를 거치지 않는다). doc 은 머리 검사를 통과한 3판 문서.
 ## ① 3판 원본을 3판 규칙으로 다 검사(전투 객체도 만든다) ② 통과한 임시 상태에 시작 소지금·빈 상점
 ## ③ 원본 saved_at·generation 으로 5판 encode ④ 5판 읽기를 그대로 거친 결과만 돌려준다.
@@ -355,6 +377,7 @@ static func _check_header(doc: Dictionary) -> String:
 ## schema 3: 대원 성장 필드를 먼저 읽어 최대 HP·TP 를 정한 뒤 hp·tp·battle 을 본다(07 §8.3). gear_bag 도 읽는다.
 ## schema 4: gear_bag 다음에 money·shop 을 읽는다(08 §4).
 ## schema 5: 층 기록이 floor_states.<층 ID> 에 있다(M3 A1). 1~4판은 state 바로 아래의 world·knowledge·annotation 이 state.floor 층의 기록이다.
+## schema 6: location·day(M3 A2). 마을이면 층이 첫 층·위치가 그 시작 칸이고 전투 대기·전투·전멸이 아니다. 5판 이하는 미궁·1일째.
 ## 위치(party.at)와 전투 편성은 지금 층(state.floor)으로, 층 기록은 각자 그 층으로 검사한다.
 ## schema 2 의 battle 은 검사만 하고 만들지 않는다(옮긴 대원으로 migrate_v2 가 만든다).
 static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int, s: ExplorationState) -> String:
@@ -363,7 +386,9 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 		return "알 수 없는 층이다: %s" % str(d.get("floor"))
 	s.defs = defs
 	s.enter_floor(f)
-	var err := _read_party(d, s, table, schema)
+	var err := _read_location(d, s) if schema >= 6 else ""
+	if err.is_empty():
+		err = _read_party(d, s, table, schema)
 	if err.is_empty():
 		err = _read_floor_states(d, s, schema)
 	for part in ["encounter", "misc"]:
@@ -398,6 +423,23 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 			s.battle = BattleState.from_dict(d["battle"], defs, s.party.members)
 	if s.encounter.pending != (d["battle"] != null):
 		return "전투 대기(pending)와 battle 이 맞지 않다"
+	if s.in_town():
+		if s.floor_def != defs.first_floor() or s.party.at != s.floor_def.start_at:
+			return "마을에 있으면 층은 첫 층(%s), 위치는 그 시작 칸이어야 한다" % defs.first_floor().id
+		if s.encounter.pending or s.wiped:
+			return "마을에서는 전투 대기·전멸일 수 없다"
+	return ""
+
+
+## 6판 location·day(M3 A2).
+static func _read_location(d: Dictionary, s: ExplorationState) -> String:
+	if typeof(d.get("location")) != TYPE_STRING or not ExplorationState.LOCATIONS.has(d["location"]):
+		return "location 이 town·labyrinth 가 아니다"
+	var day: Variant = to_int(d.get("day")) if typeof(d.get("day")) != TYPE_BOOL else null
+	if day == null or day < 1 or day > ExplorationState.DAY_MAX:
+		return "day 가 1~%d 정수가 아니다" % ExplorationState.DAY_MAX
+	s.location = d["location"]
+	s.day = day
 	return ""
 
 

@@ -38,6 +38,8 @@ func _walk_into_battle(s: DungeonScreen) -> void:
 		if s.state.party.at.y <= 15:
 			break
 		await kit.press_key(KEY_W)
+		if s.modal.kind == "stairs":
+			await kit.press_key(KEY_ESCAPE)  # M3 A2: 시작 칸(마을 문)에 서면 나가는 물음이 뜬다 → 「아니오」로 지나간다
 
 
 ## 전투 층에서 기본 정책 명령을 많아야 turns 턴 내고(연출은 즉시), 아직 전투 중이면 디버그 요청 battle_finish(층의 입구 → 규칙의
@@ -619,6 +621,10 @@ func test_one_action_per_frame() -> void:
 	check(s._action_frame > f, "두 번째 행동은 다른 프레임 (%d > %d)" % [s._action_frame, f])
 	check_eq(s.autosave_count, saves + 2, "행동 둘 = 저장 둘")
 	check_eq(s._queued, -1, "미리 받은 칸 비움")
+	# M3 A2: 시작 칸은 마을 문이라 조사하면 나가는 물음이 뜬다(물음이 다음 행동보다 먼저). 한 칸 나가서 본다.
+	await kit.press_key(KEY_W)
+	check_eq(s.state.party.at, START + Vector2i(0, -1), "준비: 문 밖 한 칸")
+	saves += 1
 	# 연출 없는 조사 + 회전도 같다.
 	kit.key(KEY_SPACE, true)
 	kit.key(KEY_D, true)
@@ -829,6 +835,10 @@ func test_blocked_pad_press_gets_no_old_approval() -> void:
 ## 나중 입력이 바꿔 W 하나만 한다(북쪽 이동 뒤 회전 같은 순서 뒤집힘 없음).
 func test_queued_action_is_replaced_not_bypassed() -> void:
 	var s := await _open()
+	# M3 A2: 시작 칸은 마을 문이라 조사하면 나가는 물음이 뜬다. 한 칸 나가서 본다.
+	await kit.press_key(KEY_W)
+	var start := s.state.party.at
+	check_eq(start, START + Vector2i(0, -1), "준비: 문 밖 한 칸")
 	var saves := s.autosave_count
 	kit.key(KEY_SPACE, true)
 	kit.key(KEY_D, true)
@@ -839,10 +849,10 @@ func test_queued_action_is_replaced_not_bypassed() -> void:
 	await tree.process_frame  # 다음 프레임: 화면 _process 보다 먼저 입력이 온다
 	kit.key(KEY_W, true)
 	kit.key(KEY_W, false)
-	check_eq(s.state.party.at, START, "W 는 미리 받는 칸을 건너뛰지 않는다")
+	check_eq(s.state.party.at, start, "W 는 미리 받는 칸을 건너뛰지 않는다")
 	check_eq(s._queued, A.FORWARD, "나중 입력이 미리 받는 칸을 바꾼다")
 	await kit.frames(4)
-	check_eq(s.state.party.at, START + Vector2i(0, -1), "W 하나 = 북쪽 한 칸")
+	check_eq(s.state.party.at, start + Vector2i(0, -1), "W 하나 = 북쪽 한 칸")
 	check_eq(s.state.party.facing, Dir.N, "D 는 하지 않는다")
 	check_eq(s.autosave_count, saves + 2, "조사 + W = 저장 둘")
 	check_eq(s._queued, -1, "미리 받은 칸 비움")

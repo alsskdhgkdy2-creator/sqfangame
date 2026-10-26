@@ -4,6 +4,16 @@ extends RefCounted
 
 ## 시작 소지금(08 §2, 자체 값).
 const START_MONEY := 200
+## 파티가 있는 곳(M3 A2): 마을(광장·시설은 화면 쪽이고 저장하지 않는다)·미궁.
+const TOWN := "town"
+const LABYRINTH := "labyrinth"
+const LOCATIONS := ["town", "labyrinth"]
+## 날(M3 A2): 1일째부터. 여관에 묵을 때만 오른다(A2b). 저장 검사 범위의 끝.
+const DAY_MAX := 99999
+
+## 마을이면 층은 첫 층·위치는 그 시작 칸이다(규칙이 지키는 불변식, 저장 검사도 본다). 이어하기는 늘 광장으로 돌아온다.
+var location := LABYRINTH
+var day := 1
 
 ## 지금 층(M3 A1). 넣으면 enter_floor 와 같다(그 층의 기록으로 바뀐다).
 var floor_def: FloorModel:
@@ -51,6 +61,10 @@ var generation := 0
 
 ## 층이 정해지기 전의 빈 기록(새 상태 객체).
 var _here := FloorState.new()
+
+
+func in_town() -> bool:
+	return location == TOWN
 
 
 ## 층 f 로 들어간다: 처음이면 그 층의 기록을 만들고, 지금 층 기록으로 둔다(위치·방향은 부르는 쪽이 정한다).

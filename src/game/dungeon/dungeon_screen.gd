@@ -15,6 +15,9 @@
 ## 계단(M3 A1): 계단 칸에 멈추거나 계단 위에서 조사하면 연출이 끝난 뒤 계단 확인 창(「예」 먼저, Esc·Backspace = 「아니오」)을 띄우고,
 ##   「예」면 규칙 행동 STAIRS 로 층을 바꾼 뒤 시야·지도·층 문패를 그 층으로 다시 맞추고 자동 저장한다. 위험도·걸음은 그대로다.
 ## 미리 받는 입력은 하나(나중 것이 대신)이고, 창이 열릴 때·불러올 때·포커스를 잃을 때·입력 창이 닫힌 뒤 비운다.
+## 마을(M3 A2): 시작은 타이틀(TitleScreen, 층 2 맨 위)이다. 상태가 마을에 있으면 마을 화면(TownScreen, 층 2)과 층 0 마을 바탕
+##   (TownBackdrop)을 띄우고 3D 시야·HUD·지도를 감춘다. 타이틀·마을에서는 시야 SubViewport 를 그리지 않고(UPDATE_DISABLED)
+##   시야 노드의 처리(연출·카메라 보정)도 멈춘다. 미궁에 들어가면(ENTER) 되살린다. B1F 시작 칸이 마을 문이다(계단 물음과 같은 창).
 class_name DungeonScreen
 extends Control
 
@@ -83,6 +86,9 @@ var url_query := ""
 var anim_speed := 1.0
 ## 네이티브 디버그 실행인지(파티 메뉴의 임시 보급, 07 §5.7). 시험은 일반 실행을 보려고 false 로 바꾼다.
 var native_debug := OS.is_debug_build()
+## 시작 방식(M3 A2): "title" = 타이틀(실제 게임), "labyrinth" = 자동 저장을 읽거나 B1F 에서 새 게임(장면 시험 기본),
+## "town" = 자동 저장을 읽거나 마을에서 새 게임(시험).
+var start_mode := "title"
 
 # ---- 상태 ----
 var state: ExplorationState
@@ -98,6 +104,8 @@ var save_pending := SavePending.new()
 ## 자동 저장에 성공한 횟수와 마지막 실패 이유(시험·디버그용).
 var autosave_count := 0
 var last_autosave_error := ""
+## 디버그 상태 요약을 낸 횟수(시험: 타이틀에서도 입력마다 다시 내는지).
+var debug_publishes := 0
 
 # ---- 화면 부품 ----
 var view: DungeonView
@@ -121,22 +129,26 @@ var layers := {}  # 이름 → CanvasLayer
 var modal: ModalLayer
 var battle_layer: BattleLayer
 var party_menu: PartyMenu
-## 상점(08 §8, D24 임시 입구: 디버그일 때만 안내 줄 「상점」·디버그 요청 open_shop 으로 연다).
+## 상점(08 §8): 마을 광장 「정크 공방」으로 연다(M3 A2, R4 S4).
 var shop_screen: ShopScreen
+## 마을 화면·타이틀(층 2)과 마을 바탕(층 0, 3D 시야 위·HUD 아래).
+var town_screen: TownScreen
+var title_screen: TitleScreen
+var town_backdrop: TownArt.TownBackdrop
 ## 정의 읽기에 실패했을 때의 오류 화면(06 §5.6). 정상 시작이면 null.
 var start_error: Control
 var pad := {}  # 규칙 행동 → TouchButton
 var map_button: TouchButton
 ## 안내 줄 「캠프」(원작 CAMP·MAP 의 CAMP).
 var camp_button: TouchButton
-## 안내 줄 「상점」(08 §8.1 임시 입구, 디버그 주소이거나 네이티브 디버그 실행일 때만 보인다). 마을(S4)이 생기면 없앤다.
-var shop_button: TouchButton
 ## 휴식(06 §8.8): 층의 시작 칸에서만 보인다.
 var rest_button: TouchButton
 var _floor_label := Label.new()
 var _steps_label := Label.new()
 var _toast := Label.new()
 var _toast_left := 0.0
+## 지금 알림 줄이 저장 실패 안내인지: 계단·마을 문 물음이 떠도 이것은 남긴다(05 §8.4, 다른 안내는 물음 띠와 겹치므로 지운다).
+var _toast_save := false
 ## 「저장 중」 표시(층 4, 화면 위 가운데). 대기가 있으면 보이고 없으면 바로 감춘다(나타날 때만 짧게 밝아진다).
 var save_chip := Control.new()
 var _flash := ColorRect.new()
@@ -177,6 +189,12 @@ var _member_names: Array[String] = []
 var _views_ann: MapAnnotation
 var _views_version := -1
 var _file_dialog: FileDialog
+## 시야 SubViewport 와 그 원래 갱신 방식. _view_on 이 거짓이면 그리지 않고 시야 노드도 멈춘다(타이틀·마을).
+var _view_sv: SubViewport
+var _view_sv_mode := SubViewport.UPDATE_WHEN_VISIBLE
+var _view_on := true
+## 시야를 끈 뒤 아직 층 메시를 다시 만들지 않았다.
+var _view_floor_stale := false
 
 
 func _ready() -> void:
@@ -206,25 +224,56 @@ func _ready() -> void:
 		bridge.on_debug_request = _on_debug_request
 		bridge.setup_debug()
 		_debug_dirty = true
-	shop_button.visible = debug_tools()
-	_start()
+	_boot()
 
 
-func _start() -> void:
+## 시작 방식대로 시작한다(M3 A2).
+func _boot() -> void:
+	match start_mode:
+		"labyrinth":
+			_start()
+		"town":
+			_start(true)
+		_:
+			_open_title()
+
+
+## 타이틀을 띄운다: 자동 저장을 읽을 수 있으면 「이어하기」가 첫 줄. 읽을 후보가 있는데 모두 깨졌으면 알림을 띄운다.
+func _open_title() -> void:
+	var l := store.load_slot(SaveStore.AUTO)
+	title_screen.open(l.ok())
+	_layout()
+	if not l.ok() and l.had_candidates:
+		_alert(texts.t("title.auto_broken"))
+	_debug_dirty = true
+
+
+## 타이틀 「이어하기」: 자동 저장을 읽는다(저장하지 않는다, 05 §8.4). 그사이 깨졌으면 알림만.
+func _continue_game() -> void:
+	var l := store.load_slot(SaveStore.AUTO)
+	if not l.ok():
+		_alert(texts.t("msg.load_failed", {"reason": l.result.error}))
+		return
+	_set_state(l.result.state)
+	_check_windows()
+
+
+## 자동 저장을 읽거나(있으면) 새 게임으로 시작한다. in_town 이면 새 게임은 마을에서(시험의 "town" 시작).
+func _start(in_town: bool = false) -> void:
 	var l := store.load_slot(SaveStore.AUTO)
 	if l.ok():
 		_set_state(l.result.state)
 	else:
-		_set_state(_new_state())
+		_set_state(_new_state(in_town))
 		_autosave()
 		if l.had_candidates:
 			_alert(texts.t("msg.auto_broken"))
 	_check_windows()
 
 
-func _new_state() -> ExplorationState:
+func _new_state(in_town: bool = false) -> ExplorationState:
 	var seed_value := seed_override if seed_override >= 0 else ExplorationRules.fresh_seed()
-	return ExplorationRules.new_game(store.defs, seed_value, settings.automap)
+	return ExplorationRules.new_game(store.defs, seed_value, settings.automap, in_town)
 
 
 ## 상태를 통째로 바꾼다(새 게임·불러오기·가져오기). 미리 받은 입력을 비우고 시야·지도를 다시 맞춘다.
@@ -241,23 +290,70 @@ func _set_state(s: ExplorationState) -> void:
 		shop_screen.close_shop(false)  # 앞 상태의 상점 화면·물음은 버린다
 	_clear_input()
 	_stairs_ask = false
-	if floor_def != state.floor_def:
-		floor_def = state.floor_def
-		view.setup(floor_def, state.world)
-	else:
-		view.rebuild(state.world)
-	view.set_pose(state.party.at, state.party.facing)
+	if _view_on and not state.in_town():
+		_sync_view()
 	map_window.set_state(state)
 	minimap.set_state(state)
 	_refresh_floor_text()
 	_refresh_hud()
+	_apply_location()
+
+
+## 시야를 지금 상태(층·세계·자세)에 맞춘다. 층이 같으면 메시만 다시 만든다.
+func _sync_view() -> void:
+	if floor_def != state.floor_def or _view_floor_stale:
+		floor_def = state.floor_def
+		view.setup(floor_def, state.world)
+	else:
+		view.rebuild(state.world)
+	_view_floor_stale = false
+	view.set_pose(state.party.at, state.party.facing)
+
+
+## 장소에 맞게 화면을 바꾼다(M3 A2): 마을이면 타이틀을 닫고 광장을 연다(지도 판은 닫는다). 미궁이면 마을 화면을 닫는다.
+## 3D 시야·HUD·바탕은 _layout 이 장소대로 보이고 감춘다(마을·타이틀에서는 시야를 그리지 않는다).
+func _apply_location() -> void:
+	if state == null:
+		return
+	if title_screen.is_open():
+		title_screen.close_title(false)
+	if state.in_town():
+		_map_open = false
+		town_screen.open(state)
+	elif town_screen.is_open():
+		town_screen.close_town(false)
+	_layout()
+
+
+func _in_town() -> bool:
+	return state != null and state.in_town()
+
+
+func _title_open() -> bool:
+	return title_screen != null and title_screen.is_open()
+
+
+## 3D 시야를 켜고 끈다. 끄면 SubViewport 를 그리지 않고(UPDATE_DISABLED) 시야 노드의 처리(연출·카메라 보정)를 멈춘다.
+## 켜면 원래 갱신 방식으로 되돌리고 지금 상태에 시야를 맞춘다.
+func _set_view_active(on: bool) -> void:
+	if on == _view_on:
+		return
+	_view_on = on
+	view_container.visible = on
+	_view_sv.render_target_update_mode = _view_sv_mode if on else SubViewport.UPDATE_DISABLED
+	view.process_mode = PROCESS_MODE_INHERIT if on else PROCESS_MODE_DISABLED
+	if on and state != null:
+		_sync_view()
+	elif not on:
+		_view_floor_stale = true  # 꺼진 동안 층이 바뀔 수 있다(불러오기): 켤 때 메시를 다시 만든다
 
 
 ## 층이 바뀌었다(계단, M3 A1): 시야를 그 층으로 다시 만들고 지도 판(열려 있으면 그대로 열린 채)·미니맵·층 문패를 맞춘다.
 func _show_floor() -> void:
-	floor_def = state.floor_def
-	view.setup(floor_def, state.world)
-	view.set_pose(state.party.at, state.party.facing)
+	if _view_on:
+		floor_def = state.floor_def
+		view.setup(floor_def, state.world)
+		view.set_pose(state.party.at, state.party.facing)
 	map_window.set_state(state)
 	minimap.set_state(state)
 	_refresh_floor_text()
@@ -300,13 +396,27 @@ func _on_pad(action: int) -> void:
 
 ## 행동을 받지 않는 조건: 상태 없음, 창(메뉴·전멸·메모·파일 고르기 등)·전투 층·파티 메뉴가 열림, 전투 중·전멸,
 ## 지도에서 진행 중인 상호작용(그리기 획·끌어 이동·핀치·아이콘·메모 누르기).
+## 마을·타이틀에서도 받지 않는다(M3 A2: 마을의 입력은 마을 화면이 받고, 미궁에 들어가는 ENTER 는 _enter_labyrinth 가 따로 부른다).
 func _input_blocked() -> bool:
-	return state == null or modal.is_open() or battle_layer.is_open() or party_menu.is_open() or shop_screen.is_open() \
-		or not ExplorationRules.can_act(state) or map.is_interacting()
+	return state == null or state.in_town() or _title_open() or modal.is_open() or battle_layer.is_open() or party_menu.is_open() \
+		or shop_screen.is_open() or not ExplorationRules.can_act(state) or map.is_interacting()
+
+
+## 마을 화면 「탐사 시작」(M3 A2): 마을에 있고 다른 창이 없을 때 규칙 행동 ENTER.
+func _enter_labyrinth() -> void:
+	if not _town_free():
+		return
+	_do_action(A.ENTER)
+
+
+## 마을에서 창(알림·캠프·상점·타이틀)이 없는지.
+func _town_free() -> bool:
+	return _in_town() and not _title_open() and not modal.is_open() and not party_menu.is_open() and not shop_screen.is_open() \
+		and not battle_layer.is_open()
 
 
 func _do_action(action: int) -> void:
-	if _input_blocked():
+	if (not _town_free()) if action == A.ENTER else _input_blocked():
 		return
 	# 한 프레임에 행동 하나: 같은 프레임의 두 번째 행동은 미리 받는 칸에 넣어 다음 프레임 이후에 한다.
 	if Engine.get_process_frames() == _action_frame:
@@ -332,12 +442,15 @@ func _do_action(action: int) -> void:
 	var rebuild := false
 	var slid := false
 	var changed := false
+	var located := false
 	for ev in events:
 		match ev["type"]:
 			"stairs":
 				_stairs_ask = true
 			"floor_changed":
 				changed = true
+			"to_town", "entered":
+				located = true
 			"blocked":
 				_show_toast(texts.t("msg." + str(ev["reason"])))
 			"shortcut_opened", "passage_found":
@@ -357,8 +470,16 @@ func _do_action(action: int) -> void:
 		_show_toast(texts.t("msg.slide"))
 	if changed:
 		_show_toast(FloorNames.place(texts, state.defs, state.floor_def))
+	if located:
+		_show_toast(texts.t("town.name") if state.in_town() else FloorNames.place(texts, state.defs, state.floor_def))
 	# 저장 실패 안내가 위 행동 안내에 덮이지 않게 안내 뒤에 저장한다.
 	_autosave()
+	if located:
+		_apply_location()  # 마을: 광장을 열고 시야를 끈다. 미궁: 마을 화면을 닫고 시야를 켜 시작 칸에 맞춘다
+		if state.in_town():
+			_refresh_hud()
+			_debug_dirty = true
+			return  # 마을에는 연출이 없다(시야는 멈춰 있다)
 	if changed:
 		_show_floor()
 	elif rebuild:
@@ -419,6 +540,8 @@ func _held_action() -> Array:
 ## 전투 중에 다른 창(알림·파티 메뉴)이 떠 있으면 그 창이 닫힌 뒤 전투 층을 연다(_close_alert·_on_party_closed 가 다시 부른다).
 ## 전멸 창은 파티 메뉴를 닫고 띄운다(전멸이면 성장 조작을 받지 않는다).
 func _check_windows() -> bool:
+	if state == null:
+		return false
 	if state.wiped:
 		if party_menu.is_open():
 			party_menu.close_menu(false)
@@ -454,6 +577,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if shop_screen.is_open():
 		return  # 상점이 키를 받는다(08 §8: 열린 동안 캠프·지도·이동은 열리거나 움직이지 않는다)
+	if _title_open() or _in_town():
+		return  # 타이틀·마을 화면이 키를 받는다(마을에서는 이동·지도·Esc 캠프가 없다, P 는 마을 화면이 캠프로)
 	if modal.kind == "stairs":
 		# 계단 확인 창: Esc·Backspace = 「아니오」. Enter·Space·방향 키는 창 안의 포커스 단추가 받는다(05 §9.3).
 		if event.is_action_pressed("open_menu") or k.keycode == KEY_BACKSPACE or k.physical_keycode == KEY_BACKSPACE:
@@ -521,7 +646,6 @@ func _clear_input() -> void:
 	if map_button != null:
 		map_button.cancel()
 		camp_button.cancel()
-		shop_button.cancel()
 		rest_button.cancel()
 
 
@@ -543,7 +667,7 @@ func _autosave(quiet: bool = false) -> bool:
 		return true
 	last_autosave_error = why
 	if not quiet:
-		_show_toast(texts.t("msg.save_failed", {"reason": why}))
+		_show_toast(texts.t("msg.save_failed", {"reason": why}), true)
 	return false
 
 
@@ -625,9 +749,10 @@ func _refresh_save_chip() -> void:
 	_debug_dirty = true
 
 
+## 새 게임(타이틀·캠프 기록·전멸): 늘 마을에서 시작한다(M3 A2 고름 3).
 func _start_new_game() -> void:
 	modal.close()
-	_set_state(_new_state())
+	_set_state(_new_state(true))
 	_autosave()
 
 
@@ -805,7 +930,8 @@ func _set_battle_view(on: bool) -> void:
 ## 전투 층이 열린 동안(06 §9.1, U1)과 파티 메뉴가 열린 동안(M2.6 2.5단계: 메뉴 뒤에는 어둡게 한 3D 시야만 보인다).
 ## 감춘 단추는 누르기를 받지 않는다. 파티 메뉴가 열리고 닫힐 때(어느 길로 닫혀도: 키·「닫기」·상태 바꾸기) visibility_changed 로 다시 맞춘다.
 func _hud_hidden() -> bool:
-	return _battle_view or (party_menu != null and party_menu.is_open()) or (shop_screen != null and shop_screen.is_open())
+	return _battle_view or (party_menu != null and party_menu.is_open()) or (shop_screen != null and shop_screen.is_open()) \
+		or _in_town() or _title_open()
 
 
 ## 전투 층 저장 갈고리(제출 결과가 정해진 직후, 연출 전).
@@ -822,10 +948,14 @@ func _open_party() -> void:
 		return
 	party_menu.debug = debug_tools()
 	party_menu.open(state)
+	if party_menu.is_open():
+		town_screen.set_covered(true)  # 캠프의 그림 창에는 마을 바탕만 보인다(research 07 §2.2)
 
 
 ## 파티 메뉴가 닫혔다: 눌림·미리 받은 입력을 버리고(닫은 뒤 누르고 있던 이동 키가 걸음이 되지 않는다) 탐색 화면을 다시 맞춘다.
 func _on_party_closed() -> void:
+	if not shop_screen.is_open():
+		town_screen.set_covered(false)
 	_clear_input()
 	_refresh_hud()
 	_debug_dirty = true
@@ -839,25 +969,28 @@ func _on_party_save() -> void:
 	_autosave()
 
 
-## 디버그 도구(캠프 임시 보급·상점 임시 입구)를 보이는지: 디버그 주소이거나 네이티브 디버그 실행(07 §5.7, 08 §8.1).
+## 디버그 도구(캠프 임시 보급)를 보이는지: 디버그 주소이거나 네이티브 디버그 실행(07 §5.7).
 func debug_tools() -> bool:
 	return _debug or (native_debug and not bridge.is_web())
 
 
-## 상점을 연다(08 §8.1): 캠프와 같은 조건(전투·전투 대기·전멸이 아니고, 다른 창이 없고, 연출 중이 아님)에 디버그일 때만.
-## 열 때마다 뿌리·명령 커서 0·대원 0에서 시작한다.
+## 상점을 연다(08 §8.1, M3 A2 S4): 마을 광장 「정크 공방」에서만, 캠프와 같은 조건(전투·전투 대기·전멸이 아니고, 다른 창이 없고,
+## 연출 중이 아님). 열 때마다 뿌리·명령 커서 0·대원 0에서 시작한다. 열린 동안 마을 화면을 감추고 바탕은 상점 그림이다.
 func _open_shop() -> void:
-	if state == null or not debug_tools() or shop_screen.is_open() or party_menu.is_open() or battle_layer.is_open() or modal.is_open() \
+	if not _in_town() or shop_screen.is_open() or party_menu.is_open() or battle_layer.is_open() or modal.is_open() \
 			or state.encounter.pending:
 		return
 	if not ExplorationRules.can_act(state) or _is_busy() or map.is_interacting():
 		return
 	shop_screen.open(state)
+	if shop_screen.is_open():
+		town_screen.set_covered(true)
+		town_backdrop.show_place("shop")
 
 
 ## 상점이 닫혔다: 캠프를 닫을 때와 같은 길(눌림·미리 받은 입력을 버리고 탐색 화면을 다시 맞춘다).
 func _on_shop_closed() -> void:
-	_on_party_closed()
+	_on_party_closed()  # 마을 화면을 걷고(커서 그대로 「정크 공방」) 바탕을 광장으로 되돌린다(TownScreen._refresh)
 
 
 ## 상점 저장 갈고리(사기·장착이 받아들여진 직후). 실패하면 탐색 화면의 실패 토스트만 띄우고 상점은 차례를 이어 간다(08 §8.11 F6).
@@ -870,7 +1003,7 @@ func _on_shop_save() -> void:
 func _try_stairs() -> void:
 	if not _stairs_ask:
 		return
-	if state == null or state.wiped or state.encounter.pending or state.floor_def.stair_at(state.party.at) == null:
+	if state == null or state.wiped or state.encounter.pending or ExplorationRules.stair_here(state).is_empty():
 		_stairs_ask = false
 		return
 	if view.is_busy() or modal.is_open() or battle_layer.is_open() or party_menu.is_open() or shop_screen.is_open() \
@@ -897,13 +1030,19 @@ func _open_stairs() -> bool:
 	if state == null or modal.is_open() or battle_layer.is_open() or party_menu.is_open() or shop_screen.is_open() \
 			or not ExplorationRules.can_act(state):
 		return false
-	var st := state.floor_def.stair_at(state.party.at)
-	if st == null:
+	var st := ExplorationRules.stair_here(state)
+	if st.is_empty():
 		return false
+	# 마을 문(B1F 시작 칸, M3 A2)은 같은 창에 마을 글(「아보르 입구」 / 마을로 돌아갈까?).
+	var gate := str(st["to"]) == ExplorationState.TOWN
 	var yes := _named(ModalLayer.button(texts.t("ui.yes"), _answer_stairs.bind(true)), "StairsYes")
 	var no := _named(ModalLayer.button(texts.t("ui.no"), _answer_stairs.bind(false)), "StairsNo")
-	var rows: Array[Control] = [ModalLayer.label(texts.t("stairs.ask_" + st.way)), ModalLayer.row([yes, no] as Array[Control])]
-	modal.open("stairs", texts.t("stairs.title"), rows)
+	var ask := texts.t("stairs.ask_town") if gate else texts.t("stairs.ask_" + str(st["way"]))
+	var rows: Array[Control] = [ModalLayer.label(ask), ModalLayer.row([yes, no] as Array[Control])]
+	# 들어올 때의 장소 안내(「시험 층 / B1F」, 층 4)는 물음 띠 아래 테두리와 겹친다: 물음이 뜨면 지운다. 저장 실패 안내는 남긴다.
+	if not _toast_save:
+		_hide_toast()
+	modal.open("stairs", texts.t("stairs.title_town" if gate else "stairs.title"), rows)
 	yes.grab_focus.call_deferred()
 	return true
 
@@ -941,15 +1080,21 @@ func record_slots() -> Array:
 		var st := l.result.state
 		out.append({"slot": slot, "ok": true, "leader": texts.t(st.defs.party.name_keys[0]),
 			"level": texts.t("party.level", {"level": st.party.members[0].level}),
-			"where": texts.t("menu.slot_where", {"floor": FloorNames.place(texts, st.defs, st.floor_def), "steps": st.steps}),
+			"where": texts.t("menu.slot_where", {"floor": _place_of(st), "steps": st.steps}),
 			"time": _local_time(l.result.saved_at)})
 	return out
+
+
+## 저장된 상태의 장소 글: 마을이면 「뿌리마을 광장」(M3 A2), 미궁이면 「층 이름 / B1F」.
+func _place_of(st: ExplorationState) -> String:
+	return texts.t("town.plaza") if st.in_town() else FloorNames.place(texts, st.defs, st.floor_def)
 
 
 func _set_automap(mode: String) -> void:
 	if settings.set_automap(mode):
 		settings.save_to(settings_path)
 	party_menu.refresh_view()
+	title_screen.refresh_view()
 
 
 static func _named(c: Control, n: String) -> Control:
@@ -1103,6 +1248,8 @@ func _build_ui() -> void:
 	sv.handle_input_locally = true
 	sv.gui_disable_input = true
 	view_container.add_child(sv)
+	_view_sv = sv
+	_view_sv_mode = sv.render_target_update_mode
 	view = DungeonView.new()
 	view.speed = anim_speed
 	sv.add_child(view)
@@ -1114,6 +1261,10 @@ func _build_ui() -> void:
 	_flash.mouse_filter = MOUSE_FILTER_IGNORE
 	_flash.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	add_child(_flash)
+	# 마을 바탕(M3 A2): 시야·번쩍임 위, 모든 UI 층 아래. 마을에 있는 동안만 보인다(누르기 없음).
+	town_backdrop = TownArt.TownBackdrop.new()
+	town_backdrop.name = "TownBackdrop"
+	add_child(town_backdrop)
 
 	hud_root = _layer_root("Hud", LAYER_HUD)
 	windows_root = _layer_root("Windows", LAYER_WINDOWS)
@@ -1150,6 +1301,23 @@ func _build_ui() -> void:
 		_debug_dirty = true
 		_debug_settle = 2)
 	battle_layer.submitted.connect(func(_e: Array) -> void: _debug_dirty = true)
+	# 마을 화면(M3 A2): 전투 층 뒤, 캠프·상점 앞(캠프·상점이 열리면 감춘다).
+	town_screen = TownScreen.new()
+	town_screen.name = "TownScreen"
+	windows_root.add_child(town_screen)
+	town_screen.build(texts)
+	town_screen.backdrop = town_backdrop
+	town_screen.blocked_hook = func() -> bool: return modal.is_open()
+	town_screen.camp_requested.connect(_open_party)
+	town_screen.shop_requested.connect(_open_shop)
+	town_screen.enter_requested.connect(_enter_labyrinth)
+	town_screen.opened.connect(func() -> void:
+		_clear_input()
+		_debug_dirty = true
+		_debug_settle = 2)
+	town_screen.visibility_changed.connect(func() -> void:
+		_debug_dirty = true
+		_debug_settle = 2)
 	party_menu = PartyMenu.new()
 	party_menu.name = "PartyMenu"
 	windows_root.add_child(party_menu)
@@ -1158,6 +1326,9 @@ func _build_ui() -> void:
 	party_menu.records = {"slots": record_slots, "save": _save_slot, "load": _load_slot, "export": _export, "import": _import,
 		"automap": func() -> String: return settings.automap, "set_automap": _set_automap, "new_game": _start_new_game}
 	party_menu.blocked_hook = func() -> bool: return modal.is_open()
+	# 마을에서 연 캠프(research 07 §2.2): 장소 띠는 그 장소 이름, 문패는 날(「n일째」). 미궁에서는 빈 글(층 이름·걸음 그대로).
+	party_menu.place_hook = func() -> String: return town_screen.place_text() if _in_town() else ""
+	party_menu.plate_hook = func() -> String: return town_screen.day_text() if _in_town() else ""
 	party_menu.opened.connect(func() -> void:
 		_clear_input()
 		_debug_dirty = true
@@ -1178,6 +1349,20 @@ func _build_ui() -> void:
 	shop_screen.closed.connect(_on_shop_closed)
 	shop_screen.visibility_changed.connect(_layout)
 	shop_screen.changed.connect(func(_e: Array) -> void: _debug_dirty = true)
+	# 타이틀(M3 A2): 층 2 의 맨 끝(모든 창 위, 불투명 바탕). 기록 판은 캠프와 같은 부품(불러오기·가져오기·자동 지도만).
+	title_screen = TitleScreen.new()
+	title_screen.name = "TitleScreen"
+	windows_root.add_child(title_screen)
+	title_screen.build(texts)
+	title_screen.blocked_hook = func() -> bool: return modal.is_open()
+	title_screen.actions = {"continue": _continue_game, "new_game": _start_new_game}
+	title_screen.records = {"slots": record_slots, "load": _load_slot, "import": _import,
+		"automap": func() -> String: return settings.automap, "set_automap": _set_automap}
+	title_screen.opened.connect(func() -> void:
+		_clear_input()
+		_debug_dirty = true
+		_debug_settle = 2)
+	title_screen.visibility_changed.connect(_layout)
 
 	# 층 3: 창(메뉴·알림·메모·전멸). ModalLayer 가 화면 전체 뿌리다.
 	var modal_cl := CanvasLayer.new()
@@ -1193,6 +1378,8 @@ func _build_ui() -> void:
 		party_menu.cancel_pointers()  # 캠프에서 누르고 있던 단추는 창이 덮은 뒤 떼도 일하지 않는다
 		battle_layer.cancel_pointers()  # 전투도 같다(명령 줄·카드·키패드 등)
 		shop_screen.cancel_pointers()  # 상점도 같다(08 §8.11: 눌린 「예」를 창이 덮으면 뗄 때 사지 않는다)
+		town_screen.cancel_pointers()
+		title_screen.cancel_pointers()
 		_debug_dirty = true
 		_debug_settle = 2)
 	modal.closed.connect(func(_k: String) -> void:
@@ -1201,6 +1388,8 @@ func _build_ui() -> void:
 		party_menu.cancel_pointers()  # 창이 뜨기 전부터 캠프에서 누르고 있던 손가락도(다른 손가락으로 창을 닫은 뒤 떼기)
 		battle_layer.cancel_pointers()
 		shop_screen.cancel_pointers()
+		town_screen.cancel_pointers()
+		title_screen.cancel_pointers()
 		_debug_dirty = true
 		_debug_settle = 2)
 	modal_cl.add_child(modal)
@@ -1332,11 +1521,7 @@ func _build_hud() -> void:
 	map_button = TouchButton.new().setup("map", texts.t("map.toggle"))
 	map_button.name = "MapButton"
 	map_button.activated.connect(_toggle_map)
-	shop_button = TouchButton.new().setup("", texts.t("shop.hud"))
-	shop_button.name = "ShopButton"
-	shop_button.activated.connect(_open_shop)
-	shop_button.visible = false  # 디버그 여부는 _ready 가 정한다
-	for b in [camp_button, map_button, shop_button]:
+	for b in [camp_button, map_button]:
 		hint_row.add_child(b)
 
 	# 이동 단추 묶음: 안내 줄 바로 위(겹치지 않는다). 안의 배치는 고정 크기 단추의 칸.
@@ -1386,6 +1571,9 @@ func _layout() -> void:
 	if view_container == null:
 		return
 	var w := get_viewport_rect().size.x
+	# 타이틀·마을(M3 A2): 3D 시야를 감추고 그리지 않는다. 마을에서는 그 자리에 마을 바탕.
+	_set_view_active(not (_in_town() or _title_open()))
+	town_backdrop.visible = _in_town()
 	var explore := not _hud_hidden()
 	var open := _map_open and explore
 	hud_root.visible = explore
@@ -1415,7 +1603,8 @@ func _layout() -> void:
 		_toast.offset_right = 0.0
 		_toast.offset_bottom = -EDGE - HINT_H - HINT_GAP - PAD_H - 10.0
 		_toast.offset_top = _toast.offset_bottom - 36.0
-	view.set_lens_cover(cover / w if w > 0.0 else 0.0)
+	if _view_on:
+		view.set_lens_cover(cover / w if w > 0.0 else 0.0)
 	_refresh_rest_button()
 	map.refresh()
 	_debug_dirty = true
@@ -1449,10 +1638,17 @@ func _refresh_rest_button() -> void:
 		_debug_dirty = true
 
 
-func _show_toast(text: String) -> void:
+func _show_toast(text: String, save_note: bool = false) -> void:
 	_toast.text = text
 	_toast.modulate.a = 1.0
 	_toast_left = 2.0
+	_toast_save = save_note
+
+
+## 알림 줄을 바로 지운다(남은 시간 0).
+func _hide_toast() -> void:
+	_toast_left = 0.0
+	_toast.modulate.a = 0.0
 
 
 func _flash_damage() -> void:
@@ -1461,6 +1657,11 @@ func _flash_damage() -> void:
 
 func _process(delta: float) -> void:
 	if state == null:
+		# 타이틀(M3 A2): 상태가 없어도 저장 반영 기다림·알림 줄·디버그 요약은 돈다.
+		save_pending.tick(delta)
+		_fade_toast(delta)
+		if _debug:
+			_debug_publish()
 		return
 	if _autosave_pending and not map.is_stroking():
 		_autosave()
@@ -1473,31 +1674,43 @@ func _process(delta: float) -> void:
 			request_action(a)
 		elif _repeat_wait:
 			_try_repeat()
-	if _toast_left > 0.0:
-		_toast_left -= delta
-		_toast.modulate.a = clampf(_toast_left / 0.5, 0.0, 1.0)
+	_fade_toast(delta)
 	save_pending.tick(delta)
 	if save_chip.visible and save_chip.modulate.a < 1.0:
 		save_chip.modulate.a = minf(1.0, save_chip.modulate.a + delta / 0.15)
 	if _flash.color.a > 0.0:
 		_flash.color.a = maxf(0.0, _flash.color.a - delta * 1.2)
 	if _debug:
-		var busy := _is_busy()
-		# 전투 층·파티 메뉴가 입력을 받으면 상태 요약을 다시 낸다(메뉴 안 탭·초안·확인 창도 요약에 있다).
-		var sig := "%s/%s/%d/%s/%s/%d/%s/%d" % [battle_layer.phase, battle_layer.sub, battle_layer.member, str(battle_layer.log_view.visible),
-			str(party_menu.is_open()), party_menu.accepted_inputs, str(shop_screen.is_open()), shop_screen.accepted_inputs]
-		if sig != _debug_battle_sig:
-			_debug_battle_sig = sig
-			_debug_dirty = true
-			_debug_settle = 2
-		if busy != _debug_busy:
-			_debug_busy = busy
-			_debug_dirty = true
-		if _debug_dirty:
-			# 창·배치가 바뀐 프레임에는 컨테이너 정렬이 아직이라 단추 위치가 틀릴 수 있다: 두 프레임 더 낸다.
-			_debug_dirty = _debug_settle > 0
-			_debug_settle = maxi(0, _debug_settle - 1)
-			bridge.publish(JSON.stringify(debug_snapshot()))
+		_debug_publish()
+
+
+## 디버그 상태 요약을 낼 때가 되면 낸다(층·창이 입력을 받았거나 바쁨이 바뀌었거나 _debug_dirty). 타이틀(상태 없음)에서도 돈다.
+func _debug_publish() -> void:
+	var busy := _is_busy() if state != null else false
+	# 전투 층·파티 메뉴가 입력을 받으면 상태 요약을 다시 낸다(메뉴 안 탭·초안·확인 창도 요약에 있다).
+	var sig := "%s/%s/%d/%s/%s/%d/%s/%d/%s/%d/%s/%d" % [battle_layer.phase, battle_layer.sub, battle_layer.member,
+		str(battle_layer.log_view.visible), str(party_menu.is_open()), party_menu.accepted_inputs, str(shop_screen.is_open()),
+		shop_screen.accepted_inputs, str(town_screen.is_open()), town_screen.accepted_inputs, str(title_screen.is_open()),
+		title_screen.accepted_inputs]
+	if sig != _debug_battle_sig:
+		_debug_battle_sig = sig
+		_debug_dirty = true
+		_debug_settle = 2
+	if busy != _debug_busy:
+		_debug_busy = busy
+		_debug_dirty = true
+	if _debug_dirty:
+		# 창·배치가 바뀐 프레임에는 컨테이너 정렬이 아직이라 단추 위치가 틀릴 수 있다: 두 프레임 더 낸다.
+		_debug_dirty = _debug_settle > 0
+		_debug_settle = maxi(0, _debug_settle - 1)
+		bridge.publish(JSON.stringify(debug_snapshot()))
+		debug_publishes += 1
+
+
+func _fade_toast(delta: float) -> void:
+	if _toast_left > 0.0:
+		_toast_left -= delta
+		_toast.modulate.a = clampf(_toast_left / 0.5, 0.0, 1.0)
 
 
 func _make_theme() -> Theme:
@@ -1524,14 +1737,30 @@ func _css(local_point: Vector2, from: CanvasItem) -> Array:
 
 func debug_snapshot() -> Dictionary:
 	var buttons := {}
+	var title := title_screen.debug_info(_css)
+	if state == null:
+		# 타이틀(M3 A2): 상태가 없다. 타이틀·창 단추와 저장 반영만.
+		if title_screen.is_open() and not modal.is_open():
+			buttons.merge(title["buttons"])
+		_merge_modal_buttons(buttons)
+		return {
+			"hash": "", "title": title, "buttons": buttons, "modal": modal.kind, "modal_title": _modal_title(), "busy": false,
+			"user_dir": OS.get_user_data_dir(),
+			"autosaves": autosave_count, "epoch": _epoch, "automap": settings.automap,
+			"save_pending": save_pending.is_pending(), "save_pending_gens": save_pending.generations(),
+			"save_watch": save_pending.enabled, "save_reads": save_pending.reads, "save_chip": save_chip.is_visible_in_tree(),
+		}
 	var party := party_menu.debug_info(_css)
 	var shop := shop_screen.debug_info(_css)
+	var town := town_screen.debug_info(_css)
 	if party_menu.is_open():
 		buttons.merge(party["buttons"])  # 메뉴가 덮은 탐색 단추는 내지 않는다(누를 수 없다)
 	elif shop_screen.is_open():
 		buttons.merge(shop["buttons"])
+	elif town_screen.is_open():
+		buttons.merge(town["buttons"])  # 마을: 탐색 HUD 는 감췄다
 	else:
-		for b in pad.values() + [rest_button, map_button, camp_button, shop_button, map_window.back_button]:
+		for b in pad.values() + [rest_button, map_button, camp_button, map_window.back_button]:
 			if (b as TouchButton).is_visible_in_tree():
 				buttons[b.name] = _css(b.size / 2.0, b)
 		for key in toolbar.buttons:
@@ -1545,10 +1774,7 @@ func debug_snapshot() -> Dictionary:
 	var battle := battle_layer.debug_info(_css)
 	if battle_layer.is_open() and not modal.is_open():
 		buttons.merge(battle["buttons"])
-	if modal.is_open():
-		for n in modal.find_children("*", "Control", true, false):
-			if (n is Button or n is TouchButton) and n.is_visible_in_tree():
-				buttons[n.name] = _css(n.size / 2.0, n)
+	_merge_modal_buttons(buttons)
 	var memo_texts := {}  # "x,y" → 글(웹 확인이 넣은 한국어 글이 그대로 저장됐는지 본다)
 	for c in state.annotation.memos:
 		memo_texts["%d,%d" % [c.x, c.y]] = state.annotation.memos[c]
@@ -1559,9 +1785,10 @@ func debug_snapshot() -> Dictionary:
 		map_info = {"origin": o, "cell": [o2[0] - o[0], o2[1] - o[1]]}
 	return {
 		"hash": SaveCodec.state_hash(state), "generation": state.generation, "autosaves": autosave_count, "seed": seed_override,
+		"location": state.location, "day": state.day, "town": town, "title": title,
 		"floor": state.floor_def.id, "at": [state.party.at.x, state.party.at.y], "facing": state.party.facing, "steps": state.steps,
 		"pending": state.encounter.pending, "wiped": state.wiped, "danger": state.encounter.danger,
-		"busy": _is_busy(), "modal": modal.kind, "automap": settings.automap, "battle": battle,
+		"busy": _is_busy(), "modal": modal.kind, "modal_title": _modal_title(), "automap": settings.automap, "battle": battle,
 		"materials": state.materials, "hp": state.party.members.map(func(m: PartyState.Member) -> int: return m.hp),
 		"shortcuts_open": state.world.shortcuts_open.size(), "passages_found": state.world.passages_found.size(),
 		"memos": state.annotation.memos.size(), "edges": state.annotation.edges.size(), "epoch": _epoch,
@@ -1581,6 +1808,18 @@ func debug_snapshot() -> Dictionary:
 		"save_pending": save_pending.is_pending(), "save_pending_gens": save_pending.generations(),
 		"save_watch": save_pending.enabled, "save_reads": save_pending.reads, "save_chip": save_chip.is_visible_in_tree(),
 	}
+
+
+## 떠 있는 층 3 창의 제목(계단·마을 문 물음을 가른다, M3 A2).
+func _modal_title() -> String:
+	return modal.title_plate.text if modal.is_open() else ""
+
+
+func _merge_modal_buttons(buttons: Dictionary) -> void:
+	if modal.is_open():
+		for n in modal.find_children("*", "Control", true, false):
+			if (n is Button or n is TouchButton) and n.is_visible_in_tree():
+				buttons[n.name] = _css(n.size / 2.0, n)
 
 
 func _debug_members() -> Array:
@@ -1607,8 +1846,8 @@ func _is_busy() -> bool:
 ## battle_auto: 지금 턴의 명령을 기본 정책으로 만들어 전투 층의 명령 입구로 제출한다(같은 막힘 조건·저장·연출).
 ## battle_finish: 전투 층의 디버그 끝내기로 규칙의 finish(승리) → 저장 → 연출 → 결과 창(「확인」은 따로 누른다).
 ## supply·grant_exp(07 §8.6): 파티 메뉴의 임시 보급 단추와 같은 규칙 함수(GrowthRules.supply·grant_exp) → 받아들여지면 자동 저장.
-## open_shop(08 §8.1): 안내 줄 「상점」과 같은 길(_open_shop)로 상점을 연다. 디버그 주소에서만.
-## 상태를 바꾸는 이 네 요청은 디버그 주소(?debug=1)에서만 받는다.
+## 상태를 바꾸는 요청(battle_auto·battle_finish·supply·grant_exp)은 디버그 주소(?debug=1)에서만 받는다.
+## 타이틀(상태 없음)에서는 snapshot·hash_save 만 받는다. 상점은 마을 광장으로 연다(M3 A2: open_shop 요청은 없앴다).
 func _on_debug_request(json_text: String) -> String:
 	var req: Variant = JSON.parse_string(json_text)
 	if typeof(req) != TYPE_DICTIONARY:
@@ -1616,6 +1855,14 @@ func _on_debug_request(json_text: String) -> String:
 	match str(req.get("op", "")):
 		"snapshot":
 			return JSON.stringify(debug_snapshot())
+		"hash_save":
+			var r := SaveCodec.decode(str(req.get("text", "")), store.defs)
+			if not r.ok():
+				return JSON.stringify({"error": r.error})
+			return JSON.stringify({"hash": SaveCodec.state_hash(r.state), "generation": r.generation})
+	if state == null:
+		return JSON.stringify({"error": "no state"})
+	match str(req.get("op", "")):
 		"simulate":
 			var copy := SaveCodec.decode(SaveCodec.encode(state), store.defs)
 			if not copy.ok():
@@ -1631,11 +1878,6 @@ func _on_debug_request(json_text: String) -> String:
 				ExplorationRules.apply(s, a, settings.automap)
 				hashes.append(SaveCodec.state_hash(s))
 			return JSON.stringify({"hashes": hashes})
-		"hash_save":
-			var r := SaveCodec.decode(str(req.get("text", "")), store.defs)
-			if not r.ok():
-				return JSON.stringify({"error": r.error})
-			return JSON.stringify({"hash": SaveCodec.state_hash(r.state), "generation": r.generation})
 		"battle_auto", "battle_finish":
 			if not _debug:
 				return JSON.stringify({"error": "debug only"})
@@ -1664,12 +1906,6 @@ func _on_debug_request(json_text: String) -> String:
 			shop_screen.refresh_view()
 			_debug_dirty = true
 			return JSON.stringify({"ok": true, "events": events})
-		"open_shop":
-			if not _debug:
-				return JSON.stringify({"error": "debug only"})
-			_open_shop()
-			_debug_dirty = true
-			return JSON.stringify({"ok": shop_screen.is_open()})
 	return JSON.stringify({"error": "unknown op"})
 
 

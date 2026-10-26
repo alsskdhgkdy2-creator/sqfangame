@@ -9,7 +9,7 @@
 
 ## 상태
 
-**M3(수직 슬라이스) 진행 중(2026-10-26, D29).** M2(전투)·M2.5(성장)·M2.6(UI 다듬기) 뒤 2026-10-18~10-24 일시 중지(D22)했다가, M2.7(화면 위에 뜨는 UI·원작 배치, D23)로 다시 시작해 탐색·전투·캠프 화면과 상점을 원작 짜임으로 옮겼다. 이제 시스템(여러 층·마을·FOE·채집·의뢰·보스·직업 여섯)부터 넣고, 생성 그림은 그 뒤에 넣는다(`docs/design/03-production-plan.md` §2 M3).
+**M3(수직 슬라이스) 진행 중(2026-10-26, D29).** M2(전투)·M2.5(성장)·M2.6(UI 다듬기) 뒤 2026-10-18~10-24 일시 중지(D22)했다가, M2.7(화면 위에 뜨는 UI·원작 배치, D23)로 다시 시작해 탐색·전투·캠프 화면과 상점을 원작 짜임으로 옮겼다. 이제 시스템(여러 층·마을·FOE·채집·의뢰·보스·직업 여섯)부터 넣고, 생성 그림은 그 뒤에 넣는다(`docs/design/03-production-plan.md` §2 M3). 지금까지 A1(여러 층·계단, 저장 5판)과 A2a(제목 → 마을 광장 → 미궁 입구 → B1F와 돌아오는 길, 광장에서 상점, 저장 6판)를 마쳤고, 다음은 A2b(여관·하루·여관 기록·전멸 뒤 지도)다.
 
 ## 문서
 
@@ -33,7 +33,7 @@
 | 규칙 시험 | `timeout 600 godot --headless -s tests/run.gd` (실패하면 종료 코드 1, 시간 초과면 124). 파일 하나만: 끝에 `-- <파일 이름 일부>` |
 | 웹 빌드 | `tools/export_web.sh` → `build/web/` |
 | 웹 캡처 | `npm install` 뒤 `flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/shot.mjs build/shot.png 1280x720 20` |
-| 브라우저 자동 확인 | 웹 빌드 뒤 `flock /tmp/voxel-test-heavy.lock flock /tmp/sqfangame-godot.lock xvfb-run -a node tools/web_check.mjs 1280x720 [a|b|all]` → `build/check/` (A = 탐색·전투, B = 성장·전멸, 기본 `all`은 A 다음 B. 2400×1000은 5분 한도 때문에 `a`·`b`를 따로 돌린다. 공략·전투·지도 편집·저장·새로 고침·내보내기·가져오기·전멸 창, 실패하면 종료 코드 1. 느린 기기 상태면 `WEB_CHECK_IDB_MS=60000`, `docs/CLOUD_TESTS.md`) |
+| 브라우저 자동 확인 | 웹 빌드 뒤 `flock /tmp/voxel-test-heavy.lock flock /tmp/sqfangame-godot.lock xvfb-run -a node tools/web_check.mjs 1280x720 [a|b|c|all]` → `build/check/` (A = 탐색·전투, B = 성장·전멸, C = 마을 고리(제목·광장·입구·문·상점·이어하기·불러오기), 기본 `all`은 A, B, C 차례. 2400×1000은 5분 한도 때문에 `a`·`b`를 따로 돌린다. 공략·전투·지도 편집·저장·새로 고침·내보내기·가져오기·전멸 창, 실패하면 종료 코드 1. 느린 기기 상태면 `WEB_CHECK_IDB_MS=60000`, `docs/CLOUD_TESTS.md`) |
 | 컨셉 그림 비교 시트 | `python3 tools/concept_sheet.py <출력.jpg> "<이름>=<그림>" ...` (아랫줄에 게임 화면 크기 판을 붙임, `assets/concept/compare/`) |
 | 텍스처 이음새 | `python3 tools/tile_check.py check <그림>...` / `preview <그림> <출력>` / `fix <그림> <출력> --size 512` |
 | 휴대폰 확인 | `python3 tools/serve_web.py` (127.0.0.1:8765, 큰 파일 gzip) 뒤 `cloudflared` 임시 주소 (`docs/CLOUD_TESTS.md`) |

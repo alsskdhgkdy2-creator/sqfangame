@@ -21,6 +21,10 @@ var rows: Array[ListRow] = []
 ## 줄 사이·안쪽 여백(content_height 에 같은 값을 준다).
 var row_gap := GAP
 var inner_pad := PAD
+## 줄 앞 띠의 폭(M3 A2 광장: 원작처럼 목록 틀 안 왼쪽에 커서 시설 그림). 0 이면 띠가 없다(캠프·상점).
+var lead := 0.0
+## 띠에 그릴 TownArt 열쇠("" 면 비운다).
+var strip := ""
 
 
 func _init() -> void:
@@ -73,6 +77,20 @@ func set_row_text(i: int, t: String) -> void:
 		rows[i].queue_redraw()
 
 
+## 띠 그림을 바꾼다(lead > 0 일 때만 보인다).
+func show_strip(key: String) -> void:
+	if key != strip:
+		strip = key
+		queue_redraw()
+
+
+## 띠 사각형(목록 기준). lead 가 0 이면 크기 0.
+func strip_rect() -> Rect2:
+	if lead <= 0.0:
+		return Rect2()
+	return Rect2(Vector2(inner_pad + RIM - 2.0, inner_pad + RIM - 2.0), Vector2(lead - 2.0 * (RIM - 2.0) - inner_pad, size.y - 2.0 * (inner_pad + RIM - 2.0)))
+
+
 func cancel() -> void:
 	for b in rows:
 		b.cancel()
@@ -94,8 +112,8 @@ func arc_x(y: float) -> float:
 func _layout() -> void:
 	for i in rows.size():
 		var y := row_y(i)
-		rows[i].position = Vector2(inner_pad, y)
-		rows[i].size = Vector2(maxf(arc_x(y), arc_x(y + ROW_H)) - inner_pad, ROW_H)
+		rows[i].position = Vector2(inner_pad + lead, y)
+		rows[i].size = Vector2(maxf(arc_x(y), arc_x(y + ROW_H)) - inner_pad - lead, ROW_H)
 		rows[i].queue_redraw()
 	queue_redraw()
 
@@ -124,3 +142,7 @@ func _draw() -> void:
 	draw_polyline(line, UiTheme.FAC_PLATE_EDGE, 3.0, true)
 	draw_line(Vector2(0, 1.5), pts[1] + Vector2(0, 1.5), UiTheme.FAC_PLATE_EDGE, 3.0)
 	draw_line(Vector2(0, size.y - 1.5), pts[pts.size() - 2] - Vector2(0, 1.5), UiTheme.FAC_PLATE_EDGE, 3.0)
+	if lead > 0.0 and not strip.is_empty():
+		var r := strip_rect()
+		TownArt.paint(self, r, strip)
+		draw_rect(r, UiTheme.FAC_PLATE_EDGE, false, 2.0)

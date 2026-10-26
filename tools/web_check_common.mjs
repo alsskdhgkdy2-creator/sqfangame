@@ -59,7 +59,31 @@ export async function waitFor(pred, what, timeoutMs = 15000) {
     await page.waitForTimeout(30);
   }
 }
-export const waitReady = () => page.waitForFunction(() => window.sqfDebug && window.sqfDebug.ready, null, { timeout: 60000 }).then(() => waitFor((s) => !s.busy, '처음 화면'));
+// 시작은 타이틀(M3 A2): 상태가 없어 해시가 빈 글이라 waitFor 대신 따로 기다린다. 「이어하기」가 있으면 그것, 없으면 「새 게임」
+// (새 게임은 마을 광장에서 시작한다). 그 뒤는 지금까지처럼 처음 화면(연출 끝)을 기다린다.
+export async function waitTitle(timeoutMs = 60000) {
+  const t0 = Date.now();
+  for (;;) {
+    const s = await snap();
+    if (s.title?.open && s.modal === '' && (s.buttons?.TitleNewGame || s.buttons?.TitleContinue)) return s;
+    if (Date.now() - t0 > timeoutMs) throw new Error(`타이틀 기다림 시간 초과 (마지막 ${JSON.stringify({ title: s.title?.open, modal: s.modal })})`);
+    await page.waitForTimeout(30);
+  }
+}
+export async function passTitle() {
+  const t = await waitTitle();
+  await clickButton(t.buttons.TitleContinue ? 'TitleContinue' : 'TitleNewGame');
+  return waitFor((s) => !s.busy && !s.title?.open, '타이틀 지남');
+}
+export const waitReady = () => page.waitForFunction(() => window.sqfDebug && window.sqfDebug.ready, null, { timeout: 60000 })
+  .then(passTitle).then(() => waitFor((s) => !s.busy, '처음 화면'));
+// 마을 광장 → 「아보르 입구」 → 「탐사 시작」 → B1F 시작 칸(M3 A2).
+export async function enterLabyrinth() {
+  await clickButton('Plaza_entrance');
+  await waitFor((x) => x.town?.open && x.town.page === 'entrance', '아보르 입구');
+  await clickButton('Entrance_start');
+  return waitFor((x) => x.location === 'labyrinth' && !x.busy && !x.town?.open, '미궁에 들어감');
+}
 // 창이 막 열린 프레임의 좌표는 배치 전일 수 있어 잠깐 기다린 뒤 새 상태 요약에서 위치를 읽는다.
 export async function clickButton(name) {
   await page.waitForTimeout(80);

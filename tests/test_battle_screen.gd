@@ -1028,6 +1028,9 @@ func test_rest_button_only_on_start_cell() -> void:
 	check_eq(s.state.party.members[1].hp, 3, "시작 칸 밖 R 은 쉬지 않는다")
 	check_eq(s._toast.text, texts.t("msg.not_rest_point"), "쉴 수 없다는 알림")
 	await kit.press_key(KEY_S)
+	# M3 A2: 시작 칸은 마을 문이라 돌아오면 나가는 물음이 뜬다 → 「아니오」(휴식은 A2b 에서 여관으로 옮긴다).
+	check_eq(s.modal.kind, "stairs", "시작 칸으로 돌아오면 나가는 물음")
+	await kit.press_key(KEY_ESCAPE)
 	await kit.press_key(KEY_R)
 	check_eq(s.state.party.members[1].hp, s.state.party.members[1].max_hp, "시작 칸에서 R")
 	await _walk_into_battle(s)
@@ -1610,6 +1613,7 @@ func _screen_with_query(query: String) -> DungeonScreen:
 	sc.seed_override = 7
 	sc.anim_speed = 0.0
 	sc.url_query = query
+	sc.start_mode = "labyrinth"  # M3 A2: 기본은 타이틀
 	kit.screen = sc
 	tree.root.add_child(sc)
 	await kit.frames(2)

@@ -115,8 +115,9 @@ func test_entrance_is_camp_and_map_and_p_or_esc_open_the_camp_root() -> void:
 	var s := await _open()
 	var pm := s.party_menu
 	var shown := s.hint_row.get_children().filter(func(c: Node) -> bool: return (c as Control).visible)
-	# 디버그 실행이라 상점 임시 입구(08 §8.1, D24)가 끝에 붙는다. 디버그가 아니면 「캠프」「지도」 둘(test_shop_screen).
-	check_eq(shown, [s.camp_button, s.map_button, s.shop_button], "안내 줄 = 「캠프」「지도」(원작 CAMP · MAP) + 디버그 「상점」")
+	# M3 A2: 상점 임시 입구(디버그 「상점」)는 없앴다(상점은 마을 광장, test_shop_screen). 디버그 실행이어도 둘.
+	check_eq(shown, [s.camp_button, s.map_button], "안내 줄 = 「캠프」「지도」(원작 CAMP · MAP)")
+	check(s.find_child("ShopButton", true, false) == null, "「상점」 단추는 없다")
 	check_eq(s.camp_button.text, s.texts.t("camp.title"), "「캠프」 글")
 	check(s.find_child("MenuButton", true, false) == null and s.find_child("PartyButton", true, false) == null, "「파티」「메뉴」 단추는 없다")
 	for k in [KEY_P, KEY_ESCAPE]:
@@ -504,7 +505,9 @@ func test_step_plate_shrinks_long_step_counts_to_fit() -> void:
 	await kit.frames(2)
 	check_eq(plate.drawn_sizes, [22], "짧은 걸음은 22 그대로")
 	await kit.press_key(KEY_ESCAPE)
-	await kit.tap(kit.center_of(s.shop_button))
+	s._start_new_game()  # M3 A2: 상점은 마을 광장 「정크 공방」으로 연다(새 게임은 마을에서 시작)
+	await kit.frames(2)
+	await kit.tap(kit.center_of(s.town_screen.plaza_list.rows[1]))
 	await kit.frames(2)
 	check(s.shop_screen.is_open(), "준비: 상점")
 	check_eq(s.shop_screen.plate.drawn_sizes, [22], "상점 이름 문패는 그대로 22")
@@ -3823,3 +3826,36 @@ func test_received_lines_fit_for_any_data_combination() -> void:
 		var n := keys.size()
 		var bound := n * widest + maxi(0, n - 1) * SheetParts.text_width(c, "  ", PartyStatusTab.SIDE_FS_MIN)
 		check(bound <= room, "%s: 항목 %d 개(%s), 가장 넓은 %.0f → 최악 폭 %.0f ≤ %.0f(12px)" % [cat, n, str(keys.keys()), widest, bound, room])
+
+
+## 값이 null 인 알약(내보내기·가져오기·새 게임)도 키 「선택」(Enter)으로 누른 것과 같다: 파일 창·확인 창. 단추 누르기와 같은 일을 한다.
+func test_records_enter_on_file_and_new_game_pills() -> void:
+	var s := await _open()
+	var pm := s.party_menu
+	var rt := pm.records_tab
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_5)
+	check_eq([pm.page, pm.tab], ["sub", 4], "준비: 기록 화면")
+	for c in 2:
+		for i in 6:
+			await kit.press_key(KEY_UP)
+		for i in 3:
+			await kit.press_key(KEY_DOWN)
+		for i in 3:
+			await kit.press_key(KEY_LEFT)
+		for i in c:
+			await kit.press_key(KEY_RIGHT)
+		check_eq(rt.cursor_button().name, ["Export", "Import"][c], "준비: 커서 파일 줄 %d" % c)
+		await kit.press_key(KEY_ENTER)
+		check(s.modal.kind == "file" and pm.is_open(), "Enter %s → 파일 고르기 창(캠프는 뒤에)" % rt.cursor_button().name)
+		s._finish_file_request()
+		await kit.frames(2)
+		check_eq(s.modal.kind, "", "준비: 파일 창 닫힘")
+	for i in 2:
+		await kit.press_key(KEY_DOWN)
+	check_eq(rt.cursor_button().name, "NewGame", "준비: 커서 새 게임")
+	var h := kit.hash_now()
+	await kit.press_key(KEY_ENTER)
+	check_eq([pm.dialog_kind, pm.dialog_pick], ["new_game", 0], "Enter 새 게임 → 확인 창(「돌아가기」)")
+	await kit.press_key(KEY_ESCAPE)
+	check(pm.dialog_kind == "" and pm.is_open() and kit.hash_now() == h, "Esc = 「돌아가기」: 그대로")

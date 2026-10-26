@@ -147,17 +147,20 @@ static func _yellow(sc: ShopScreen) -> Array:
 
 # ---- 입구 ----
 
-func test_entrance_is_debug_only_and_opens_like_the_camp() -> void:
+## M3 A2 (R4 S4): 입구는 마을 광장 「정크 공방」 줄이다(디버그와 상관없다). 캠프와 같은 막는 때·처음부터 열기는 그대로다.
+func test_entrance_is_the_plaza_and_opens_like_the_camp() -> void:
 	timeout_sec = 120.0
 	_kit()
-	var s := await kit.open("native", 7, "debug=1")
-	var shown := s.hint_row.get_children().filter(func(c: Node) -> bool: return (c as Control).visible)
-	check_eq(shown, [s.camp_button, s.map_button, s.shop_button], "디버그: 안내 줄 「캠프」「지도」「상점」")
-	check_eq(s.shop_button.text, texts.t("shop.hud"), "「상점」 글")
-	await kit.tap(kit.center_of(s.shop_button))
+	var s := await kit.open_town("native", 7, "", func(sc: DungeonScreen) -> void: sc.native_debug = false)
+	var town := s.town_screen
+	check(town.is_open() and town.page == "plaza", "준비: 광장")
+	check(s.find_child("ShopButton", true, false) == null, "안내 줄 「상점」 단추는 없다")
+	check_eq(town.plaza_list.rows[1].name, &"Plaza_shop", "광장 둘째 줄 = 정크 공방")
+	await kit.tap(kit.center_of(town.plaza_list.rows[1]))
 	var sc := s.shop_screen
-	check(sc.is_open() and sc.page == "root" and sc.root_cursor == 0 and sc.member == 0, "「상점」 → 뿌리·커서 0·대원 0")
-	check(not s.hud_root.visible, "열린 동안 탐색 HUD 를 감춘다")
+	check(sc.is_open() and sc.page == "root" and sc.root_cursor == 0 and sc.member == 0, "「정크 공방」 → 뿌리·커서 0·대원 0")
+	check(not s.hud_root.visible and not town.visible and town.covered, "열린 동안 탐색 HUD·마을 화면을 감춘다")
+	check_eq(s.town_backdrop.place, "shop", "바탕 = 상점 그림")
 	var at := s.state.party.at
 	for k in [KEY_P, KEY_W, KEY_M, KEY_UP]:
 		await kit.press_key(k)
@@ -165,7 +168,9 @@ func test_entrance_is_debug_only_and_opens_like_the_camp() -> void:
 	s._open_party()
 	check(not s.party_menu.is_open(), "상점이 열려 있으면 캠프는 열리지 않는다")
 	await kit.press_key(KEY_ESCAPE)
-	check(not sc.is_open() and s.hud_root.visible, "뿌리 Esc → 닫힘, HUD 다시")
+	check(not sc.is_open() and town.visible and not town.covered, "뿌리 Esc → 닫힘, 광장 다시")
+	check(not s.hud_root.visible and not s.view_container.visible, "광장으로 돌아와도 탐색 HUD·3D 시야는 감춘 채")
+	check_eq([town.page, town.plaza_cursor, s.town_backdrop.place], ["plaza", 1, "plaza"], "광장 커서는 「정크 공방」 그대로, 바탕은 광장")
 	# 다시 열면 뿌리·커서 0·대원 0, 알림 없음.
 	sc.open(s.state)
 	sc.handle("root_cursor", 2)
@@ -193,25 +198,30 @@ func test_entrance_is_debug_only_and_opens_like_the_camp() -> void:
 	s._open_shop()
 	check(not sc.is_open(), "전투 대기면 열리지 않는다")
 	s.state.encounter.pending = false
-	# 디버그 요청 open_shop.
-	var r: Dictionary = JSON.parse_string(s._on_debug_request(JSON.stringify({"op": "open_shop"})))
-	check(r.get("ok", false) and sc.is_open(), "디버그 요청 open_shop → 열림 %s" % str(r))
+	# 광장 줄을 키로 고른다(2 = 정크 공방).
+	await kit.press_key(KEY_2)
+	check(sc.is_open(), "키 2 → 상점")
 	var snap: Dictionary = s.debug_snapshot()
 	check(snap["shop"]["open"] and snap["shop"]["page"] == "root" and snap["buttons"].has("Root_buy"), "스냅숏 shop 칸·단추")
+	check(not snap["buttons"].has("Plaza_shop"), "상점이 덮은 광장 줄은 스냅숏에 없다")
 	check_eq(snap["money"], s.state.money, "스냅숏 소지금")
 
 
-func test_hud_button_and_request_are_hidden_without_debug() -> void:
+## M3 A2: 미궁에서는 상점을 열 수 없다(디버그여도). 안내 줄은 「캠프」「지도」뿐이고 디버그 요청 open_shop 은 없다.
+func test_shop_is_closed_in_the_labyrinth() -> void:
 	timeout_sec = 120.0
 	_kit()
-	var s := await kit.open("native", 7, "", func(sc: DungeonScreen) -> void: sc.native_debug = false)
-	check(not s.shop_button.visible, "디버그가 아니면 「상점」 단추 없음")
-	var shown := s.hint_row.get_children().filter(func(c: Node) -> bool: return (c as Control).visible)
-	check_eq(shown, [s.camp_button, s.map_button], "안내 줄 = 「캠프」「지도」")
-	s._open_shop()
-	check(not s.shop_screen.is_open(), "디버그가 아니면 열리지 않는다")
-	var r: Dictionary = JSON.parse_string(s._on_debug_request(JSON.stringify({"op": "open_shop"})))
-	check_eq(r.get("error", ""), "debug only", "디버그 요청도 디버그 주소에서만")
+	for q in ["debug=1", ""]:
+		var s := await kit.open("native", 7, q)
+		var shown := s.hint_row.get_children().filter(func(c: Node) -> bool: return (c as Control).visible)
+		check_eq(shown, [s.camp_button, s.map_button], "안내 줄 = 「캠프」「지도」 (%s)" % q)
+		s._open_shop()
+		check(not s.shop_screen.is_open(), "미궁에서는 열리지 않는다 (%s)" % q)
+		var r: Dictionary = JSON.parse_string(s._on_debug_request(JSON.stringify({"op": "open_shop"})))
+		check_eq(r.get("error", ""), "unknown op", "디버그 요청 open_shop 은 없다 (%s)" % q)
+		check(not s.shop_screen.is_open(), "요청으로도 열리지 않는다 (%s)" % q)
+		kit.close_screen()
+		await kit.frames(1)
 
 
 # ---- 화면 차례 ----
@@ -834,7 +844,7 @@ func test_context_changes_drop_held_presses() -> void:
 func test_layer_three_window_over_a_held_yes_buys_nothing() -> void:
 	timeout_sec = 120.0
 	_kit()
-	var s := await kit.open("native", 7, "debug=1")
+	var s := await kit.open_town("native", 7, "debug=1")  # M3 A2: 상점은 마을에서 연다
 	var sc := s.shop_screen
 	s.state.money = 1000
 	s._open_shop()
@@ -869,7 +879,7 @@ func test_layer_three_window_over_a_held_yes_buys_nothing() -> void:
 func test_save_failure_keeps_the_accepted_change_and_the_prompt_chain() -> void:
 	timeout_sec = 120.0
 	_kit()
-	var s := await kit.open("native", 7, "debug=1")
+	var s := await kit.open_town("native", 7, "debug=1")  # M3 A2: 상점은 마을에서 연다
 	var sc := s.shop_screen
 	s.state.money = 1000
 	s._open_shop()
@@ -1341,10 +1351,10 @@ func test_mark_changes_cancel_held_multi_and_pad_presses() -> void:
 func test_batch_sale_sells_the_quoted_lines_after_a_debug_supply() -> void:
 	timeout_sec = 120.0
 	_kit()
-	var dungeon := await kit.open("native", 7, "debug=1")
+	var dungeon := await kit.open_town("native", 7, "debug=1")  # M3 A2: 상점은 마을 광장 「정크 공방」
 	var s := dungeon.state
 	s.gear_bag["equip.twin_edge"] = 1
-	await kit.tap(kit.center_of(dungeon.shop_button))
+	await kit.tap(kit.center_of(dungeon.town_screen.plaza_list.rows[1]))
 	var sc := dungeon.shop_screen
 	await _step(sc, "root", 1)
 	await _step(sc, "tab", 1)

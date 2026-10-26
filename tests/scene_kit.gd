@@ -37,7 +37,8 @@ static func is_scene_dir(path: String) -> bool:
 
 
 ## 화면을 만들어 트리에 넣는다. 시드는 고정, 연출은 즉시, 플랫폼은 PC 로 본다. query 는 주소 인자 글(예 "debug=1").
-## prepare 가 있으면 트리에 넣기 직전에 화면을 넘겨 부른다(시험용 값을 더 바꿀 때).
+## 시작 방식은 "labyrinth"(M3 A2: 실제 게임은 타이틀, 장면 시험은 지금까지처럼 B1F 로 바로). prepare 가 있으면 트리에 넣기 직전에
+## 화면을 넘겨 부른다(시험용 값을 더 바꿀 때, 시작 방식도 바꿀 수 있다).
 func open(platform: String = "native", seed_value: int = 7, query: String = "", prepare: Callable = Callable()) -> DungeonScreen:
 	screen = SCREEN.instantiate()
 	screen.save_dir = dir + "/saves"
@@ -46,6 +47,7 @@ func open(platform: String = "native", seed_value: int = 7, query: String = "", 
 	screen.seed_override = seed_value
 	screen.anim_speed = 0.0
 	screen.url_query = query
+	screen.start_mode = "labyrinth"
 	if prepare.is_valid():
 		prepare.call(screen)
 	tree.root.add_child(screen)
@@ -62,11 +64,28 @@ func open_map() -> void:
 		push_error("M 키로 지도 판이 열리지 않았다")
 
 
-## 같은 저장 폴더로 화면을 다시 연다(앞 화면은 지운다).
-func reopen() -> DungeonScreen:
+## 타이틀로 띄운다(실제 게임의 시작, M3 A2).
+func open_title(platform: String = "native", seed_value: int = 7, query: String = "", prepare: Callable = Callable()) -> DungeonScreen:
+	return await open(platform, seed_value, query, _with_mode("title", prepare))
+
+
+## 마을로 띄운다: 자동 저장이 있으면 읽고, 없으면 마을에서 새 게임(M3 A2).
+func open_town(platform: String = "native", seed_value: int = 7, query: String = "", prepare: Callable = Callable()) -> DungeonScreen:
+	return await open(platform, seed_value, query, _with_mode("town", prepare))
+
+
+static func _with_mode(mode: String, prepare: Callable) -> Callable:
+	return func(s: DungeonScreen) -> void:
+		s.start_mode = mode
+		if prepare.is_valid():
+			prepare.call(s)
+
+
+## 같은 저장 폴더로 화면을 다시 연다(앞 화면은 지운다). prepare 는 open 과 같다(시작 방식을 바꿀 때).
+func reopen(prepare: Callable = Callable()) -> DungeonScreen:
 	close_screen()
 	await frames(1)
-	return await open()
+	return await open("native", 7, "", prepare)
 
 
 func close_screen() -> void:

@@ -77,6 +77,9 @@ const SLOT_KEYS := PartyNames.SLOT_KEYS
 ## 「기록」의 일(탐색 화면이 준다): slots() -> Array, save(slot), load(slot), export(), import(), automap() -> String,
 ## set_automap(mode), new_game(). 캠프는 탐색 화면을 직접 부르지 않는다.
 var records := {}
+## 마을에서 연 캠프(M3 A2, research 07 §2.2): 장소 띠 글·문패 글을 탐색 화면이 준다. 빈 글을 돌려주면 미궁 그대로(층 이름·걸음).
+var place_hook: Callable
+var plate_hook: Callable
 ## 캠프 위에 다른 창(모달)이 떠 있으면 true: 그동안 키를 받지 않는다(그 창과 탐색 화면이 받는다).
 var blocked_hook: Callable
 ## 디버그(디버그 주소 또는 네이티브 디버그 실행): 소지품 탭에 「임시 보급(시험용)」을 보인다(07 §5.7). 열 때마다 탐색 화면이 정한다.
@@ -950,9 +953,11 @@ func root_band() -> bool:
 
 ## 맨 위 띠: 걸음 문패·장소 띠·소지금(뿌리·고르기·기록).
 func _refresh_top() -> void:
-	camp_plate.show_lines(texts.t("hud.steps", {"steps": state.steps}), "")
-	# 원작 「第1階層 / B1F」처럼 「층 이름 / B1F」(07 §9.8 ③, M3 A1).
-	ribbon.show_text(FloorNames.place(texts, state.defs, state.floor_def))
+	var plate_text: String = plate_hook.call() if plate_hook.is_valid() else ""
+	camp_plate.show_lines(plate_text if not plate_text.is_empty() else texts.t("hud.steps", {"steps": state.steps}), "")
+	# 원작 「第1階層 / B1F」처럼 「층 이름 / B1F」(07 §9.8 ③, M3 A1). 마을에서는 그 장소 이름(뿌리마을 광장·시설 이름).
+	var place_text: String = place_hook.call() if place_hook.is_valid() else ""
+	ribbon.show_text(place_text if not place_text.is_empty() else FloorNames.place(texts, state.defs, state.floor_def))
 	money_plate.queue_redraw()
 
 
