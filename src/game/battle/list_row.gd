@@ -12,6 +12,9 @@ var chosen := false
 ## 오른쪽 글자(TP)를 남색 상자에 흰 숫자로(스킬 목록 줄, gs2_653224).
 var boxed_right := false
 const BOX_W := 64.0
+## 마지막으로 그린 값(시험이 그린 모양을 본다, BattleCard.drawn 과 같은 뜻, M3 A4c): state·top·bottom(채움)·text(이름 글자색)·
+## note(이유 글자색, 없으면 없음)·box(오른쪽 남색 상자 색, 없으면 없음).
+var drawn := {}
 
 
 func _init() -> void:
@@ -55,6 +58,7 @@ func _draw() -> void:
 	line.append(pts[0])
 	draw_polyline(line, lk["outer"], float(lk["outer_w"]), true)
 	var fg: Color = lk["text"]
+	drawn = {"state": theme_state(), "top": lk["top"], "bottom": lk["bottom"], "text": fg}
 	var font := get_theme_default_font()
 	var pad := 22.0
 	var edge := minf(pts[1].x, pts[2].x)
@@ -65,6 +69,7 @@ func _draw() -> void:
 	if not right.is_empty() and boxed_right:
 		var box := Rect2(edge - 8.0 - BOX_W, 8.0, BOX_W, size.y - 16.0)
 		draw_rect(box, UiTheme.SKILL_TP_BOX)
+		drawn["box"] = UiTheme.SKILL_TP_BOX
 		var nw := font.get_string_size(right, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size - 2).x
 		draw_string(font, Vector2(box.end.x - 8.0 - nw, box.get_center().y + (font_size - 2) * 0.36), right, HORIZONTAL_ALIGNMENT_LEFT, -1,
 			font_size - 2, UiTheme.CMD_TEXT)
@@ -75,3 +80,4 @@ func _draw() -> void:
 	draw_string(font, Vector2(pad, main_y), text, HORIZONTAL_ALIGNMENT_LEFT, maxf(8.0, edge - pad - 24.0 - right_w), font_size, fg)
 	if not note.is_empty():
 		draw_string(font, Vector2(pad, size.y - 9.0), note, HORIZONTAL_ALIGNMENT_LEFT, edge - pad - 12.0, 14, lk["reason"])
+		drawn["note"] = lk["reason"]

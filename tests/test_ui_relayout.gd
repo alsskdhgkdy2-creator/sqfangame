@@ -149,7 +149,7 @@ func test_battle_layers_follow_the_table_at_both_sizes() -> void:
 		check(layer.banner_rect().encloses(lb) and not lb.intersects(plate), tag + ": 로그 단추는 띠 안")
 		# 왼쪽: 띠 바로 아래 초상(x 0~180) + 아래 TP 게이지(x 0~267), 초상 오른쪽 명령 목록(x 170~493).
 		check_eq(_rect(layer.portrait), Rect2(0, 108, 267, 397), tag + ": 초상 + TP 게이지")
-		check_eq(_rect(layer.panel), Rect2(170, 108, 323, 356), tag + ": 명령 목록")
+		check_eq(_rect(layer.panel), Rect2(170, 108, 323, 426), tag + ": 명령 목록(M3 A4c: 다섯 줄 + 「뒤로」, 170,108 → 493,534)")
 		# 적 영역: 명령 목록 오른쪽 ~ 미니맵 열 왼쪽, 띠(100)와 파티 카드 위(548) 사이 가운데.
 		var er := _rect(layer.enemy_area)
 		check_eq(er, Rect2(500, 150, s.x - 500 - 255, EnemyArea.FRONT_TOP + EnemyArea.FRONT_SIZE), tag + ": 적 영역")

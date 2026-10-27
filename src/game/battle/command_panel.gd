@@ -1,6 +1,8 @@
 ## 명령 목록(06 §9.1·§9.2, M2.7 R3: 원작 HD 1868180_0e36b17e 의 왼쪽 명령 목록). 초상 오른쪽에 세로로 줄을 쌓고,
 ## 목록 전체의 오른쪽 가장자리는 오른쪽으로 볼록한 원호다(뒤판과 줄 끝이 같은 원호를 따른다, ListRow).
-## 줄: 공격·스킬·방어·도주(숫자 키 1~4), 그 아래 「뒤로」. 모든 명령이 차면 「실행」과 「뒤로」.
+## 줄: 공격·스킬·방어·아이템·도주(숫자 키 1~5, M3 A4c: 아이템 넷째, 도주 다섯째), 그 아래 「뒤로」. 모든 명령이 차면 「실행」과 「뒤로」.
+## 아이템 목록(M3 A4c, 이름 있는 벗어남: 원작 전투 아이템 목록 화면을 찾지 못해 스킬 목록 판 gs2_653224 의 자리·모양을 그대로 쓴다):
+## 같은 판·같은 끌어 내리는 목록에 Item_k 줄(스킬 줄과 같은 skin "skill", 오른쪽 남색 상자 = 보이는 남은 수).
 ## 스킬 목록(원작 III HD gs2_653224): 명령 목록 오른쪽의 따로 된 판(skill_panel, 이 컨트롤의 자식이지만 영역 밖 오른쪽에 놓인다).
 ## 첫 줄 위가 「스킬」 줄 위와 맞고, 높이는 줄을 감싸되 가장 크게 파티 카드 위 − 8(skill_area, 전투 층이 정한다). 줄은 청록, 커서 줄은 옅은 노랑,
 ## TP 는 오른쪽 남색 상자. 넘치면 끌어 내린다(PartyScroll, 줄을 끌거나 휠, 키보드 커서는 그 줄이 보이게 맞춘다). 설명은 위 메시지 띠.
@@ -9,10 +11,14 @@
 class_name CommandPanel
 extends Control
 
-## kind: "command"(arg 0~3) · "skill"(arg 스킬 ID) · "back" · "execute"
+## kind: "command"(arg 0~4) · "skill"(arg 스킬 ID) · "item"(arg 소모품 ID) · "back" · "execute"
 signal pressed(kind: String, arg: Variant)
 
-const COMMANDS := ["attack", "skill", "guard", "escape"]
+const COMMANDS := ["attack", "skill", "guard", "item", "escape"]
+## 명령 줄 번호(전투 층·시험이 같이 쓴다).
+const CMD_SKILL := 1
+const CMD_ITEM := 3
+const CMD_ESCAPE := 4
 ## 줄 높이·간격(누르는 칸 64 이상), 뒤판 안쪽 여백.
 const ROW_H := 64.0
 const GAP := 6.0
@@ -31,13 +37,15 @@ var command_buttons: Array[ListRow] = []
 var skill_panel: Control
 var skill_list: PartyScroll
 var skill_rows: Array[ListRow] = []
+## 아이템 목록 줄(M3 A4c): 스킬 줄과 같은 목록 안, 둘 중 하나만 보인다.
+var item_rows: Array[ListRow] = []
 ## 스킬 판 자리(이 컨트롤 기준). 전투 층이 화면 크기에 맞춰 정한다(set_skill_area).
 var skill_area := Rect2(300, 76, 410, 292)
 ## 마지막으로 보인 스킬 목록 커서(바뀔 때만 그 줄이 보이게 맞춘다: 다시 그리기만 할 때는 끌어 내린 자리를 지킨다).
 var _skill_cursor := -1
 var back_button: ListRow
 var execute_button: ListRow
-## "none" / "menu" / "skills" / "target" / "confirm"
+## "none" / "menu" / "skills" / "items" / "target" / "confirm"
 var mode := "none"
 ## 지금 보이는 대원 이름(초상·시험용).
 var title := ""
@@ -66,7 +74,7 @@ func build(text_db: TextDb) -> void:
 	skill_list.name = "SkillList"
 	skill_panel.add_child(skill_list)
 	skill_list.content.item_rect_changed.connect(func() -> void:
-		for r in skill_rows:
+		for r in skill_rows + item_rows:
 			r.queue_redraw())
 	show_none()
 
@@ -87,7 +95,7 @@ func _hide_all() -> void:
 		b.chosen = false
 		b.mouse_filter = MOUSE_FILTER_STOP
 		b.cancel()
-	for b in skill_rows:
+	for b in skill_rows + item_rows:
 		b.visible = false
 		b.cancel()
 	skill_list.cancel()
@@ -122,31 +130,46 @@ func show_menu(member_title: String, cursor: int, can_back: bool, blocked: Dicti
 
 ## rows: [{id, name, tp, reason}]
 func show_skills(member_title: String, rows: Array, cursor: int) -> void:
+	_show_list("skills", member_title, rows, cursor)
+
+
+## 아이템 목록(M3 A4c). rows: [{id, name, count(보이는 남은 수), reason(흐린 이유, "" 이면 고를 수 있다)}]
+func show_items(member_title: String, rows: Array, cursor: int) -> void:
+	_show_list("items", member_title, rows, cursor)
+
+
+## 스킬·아이템 목록(같은 판·같은 목록, 줄 모양 같음). 오른쪽 상자 = 스킬 TP · 아이템 남은 수.
+func _show_list(kind: String, member_title: String, rows: Array, cursor: int) -> void:
 	# 처음 열 때(다른 모드·다른 대원에서 올 때)만 맨 위로. 다시 그릴 때는 끌어 내린 자리를 지킨다.
-	var opening := mode != "skills" or title != member_title
+	var opening := mode != kind or title != member_title
 	var moved := cursor != _skill_cursor
 	_skill_cursor = cursor
-	mode = "skills"
+	mode = kind
 	title = member_title
 	_hide_all()
-	_show_commands_fixed(1)
-	while skill_rows.size() < rows.size():
-		var b := _row("Skill_%d" % skill_rows.size(), "", skill_list.content)
+	_show_commands_fixed(CMD_ITEM if kind == "items" else CMD_SKILL)
+	var list := item_rows if kind == "items" else skill_rows
+	while list.size() < rows.size():
+		var b := _row(("Item_%d" if kind == "items" else "Skill_%d") % list.size(), "", skill_list.content)
 		b.curve = null
 		b.skin = "skill"
 		b.boxed_right = true
 		b.font_size = 20
 		b.scroller = skill_list
-		var idx := skill_rows.size()
-		b.activated.connect(func() -> void: pressed.emit("skill", skill_rows[idx].get_meta("skill_id", "")))
-		skill_rows.append(b)
+		var idx := list.size()
+		if kind == "items":
+			b.activated.connect(func() -> void: pressed.emit("item", item_rows[idx].get_meta("item_id", "")))
+		else:
+			b.activated.connect(func() -> void: pressed.emit("skill", skill_rows[idx].get_meta("skill_id", "")))
+		list.append(b)
 	skill_panel.visible = true
 	for i in rows.size():
-		var b := skill_rows[i]
+		var b := list[i]
 		b.visible = true
 		b.position = Vector2(0, i * (ROW_H + SKILL_GAP))
-		b.set_meta("skill_id", rows[i]["id"])
-		b.show_row(rows[i]["name"], str(int(rows[i]["tp"])), str(rows[i]["reason"]), not str(rows[i]["reason"]).is_empty())
+		b.set_meta("item_id" if kind == "items" else "skill_id", rows[i]["id"])
+		var right := str(int(rows[i]["count"])) if kind == "items" else str(int(rows[i]["tp"]))
+		b.show_row(rows[i]["name"], right, str(rows[i]["reason"]), not str(rows[i]["reason"]).is_empty())
 		b.selected = i == cursor
 	skill_list.set_content_height(rows.size() * (ROW_H + SKILL_GAP) - SKILL_GAP)
 	_show_back(true)
@@ -217,7 +240,7 @@ func arc_x(y: float) -> float:
 
 func _layout() -> void:
 	var i := 0
-	if mode == "menu" or mode == "target" or mode == "skills":
+	if mode == "menu" or mode == "target" or mode == "skills" or mode == "items":
 		for b in command_buttons:
 			_place_row(b, row_y(i))
 			i += 1
@@ -226,7 +249,7 @@ func _layout() -> void:
 	# 「뒤로」는 목록 맨 아래(명령 줄이 있으면 그 바로 아래보다 위로 오지 않는다).
 	_place_row(back_button, maxf(size.y - PAD - ROW_H, row_y(i)))
 	# 판 높이 = 줄 + 여백, 가장 크게 skill_area(카드 위 − 8)까지. 넘칠 때만 끌어 내린다(원작 gs2_653224 처럼 줄을 감싼다).
-	var n := skill_rows.filter(func(b: ListRow) -> bool: return b.visible).size()
+	var n := (skill_rows + item_rows).filter(func(b: ListRow) -> bool: return b.visible).size()
 	var content_h := maxf(ROW_H, n * (ROW_H + SKILL_GAP) - SKILL_GAP)
 	skill_panel.position = skill_area.position
 	skill_panel.size = Vector2(skill_area.size.x, minf(skill_area.size.y, content_h + 2.0 * SKILL_PAD))
@@ -234,12 +257,12 @@ func _layout() -> void:
 	var list_h := maxf(ROW_H, skill_panel.size.y - 2.0 * SKILL_PAD)
 	var resized := absf(skill_list.size.y - list_h) > 0.01
 	skill_list.size = Vector2(skill_area.size.x - 2.0 * SKILL_PAD, list_h)
-	for r in skill_rows:
+	for r in skill_rows + item_rows:
 		r.size = Vector2(skill_list.size.x, ROW_H)
 	# 목록의 보이는 높이가 바뀌면(화면 크기가 바뀜) 커서 줄이 보이게 맞춘다. 같은 크기로 다시 그릴 때는 손으로 끌어 내린 자리를 둔다.
-	if resized and mode == "skills":
+	if resized and (mode == "skills" or mode == "items"):
 		_show_cursor_row()
-	for b in command_buttons + skill_rows + [back_button, execute_button]:
+	for b in command_buttons + skill_rows + item_rows + [back_button, execute_button]:
 		(b as ListRow).queue_redraw()
 	queue_redraw()
 
@@ -253,7 +276,7 @@ func _place_row(b: ListRow, y: float) -> void:
 
 ## 스킬 목록 커서 줄이 보이게 끌어 내린다(줄이 이미 다 보이면 그대로).
 func _show_cursor_row() -> void:
-	var visible_rows := skill_rows.filter(func(b: ListRow) -> bool: return b.visible).size()
+	var visible_rows := (skill_rows + item_rows).filter(func(b: ListRow) -> bool: return b.visible).size()
 	if _skill_cursor < 0 or _skill_cursor >= visible_rows:
 		return
 	var top := _skill_cursor * (ROW_H + SKILL_GAP)

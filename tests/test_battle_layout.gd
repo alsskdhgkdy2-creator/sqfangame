@@ -176,7 +176,7 @@ func test_banner_text_per_phase() -> void:
 	# 못 고르는 명령: 둘째 줄이 안내(첫 줄은 그대로).
 	layer.state.battle.party[1].binds["leg"] = 2
 	layer._refresh()
-	await _step("command", 3)
+	await _step("command", CommandPanel.CMD_ESCAPE)  # M3 A4c: 도주는 다섯째(4)
 	var bl := layer.banner_lines()
 	check_eq(bl, [texts.t("battle.ui.prompt", {"member": layer.display.party[1].name}), texts.t("battle.reason.bound_leg"), true], "안내는 둘째 줄")
 	layer.state.battle.party[1].binds.erase("leg")
@@ -258,7 +258,8 @@ func test_command_list_rows_follow_the_curved_edge() -> void:
 	layer.state.battle.party[0].binds["leg"] = 2
 	layer._refresh()
 	await kit.frames(1)
-	check_eq(p.command_buttons[3].theme_state(), "cmd:disabled", "못 고르는 도주 줄")
+	check_eq(p.command_buttons[CommandPanel.CMD_ESCAPE].theme_state(), "cmd:disabled", "못 고르는 도주 줄(M3 A4c: 다섯째)")
+	check_eq(p.command_buttons[CommandPanel.CMD_ESCAPE].name, &"Cmd_escape", "다섯째 줄 = 도주")
 	layer.state.battle.party[0].binds.erase("leg")
 	layer._refresh()
 	# 대상 고르기: 명령 줄을 보인 채 고른 명령만 「고른」 모양(gs2_653224), 줄은 누르기 없음, 「뒤로」만 누른다.

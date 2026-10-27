@@ -43,7 +43,7 @@ const LOG_RIGHT := 8.0
 const LIST_TOP := BANNER_H + 8.0
 const LIST_X := 170.0
 const LIST_W := 323.0
-const LIST_H := 356.0
+const LIST_H := 426.0  # 다섯 줄(M3 A4c: 아이템) + 「뒤로」
 ## 미니맵(오른쪽 아래, 원작 x 1033~1260 · y 507~667): 크기, 오른쪽·아래 여백.
 const MINIMAP := Vector2(227, 160)
 const MINIMAP_RIGHT := 20.0
@@ -75,7 +75,8 @@ const ACTOR_HEADS := ["action", "failed", "idle", "guarding"]
 const DETAIL_AT := 0.35
 ## 대상이 정해진 대상 규칙(06 §9.2): 고르지 않고, 정해진 대상을 모두 밝힌 확인 단계에서 확정한다(원작의 전체 스킬 확인).
 const AUTO_TARGETS := ["self", "enemy_all", "ally_all"]
-const REASON_KEYS := ["no_tp", "bound_head", "bound_arm", "bound_leg", "no_target", "no_escape", "unknown_skill"]
+const REASON_KEYS := ["no_tp", "bound_head", "bound_arm", "bound_leg", "no_target", "no_escape", "unknown_skill",
+	"item_not_here", "no_item", "unknown_item", "no_usable_item"]
 ## 결과 창: 폭, 가장 작은 높이, 본문 시작(제목 아래), 본문과 「확인」 사이, 「확인」 아래 여백.
 const RESULT_W := 560.0
 ## 결과 본문 글자 크기와 묶음 머리 글자 크기.
@@ -111,15 +112,15 @@ var texts: TextDb
 var display: BattleDisplay
 ## closed / command / anim / result
 var phase := "closed"
-## 명령 단계 안: menu / skills / target / confirm
+## 명령 단계 안: menu / skills / items / target / confirm
 var sub := "menu"
 ## 지금 명령을 고르는 대원 칸(-1 = 없음: 모두 찼거나 닫힘).
 var member := -1
 ## 대원 순서 5칸. 고르지 않았거나 명령을 받지 않는 대원은 null.
 var commands: Array = []
-## 키보드 커서(메뉴 0~3, 스킬 줄 번호, 대상 목록 번호).
+## 키보드 커서(메뉴 0~4, 스킬·아이템 줄 번호, 대상 목록 번호).
 var cursor := 0
-## 대상을 고르는 중인 스킬 ID("attack" = 일반 공격).
+## 대상을 고르는 중인 스킬 ID("attack" = 일반 공격). 아이템이면 소모품 ID(target_from_items).
 var target_skill := ""
 var target_side := ""
 var target_slots: Array[int] = []
@@ -127,6 +128,8 @@ var target_slots: Array[int] = []
 var target_fixed := false
 ## 스킬 목록에서 대상 고르기로 왔는지(뒤로 갈 곳).
 var target_from_skills := false
+## 아이템 목록에서 대상 고르기로 왔는지(M3 A4c: target_skill 은 소모품 ID, 대상은 그 대리 스킬로).
+var target_from_items := false
 var outcome := ""
 var end_event := {}
 ## 마지막으로 받아들인 제출의 이벤트 열.
@@ -374,7 +377,7 @@ func _cancel_pointers() -> void:
 # ---- 입력 입구 ----
 
 ## 모든 입력이 여기로 온다. 받아들였으면 true. 한 프레임에 하나만.
-## kind: command(0~3)·skill(ID)·target({side, slot})·cursor(±1)·target_cursor(±1)·confirm·back·execute·log·log_close·
+## kind: command(0~4)·skill(ID)·item(ID)·target({side, slot})·cursor(±1)·target_cursor(±1)·confirm·back·execute·log·log_close·
 ##       skip·result_ok·commands(명령 배열: 디버그 자동 명령, 같은 조건으로 제출)
 func handle(kind: String, arg: Variant = null) -> bool:
 	if phase == "closed":
@@ -423,6 +426,8 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 			return _choose_command(int(arg))
 		"skill":
 			return _choose_skill(str(arg))
+		"item":
+			return _choose_item(str(arg))
 		"target":
 			return _choose_target(arg)
 		"cursor":
@@ -485,6 +490,9 @@ func pad_state() -> Dictionary:
 					"skills":
 						var any := not _skill_ids().is_empty()
 						on = {"up": any, "down": any, "ok": any, "back": true}
+					"items":
+						var any := not _item_ids().is_empty()
+						on = {"up": any, "down": any, "ok": any, "back": true}
 					"target":
 						var lr := not target_slots.is_empty() and not target_fixed
 						on = {"left": lr, "right": lr, "ok": not target_slots.is_empty(), "back": true}
@@ -516,7 +524,7 @@ func _on_catcher_input(ev: InputEvent) -> void:
 		skip_catcher.accept_event()
 
 
-## 키보드(06 §9.2): 1~4 명령, ↑↓ 목록, ←→ 대상, Enter·Space 확정·실행·건너뛰기, Esc·Backspace 뒤로, L 로그. 물리 키.
+## 키보드(06 §9.2): 1~5 명령(M3 A4c: 4 아이템, 5 도주), ↑↓ 목록, ←→ 대상, Enter·Space 확정·실행·건너뛰기, Esc·Backspace 뒤로, L 로그. 물리 키.
 ## 층이 열려 있으면 누른 키는 모두 여기서 끝난다(뒤 미궁 화면의 이동·메뉴·조사로 가지 않는다). 떼기는 그대로 둔다.
 func _unhandled_input(event: InputEvent) -> void:
 	if phase == "closed" or not event is InputEventKey:
@@ -530,9 +538,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if k.echo or k.ctrl_pressed or k.alt_pressed or k.meta_pressed:
 		return
 	match k.physical_keycode:
-		KEY_1, KEY_2, KEY_3, KEY_4:
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
 			handle("command", k.physical_keycode - KEY_1)
-		KEY_KP_1, KEY_KP_2, KEY_KP_3, KEY_KP_4:
+		KEY_KP_1, KEY_KP_2, KEY_KP_3, KEY_KP_4, KEY_KP_5:
 			handle("command", k.physical_keycode - KEY_KP_1)
 		KEY_UP:
 			handle("cursor", -1)
@@ -587,7 +595,7 @@ func _prev_commandable(before: int) -> int:
 
 
 func _choose_command(i: int) -> bool:
-	if sub != "menu" or i < 0 or i > 3:
+	if sub != "menu" or i < 0 or i >= CommandPanel.COMMANDS.size():
 		return false
 	match i:
 		0:
@@ -603,7 +611,15 @@ func _choose_command(i: int) -> bool:
 		2:
 			commands[member] = {"kind": "guard"}
 			_advance()
-		3:
+		CommandPanel.CMD_ITEM:
+			var why := _items_block_reason()
+			if not why.is_empty():
+				_show_notice(_reason_text(why))
+				return true
+			sub = "items"
+			cursor = 0
+			_refresh()
+		CommandPanel.CMD_ESCAPE:
 			var why := BattleRules.escape_block_reason(state, member)
 			if not why.is_empty():
 				_show_notice(_reason_text(why))
@@ -620,6 +636,71 @@ func _skill_ids() -> Array[String]:
 	for sid in state.battle.party[member].skills:
 		out.append(str(sid))
 	return out
+
+
+## 아이템 목록 줄(M3 A4c): 가진 소모품(정의 차례). 다른 대원이 이 턴에 다 예약해 보이는 수가 0 인 것도 흐린 줄로 남는다.
+func _item_ids() -> Array[String]:
+	var out: Array[String] = []
+	if member < 0:
+		return out
+	for id in state.defs.battle.consumable_ids:
+		if int(state.consumables.get(id, 0)) > 0:
+			out.append(id)
+	return out
+
+
+## 보이는 남은 수 = 가진 수 − 이 턴에 **다른** 대원이 고른 수(규칙 item_block_reason 의 no_item 과 같은 셈: 그 대원 자기 칸은 세지 않는다).
+## 실행 전에는 소모품이 줄지 않으므로 state.consumables 가 가진 수다(01 §4.1).
+func item_shown_count(id: String) -> int:
+	var others := 0
+	for i in commands.size():
+		var c: Variant = commands[i]
+		if i != member and typeof(c) == TYPE_DICTIONARY and c.get("kind") == "item" and c.get("item") == id:
+			others += 1
+	return maxi(0, int(state.consumables.get(id, 0)) - others)
+
+
+## 그 소모품 줄이 흐린 이유(규칙의 item_block_reason 그대로: item_not_here · no_item · no_target). 고를 수 있으면 "".
+func item_reason(id: String) -> String:
+	return BattleRules.item_block_reason(state, member, id, commands)
+
+
+## 「아이템」 명령 줄이 흐린 이유: 이 전투에서 쓸 수 있는 아이템이 하나도 없으면(가진 것이 없거나 모두 전투에서 못 쓰거나 대상이 없다)
+## no_usable_item. 다른 대원의 예약으로만 막힌 것(no_item)은 줄을 흐리지 않는다: 목록을 열어 그 줄의 「남은 수 없음」을 보인다.
+func _items_block_reason() -> String:
+	for id in _item_ids():
+		var why := item_reason(id)
+		if why.is_empty() or why == "no_item":
+			return ""
+	return "no_usable_item"
+
+
+## 아이템 줄 누르기(M3 A4c): 커서를 그 줄로 옮기고, 흐린 줄이면 이유만 알린다. 되면 대상 고르기(대리 스킬의 대상).
+func _choose_item(id: String) -> bool:
+	if sub != "items" or not _item_ids().has(id):
+		return false
+	cursor = _item_ids().find(id)
+	var why := item_reason(id)
+	if not why.is_empty():
+		_refresh()
+		_show_notice(_reason_text(why))
+		return true
+	_enter_item_target(id)
+	return true
+
+
+func _enter_item_target(id: String) -> void:
+	var u := state.battle.party[member]
+	var s := state.defs.battle.item_skill(id)
+	target_skill = id
+	target_from_skills = false
+	target_from_items = true
+	target_side = BattleRules.target_side(u, s)
+	target_slots = BattleRules.item_targets(state, member, id)
+	target_fixed = false  # 소모품은 모두 단일 대상(A4a 규칙)
+	sub = "target"
+	cursor = 0
+	_refresh()
 
 
 func _choose_skill(sid: String) -> bool:
@@ -643,6 +724,7 @@ func _enter_target(sid: String, from_skills: bool) -> void:
 	var s := BattleRules.skill_of(state, member, sid)
 	target_skill = sid
 	target_from_skills = from_skills
+	target_from_items = false
 	target_side = BattleRules.target_side(u, s)
 	target_slots = BattleRules.valid_targets(state, member, sid)
 	target_fixed = AUTO_TARGETS.has(s.target)
@@ -663,7 +745,9 @@ func _choose_target(r: Variant) -> bool:
 			_show_notice(texts.t("battle.reason.unreachable" if target_side == BattleUnit.ENEMY else "battle.reason.not_target"))
 			return true
 		return false
-	if target_skill == "attack":
+	if target_from_items:
+		commands[member] = {"kind": "item", "item": target_skill, "target": slot}
+	elif target_skill == "attack":
 		commands[member] = {"kind": "attack", "target": slot}
 	elif target_fixed:
 		commands[member] = {"kind": "skill", "skill": target_skill}  # 규칙이 대상을 정한다(제출 형식은 바로 확정하던 때와 같다)
@@ -679,19 +763,30 @@ func _advance() -> void:
 	cursor = 0
 	target_skill = ""
 	target_fixed = false
+	target_from_items = false
 	_refresh()
 
 
+## 뒤로: 대상 → 온 목록(스킬·아이템) 또는 메뉴, 목록 → 메뉴(그 명령 줄), 메뉴·확인 → 앞 대원(그 대원의 명령을 버린다: 아이템이면
+## 그 예약도 풀려 뒤 대원의 보이는 남은 수가 돌아온다).
 func _back() -> bool:
 	match sub:
 		"target":
-			sub = "skills" if target_from_skills else "menu"
-			cursor = maxi(0, _skill_ids().find(target_skill)) if target_from_skills else 0
+			if target_from_items:
+				sub = "items"
+				cursor = maxi(0, _item_ids().find(target_skill))
+			else:
+				sub = "skills" if target_from_skills else "menu"
+				cursor = maxi(0, _skill_ids().find(target_skill)) if target_from_skills else 0
 			target_skill = ""
 			target_fixed = false
+			target_from_items = false
 		"skills":
 			sub = "menu"
-			cursor = 1
+			cursor = CommandPanel.CMD_SKILL
+		"items":
+			sub = "menu"
+			cursor = CommandPanel.CMD_ITEM
 		"menu", "confirm":
 			var prev := _prev_commandable(member if sub == "menu" else state.battle.party.size())
 			if prev < 0:
@@ -711,6 +806,9 @@ func _confirm() -> bool:
 		"skills":
 			var ids := _skill_ids()
 			return _choose_skill(ids[cursor]) if cursor < ids.size() else false
+		"items":
+			var ids := _item_ids()
+			return _choose_item(ids[cursor]) if cursor < ids.size() else false
 		"target":
 			if target_slots.is_empty():
 				return false
@@ -724,9 +822,9 @@ func _confirm() -> bool:
 func _move_cursor(d: int) -> bool:
 	match sub:
 		"menu":
-			cursor = wrapi(cursor + d, 0, 4)
-		"skills":
-			var n := _skill_ids().size()
+			cursor = wrapi(cursor + d, 0, CommandPanel.COMMANDS.size())
+		"skills", "items":
+			var n := _skill_ids().size() if sub == "skills" else _item_ids().size()
 			if n == 0:
 				return false
 			cursor = wrapi(cursor + d, 0, n)
@@ -1153,6 +1251,8 @@ func _command_label(c: Variant) -> String:
 			return texts.t("battle.cmd.escape")
 		"skill":
 			return texts.t(str(c["skill"]))
+		"item":
+			return texts.t(str(c["item"]))  # 카드에 고른 아이템 이름(M3 A4c)
 	return ""
 
 
@@ -1171,9 +1271,12 @@ func _refresh_panel() -> void:
 			var why := BattleRules.skill_block_reason(state, member, "attack")
 			if not why.is_empty():
 				blocked[0] = _reason_text(why)
+			why = _items_block_reason()
+			if not why.is_empty():
+				blocked[CommandPanel.CMD_ITEM] = _reason_text(why)
 			why = BattleRules.escape_block_reason(state, member)
 			if not why.is_empty():
-				blocked[3] = _reason_text(why)
+				blocked[CommandPanel.CMD_ESCAPE] = _reason_text(why)
 			panel.show_menu(title, cursor, _prev_commandable(member) >= 0, blocked)
 		"skills":
 			var rows := []
@@ -1183,8 +1286,19 @@ func _refresh_panel() -> void:
 				rows.append({"id": sid, "name": texts.t(s.name_key), "tp": BattleRules.tp_cost(state.battle.party[member], s),
 					"reason": _reason_text(why) if not why.is_empty() else ""})
 			panel.show_skills(title, rows, cursor)
+		"items":
+			var rows := []
+			for id in _item_ids():
+				var why := item_reason(id)
+				rows.append({"id": id, "name": texts.t(id), "count": item_shown_count(id), "reason": _reason_text(why) if not why.is_empty() else ""})
+			panel.show_items(title, rows, cursor)
 		"target":
-			panel.show_target(title, 1 if target_from_skills else 0)
+			var chosen := 0
+			if target_from_skills:
+				chosen = CommandPanel.CMD_SKILL
+			elif target_from_items:
+				chosen = CommandPanel.CMD_ITEM
+			panel.show_target(title, chosen)
 
 
 ## 초상·TP 게이지: 명령을 고르는 대원이 있을 때만(연출·결과·모두 고른 뒤에는 감춘다, 원작 1810820_1f51fd75).
@@ -1201,6 +1315,20 @@ func _refresh_portrait() -> void:
 ## 숫자는 SkillSummary 가 스킬 정의에서 읽는다. 메시지 띠에 보인다(원작에 스킬 목록 화면이 없어 가장 가까운 메시지 자리). 로그 창이 열리면 감춘다.
 func _refresh_skill_info() -> void:
 	var sid := ""
+	# 아이템(M3 A4c): 머리 = 이름, 둘째 줄 = 설명(흐린 줄이면 그 이유). 대상 고르기 동안은 설명.
+	var item := ""
+	if phase == "command" and not log_view.visible:
+		if sub == "items":
+			var ids := _item_ids()
+			if cursor >= 0 and cursor < ids.size():
+				item = ids[cursor]
+		elif sub == "target" and target_from_items:
+			item = target_skill
+	if not item.is_empty():
+		var why := item_reason(item) if sub == "items" else ""
+		skill_info_title = texts.t(item)
+		skill_info_text = _reason_text(why) if not why.is_empty() else texts.t(state.defs.battle.consumable(item).desc_key)
+		return
 	if phase == "command" and not log_view.visible:
 		if sub == "skills":
 			var ids := _skill_ids()
@@ -1284,12 +1412,12 @@ func banner_lines() -> Array:
 		"command":
 			if log_view.visible:
 				head = texts.t("battle.ui.log")
-			elif skill_info_shown() and sub == "skills":
+			elif skill_info_shown() and (sub == "skills" or sub == "items"):
 				head = skill_info_title
 				body = skill_info_text
 			else:
 				match sub:
-					"menu", "skills":
+					"menu", "skills", "items":
 						head = texts.t("battle.ui.prompt", {"member": display.party[member].name})
 					"target":
 						if target_fixed:
@@ -1424,4 +1552,16 @@ func debug_info(css: Callable) -> Dictionary:
 		"target_fixed": target_fixed if sub == "target" else false,
 		"enemy_hp": enemy_hp, "charging": charging, "log": log_view.visible, "log_lines": log_view.lines.size(), "outcome": outcome,
 		"result_lines": result_lines if phase == "result" else [], "panel": panel.visible,
-		"skill_info": [skill_info_title, skill_info_text] if skill_info_shown() else [], "banner": banner_lines().slice(0, 2), "buttons": buttons}
+		"skill_info": [skill_info_title, skill_info_text] if skill_info_shown() else [], "banner": banner_lines().slice(0, 2), "buttons": buttons,
+		# 아이템(M3 A4c): 지금 대원에게 보이는 아이템 줄(정의 차례) [{id, count(보이는 남은 수), reason}], 커서, 이 턴 명령.
+		"items": _debug_items(), "cursor": cursor, "commands": commands.duplicate(true) if phase == "command" else [],
+		"item_used": last_events.filter(func(e: Dictionary) -> bool: return e["type"] == "item_used").size()}
+
+
+func _debug_items() -> Array:
+	var out := []
+	if phase != "command" or member < 0:
+		return out
+	for id in _item_ids():
+		out.append({"id": id, "count": item_shown_count(id), "reason": item_reason(id)})
+	return out

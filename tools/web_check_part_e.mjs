@@ -5,6 +5,8 @@
 // 4) 광장 캠프 → 소지품: 띠 「소지품   4/60」, 메디카 「쓰기」 → 카드 → 「HP가 가득하다」(개수 그대로), 비콘 「쓰기」 흐림 → 「마을에서는 쓸 수 없다」
 // 5) 탐사 시작 → 지도 메모 → 공략 몇 걸음 → 캠프 → 소지품: 메디카 「버리기」 → 수량 창(「아니오」 먼저) → 1 → 「예」 → 2개·띠 「3/60」
 // 6) 비콘 「쓰기」 → 확인 창(첫 커서 「돌아가기」) → 「돌아간다」 → 광장·첫 층 시작 칸·날·걸음·지도 메모 그대로·안내 없음(관문 도착과 같다)·IndexedDB = 화면
+// 5b) (M3 A4c) 공략을 이어 걸어 첫 전투: 대원 1 「아이템」 → 메디카 → 자기 카드, 대원 2 「아이템」 → 줄어든 수를 보고 뒤로, 나머지 방어 → 실행 →
+//     소모품 = 전 − item_used(어떻게 끝나도 통과, D15) → battle_finish → 「확인」. 그 뒤 캠프로 돌아가 6) 을 잇는다.
 // 7) 새로 고침 → 이어하기: 같은 해시, 마을. 전투는 battle_finish 로 넘긴다(승패에 기대지 않는다, D15).
 import {
   W, H, outDir, KEYS, page, check, log, snap, request, waitFor, waitReady, waitTitle, clickButton, enterLabyrinth, finishBattle, waitIdb, route,
@@ -199,11 +201,77 @@ export async function partE() {
   check(s.consumables[MEDICA] === 2 && s.party_menu.strip === '메디카 1개를 버렸다' && s.party_menu.items.mode === 'list' && s.bag_used === 3,
     '아이템 5: 1개 버림 → 2개·띠에 결과(D2)·목록 쪽', { consumables: s.consumables, strip: s.party_menu.strip, items: s.party_menu.items });
 
-  // 6) 비콘 → 마을(결과 안내가 2.5초 뒤 사라지면 띠는 다시 칸 수).
-  await key('ArrowDown', (x) => x.party_menu.items.item === BEACON, '비콘 줄');
+  // 결과 안내가 2.5초 뒤 사라지면 띠는 다시 칸 수.
   s = await waitFor((x) => x.party_menu.strip !== '메디카 1개를 버렸다', '안내가 사라짐', 5000);
-  check(s.party_menu.items.use === 'on' && s.party_menu.strip === '소지품   3/60', '아이템 5·6: 띠 「소지품   3/60」, 미궁에서 비콘 「쓰기」 켜짐',
-    { items: s.party_menu.items, strip: s.party_menu.strip });
+  check(s.party_menu.strip === '소지품   3/60', '아이템 5: 띠 「소지품   3/60」', { strip: s.party_menu.strip });
+  await clickButton('VPad_back');
+  await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');
+  await clickButton('VPad_back');
+  await waitFor((x) => !x.party_menu?.open && !x.busy, '캠프 닫힘');
+
+  // 5b) 첫 전투의 「아이템」(M3 A4c).
+  await page.mouse.click(Math.round(W * 0.3), Math.round(H * 0.3));  // 캔버스에 키 포커스
+  for (let i = 3; i < route.actions.length; i++) {
+    const b0 = await snap();
+    if (b0.battle?.open) break;
+    await page.keyboard.press(KEYS[route.actions[i]]);
+    const b1 = await waitFor((x) => (x.generation > b0.generation || x.battle?.open) && !x.busy, `걸음 ${i + 1}`);
+    if (b1.battle?.open) break;
+    if (b1.modal !== '') {
+      await page.keyboard.press('Escape');
+      await waitFor((x) => x.modal === '' && !x.busy, '물음 닫기');
+    }
+  }
+  let b = await waitFor((x) => x.battle?.open && x.battle.phase === 'command' && x.battle.sub === 'menu' && !x.busy, '첫 전투 명령 단계');
+  const med0 = b.consumables[MEDICA];
+  check(b.battle.member === 0 && b.buttons.Cmd_item && b.buttons.Cmd_escape && med0 === 2, '아이템 5b: 첫 전투 — 다섯 줄(「아이템」·「도주」), 메디카 2',
+    { member: b.battle.member, med0, buttons: Object.keys(b.buttons).filter((n) => n.startsWith('Cmd_')) });
+  await clickButton('Cmd_item');
+  b = await waitFor((x) => x.battle?.sub === 'items', '아이템 목록');
+  const mk = b.battle.items.findIndex((r) => r.id === MEDICA);
+  check(mk >= 0 && b.battle.items[mk].count === med0 && b.battle.items[mk].reason === '' && b.buttons[`Item_${mk}`],
+    '아이템 5b: 대원 1 아이템 목록 — 메디카 2(고를 수 있다)', { items: b.battle.items });
+  await shot('e07a_battle_items');
+  await clickButton(`Item_${mk}`);
+  b = await waitFor((x) => x.battle?.sub === 'target', '대상 고르기');
+  await clickButton('Member_0');
+  b = await waitFor((x) => x.battle?.member === 1 && x.battle.sub === 'menu', '대원 2');
+  const c0 = b.battle.commands[0];
+  check(c0?.kind === 'item' && c0.item === MEDICA && c0.target === 0 && Object.keys(c0).length === 3 && b.consumables[MEDICA] === med0,
+    '아이템 5b: 대원 1 = 메디카 → 자기 카드(실행 전이라 소모품 그대로)', { command: b.battle.commands[0], consumables: b.consumables });
+  await clickButton('Cmd_item');
+  b = await waitFor((x) => x.battle?.sub === 'items', '대원 2 아이템 목록');
+  check(b.battle.items.find((r) => r.id === MEDICA)?.count === med0 - 1, '아이템 5b: 대원 2 — 보이는 메디카가 하나 줄었다(대원 1 의 예약)', { items: b.battle.items });
+  await shot('e07b_battle_items_member2');
+  await clickButton('VPad_back');
+  b = await waitFor((x) => x.battle?.sub === 'menu' && x.battle.member === 1, '대원 2 메뉴');
+  for (let k = 0; k < 6; k++) {
+    b = await snap();
+    if (b.battle.sub === 'confirm') break;
+    const m = b.battle.member;
+    await clickButton('Cmd_guard');
+    await waitFor((x) => x.battle.sub === 'confirm' || x.battle.member !== m, '방어');
+  }
+  b = await waitFor((x) => x.battle?.sub === 'confirm' && x.buttons.Execute, '모든 명령');
+  const gb = b.generation;
+  await clickButton('Execute');
+  b = await waitFor((x) => x.generation > gb, '제출 저장');
+  if (b.battle?.phase === 'anim') await page.keyboard.press('Enter');
+  b = await waitFor((x) => !x.battle?.open || x.battle.phase !== 'anim', '연출 끝');
+  const used = b.battle?.item_used ?? -1;
+  const medAfter = b.consumables[MEDICA] ?? 0;
+  check(used >= 0 && used <= 1 && medAfter === med0 - used, '아이템 5b: 실행 뒤 메디카 = 전 − item_used(결과에 기대지 않는다, D15)',
+    { med0, used, medAfter, phase: b.battle?.phase, outcome: b.battle?.outcome });
+  b = await finishBattle(b, false);
+  b = await waitFor((x) => !x.battle?.open && x.modal === '' && !x.busy, '전투 끝 → 탐색');
+
+  // 6) 비콘 → 마을.
+  s = await openItems();
+  check(s.party_menu.strip === `소지품   ${3 - (med0 - medAfter)}/60` && s.bag_used === 3 - (med0 - medAfter), '아이템 6: 전투 뒤 띠 = 공용 가방 칸 수',
+    { strip: s.party_menu.strip, bag_used: s.bag_used });
+  await key('ArrowDown', (x) => x.party_menu.items.item === BEACON, '비콘 줄');
+  s = await snap();
+  check(s.party_menu.items.use === 'on', '아이템 6: 미궁에서 비콘 「쓰기」 켜짐', { items: s.party_menu.items });
   await key('Enter', (x) => x.party_menu.items.mode === 'pills', '알약 쪽');
   s = await key('Enter', (x) => x.party_menu.dialog === 'beacon', '비콘 확인 창');
   check(s.party_menu.dialog_pick === 0 && s.buttons.DialogBack && s.buttons.DialogOk, '아이템 6: 비콘 확인 창, 첫 커서 「돌아가기」', { pick: s.party_menu.dialog_pick });
@@ -214,7 +282,7 @@ export async function partE() {
   s = await waitFor((x) => x.generation > g && x.location === 'town' && x.town?.open && !x.party_menu?.open && !x.busy, '비콘 → 광장');
   idb = await waitIdb(s);
   check(s.town.page === 'plaza' && s.floor === startFloor && s.at[0] === start[0] && s.at[1] === start[1] && s.day === before.day && s.steps === before.steps
-    && s.memo_texts?.[memoKey] === memoText && s.consumables[BEACON] === undefined && s.consumables[MEDICA] === 2 && s.generation === g + 1 && !idb.timeout,
+    && s.memo_texts?.[memoKey] === memoText && s.consumables[BEACON] === undefined && s.consumables[MEDICA] === medAfter && s.generation === g + 1 && !idb.timeout,
   '아이템 6: 「돌아간다」 → 광장·첫 층 시작 칸·날·걸음·지도 메모 그대로, 비콘 −1, 자동 저장 하나, IndexedDB = 화면',
   { page: s.town.page, floor: s.floor, at: s.at, day: [before.day, s.day], steps: [before.steps, s.steps], memo: s.memo_texts?.[memoKey], consumables: s.consumables, idb });
   check(s.town.notice === '' && s.toast === '' && s.warning === '' && s.modal === '' && s.town.place === '뿌리마을 광장',
@@ -229,6 +297,6 @@ export async function partE() {
   check(t.buttons.TitleContinue, '아이템 7: 새로 고침 → 타이틀 이어하기', { title: t.title });
   await clickButton('TitleContinue');
   s = await waitFor((x) => x.town?.open && !x.busy && !x.title?.open, '이어하기');
-  check(s.hash === hash && s.location === 'town' && s.consumables[MEDICA] === 2, '아이템 7: 이어하기 → 같은 해시·마을', { before: hash.slice(0, 12), after: s.hash.slice(0, 12) });
+  check(s.hash === hash && s.location === 'town' && s.consumables[MEDICA] === medAfter, '아이템 7: 이어하기 → 같은 해시·마을', { before: hash.slice(0, 12), after: s.hash.slice(0, 12) });
   log('부분 E 끝');
 }

@@ -172,6 +172,11 @@ func apply(ev: Dictionary) -> void:
 			var t := unit(ev["target"])
 			if t != null:
 				t.hp = int(ev["hp"])
+		"tp_healed":
+			# 아미타(M3 A4): 대상의 TP 를 규칙이 정한 값으로.
+			var t := unit(ev["target"])
+			if t != null:
+				t.tp = int(ev["tp"])
 		"defeated":
 			var t := unit(ev["target"])
 			if t != null:
@@ -329,6 +334,11 @@ func describe(ev: Dictionary) -> String:
 			return line
 		"healed":
 			return texts.t("battle.event.healed", {"target": target, "amount": ev["amount"]})
+		"tp_healed":
+			return texts.t("battle.event.tp_healed", {"target": target, "amount": ev["amount"]})
+		"item_used":
+			# 쓴 소모품의 남은 수(M3 A4, 「메디카 남은 수 1」). 행동 줄 「{actor}의 메디카!」 바로 뒤.
+			return texts.t("battle.event.item_used", {"item": texts.t(str(ev["item"])), "left": ev["left"]})
 		"expired":
 			var what := str(ev["what"])
 			var thing := ""
