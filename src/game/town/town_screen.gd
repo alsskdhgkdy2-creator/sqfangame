@@ -545,10 +545,16 @@ func _notification(what: int) -> void:
 
 # ---- 알림 ----
 
-func show_notice(t: String) -> void:
+## sec = 보일 시간(DungeonScreen 의 저장 실패 안내는 남은 시간을 넘긴다).
+func show_notice(t: String, sec: float = NOTICE_SEC) -> void:
 	notice = t
-	_notice_left = NOTICE_SEC
+	_notice_left = sec
 	_refresh_banner()
+
+
+## 다른 화면이 넘겨준 안내를 거둔다(DungeonScreen: 저장 실패 안내가 다른 곳으로 옮겨 갈 때).
+func clear_notice() -> void:
+	_clear_notice()
 
 
 func _clear_notice() -> void:

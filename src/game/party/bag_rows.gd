@@ -3,9 +3,15 @@
 class_name BagRows
 extends RefCounted
 
+## 귀중품 줄 아이콘(VectorIcons 종류 아이콘).
+const KEY_ICON := "kind_key"
+## 캠프 소지품의 종류 차례: 장비 → 소재 → 귀중품(M3 A3).
+const CAMP_KINDS := ["gear", "material", "key"]
+
 
 ## 가방 줄 [{item, count, kind, icon}, …]. kinds 차례로: "gear" = 장비(자료 차례, gear_bag 1 이상),
 ## "material" = 소재(정의 자료 차례 = data/items/materials.json, 몬스터 차례를 따른다, 1 이상). 캠프 소지품과 상점 판매가 같은 차례(D28-b).
+## "key" = 귀중품(열쇠, M3 A3, 정의 차례 = data/items/key_items.json, 개수는 늘 1). 캠프 소지품만 넣는다(상점은 종류를 따로 넘겨 팔 수 없다).
 static func bag(state: ExplorationState, kinds: Array = ["gear", "material"]) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var defs := state.defs
@@ -21,6 +27,10 @@ static func bag(state: ExplorationState, kinds: Array = ["gear", "material"]) ->
 					var n := int(state.materials.get(id, 0))
 					if n >= 1:
 						out.append({"item": str(id), "count": n, "kind": "material", "icon": str(ShopTabs.ICONS["material"])})
+			"key":
+				for id in defs.battle.key_item_ids:
+					if state.key_items.has(id):
+						out.append({"item": id, "count": 1, "kind": "key", "icon": KEY_ICON})
 	return out
 
 

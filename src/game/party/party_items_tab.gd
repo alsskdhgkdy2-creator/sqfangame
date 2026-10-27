@@ -167,7 +167,7 @@ func can_move() -> bool:
 	return inv.can_move()
 
 
-## 띠 글(알림이 없을 때): 「소지품   장비 n · 소재 n」, n 은 가진 종류 수(개수 1 이상).
+## 띠 글(알림이 없을 때): 「소지품   장비 n · 소재 n · 귀중품 n」, n 은 가진 종류 수(개수 1 이상, 귀중품은 가진 수).
 func caption() -> String:
 	var gear := 0
 	for id in menu.state.defs.battle.equipment_ids:
@@ -177,7 +177,7 @@ func caption() -> String:
 	for id in menu.state.materials:
 		if int(menu.state.materials[id]) >= 1:
 			mats += 1
-	return menu.texts.t("party.items.strip", {"gear": gear, "materials": mats})
+	return menu.texts.t("party.items.strip", {"gear": gear, "materials": mats, "keys": menu.state.key_items.size()})
 
 
 func dispatch(kind: String, arg: Variant) -> bool:
@@ -318,10 +318,11 @@ func refresh() -> void:
 		next_buttons[k].text = menu.texts.t("party.supply.next")
 		next_buttons[k].dimmed = m.level >= defs.battle.growth.level_cap
 	if not show_supply:
-		for line in BagRows.bag(menu.state):
+		for line in BagRows.bag(menu.state, BagRows.CAMP_KINDS):
 			var id: String = line["item"]
 			row_items.append(id)
-			lines.append({"icon": item_icon(id), "name": item_label(id), "right": menu.texts.t("party.count", {"n": item_count(id)}), "id": id})
+			var right := menu.texts.t("party.items.key") if _is_key(id) else menu.texts.t("party.count", {"n": item_count(id)})
+			lines.append({"icon": item_icon(id), "name": item_label(id), "right": right, "id": id})
 		if row_items.is_empty():
 			lines.append({"name": menu.texts.t("party.items.none"), "dim": true, "press": false})
 	# 커서 표시는 공용 목록이 칸마다 다시 켠다. 감춘 단추의 표시는 여기서 지운다.
@@ -340,14 +341,25 @@ func refresh() -> void:
 
 
 func item_icon(id: String) -> String:
+	if _is_key(id):
+		return BagRows.KEY_ICON
 	return SheetParts.kind_icon(menu.state.defs, id) if menu.state.defs.battle.equip(id) != null else str(ShopTabs.ICONS["material"])
 
 
 func item_label(id: String) -> String:
+	if _is_key(id):
+		return menu.texts.t(menu.state.defs.battle.key_items[id]["name_key"])
 	return menu.item_name(id)
 
 
+## 귀중품(열쇠, M3 A3) ID 인지.
+func _is_key(id: String) -> bool:
+	return menu.state.defs.battle.key_items.has(id)
+
+
 func item_count(id: String) -> int:
+	if _is_key(id):
+		return 1 if menu.state.key_items.has(id) else 0
 	if menu.state.defs.battle.equip(id) != null:
 		return int(menu.state.gear_bag.get(id, 0))
 	return int(menu.state.materials.get(id, 0))
@@ -382,6 +394,9 @@ func _refresh_desc() -> void:
 func item_lines(id: String) -> Array[String]:
 	var out: Array[String] = []
 	var t := menu.texts
+	if _is_key(id):
+		# 귀중품(M3 A3): 설명 글 · 「귀중품 · 팔 수 없다」(판매값 없음).
+		return [t.t(menu.state.defs.battle.key_items[id]["desc_key"]), t.t("party.items.key_line")] as Array[String]
 	var e := menu.state.defs.battle.equip(id)
 	if e != null:
 		for s in [PartyNames.values_text(menu.state, t, id), PartyNames.received_text(menu.state, t, id)]:

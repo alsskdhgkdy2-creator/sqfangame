@@ -1016,9 +1016,11 @@ func test_save_failure_notice_shows_over_battle() -> void:
 	s.battle_layer.handle("commands", BattlePolicy.choose(s.state, BattlePolicy.DEFAULT))
 	await kit.frames(2)
 	check(s.last_autosave_error != "", "저장 실패")
-	check(s._toast.text.begins_with(texts.t("msg.save_failed", {"reason": ""})), "저장 실패 알림")
-	var tr := s._toast.get_global_rect()
-	check(s._toast.is_visible_in_tree() and tr.position.y >= BattleLayer.BANNER_H and tr.position.x >= BattleLayer.TOAST_LEFT,
+	# M3 A3b(검토 R2~R4): 저장 실패 안내는 일반 알림 줄과 따로 자기 글줄(SaveWarning)에 보인다. 자리는 같은 전투 띠.
+	var wl := s._warn_label
+	check(wl.text.begins_with(texts.t("msg.save_failed", {"reason": ""})) and wl.modulate.a > 0.9, "저장 실패 알림")
+	var tr := wl.get_global_rect()
+	check(wl.is_visible_in_tree() and tr.position.y >= BattleLayer.BANNER_H and tr.position.x >= BattleLayer.TOAST_LEFT,
 		"알림 줄은 전투 층 위, 메시지 띠 아래·로그 단추 오른쪽에 보인다: %s" % str(tr))
 
 
@@ -1116,6 +1118,7 @@ func test_start_error_is_shown() -> void:
 	screen.save_dir = kit.dir + "/saves"
 	screen.settings_path = kit.dir + "/settings.json"
 	screen.platform = "native"
+	screen.labyrinth_path = DungeonScreen.TEST_LABYRINTH_PATH
 	screen.party_path = "res://data/party/does_not_exist.json"
 	kit.screen = screen
 	tree.root.add_child(screen)
@@ -1586,6 +1589,7 @@ func _screen_with_query(query: String) -> DungeonScreen:
 	sc.anim_speed = 0.0
 	sc.url_query = query
 	sc.start_mode = "labyrinth"  # M3 A2: 기본은 타이틀
+	sc.labyrinth_path = DungeonScreen.TEST_LABYRINTH_PATH  # M3 A3: 기본은 실제 미궁
 	kit.screen = sc
 	tree.root.add_child(sc)
 	await kit.frames(2)

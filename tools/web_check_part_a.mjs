@@ -5,12 +5,12 @@ import fs from 'node:fs';
 import { idbMatches } from './web_check_lib.mjs';
 import {
   W, H, SEED, outDir, route, FOLLOW_UP, page, log, check, snap, request, waitFor, waitReady, clickButton, waitIdb,
-  IDB_WAIT_MS, battles, battleTurns, reloadChecked, act, openRecords, closeCamp, enterLabyrinth,
+  IDB_WAIT_MS, battles, battleTurns, reloadChecked, act, openRecords, closeCamp, enterLabyrinth, autoKey,
 } from './web_check_common.mjs';
 
 // 한 번의 페이지 호출 안에서 상태 요약(글)을 먼저 읽고 그다음 IndexedDB 의 자동 저장을 읽는다(순서 고정, 표본 간격을 줄인다).
 // 저장 글은 세대가 want 와 같을 때만 돌려준다(해시는 그때만 계산).
-const snapThenIdb = (want) => page.evaluate((wantGen) => {
+const snapThenIdb = (want) => page.evaluate(([wantGen, key]) => {
   const snapText = window.sqfDebug?.snapshot || '{}';
   return new Promise((resolve) => {
     const req = indexedDB.open('/userfs');
@@ -18,7 +18,7 @@ const snapThenIdb = (want) => page.evaluate((wantGen) => {
     req.onsuccess = () => {
       const db = req.result;
       const st = db.transaction('FILE_DATA', 'readonly').objectStore('FILE_DATA');
-      const g = st.get('/userfs/sqfangame/saves/auto.json');
+      const g = st.get(key);
       g.onsuccess = () => {
         db.close();
         if (!g.result?.contents) { resolve({ snapText, generation: null }); return; }
@@ -31,7 +31,7 @@ const snapThenIdb = (want) => page.evaluate((wantGen) => {
       g.onerror = () => { db.close(); resolve({ snapText, error: 'get' }); };
     };
   });
-}, want);
+}, [want, autoKey()]);
 
 export async function partA() {
   let s = await waitReady();
@@ -155,7 +155,7 @@ export async function partA() {
 
   // ---- 3) IndexedDB 반영 ----
   let idb = await waitIdb(s);
-  check(!idb.timeout && idb.keys?.[0] === '/userfs/sqfangame/saves/auto.json', 'IndexedDB 자동 저장 = 화면 세대·상태 해시', idb);
+  check(!idb.timeout && idb.keys?.[0] === autoKey(), 'IndexedDB 자동 저장 = 화면 세대·상태 해시', idb);
   // 게임은 대기 중 약 0.25초마다 IndexedDB 를 읽는다: 그 세대가 들어간 것을 확인했으면 곧 대기를 내리고 표시를 감춘다.
   const cleared = await waitFor((x) => !x.save_pending, '「저장 중」 대기 내림', 5000).catch(() => null);
   const s3 = cleared ?? await snap();
@@ -164,9 +164,9 @@ export async function partA() {
   'IndexedDB 에 그 세대가 들어간 뒤 「저장 중」 대기 없음·표시 감춤', { save_pending: s3.save_pending, save_chip: s3.save_chip, gens: s3.save_pending_gens, reads: s3.save_reads, generation: s3.generation, pendingGen });
   // 게임의 IndexedDB 읽기(window.sqfIdbRead, 05 §8.3)를 직접 부른다: 내용 없는 기록·Blob 내용 기록은 false(읽을 수 없음),
   // 없는 열쇠는 null, 자동 저장은 바이트(base64). 시험 기록은 같은 호출 안에서 지운다(새로 고침 전, 게임 파일 밖 경로).
-  const probe = await page.evaluate(() => new Promise((resolve) => {
+  const probe = await page.evaluate((auto) => new Promise((resolve) => {
     const dir = '/userfs/sqfangame/w1probe_';
-    const keys = [dir + 'nocontents', dir + 'blob', dir + 'absent', '/userfs/sqfangame/saves/auto.json'];
+    const keys = [dir + 'nocontents', dir + 'blob', dir + 'absent', auto];
     const req = indexedDB.open('/userfs');
     req.onerror = () => resolve({ error: 'open' });
     req.onsuccess = () => {
@@ -192,7 +192,7 @@ export async function partA() {
         });
       };
     };
-  }));
+  }), autoKey());
   check(!probe.error && probe.err === '' && probe.values?.[0] === false && probe.values?.[1] === false && probe.values?.[2] === null
     && probe.values?.[3] === 'bytes' && probe.gen === pendingGen,
   '게임의 IndexedDB 읽기: 읽을 수 없는 기록은 false, 없는 열쇠만 null, 자동 저장은 바이트 그대로', probe);

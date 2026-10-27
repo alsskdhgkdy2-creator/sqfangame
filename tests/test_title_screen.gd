@@ -293,7 +293,7 @@ func test_reopen_shows_title_again() -> void:
 	var plain: DungeonScreen = Kit.SCREEN.instantiate()
 	check_eq(plain.start_mode, "title", "화면 기본 시작은 타이틀")
 	# 트리에 넣지 않은 화면: 미리 만든 부품(_ready 가 트리에 넣는 것)도 함께 지운다(_show_start_error 와 같다).
-	for n in [plain._floor_label, plain._steps_label, plain._toast, plain._flash, plain.save_chip]:
+	for n in [plain._floor_label, plain._steps_label, plain._toast, plain._warn_label, plain._flash, plain.save_chip]:
 		(n as Node).free()
 	plain.free()
 	var s := await kit.open_title()

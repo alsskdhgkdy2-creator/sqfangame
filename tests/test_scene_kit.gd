@@ -165,3 +165,18 @@ func test_purge_does_not_follow_links() -> void:
 	check(DirAccess.dir_exists_absolute(_target + "/sub"), "대상의 하위 폴더도 남는다")
 	check(not DirAccess.dir_exists_absolute("user://" + holder), "링크를 품은 임시 폴더는 지운다")
 	check(not DirAccess.open("user://").is_link(root_link) and not DirAccess.dir_exists_absolute("user://" + root_link), "임시 폴더 이름의 링크는 링크만 지운다")
+
+
+## (M-K1 남은 키트를 치우지 않음) 시험이 키트를 치우지 않고 새 키트를 만들면, 새 키트가 옛 키트(화면·임시 폴더)를 먼저 치운다.
+## 옛 화면이 트리에 남으면 다음 시험(다른 파일 포함)의 입력을 가로챈다(A3b 재확인 3: 상자 시험 → 상점 시험 순서).
+func test_new_kit_disposes_a_kit_left_live() -> void:
+	timeout_sec = 30.0
+	var a := Kit.new(tree)
+	var sa := await a.open()
+	check(sa.is_inside_tree() and DirAccess.dir_exists_absolute(a.dir), "준비: 옛 키트의 화면·임시 폴더")
+	var b := Kit.new(tree)
+	await b.frames(1)
+	check(not is_instance_valid(sa), "옛 화면은 치운다(트리에 남지 않는다)")
+	check(not DirAccess.dir_exists_absolute(a.dir), "옛 임시 폴더도 치운다")
+	check_eq(tree.root.get_children().filter(func(c: Node) -> bool: return c is DungeonScreen).size(), 0, "트리에 남은 탐색 화면 없음")
+	b.dispose()

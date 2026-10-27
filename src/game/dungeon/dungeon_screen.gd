@@ -21,8 +21,13 @@
 class_name DungeonScreen
 extends Control
 
-## 층 묶음(미궁 하나, M3 A1): 층 차례가 깊이(B1F, B2F, …).
-const LABYRINTH_PATH := "res://data/floors/labyrinth.json"
+## 층 묶음(미궁 하나, M3 A1): 층 차례가 깊이(B1F, B2F, …). 게임은 실제 미궁(arbor, M3 A3)이다.
+const LABYRINTH_PATH := "res://data/floors/arbor.json"
+## 시험 층 묶음(f1_test·f2_test, M3 A3): 장면 시험 도구(scene_kit.open)와 디버그 주소 &set=test 가 쓴다.
+const TEST_LABYRINTH_PATH := "res://data/floors/labyrinth.json"
+## 저장 폴더. 시험 층 묶음으로 띄운 디버그 실행(&set=test)은 따로 된 폴더를 써서 두 묶음이 서로의 저장을 읽거나 옮기거나 지우지 않는다.
+const SAVE_DIR := "user://saves"
+const TEST_SAVE_DIR := "user://saves_test"
 const PARTY_PATH := "res://data/party/test_party.json"
 const TEXT_PATH := "res://data/text/ko.json"
 const DATA_DIR := "res://data"
@@ -58,12 +63,20 @@ const PROMPT_BLOCKED_MS := 40
 ## 「저장 중」 표시의 글자 크기·높이와 화면 위 가장자리 여백.
 const SAVE_CHIP_FONT := 15
 const SAVE_CHIP_H := 26.0
+## 알림 줄 높이, 창 판과 띄우는 틈(창이 열린 동안 판 위·아래 빈 띠에 둔다).
+const TOAST_H := 36.0
+const TOAST_GAP := 8.0
+## 저장 실패 안내가 보이는 시간(알림 줄 한 번과 같다), 탐색 중 그 띠와 일반 알림 줄 사이 틈.
+const WARN_SEC := 2.0
+const WARN_GAP := 4.0
+## 탐색 중 일반 알림 줄의 아래 끝(화면 아래에서): 이동 단추 묶음 바로 위.
+const TOAST_ROW_BOTTOM := -EDGE - HINT_H - HINT_GAP - PAD_H - 10.0
 const SAVE_CHIP_TOP := 4.0
 ## 누르고 있기 반복은 누른 지 이만큼 지나야 시작한다(연출이 없는 행동 뒤 짧은 누르기가 두 번 되지 않게).
 const HOLD_REPEAT_MS := 220
 
 # ---- 시험이 트리에 넣기 전에 바꿀 수 있는 값 ----
-var save_dir := "user://saves"
+var save_dir := SAVE_DIR
 ## 정의 데이터 경로(시험이 읽기 실패를 만들 때 바꾼다).
 var labyrinth_path := LABYRINTH_PATH
 var party_path := PARTY_PATH
@@ -144,10 +157,17 @@ var _steps_label := Label.new()
 var _toast := Label.new()
 var _toast_left := 0.0
 ## 지금 알림 줄이 저장 실패 안내인지: 계단·마을 문 물음이 떠도 이것은 남긴다(05 §8.4, 다른 안내는 물음 띠와 겹치므로 지운다).
-var _toast_save := false
+## 저장 실패 안내(05 §8.4)는 일반 알림 줄과 따로 이 화면이 가진다(검토 R1~R4): 글과 남은 시간 하나, 자기 글줄(_warn_label).
+## 보일 곳은 매 프레임 정한다(_warn_sync): 창(층 3) 둘레 빈 띠 → 화면 창 안내 줄 → 전투 띠 → 탐색 띠(알림 줄 바로 위).
+var _warn_text := ""
+var _warn_left := 0.0
+var _warn_at: Object = null  # 지금 띄운 곳: 화면 창, _warn_label, null(창 둘레에 자리가 없어 들고만 있다)
+var _warn_label := Label.new()
 ## 전멸 뒤 지도 물음에 답하면 들어갈 상태(읽은 수동 저장 또는 마을 새 게임)와, 그것이 읽은 저장인지(안내·저장 실패 알림이 다르다).
 var _wipe_target: ExplorationState
 var _wipe_loaded := false
+## 그 읽은 저장이 시험 층에서 옮긴 것인지(M3 A3: 답한 뒤 옮김 알림).
+var _wipe_relocated := false
 ## 「저장 중」 표시(층 4, 화면 위 가운데). 대기가 있으면 보이고 없으면 바로 감춘다(나타날 때만 짧게 밝아진다).
 var save_chip := Control.new()
 var _flash := ColorRect.new()
@@ -199,6 +219,9 @@ var _view_floor_stale := false
 func _ready() -> void:
 	theme = _make_theme()
 	texts = TextDb.load_path(TEXT_PATH)
+	# 주소 인자는 정의를 읽기 전에 본다: 디버그 주소의 &set=test 면 시험 층 묶음과 그 저장 폴더(M3 A3).
+	bridge = WebBridge.new(platform, url_query)
+	_apply_set_query()
 	var dr := GameDefs.load_paths(labyrinth_path, party_path, data_dir, texts)
 	if not dr.ok():
 		push_error("정의 데이터를 읽지 못했다: %s" % "; ".join(dr.errors))
@@ -210,7 +233,6 @@ func _ready() -> void:
 		_member_names.append(texts.t(k))
 	settings = GameSettings.load_from(settings_path)
 	store = SaveStore.new(dr.defs, save_dir)
-	bridge = WebBridge.new(platform, url_query)
 	bridge.on_import = _on_import_result
 	_setup_save_pending()
 	_build_ui()
@@ -224,6 +246,17 @@ func _ready() -> void:
 		bridge.setup_debug()
 		_debug_dirty = true
 	_boot()
+
+
+## 디버그 주소(?debug=1)의 &set=test(M3 A3): 시험 층 묶음과 시험 저장 폴더로 바꾼다. 시험이 이미 바꾼 경로·폴더는 그대로 둔다.
+## 디버그 주소가 아니면 set 인자는 보지 않는다(실제 게임은 늘 실제 미궁과 user://saves).
+func _apply_set_query() -> void:
+	if not bridge.debug_requested() or bridge.url_param("set") != "test":
+		return
+	if labyrinth_path == LABYRINTH_PATH:
+		labyrinth_path = TEST_LABYRINTH_PATH
+	if save_dir == SAVE_DIR:
+		save_dir = TEST_SAVE_DIR
 
 
 ## 시작 방식대로 시작한다(M3 A2).
@@ -254,7 +287,7 @@ func _continue_game() -> void:
 		_alert(texts.t("msg.load_failed", {"reason": l.result.error}))
 		return
 	_set_state(l.result.state)
-	_check_windows()
+	_after_load(l.result.relocated)
 
 
 ## 자동 저장을 읽거나(있으면) 새 게임으로 시작한다. in_town 이면 새 게임은 마을에서(시험의 "town" 시작).
@@ -262,12 +295,35 @@ func _start(in_town: bool = false) -> void:
 	var l := store.load_slot(SaveStore.AUTO)
 	if l.ok():
 		_set_state(l.result.state)
-	else:
-		_set_state(_new_state(in_town))
-		_autosave()
-		if l.had_candidates:
-			_alert(texts.t("msg.auto_broken"))
+		_after_load(l.result.relocated)
+		return
+	_set_state(_new_state(in_town))
+	_autosave()
+	if l.had_candidates:
+		_alert(texts.t("msg.auto_broken"))
 	_check_windows()
+
+
+## 저장을 읽어 상태를 바꾼 뒤: 시험 층 저장을 옮겼으면(M3 A3) 알림을 띄우고(head = 안내 줄이 있으면 그 줄을 알림 첫 줄로),
+## 전멸·전투 창은 알림을 닫은 뒤 연다(_close_alert). 아니면 안내 줄을 띄우고 바로 창을 본다.
+## 옮김 알림 때는 안내 줄을 알림 첫 줄로 옮긴다(창이 열린 동안 알림 줄은 그리지 않는다: _show_toast).
+func _after_load(relocated: bool, head: String = "") -> void:
+	if relocated:
+		_alert(texts.t("msg.relocated") if head.is_empty() else head + "\n" + texts.t("msg.relocated"))
+		return
+	if not head.is_empty():
+		_show_toast(head)
+	_check_windows()
+
+
+## 읽거나 가져온 상태로 바꾸고 자동 저장한 뒤의 안내(불러오기·가져오기·전멸 뒤 기록으로 돌아가기). 옮긴 저장이면(M3 A3) 안내 글과
+## 옮김을 한 알림에 적는다. 자동 저장에 실패했으면 실패와 옮김을 한 알림에 함께 적는다(둘 다 알린다). 전멸·전투 창은 알림을 닫은 뒤.
+func _after_load_save(relocated: bool, done_key: String, failed_key: String) -> void:
+	if _autosave(true):
+		_after_load(relocated, texts.t(done_key))
+		return
+	var why := texts.t(failed_key, {"reason": last_autosave_error})
+	_alert(why + "\n" + texts.t("msg.relocated") if relocated else why)
 
 
 func _new_state(in_town: bool = false) -> ExplorationState:
@@ -364,6 +420,28 @@ func _refresh_floor_text() -> void:
 	map_window.set_floor_label(FloorNames.label(texts, state.defs, state.floor_def))
 
 
+## 물건 이름(소재·장비·귀중품, M3 A3). 모르는 ID 는 그 ID 의 글.
+func item_text(id: String) -> String:
+	var key: Dictionary = store.defs.battle.key_items.get(id, {})
+	return texts.t(key["name_key"]) if not key.is_empty() else PartyNames.item_name(state, texts, id)
+
+
+## 상자 이벤트의 안내 글(M3 A3, 원작의 메시지 창 대신 알림 줄, 이름 붙은 차이): chest_opened·chest_full·chest_empty.
+func chest_text(ev: Dictionary) -> String:
+	match str(ev["type"]):
+		"chest_empty":
+			return texts.t("msg.chest_empty")
+		"chest_full":
+			if str(ev.get("item", "")).is_empty():
+				return texts.t("msg.chest_full_money")
+			return texts.t("msg.chest_full", {"item": item_text(str(ev["item"]))})
+	if ev.has("money"):
+		return texts.t("msg.chest_money", {"money": ShopRow.grouped(int(ev["money"]))})
+	var n := int(ev.get("count", 1))
+	var item := item_text(str(ev["item"]))
+	return texts.t("msg.chest_item", {"item": item, "count": n}) if n > 1 else texts.t("msg.chest_one", {"item": item})
+
+
 # ---- 행동 ----
 
 ## 화면 단추·키보드·미리 받은 입력·누르고 있기 반복이 모두 이리로 온다(05 §9.3).
@@ -442,7 +520,7 @@ func _do_action(action: int) -> void:
 	var located := false
 	for ev in events:
 		match ev["type"]:
-			"stairs":
+			"stairs", "chest":
 				_stairs_ask = true
 			"floor_changed":
 				changed = true
@@ -453,6 +531,14 @@ func _do_action(action: int) -> void:
 			"shortcut_opened", "passage_found":
 				rebuild = true
 				_show_toast(texts.t("msg." + str(ev["type"])))
+			"lock_opened":
+				rebuild = true
+				_show_toast(texts.t("msg.lock_opened", {"key": item_text(str(ev["key"]))}))
+			"chest_opened":
+				rebuild = true  # 상자 겉모습(닫힘 → 열림)
+				_show_toast(chest_text(ev))
+			"chest_full", "chest_empty":
+				_show_toast(chest_text(ev))
 			"nothing_found":
 				_show_toast(texts.t("msg.nothing_found"))
 			"damaged":
@@ -574,11 +660,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return  # 상점이 키를 받는다(08 §8: 열린 동안 캠프·지도·이동은 열리거나 움직이지 않는다)
 	if _title_open() or _in_town():
 		return  # 타이틀·마을 화면이 키를 받는다(마을에서는 이동·지도·Esc 캠프가 없다, P 는 마을 화면이 캠프로)
-	if modal.kind == "stairs":
-		# 계단 확인 창: Esc·Backspace = 「아니오」. Enter·Space·방향 키는 창 안의 포커스 단추가 받는다(05 §9.3).
+	if modal.kind == "stairs" or modal.kind == "chest":
+		# 계단 확인·상자 물음(M3 A3): Esc·Backspace = 「아니오」. Enter·Space·방향 키는 창 안의 포커스 단추가 받는다(05 §9.3).
 		if event.is_action_pressed("open_menu") or k.keycode == KEY_BACKSPACE or k.physical_keycode == KEY_BACKSPACE:
 			get_viewport().set_input_as_handled()
-			_answer_stairs(false)
+			if modal.kind == "chest":
+				_answer_chest(false)
+			else:
+				_answer_stairs(false)
 		return
 	if event.is_action_pressed("open_menu"):
 		get_viewport().set_input_as_handled()
@@ -655,10 +744,11 @@ func _autosave(quiet: bool = false) -> bool:
 	if why.is_empty():
 		autosave_count += 1
 		last_autosave_error = ""
+		_warn_end()  # 다시 저장했다: 저장하지 못했다는 안내는 더 맞지 않는다(그다음 안내가 바로 보인다)
 		return true
 	last_autosave_error = why
 	if not quiet:
-		_show_toast(texts.t("msg.save_failed", {"reason": why}), true)
+		_warn(texts.t("msg.save_failed", {"reason": why}))
 	return false
 
 
@@ -669,11 +759,7 @@ func _load_slot(slot: String) -> void:
 		return
 	modal.close()
 	_set_state(l.result.state)
-	if _autosave(true):
-		_show_toast(texts.t("msg.loaded"))
-		_check_windows()
-	else:
-		_alert(texts.t("msg.loaded_save_failed", {"reason": last_autosave_error}))
+	_after_load_save(l.result.relocated, "msg.loaded", "msg.loaded_save_failed")
 
 
 func _save_slot(slot: String) -> void:
@@ -852,11 +938,7 @@ func import_text(text: String) -> bool:
 		return false
 	modal.close()
 	_set_state(r.state)
-	if _autosave(true):
-		_show_toast(texts.t("msg.imported"))
-		_check_windows()
-	else:
-		_alert(texts.t("msg.imported_save_failed", {"reason": last_autosave_error}))
+	_after_load_save(r.relocated, "msg.imported", "msg.imported_save_failed")
 	return true
 
 
@@ -925,6 +1007,8 @@ func _on_battle_closed(_outcome: String) -> void:
 
 ## 전투 층이 열린 동안 HUD·지도 판을 감춘다(3D 시야는 언제나 화면 전체, 06 §9.1, M2.6 U1).
 func _set_battle_view(on: bool) -> void:
+	if on and not _battle_view:
+		_hide_toast()  # 전투가 열리면 보이던 일반 안내(전투를 연 행동의 결과)는 지운다: 화면 이동이다(A3b 재확인 3, R5)
 	_battle_view = on
 	_layout()
 
@@ -1001,12 +1085,12 @@ func _on_shop_save() -> void:
 	_autosave()
 
 
-## 남은 계단 물음을 띄울 수 있으면 띄운다. 전멸·전투 대기거나 계단 위가 아니면 물음을 버린다.
+## 남은 물음(계단·마을 문, M3 A3 부터 닫힌 상자도)을 띄울 수 있으면 띄운다. 전멸·전투 대기거나 물을 것이 없으면(question_here) 물음을 버린다.
 ## 창(알림·메모·전투·캠프·상점)이 열려 있거나 연출 중이면 남겨 둔다. 지도 손짓은 막지 않는다: 창이 열리며 취소한다(05 §9.3).
 func _try_stairs() -> void:
 	if not _stairs_ask:
 		return
-	if state == null or state.wiped or state.encounter.pending or ExplorationRules.stair_here(state).is_empty():
+	if state == null or state.wiped or state.encounter.pending or ExplorationRules.question_here(state).is_empty():
 		_stairs_ask = false
 		return
 	if view.is_busy() or modal.is_open() or battle_layer.is_open() or party_menu.is_open() or shop_screen.is_open() \
@@ -1033,6 +1117,10 @@ func _open_stairs() -> bool:
 	if state == null or modal.is_open() or battle_layer.is_open() or party_menu.is_open() or shop_screen.is_open() \
 			or not ExplorationRules.can_act(state):
 		return false
+	var q := ExplorationRules.question_here(state)
+	if q.get("kind") == "chest":
+		_open_chest_question()
+		return true
 	var st := ExplorationRules.stair_here(state)
 	if st.is_empty():
 		return false
@@ -1047,11 +1135,26 @@ func _open_stairs() -> bool:
 	return true
 
 
-## 층 3 물음 창(계단·마을 문·전멸·지도 물음)을 연다. 알림 줄(층 4, 화면 아래쪽: 장소·「가져왔다」 같은 안내)은 창 아래 테두리와
-## 겹치므로 물음이 뜨면 지운다. 저장 실패 안내는 남긴다(05 §8.4, 저장 칩·알림 창은 따로다).
+## 보물상자 물음(M3 A3, 층 3 kind "chest"). 원작 프레임을 찾지 못해 계단 물음과 같은 창이다(이름 붙은 차이).
+## 처음 커서는 「예」(D25). 「예」면 규칙 행동 OPEN(자동 저장·안내), 「아니오」·Esc 면 닫기만(상자 위에 그대로, 저장 없음).
+func _open_chest_question() -> void:
+	var yes := _named(ModalLayer.button(texts.t("ui.yes"), _answer_chest.bind(true)), "ChestYes")
+	var no := _named(ModalLayer.button(texts.t("ui.no"), _answer_chest.bind(false)), "ChestNo")
+	var rows: Array[Control] = [ModalLayer.label(texts.t("chest.ask")), ModalLayer.row([yes, no] as Array[Control])]
+	_open_question("chest", texts.t("chest.title"), rows)
+	yes.grab_focus.call_deferred()
+
+
+func _answer_chest(yes: bool) -> void:
+	if modal.kind != "chest":
+		return
+	modal.close()
+	if yes:
+		request_action(A.OPEN)
+
+
+## 층 3 물음 창(계단·마을 문·상자·전멸·지도 물음)을 연다. 알림 줄과 창의 규칙은 modal.opened 한곳에 있다(_on_modal_toast).
 func _open_question(kind: String, title: String, rows: Array[Control]) -> void:
-	if not _toast_save:
-		_hide_toast()
 	modal.open(kind, title, rows)
 
 
@@ -1088,6 +1191,7 @@ func _wipe_load(slot: String) -> void:
 	if not l.ok():
 		_alert(texts.t("msg.load_failed", {"reason": l.result.error}))
 		return
+	_wipe_relocated = l.result.relocated
 	_ask_wipe_map(l.result.state, true)
 
 
@@ -1095,6 +1199,7 @@ func _wipe_load(slot: String) -> void:
 func _wipe_new_game() -> void:
 	if modal.kind != "wipe":
 		return
+	_wipe_relocated = false
 	_ask_wipe_map(_new_state(true), false)
 
 
@@ -1124,11 +1229,7 @@ func _answer_wipe_map(keep: bool) -> void:
 	if not _wipe_loaded:
 		_autosave()
 		return
-	if _autosave(true):
-		_show_toast(texts.t("msg.loaded"))
-		_check_windows()
-	else:
-		_alert(texts.t("msg.loaded_save_failed", {"reason": last_autosave_error}))
+	_after_load_save(_wipe_relocated, "msg.loaded", "msg.loaded_save_failed")
 
 
 ## 캠프 「기록」 화면의 슬롯 카드 값(07 §9.2): 검사를 지난 저장이면 대표 대원(파티 칸 0)·Lv, 층 · 걸음, 저장 시각(저장에 이미 있는 값).
@@ -1375,6 +1476,7 @@ func _build_ui() -> void:
 	town_screen.enter_requested.connect(_enter_labyrinth)
 	town_screen.stay_hook = _inn_stay
 	town_screen.opened.connect(func() -> void:
+		_settle_toast("window")
 		_clear_input()
 		_debug_dirty = true
 		_debug_settle = 2)
@@ -1397,6 +1499,7 @@ func _build_ui() -> void:
 	party_menu.place_hook = func() -> String: return town_screen.place_text() if _in_town() else ""
 	party_menu.plate_hook = func() -> String: return town_screen.day_text() if _in_town() else ""
 	party_menu.opened.connect(func() -> void:
+		_settle_toast("window")
 		_clear_input()
 		_debug_dirty = true
 		_debug_settle = 2)
@@ -1410,6 +1513,7 @@ func _build_ui() -> void:
 	shop_screen.save_hook = _on_shop_save
 	shop_screen.blocked_hook = func() -> bool: return modal.is_open()
 	shop_screen.opened.connect(func() -> void:
+		_settle_toast("window")
 		_clear_input()
 		_debug_dirty = true
 		_debug_settle = 2)
@@ -1441,6 +1545,7 @@ func _build_ui() -> void:
 	modal.name = "ModalLayer"
 	modal.theme = theme
 	modal.opened.connect(func(_k: String) -> void:
+		_settle_toast("modal")
 		_clear_input()
 		party_menu.cancel_pointers()  # 캠프에서 누르고 있던 단추는 창이 덮은 뒤 떼도 일하지 않는다
 		battle_layer.cancel_pointers()  # 전투도 같다(명령 줄·카드·키패드 등)
@@ -1450,6 +1555,7 @@ func _build_ui() -> void:
 		_debug_dirty = true
 		_debug_settle = 2)
 	modal.closed.connect(func(_k: String) -> void:
+		_settle_toast()
 		_clear_input()  # 창 안에서 누른 키·단추는 닫힌 뒤에도 승인되지 않는다
 		_retry_stairs.call_deferred()  # 이 창 때문에 띄우지 못한 계단 물음
 		party_menu.cancel_pointers()  # 창이 뜨기 전부터 캠프에서 누르고 있던 손가락도(다른 손가락으로 창을 닫은 뒤 떼기)
@@ -1473,7 +1579,17 @@ func _build_ui() -> void:
 	_toast.add_theme_constant_override("outline_size", 8)
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.mouse_filter = MOUSE_FILTER_IGNORE
+	_toast.modulate.a = 0.0  # 아직 띄운 안내가 없다
 	toast_area.add_child(_toast)
+	# 저장 실패 안내 글줄(알림 줄과 같은 모양, 따로 놓인다: _warn_sync).
+	_warn_label.name = "SaveWarning"
+	_warn_label.add_theme_font_size_override("font_size", 22)
+	_warn_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_warn_label.add_theme_constant_override("outline_size", 8)
+	_warn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_warn_label.mouse_filter = MOUSE_FILTER_IGNORE
+	_warn_label.modulate.a = 0.0
+	toast_area.add_child(_warn_label)
 	_build_save_chip(toast_root)
 	_layout()
 
@@ -1647,9 +1763,19 @@ func _layout() -> void:
 		b.visible = _map_open
 		if not _map_open:
 			b.cancel()
+	toast_area.offset_right = 0.0 if _battle_view else -cover
+	_place_toast()
+	if _view_on:
+		view.set_lens_cover(cover / w if w > 0.0 else 0.0)
+	map.refresh()
+	_debug_dirty = true
+	_debug_settle = 2
+
+
+## 알림 줄 자리. 창(층 3)이 열려 있으면 창 둘레(_place_toast_by_modal), 아니면 전투·탐색 자리.
+func _place_toast() -> void:
 	if _battle_view:
 		# 전투 중: 전투 층 메시지 띠 아래 · 적 영역 위, 명령 목록 오른쪽(BattleLayer.TOAST_Y·TOAST_LEFT) ~ 오른쪽 − TOAST_RIGHT.
-		toast_area.offset_right = 0.0
 		_toast.set_anchors_preset(PRESET_TOP_WIDE)
 		_toast.offset_left = BattleLayer.TOAST_LEFT
 		_toast.offset_right = -BattleLayer.TOAST_RIGHT
@@ -1657,17 +1783,13 @@ func _layout() -> void:
 		_toast.offset_bottom = BattleLayer.TOAST_Y + BattleLayer.TOAST_H
 	else:
 		# 탐색: 시야 영역 아래쪽, 이동 단추 묶음 바로 위.
-		toast_area.offset_right = -cover
 		_toast.set_anchors_preset(PRESET_BOTTOM_WIDE)
 		_toast.offset_left = 0.0
 		_toast.offset_right = 0.0
-		_toast.offset_bottom = -EDGE - HINT_H - HINT_GAP - PAD_H - 10.0
-		_toast.offset_top = _toast.offset_bottom - 36.0
-	if _view_on:
-		view.set_lens_cover(cover / w if w > 0.0 else 0.0)
-	map.refresh()
-	_debug_dirty = true
-	_debug_settle = 2
+		_toast.offset_bottom = TOAST_ROW_BOTTOM
+		_toast.offset_top = _toast.offset_bottom - TOAST_H
+	if modal != null and modal.is_open():
+		_place_toast_by_modal()
 
 
 ## 덮이지 않은 시야 영역(화면 좌표). 지도 판이 열리면 판 왼쪽까지.
@@ -1684,17 +1806,181 @@ func _refresh_hud() -> void:
 	_refresh_toolbar()
 
 
-func _show_toast(text: String, save_note: bool = false) -> void:
+## 일반 안내(알림 줄, HEAD 그대로: 새 안내가 앞 안내를 바꾸고 2초 뒤 사라진다). 화면 창·창과의 규칙은 _settle_toast.
+func _show_toast(text: String) -> void:
 	_toast.text = text
 	_toast.modulate.a = 1.0
 	_toast_left = 2.0
-	_toast_save = save_note
+	_place_toast()
+	if _warn_in_battle_band():
+		_hide_toast()  # 전투 띠는 한 줄: 실패 안내가 있는 동안 일반 안내는 그리지 않는다(R5)
+	# 화면 창으로 옮길지는 이 프레임의 처리가 끝난 뒤 본다: 같은 처리에서 마을을 닫거나(미궁 들어가기) 여는(마을 돌아오기) 일이 뒤따른다.
+	_settle_toast.call_deferred("show")
 
 
 ## 알림 줄을 바로 지운다(남은 시간 0).
 func _hide_toast() -> void:
 	_toast_left = 0.0
 	_toast.modulate.a = 0.0
+
+
+## 일반 안내의 규칙(알림 줄은 층 4 라 창(층 3)·화면 창(층 2)의 단추를 가린다: 1280×720·1728×720 에서 y 422..458 이 창 아래 단추 줄·
+## 기록 「내보내기」·광장 줄 끝과 겹쳤다):
+## - 화면 창(캠프·상점·마을)이 열려 있으면(전투 밖) 그 창이 열린 동안 나온 안내는 그 창의 안내 줄(show_notice)로 옮기고,
+##   창이 열리기 전부터 보이던 안내는 지운다(이동하면 사라지는 안내, 옮겨 다니지 않는다).
+## - 창(층 3)이 열리면 보이던 안내는 지우고 다시 띄우지 않는다. 창이 열린 동안 나온 안내는 창 판 둘레 빈 띠에 둔다.
+## why: "show" = 막 띄운 안내, "modal" = 창이 막 열렸다, "window" = 화면 창이 막 열렸다, "" = 그 밖(창 닫힘).
+func _settle_toast(why: String = "") -> void:
+	if _toast_left > 0.0 and why in ["show", "window"]:
+		var w := _toast_window()
+		if w != null:
+			if why == "show":
+				w.call("show_notice", _toast.text)
+			_hide_toast()
+	elif _toast_left > 0.0 and why == "modal":
+		_hide_toast()
+	else:
+		_place_toast()
+	_warn_sync()
+
+
+## 저장 실패 안내를 새로 든다(새 2초, 앞 실패 안내를 바꾼다).
+func _warn(text: String) -> void:
+	_warn_end()
+	_warn_text = text
+	_warn_left = WARN_SEC
+	_warn_sync()
+
+
+## 저장 실패 안내를 끝낸다(다 보였을 때, 자동 저장이 성공했을 때): 띄운 곳에서 거둔다. 일반 안내는 건드리지 않는다.
+func _warn_end() -> void:
+	_warn_leave()
+	_warn_text = ""
+	_warn_left = 0.0
+
+
+## 지금 띄운 곳에서 저장 실패 안내를 거둔다(화면 창은 그 창이 아직 그 글을 보이고 있을 때만).
+func _warn_leave() -> void:
+	if _warn_at == _warn_label:
+		_warn_label.modulate.a = 0.0
+	elif _warn_at != null and is_instance_valid(_warn_at) and str(_warn_at.get("notice")) == _warn_text:
+		_warn_at.call("clear_notice")
+	_warn_at = null
+
+
+## 매 프레임(그리고 창·화면 창이 열리고 닫힐 때) 저장 실패 안내를 놓는다. 차례:
+## 1) 창(층 3)이 열려 있으면 판 둘레 빈 띠(위, 없으면 아래). 둘 다 없으면 들고만 있고 시간을 멈춘다.
+## 2) 아니면 캠프 > 상점 > 마을(전투 밖)의 안내 줄(매번 다시 쓴다: 창 안 이동으로 지워져도 돌아온다).
+## 3) 아니면 전투 띠(HEAD 의 전투 중 알림 줄 자리). 4) 아니면 탐색 띠(일반 알림 줄 바로 위, HUD·지도·이동 단추와 겹치지 않는다).
+## 놓인 동안(1~4) 시간이 준다. 남은 시간이 0 이하가 되면 이 호출에서 끝낸다(프레임 시간과 상관없이). 투명도는 남은 시간에서만 나온다.
+func _warn_sync(delta: float = 0.0) -> void:
+	if _warn_left <= 0.0:
+		return
+	var at: Object = _warn_label
+	var y := 0.0
+	if modal != null and modal.is_open():
+		y = _modal_band_y(0)
+		if y < 0.0:
+			at = null
+	else:
+		var w := _toast_window()
+		if w != null:
+			at = w
+	if at != _warn_at:
+		_warn_leave()
+		_warn_at = at
+	if at == null:
+		return
+	_warn_left -= delta
+	if _warn_left <= 0.0:
+		_warn_end()
+		return
+	if at == _warn_label:
+		_warn_label.text = _warn_text
+		if modal != null and modal.is_open():
+			_put_label(_warn_label, y)
+		else:
+			_place_warn_label()
+		_warn_label.modulate.a = clampf(_warn_left / 0.5, 0.0, 1.0)
+		if _warn_in_battle_band() and _toast_left > 0.0:
+			_hide_toast()  # 전투 띠는 한 줄이고 실패 안내가 앞선다(화면 창 안내 줄과 같다, R5)
+	elif str(at.get("notice")) != _warn_text:
+		at.call("show_notice", _warn_text, _warn_left)
+
+
+## 저장 실패 안내가 지금 전투 띠에 놓였는지(전투 띠는 메시지 띠와 적 영역 사이 한 줄뿐이라 일반 안내와 함께 둘 수 없다).
+func _warn_in_battle_band() -> bool:
+	return _battle_view and _warn_left > 0.0 and _warn_at == _warn_label and not (modal != null and modal.is_open())
+
+
+## 저장 실패 안내 글줄의 제자리(창이 없을 때): 전투 중이면 전투 띠, 탐색이면 일반 알림 줄 바로 위 띠.
+func _place_warn_label() -> void:
+	if _battle_view:
+		_warn_label.set_anchors_preset(PRESET_TOP_WIDE)
+		_warn_label.offset_left = BattleLayer.TOAST_LEFT
+		_warn_label.offset_right = -BattleLayer.TOAST_RIGHT
+		_warn_label.offset_top = BattleLayer.TOAST_Y
+		_warn_label.offset_bottom = BattleLayer.TOAST_Y + BattleLayer.TOAST_H
+	else:
+		_warn_label.set_anchors_preset(PRESET_BOTTOM_WIDE)
+		_warn_label.offset_left = 0.0
+		_warn_label.offset_right = 0.0
+		_warn_label.offset_bottom = TOAST_ROW_BOTTOM - TOAST_H - WARN_GAP
+		_warn_label.offset_top = _warn_label.offset_bottom - TOAST_H
+
+
+## 지금 보이는 저장 실패 안내 글(글줄 또는 화면 창 안내 줄). 없거나 들고만 있으면 "".
+func warning_shown() -> String:
+	if _warn_at == _warn_label and _warn_label.modulate.a > 0.0:
+		return _warn_text
+	if _warn_at != null and _warn_at != _warn_label and str(_warn_at.get("notice")) == _warn_text:
+		return _warn_text
+	return ""
+
+
+## 알림 줄 대신 안내를 받을 화면 창(층 2). 전투 중에는 전투 자리(_place_toast)를 쓴다.
+func _toast_window() -> Control:
+	if _battle_view or party_menu == null:
+		return null
+	for w in [party_menu, shop_screen, town_screen]:
+		if w.is_open():
+			return w
+	return null
+
+
+## 창 판(제목 문패 포함) 둘레 빈 띠의 화면 y: n = 0 은 판 바로 위(저장 실패 안내), 1 은 그 위(창이 열린 동안 나온 일반 안내).
+## 위쪽 한계는 저장 칩 아래. 위에 자리가 없으면 판 아래부터, 그것도 없으면 -1. 판 크기는 컨테이너 정렬 뒤에 맞으므로 매 프레임 다시 잰다.
+func _modal_band_y(n: int) -> float:
+	var area := toast_area.get_global_rect()
+	var panel: Rect2 = modal._panel.get_global_rect().merge(modal.title_plate.get_global_rect())
+	var top_min := SAVE_CHIP_TOP + SAVE_CHIP_H + TOAST_GAP
+	var bottom_max := area.end.y - EDGE
+	var above := panel.position.y - (n + 1) * (TOAST_GAP + TOAST_H)
+	if above >= top_min:
+		return above
+	var below := panel.end.y + TOAST_GAP + n * (TOAST_H + TOAST_GAP)
+	if below + TOAST_H <= bottom_max:
+		return below
+	return -1.0
+
+
+## 글줄을 화면 y 에 둔다(알림 영역 폭 전체).
+func _put_label(l: Label, y: float) -> void:
+	var area := toast_area.get_global_rect()
+	l.set_anchors_preset(PRESET_TOP_WIDE)
+	l.offset_left = 0.0
+	l.offset_right = 0.0
+	l.offset_top = y - area.position.y
+	l.offset_bottom = l.offset_top + TOAST_H
+
+
+## 창이 열린 동안의 일반 안내: 판 둘레 빈 띠(저장 실패 안내가 판 바로 위 띠에 있으면 그다음 띠). 자리가 없으면 지운다.
+func _place_toast_by_modal() -> void:
+	var y := _modal_band_y(1 if _warn_at == _warn_label else 0)
+	if y < 0.0:
+		_hide_toast()
+		return
+	_put_label(_toast, y)
 
 
 func _flash_damage() -> void:
@@ -1754,6 +2040,9 @@ func _debug_publish() -> void:
 
 
 func _fade_toast(delta: float) -> void:
+	_warn_sync(delta)  # 저장 실패 안내는 자기 시간으로 따로(일반 안내의 사라짐과 묶이지 않는다)
+	if _toast_left > 0.0 and modal.is_open():
+		_place_toast_by_modal()  # 창 판 크기는 컨테이너 정렬 뒤에 맞는다
 	if _toast_left > 0.0:
 		_toast_left -= delta
 		_toast.modulate.a = clampf(_toast_left / 0.5, 0.0, 1.0)
@@ -1795,6 +2084,7 @@ func debug_snapshot() -> Dictionary:
 			"autosaves": autosave_count, "epoch": _epoch, "automap": settings.automap,
 			"save_pending": save_pending.is_pending(), "save_pending_gens": save_pending.generations(),
 			"save_watch": save_pending.enabled, "save_reads": save_pending.reads, "save_chip": save_chip.is_visible_in_tree(),
+			"set": _set_name(), "save_dir": save_dir,
 		}
 	var party := party_menu.debug_info(_css)
 	var shop := shop_screen.debug_info(_css)
@@ -1834,11 +2124,15 @@ func debug_snapshot() -> Dictionary:
 		"location": state.location, "day": state.day, "town": town, "title": title,
 		"floor": state.floor_def.id, "at": [state.party.at.x, state.party.at.y], "facing": state.party.facing, "steps": state.steps,
 		"pending": state.encounter.pending, "wiped": state.wiped, "danger": state.encounter.danger,
-		"busy": _is_busy(), "modal": modal.kind, "modal_title": _modal_title(), "automap": settings.automap, "battle": battle,
+		"busy": _is_busy(), "modal": modal.kind, "modal_title": _modal_title(), "modal_text": _modal_text(), "automap": settings.automap, "battle": battle,
 		"materials": state.materials, "hp": state.party.members.map(func(m: PartyState.Member) -> int: return m.hp),
 		"shortcuts_open": state.world.shortcuts_open.size(), "passages_found": state.world.passages_found.size(),
 		"memos": state.annotation.memos.size(), "edges": state.annotation.edges.size(), "epoch": _epoch,
 		"memo_texts": memo_texts,
+		# 상자·잠긴 문·귀중품(M3 A3): 지금 층의 연 상자·연 문 수, 귀중품 ID(정렬), 발밑의 닫힌 상자 ID, 지금 알림 줄 글(사라졌으면 "").
+		"chests_opened": state.world.chests_opened.size(), "locks_open": state.world.locks_open.size(),
+		"key_items": _sorted_keys(state.key_items), "chest_here": _chest_here(), "toast": _toast.text if _toast.modulate.a > 0.0 else "", "warning": warning_shown(),
+		"set": _set_name(), "save_dir": save_dir,
 		"user_dir": OS.get_user_data_dir(), "buttons": buttons, "map": map_info, "tool": map.tool, "map_open": _map_open, "lens_cover": view.lens_cover,
 		"guard_delta": view.last_guard_delta, "guard_radius": view.guard_radius,
 		"plan_ms_last": view.last_plan_ms, "plan_ms_max": view.max_plan_ms,
@@ -1854,6 +2148,42 @@ func debug_snapshot() -> Dictionary:
 		"save_pending": save_pending.is_pending(), "save_pending_gens": save_pending.generations(),
 		"save_watch": save_pending.enabled, "save_reads": save_pending.reads, "save_chip": save_chip.is_visible_in_tree(),
 	}
+
+
+## 화면이 띄운 층 묶음: "game"(실제 미궁) · "test"(시험 층, &set=test·장면 시험) · 그 밖의 경로면 "other".
+func _set_name() -> String:
+	match labyrinth_path:
+		LABYRINTH_PATH:
+			return "game"
+		TEST_LABYRINTH_PATH:
+			return "test"
+	return "other"
+
+
+static func _sorted_keys(d: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	out.assign(d.keys())
+	out.sort()
+	return out
+
+
+## 발밑의 닫힌 상자 ID(없으면 "").
+func _chest_here() -> String:
+	if state == null or state.in_town():
+		return ""
+	var c := state.floor_def.chest_at(state.party.at)
+	return c.id if c != null and not state.world.is_chest_opened(c.id) else ""
+
+
+## 떠 있는 층 3 창의 글(제목 문패를 뺀 Label 들, 줄바꿈으로 잇는다, M3 A3: 옮김 알림 확인).
+func _modal_text() -> String:
+	if not modal.is_open():
+		return ""
+	var out: Array[String] = []
+	for l in modal.find_children("*", "Label", true, false):
+		if (l as Label).is_visible_in_tree() and not modal.title_plate.is_ancestor_of(l) and l != modal.title_plate:
+			out.append((l as Label).text)
+	return "\n".join(out)
 
 
 ## 떠 있는 층 3 창의 제목(계단·마을 문 물음을 가른다, M3 A2).
@@ -1967,7 +2297,7 @@ static func finish_battle(s: ExplorationState) -> bool:
 ## 정의 데이터를 읽지 못했다: 빈 화면 대신 오류 목록을 보인다(게임은 시작하지 않는다).
 func _show_start_error(errors: Array) -> void:
 	# 화면을 만들지 않으므로 미리 만든 부품(트리에 넣지 않음)을 치운다.
-	for n in [_floor_label, _steps_label, _toast, _flash, save_chip]:
+	for n in [_floor_label, _steps_label, _toast, _warn_label, _flash, save_chip]:
 		(n as Node).free()
 	set_process(false)
 	set_process_unhandled_input(false)

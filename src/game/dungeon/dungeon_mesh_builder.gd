@@ -39,6 +39,22 @@ const LAMP_CLOSED_LOCKED := Color(1.0, 0.18, 0.12)
 const LAMP_OPEN := Color(0.3, 1.0, 0.45)
 const ONEWAY_COLOR := Color(1.0, 0.85, 0.2)
 const PASSAGE_RIM := Color(0.12, 0.42, 0.44)
+## 잠긴 문(M3 A3 자리표시, 그림 B2 에서 모형): 열쇠 문은 보라 문판·자홍 등, 봉인 문은 검붉은 문판·붉은 등·가로 빗장.
+const LOCK_PLATE := [Color(0.34, 0.16, 0.5), Color(0.28, 0.13, 0.42)]
+const LAMP_LOCKED := Color(1.0, 0.25, 0.85)
+const SEAL_PLATE := [Color(0.3, 0.06, 0.06), Color(0.24, 0.05, 0.05)]
+const LAMP_SEALED := Color(1.0, 0.08, 0.05)
+const SEAL_BAR := Color(0.55, 0.1, 0.08)
+## 빗장 높이(0.25m 격자)와 문면에서 튀어나온 깊이(문틀 깊이와 같다).
+const SEAL_BAR_H0 := 0.75
+const SEAL_BAR_H1 := 1.0
+## 보물상자(M3 A3 자리표시): 칸 가운데 ±0.5m(0.25m 격자) 상자, 높이 0.5m. 닫힘 = 호박색 몸통 + 발광 뚜껑 띠(±0.25m), 열림 = 어두운 몸통.
+const CHEST_HALF := 0.5
+const CHEST_H := 0.5
+const CHEST_STRIPE := 0.25
+const CHEST_CLOSED := Color(0.85, 0.55, 0.15)
+const CHEST_LID_GLOW := Color(1.0, 0.85, 0.3)
+const CHEST_OPENED := Color(0.22, 0.18, 0.14)
 
 
 class Built:
@@ -63,8 +79,8 @@ class EdgeFrame:
 		return o + a * u + Vector3.UP * h + n * d
 
 
-## 경계의 3D 겉모습: wall·open·door·shortcut_closed·shortcut_open·oneway·passage(찾은 숨은 통로).
-## 못 찾은 숨은 통로는 wall 과 같다.
+## 경계의 3D 겉모습: wall·open·door·shortcut_closed·shortcut_open·oneway·passage(찾은 숨은 통로)·locked(닫힌 열쇠 문)·sealed(봉인 문).
+## 못 찾은 숨은 통로는 wall 과 같다. 연 열쇠 문은 door 와 같다(M3 A3).
 static func edge_style(f: FloorModel, world: WorldState, e: Vector3i) -> String:
 	match f.edge_kind(e):
 		FloorModel.Edge.OPEN:
@@ -77,6 +93,10 @@ static func edge_style(f: FloorModel, world: WorldState, e: Vector3i) -> String:
 			return "oneway"
 		FloorModel.Edge.PASSAGE:
 			return "passage" if world.is_passage_found(e) else "wall"
+		FloorModel.Edge.LOCK:
+			if f.is_sealed(e):
+				return "sealed"
+			return "door" if world.is_lock_open(e) else "locked"
 		_:
 			return "wall"
 
@@ -107,6 +127,8 @@ static func build(f: FloorModel, world: WorldState) -> Built:
 	for y in f.height:
 		for x in f.width + 1:
 			b.edge(f, world, Vector3i(x, y, 1))
+	for c in f.chest_list():
+		b.chest(c.at, world.is_chest_opened(c.id))
 	return b.finish()
 
 
@@ -229,6 +251,32 @@ class _Builder:
 		box(fr, OPEN_U1, JAMB_U1, 0.0, OPEN_H, [])
 		box(fr, JAMB_U0, JAMB_U1, OPEN_H, LINTEL_H, lamp)
 
+	## 보물상자(칸 c): 네 옆면과 뚜껑. 닫혔으면 뚜껑 가운데에 발광 띠(동서로 가로지른다), 열렸으면 어두운 몸통뿐.
+	func chest(c: Vector2i, opened: bool) -> void:
+		var o := DungeonMeshBuilder.cell_center(c)
+		var h := CHEST_HALF
+		var body := CHEST_OPENED if opened else CHEST_CLOSED
+		var full: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+		var y1 := CHEST_H
+		# 옆면 넷(밖을 본다)
+		quad("plate", [o + Vector3(-h, 0, -h), o + Vector3(h, 0, -h), o + Vector3(h, y1, -h), o + Vector3(-h, y1, -h)], full, Vector3.FORWARD, body)
+		quad("plate", [o + Vector3(-h, 0, h), o + Vector3(h, 0, h), o + Vector3(h, y1, h), o + Vector3(-h, y1, h)], full, Vector3.BACK, body)
+		quad("plate", [o + Vector3(-h, 0, -h), o + Vector3(-h, 0, h), o + Vector3(-h, y1, h), o + Vector3(-h, y1, -h)], full, Vector3.LEFT, body)
+		quad("plate", [o + Vector3(h, 0, -h), o + Vector3(h, 0, h), o + Vector3(h, y1, h), o + Vector3(h, y1, -h)], full, Vector3.RIGHT, body)
+		# 뚜껑(위): 닫힘이면 북·띠·남 세 장
+		if opened:
+			quad("plate", [o + Vector3(-h, y1, -h), o + Vector3(h, y1, -h), o + Vector3(h, y1, h), o + Vector3(-h, y1, h)], full, Vector3.UP, body)
+			return
+		var t := CHEST_STRIPE
+		quad("plate", [o + Vector3(-h, y1, -h), o + Vector3(h, y1, -h), o + Vector3(h, y1, -t), o + Vector3(-h, y1, -t)], full, Vector3.UP, body)
+		quad("glow", [o + Vector3(-h, y1, -t), o + Vector3(h, y1, -t), o + Vector3(h, y1, t), o + Vector3(-h, y1, t)], full, Vector3.UP, CHEST_LID_GLOW)
+		quad("plate", [o + Vector3(-h, y1, t), o + Vector3(h, y1, t), o + Vector3(h, y1, h), o + Vector3(-h, y1, h)], full, Vector3.UP, body)
+
+	## 봉인 문의 가로 빗장: 문판 앞(문틀 깊이만큼 나와) 출입구 폭, 0.75~1.0m.
+	func seal_bar(fr: EdgeFrame, sides: Array) -> void:
+		for side in sides:
+			rect("plate", fr, OPEN_U0, OPEN_U1, SEAL_BAR_H0, SEAL_BAR_H1, FRAME_D * side, side, SEAL_BAR)
+
 	## 문판(두 쪽). colors_b·colors_a = B 쪽·A 쪽에서 본 두 쪽 색.
 	func plate(fr: EdgeFrame, colors_b: Array, colors_a: Array) -> void:
 		var mid := CELL / 2.0
@@ -295,6 +343,13 @@ class _Builder:
 				oneway_arrows(fr, dir_sign, a_ok, b_ok)
 			"passage":
 				passage(fr, sides)
+			"locked":
+				doorway(fr, sides, [LAMP_LOCKED, LAMP_LOCKED])
+				plate(fr, LOCK_PLATE, LOCK_PLATE)
+			"sealed":
+				doorway(fr, sides, [LAMP_SEALED, LAMP_SEALED])
+				plate(fr, SEAL_PLATE, SEAL_PLATE)
+				seal_bar(fr, sides)
 			_:
 				for side in sides:
 					rect("wall", fr, 0.0, CELL, 0.0, WALL_H, 0.0, side, WHITE)

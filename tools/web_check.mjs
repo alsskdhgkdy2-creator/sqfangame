@@ -24,20 +24,24 @@
 // 부분마다 새 브라우저(빈 IndexedDB)로 돈다. 확인 이름과 개수는 나누기 전과 같다(A + B).
 // M3 A2: 시작은 타이틀이다(waitReady 가 「이어하기」 또는 「새 게임」으로 지난다, 새 게임은 마을 광장). C = 마을 고리(web_check_part_c.mjs, A2b 숙소 포함).
 // M3 A2b: 전멸 창 「처음부터」 뒤에는 지도 물음(answerWipeMap)이 있다.
-// 실행: flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/web_check.mjs [너비x높이] [a|b|c|all]  (기본 all = A, B, C 차례)
+// M3 A3: 게임은 실제 미궁(arbor)이다. A·B·C 는 시험 층(주소 &set=test, 저장 폴더 saves_test)으로 돌고, D = 실제 미궁 B1F~B3F
+// (상자·계단·잠긴 문·귀중품·옛 저장 옮김, web_check_part_d.mjs, 주소에 set 없음·저장 폴더 saves).
+// 실행: flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/web_check.mjs [너비x높이] [a|b|c|d|all]  (기본 all = A, B, C, D 차례)
 // 결과: build/check/ 에 캡처·내보낸 파일, 부분마다 report_a.json·report_b.json, 이번 실행 전체 report.json.
 import { runPart, finish } from './web_check_common.mjs';
 import { partA } from './web_check_part_a.mjs';
 import { partB } from './web_check_part_b.mjs';
 import { partC } from './web_check_part_c.mjs';
+import { partD } from './web_check_part_d.mjs';
 
 const which = (process.argv[3] ?? 'all').toLowerCase();
 // 부분 이름은 이 목록에만 있다(Map: 「constructor」 같은 객체 기본 이름이 부분으로 통과하지 않는다). 브라우저를 띄우기 전에 거른다.
-const PARTS = new Map([['a', partA], ['b', partB], ['c', partC]]);
+// 값 = [본문, 층 묶음].
+const PARTS = new Map([['a', [partA, 'test']], ['b', [partB, 'test']], ['c', [partC, 'test']], ['d', [partD, 'game']]]);
 const names = which === 'all' ? [...PARTS.keys()] : [which];
 if (!names.every((n) => PARTS.has(n))) {
-  console.log(`모르는 부분: ${which}\n사용: node tools/web_check.mjs [너비x높이] [a|b|c|all]`);
+  console.log(`모르는 부분: ${which}\n사용: node tools/web_check.mjs [너비x높이] [a|b|c|d|all]`);
   process.exit(2);
 }
-for (const n of names) await runPart(n, PARTS.get(n));
+for (const n of names) await runPart(n, ...PARTS.get(n));
 process.exit(finish());

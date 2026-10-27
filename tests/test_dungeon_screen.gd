@@ -657,7 +657,8 @@ func test_autosave_failure_notice_is_not_overwritten() -> void:
 	s.store.fail_points = ["write"]
 	await kit.press_key(KEY_SPACE)
 	check(not s.last_autosave_error.is_empty(), "준비: 자동 저장 실패")
-	check_eq(s._toast.text, s.texts.t("msg.save_failed", {"reason": s.last_autosave_error}), "조사 안내보다 저장 실패 안내")
+	# M3 A3b(검토 R2~R4): 저장 실패 안내는 자기 글줄(SaveWarning)에 따로 보인다(조사 안내가 덮지 않는다).
+	check_eq([s._warn_label.text, s.warning_shown()], [s.texts.t("msg.save_failed", {"reason": s.last_autosave_error}), s._warn_label.text], "조사 안내보다 저장 실패 안내")
 	# 불러오기·가져오기는 성공했지만 자동 저장이 실패하면 둘을 함께 알린다.
 	s.store.fail_points = []
 	check(s.store.save("slot1", s.state).is_empty(), "준비: 슬롯 1 저장")

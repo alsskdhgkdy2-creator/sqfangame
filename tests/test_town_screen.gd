@@ -441,5 +441,6 @@ func test_gate_prompt_hides_the_place_toast() -> void:
 	s.store.fail_points = []
 	check_eq(s.modal.kind, "stairs", "준비: 다시 문 물음")
 	check(not s.last_autosave_error.is_empty(), "준비: 자동 저장 실패")
-	check(s._toast.text == s.texts.t("msg.save_failed", {"reason": s.last_autosave_error}) and s._toast.modulate.a > 0.9,
+	# M3 A3b(검토 R2~R4): 저장 실패 안내는 자기 글줄(SaveWarning)에 보인다.
+	check(s._warn_label.text == s.texts.t("msg.save_failed", {"reason": s.last_autosave_error}) and s._warn_label.modulate.a > 0.9,
 		"저장 실패 안내는 물음이 떠도 남는다")

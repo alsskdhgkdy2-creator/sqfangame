@@ -14,6 +14,7 @@ export const IDB_WAIT_MS = Number(process.env.WEB_CHECK_IDB_MS ?? 30000);
 const root = path.resolve('build/web');
 export const outDir = path.resolve('build/check');
 fs.mkdirSync(outDir, { recursive: true });
+// 시험 층 고정 공략(부분 A, &set=test). 실제 미궁 공략(부분 D)은 web_check_part_d.mjs 가 data/floors/arbor_route.json 을 읽는다.
 export const route = JSON.parse(fs.readFileSync('data/floors/f1_test_route.json', 'utf8'));
 export const KEYS = { forward: 'KeyW', back: 'KeyS', turn_left: 'KeyA', turn_right: 'KeyD',
   strafe_left: 'KeyQ', strafe_right: 'KeyE', investigate: 'Space' };
@@ -23,6 +24,10 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'applic
 
 let server = null;
 export let url = '';
+let baseUrl = '';
+// 부분의 층 묶음(M3 A3): 'test' = 시험 층(f1_test·f2_test, 주소에 &set=test, 저장 폴더 saves_test), 'game' = 실제 미궁(저장 폴더 saves).
+export let saveDir = 'saves';
+export const autoKey = () => `/userfs/sqfangame/${saveDir}/auto.json`;
 async function startServer() {
   server = http.createServer((req, res) => {
     const p = path.join(root, decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/$/, '/index.html'));
@@ -31,7 +36,7 @@ async function startServer() {
     fs.createReadStream(p).pipe(res);
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  url = `http://127.0.0.1:${server.address().port}/?debug=1&seed=${SEED}`;
+  baseUrl = `http://127.0.0.1:${server.address().port}/?debug=1&seed=${SEED}`;
 }
 
 export const report = { size: `${W}x${H}`, seed: SEED, idbWaitMs: IDB_WAIT_MS, parts: {}, steps: [], checks: [], errors: [] };
@@ -121,7 +126,7 @@ export async function closeCamp() {
   return waitFor((x) => !x.party_menu?.open && x.modal === '', '캠프 닫힘');
 }
 export async function idbAuto() {
-  return page.evaluate(() => new Promise((resolve) => {
+  return page.evaluate((key) => new Promise((resolve) => {
     const req = indexedDB.open('/userfs');
     req.onerror = () => resolve({ error: 'open' });
     req.onsuccess = () => {
@@ -130,7 +135,7 @@ export async function idbAuto() {
       const store = tx.objectStore('FILE_DATA');
       const keysReq = store.getAllKeys();
       keysReq.onsuccess = () => {
-        const keys = keysReq.result.filter((k) => String(k).endsWith('/saves/auto.json'));
+        const keys = keysReq.result.filter((k) => String(k) === key);
         if (!keys.length) { resolve({ keys: [] }); return; }
         const g = store.get(keys[0]);
         g.onsuccess = () => {
@@ -141,7 +146,7 @@ export async function idbAuto() {
         };
       };
     };
-  }));
+  }), autoKey());
 }
 // 화면 상태 요약 want 의 세대·해시와 IndexedDB 자동 저장의 세대·해시(저장 글을 게임이 읽어 계산)가 같을 때까지.
 export async function waitIdb(want) {
@@ -298,12 +303,15 @@ export async function finishBattle(s, shotResult) {
 }
 
 // 부분 하나를 새 브라우저에서 돌린다. 오류는 그 부분 이름을 붙여 남기고 다음 부분은 그대로 돈다.
-export async function runPart(name, body) {
+// set = 'test'(시험 층, &set=test) 또는 'game'(실제 미궁).
+export async function runPart(name, body, set = 'test') {
   part = name;
+  saveDir = set === 'test' ? 'saves_test' : 'saves';
   const t0 = Date.now();
   const n0 = report.checks.length;
   const e0 = report.errors.length;
   if (!server) await startServer();
+  url = baseUrl + (set === 'test' ? '&set=test' : '');
   const browser = await launchBrowser();
   try {
     page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1, acceptDownloads: true });

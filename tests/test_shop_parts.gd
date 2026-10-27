@@ -146,7 +146,7 @@ func _many_rows(n: int) -> Array:
 # ---- 아이콘 ----
 
 func test_ten_kind_icons_are_drawn_inside_and_tell_apart() -> void:
-	check_eq(VectorIcons.KIND_ICONS.size(), 10, "종류 아이콘 10개")
+	check_eq(VectorIcons.KIND_ICONS.size(), 11, "종류 아이콘 11개(M3 A3 귀중품 열쇠 포함)")
 	for side in [28.0, 40.0]:
 		var rect := Rect2(Vector2(5, 7), Vector2(side, side))
 		var sigs := {}
@@ -171,7 +171,7 @@ func test_ten_kind_icons_are_drawn_inside_and_tell_apart() -> void:
 		await kit.frames(1)
 	list.set_rows(VectorIcons.KIND_ICONS.map(func(n: String) -> Dictionary: return {"icon": n, "name": n, "right": "1"}))
 	await kit.frames(2)
-	check_eq(list.row_count, 10, "아이콘 줄 10")
+	check_eq(list.row_count, 11, "아이콘 줄 11")
 
 
 func _bounds(sh: Dictionary) -> Rect2:

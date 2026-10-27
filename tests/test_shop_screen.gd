@@ -892,7 +892,8 @@ func test_save_failure_keeps_the_accepted_change_and_the_prompt_chain() -> void:
 	await _step(sc, "row", _row_of(sc, "equip.twin_edge"))
 	await _step(sc, "dialog", ["confirm", null])
 	check(not s.last_autosave_error.is_empty(), "준비: 저장 실패")
-	check_eq(s._toast.text, texts.t("msg.save_failed", {"reason": s.last_autosave_error}), "저장 실패 토스트")
+	# M3 A3b(검토 R1): 상점이 열려 있으면 저장 실패 안내는 상점 안내 줄에 보인다(알림 줄은 창 위에 그리지 않는다).
+	check_eq([sc.notice, s._toast.modulate.a], [texts.t("msg.save_failed", {"reason": s.last_autosave_error}), 0.0], "저장 실패 안내(상점 안내 줄)")
 	check_eq([s.state.money, int(s.state.gear_bag.get("equip.twin_edge", 0)), sc.ask], [880, 1, "equip"], "산 것은 그대로, 장착 물음은 이어진다")
 	check_eq(s.state.generation, gen, "저장이 실패해 세대는 그대로")
 	await _step(sc, "dialog", ["confirm", 1])

@@ -2303,12 +2303,12 @@ func test_items_screen_follows_the_reference_table() -> void:
 	# 띠: 「소지품   장비 n · 소재 n」(가진 종류 수), 알림이 뜨면 알림이 대신하고 지나면 돌아온다. 스냅숏 strip 도 같다.
 	var n_gear := s.state.defs.battle.equipment_ids.size()
 	var n_mat := s.state.defs.battle.material_ids.size()
-	var caption := s.texts.t("party.items.strip", {"gear": n_gear, "materials": n_mat})
+	var caption := s.texts.t("party.items.strip", {"gear": n_gear, "materials": n_mat, "keys": 0})  # 시험 층: 귀중품 없음(M3 A3)
 	check_eq([pm.notice_line_text(), s.debug_snapshot()["party_menu"]["strip"]], [caption, caption], "띠 글 = 종류 수")
 	s.state.gear_bag[s.state.defs.battle.equipment_ids[0]] = 0
 	s.state.materials[s.state.defs.battle.material_ids[0]] = 0
 	pm.refresh_view()
-	caption = s.texts.t("party.items.strip", {"gear": n_gear - 1, "materials": n_mat - 1})
+	caption = s.texts.t("party.items.strip", {"gear": n_gear - 1, "materials": n_mat - 1, "keys": 0})
 	check_eq(s.debug_snapshot()["party_menu"]["strip"], caption, "개수 0 은 세지 않는다")
 	pm.show_notice("시험 안내 B")
 	await kit.frames(1)

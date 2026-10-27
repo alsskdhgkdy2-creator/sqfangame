@@ -875,14 +875,20 @@ func item_name(id: String) -> String:
 	return PartyNames.item_name(state, texts, id)
 
 
-func show_notice(t: String) -> void:
+## sec = 보일 시간(DungeonScreen 의 저장 실패 안내는 남은 시간을 넘긴다).
+func show_notice(t: String, sec: float = NOTICE_SEC) -> void:
 	notice = t
-	_notice_left = NOTICE_SEC
+	_notice_left = sec
 	_refresh_notice()
 	queue_redraw()
 
 
 ## 안내를 비운다(글·남은 시간): 닫았다 다시 열 때 앞 안내가 남지 않는다.
+## 다른 화면이 넘겨준 안내를 거둔다(DungeonScreen: 저장 실패 안내가 다른 곳으로 옮겨 갈 때).
+func clear_notice() -> void:
+	_clear_notice()
+
+
 func _clear_notice() -> void:
 	notice = ""
 	_notice_left = 0.0
@@ -1111,6 +1117,8 @@ func debug_info(css: Callable) -> Dictionary:
 			"list_row": equip_tab.list_cursor if equip_tab.list_open else -1, "items": items_tab.cursor},
 		"dialog": dialog_kind, "dialog_pick": dialog_pick, "sp_line": skill_tab._sp_label.text if tab == 1 else "",
 		"notice": notice, "strip": notice_line_text() if notice_line.visible else "", "debug": debug, "supply_open": items_tab.supply_open, "equip_rows": rows,
+		# 소지품(M3 A3): 줄의 물건 ID 차례와 설명 상자(머리 글 + 줄).
+		"item_rows": items_tab.row_items.duplicate(), "item_desc": [items_tab.desc.title] + items_tab.desc.lines,
 		"records": {"cursor": [records_tab.cur_row, records_tab.cur_col], "cards": [0, 1, 2].map(records_tab.card_lines),
 			"save_ok": records_tab.save_ok(), "help": records_tab.help_text()} if tab == 4 else {},
 		"buttons": buttons, "nodes": nodes, "pad": pad_state(),

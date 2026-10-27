@@ -10,11 +10,20 @@ var tree: SceneTree
 var dir := ""
 var screen: DungeonScreen
 
+## 아직 치우지 않은 키트들. 시험이 kit 변수를 치우지 않고 새 키트로 덮으면 teardown 은 옛 키트를 모른다: 옛 화면이 트리에 남아
+## 다음 시험(다른 파일 포함)의 키·키패드 입력을 가로챈다(A3b 재확인 3: 상자 시험 → 상점 시험을 한 프로세스에서 돌리면 상점 8개 실패).
+## 그래서 새 키트를 만들 때 남은 키트를 먼저 치운다(화면·임시 폴더).
+static var _live: Array = []
+
 
 func _init(t: SceneTree) -> void:
 	tree = t
+	for k in _live.duplicate():
+		k.dispose()
+	_live.clear()
 	purge_stale()
 	dir = "user://%s%d" % [PREFIX, Time.get_ticks_usec() % 100000000]
+	_live.append(self)
 
 
 ## 지난 실행이 남긴 임시 폴더를 지운다(시간 초과로 끊긴 실행은 teardown 을 못 한다).
@@ -39,6 +48,7 @@ static func is_scene_dir(path: String) -> bool:
 ## 화면을 만들어 트리에 넣는다. 시드는 고정, 연출은 즉시, 플랫폼은 PC 로 본다. query 는 주소 인자 글(예 "debug=1").
 ## 시작 방식은 "labyrinth"(M3 A2: 실제 게임은 타이틀, 장면 시험은 지금까지처럼 B1F 로 바로). prepare 가 있으면 트리에 넣기 직전에
 ## 화면을 넘겨 부른다(시험용 값을 더 바꿀 때, 시작 방식도 바꿀 수 있다).
+## 층 묶음은 시험 층(f1_test·f2_test, TEST_LABYRINTH_PATH)으로 고정한다(M3 A3: 게임은 실제 미궁). 실제 미궁은 open_arbor.
 func open(platform: String = "native", seed_value: int = 7, query: String = "", prepare: Callable = Callable()) -> DungeonScreen:
 	screen = SCREEN.instantiate()
 	screen.save_dir = dir + "/saves"
@@ -48,6 +58,7 @@ func open(platform: String = "native", seed_value: int = 7, query: String = "", 
 	screen.anim_speed = 0.0
 	screen.url_query = query
 	screen.start_mode = "labyrinth"
+	screen.labyrinth_path = DungeonScreen.TEST_LABYRINTH_PATH
 	if prepare.is_valid():
 		prepare.call(screen)
 	tree.root.add_child(screen)
@@ -62,6 +73,14 @@ func open_map() -> void:
 	await press_key(KEY_M)
 	if not screen._map_open:
 		push_error("M 키로 지도 판이 열리지 않았다")
+
+
+## 실제 미궁(arbor: B1F~B3F, M3 A3)으로 띄운다. 나머지는 open 과 같다(prepare 는 묶음을 바꾼 뒤 부른다).
+func open_arbor(platform: String = "native", seed_value: int = 7, query: String = "", prepare: Callable = Callable()) -> DungeonScreen:
+	return await open(platform, seed_value, query, func(s: DungeonScreen) -> void:
+		s.labyrinth_path = DungeonScreen.LABYRINTH_PATH
+		if prepare.is_valid():
+			prepare.call(s))
 
 
 ## 타이틀로 띄운다(실제 게임의 시작, M3 A2).
@@ -102,6 +121,7 @@ func close_screen() -> void:
 func dispose() -> void:
 	close_screen()
 	remove_scene_dir(dir)
+	_live.erase(self)
 
 
 ## 장면 시험 임시 폴더를 통째로 지운다. 다른 경로면 단언 실패(그리고 아무것도 지우지 않는다).

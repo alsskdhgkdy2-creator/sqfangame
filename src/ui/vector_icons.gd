@@ -6,7 +6,7 @@ extends RefCounted
 const MAP_ICONS := ["door", "shortcut", "stairs_up", "stairs_down", "chest", "gather", "event", "danger", "foe", "arrow", "warp", "pin"]
 ## 상점 종류 아이콘(08 §7.2).
 const KIND_ICONS := ["kind_sword", "kind_staff", "kind_body", "kind_shield", "kind_head", "kind_hands", "kind_feet", "kind_accessory",
-	"kind_material", "kind_consumable"]
+	"kind_material", "kind_consumable", "kind_key"]
 
 
 static func draw(ci: CanvasItem, name: String, rect: Rect2, color: Color, dir: int = 0) -> void:
@@ -107,7 +107,7 @@ static func draw(ci: CanvasItem, name: String, rect: Rect2, color: Color, dir: i
 			ci.draw_circle(p.call(0.5, 0.38), rect.size.x * 0.18, color)
 			ci.draw_colored_polygon(PackedVector2Array([p.call(0.36, 0.46), p.call(0.64, 0.46), p.call(0.5, 0.86)]), color)
 		"kind_sword", "kind_staff", "kind_body", "kind_shield", "kind_head", "kind_hands", "kind_feet", "kind_accessory", \
-				"kind_material", "kind_consumable":
+				"kind_material", "kind_consumable", "kind_key":
 			_kind(ci, name, rect, color)
 		_:
 			ci.draw_rect(Rect2(p.call(0.3, 0.3), rect.size * 0.4), color, false, w)
@@ -191,6 +191,12 @@ static func kind_shapes(name: String, rect: Rect2) -> Array[Dictionary]:
 			out.append({"type": "circle", "center": p.call(0.5, 0.64), "radius": s * 0.24})
 			out.append(box.call(0.42, 0.26, 0.16, 0.2))
 			out.append(box.call(0.36, 0.14, 0.28, 0.1))
+		"kind_key":
+			# 열쇠(귀중품, M3 A3): 왼쪽 위 고리 + 오른쪽 아래로 뻗은 대 + 아래로 난 이 둘.
+			out.append({"type": "arc", "center": p.call(0.3, 0.32), "radius": s * 0.16, "from": 0.0, "to": TAU, "width": w * 1.3})
+			out.append(line.call(0.42, 0.44, 0.86, 0.88, 1.4))
+			out.append(line.call(0.66, 0.68, 0.56, 0.78, 1.3))
+			out.append(line.call(0.78, 0.8, 0.68, 0.9, 1.3))
 	return out
 
 

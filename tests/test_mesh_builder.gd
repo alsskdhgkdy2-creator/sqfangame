@@ -201,3 +201,131 @@ func _check_pose(near: Array, cam: Vector3, fwd: Vector3, label: String, strict:
 		failures.append("%s: 2ε 안에 답이 없음 (δ %.3f, 최소 |w| %.3f)" % [label, d, gap])
 	elif not strict and gap < ROTATION_MIN_GAP:
 		failures.append("%s: 보정 뒤 최소 |w| %.4f < %.2f" % [label, gap, ROTATION_MIN_GAP])
+
+
+# ---- M3 A3: 상자·잠긴 문(실제 미궁 arbor) ----
+
+## 상자 c 의 정점(칸 가운데 ±0.5m·높이 0.5m 상자 안). 바닥·벽 정점은 칸 가운데에서 1m 이상 떨어져 들지 않는다.
+static func _chest_verts(b: DungeonMeshBuilder.Built, c: Vector2i) -> Array[Vector3]:
+	var o := DungeonMeshBuilder.cell_center(c)
+	var out: Array[Vector3] = []
+	for v in b.verts:
+		if absf(v.x - o.x) <= 0.75 and absf(v.z - o.z) <= 0.75 and v.y <= DungeonMeshBuilder.WALL_H - 0.01:
+			out.append(v)
+	return out
+
+
+## 표면의 정점 색 묶음. 메시는 색을 낮은 정밀도로 담으므로 has 로 가까운 색(채널마다 1/128 안)을 찾는다.
+class _Colors:
+	extends RefCounted
+	var list: Array[Color] = []
+
+	func has(c: Color) -> bool:
+		for x in list:
+			if absf(x.r - c.r) < 1.0 / 128.0 and absf(x.g - c.g) < 1.0 / 128.0 and absf(x.b - c.b) < 1.0 / 128.0 and absf(x.a - c.a) < 1.0 / 128.0:
+				return true
+		return false
+
+
+static func _colors(b: DungeonMeshBuilder.Built, surface: String) -> _Colors:
+	var out := _Colors.new()
+	var i := b.surface_names.find(surface)
+	if i < 0:
+		return out
+	var seen := {}
+	for col in b.mesh.surface_get_arrays(i)[Mesh.ARRAY_COLOR]:
+		if not seen.has(col):
+			seen[col] = true
+			out.list.append(col)
+	return out
+
+
+## (M-M1 상자 모서리 ±0.6m: 격자 밖) 상자 정점: 평면 0.25m 격자, 높이 0.5m 이하, 칸 가운데 ±0.5m. 닫힘 12개(모서리 8 + 뚜껑 띠 4), 열림 8개.
+## 닫힘 = 호박색 몸통 + 발광 뚜껑 띠, 열림 = 어두운 몸통(발광 띠 없음). 세 층 모든 정점이 0.25m 격자.
+func test_chest_geometry_and_colors() -> void:
+	var defs := Fx.arbor()
+	var f := defs.floor_by_id("b1f")
+	var closed := DungeonMeshBuilder.build(f, WorldState.new())
+	var w := WorldState.new()
+	for c in f.chest_list():
+		w.open_chest(c.id)
+	var opened := DungeonMeshBuilder.build(f, w)
+	for c in f.chest_list():
+		var o := DungeonMeshBuilder.cell_center(c.at)
+		for x in [[closed, 12, "닫힘"], [opened, 8, "열림"]]:
+			var vs := _chest_verts(x[0], c.at)
+			check_eq(vs.size(), x[1], "%s %s: 상자 정점 수" % [c.id, x[2]])
+			for v in vs:
+				var off := Vector2(v.x - o.x, v.z - o.z)
+				check(absf(off.x) <= DungeonMeshBuilder.CHEST_HALF + 1e-4 and absf(off.y) <= DungeonMeshBuilder.CHEST_HALF + 1e-4
+					and v.y <= DungeonMeshBuilder.CHEST_H + 1e-4, "%s %s: 정점 %s 이 상자 안" % [c.id, x[2], v])
+	check(_colors(closed, "plate").has(DungeonMeshBuilder.CHEST_CLOSED) and not _colors(closed, "plate").has(DungeonMeshBuilder.CHEST_OPENED),
+		"닫힘: 호박색 몸통")
+	check(_colors(closed, "glow").has(DungeonMeshBuilder.CHEST_LID_GLOW), "닫힘: 발광 뚜껑 띠")
+	check(_colors(opened, "plate").has(DungeonMeshBuilder.CHEST_OPENED) and not _colors(opened, "plate").has(DungeonMeshBuilder.CHEST_CLOSED),
+		"열림: 어두운 몸통")
+	check(not _colors(opened, "glow").has(DungeonMeshBuilder.CHEST_LID_GLOW), "열림: 발광 띠 없음")
+	check_eq(closed.mesh.get_surface_count(), DungeonMeshBuilder.build(f, w).mesh.get_surface_count(), "열림·닫힘 표면 수 같음(재질 재사용)")
+	for id in defs.floor_ids:
+		var b := DungeonMeshBuilder.build(defs.floor_by_id(id), WorldState.new())
+		var bad := 0
+		for v in b.verts:
+			if absf(v.x * 4.0 - roundf(v.x * 4.0)) > 1e-4 or absf(v.z * 4.0 - roundf(v.z * 4.0)) > 1e-4:
+				bad += 1
+		check_eq(bad, 0, "%s: 평면 위치가 0.25m 격자 밖인 정점 수" % id)
+
+
+## 잠긴 문 겉모습: B2F 열쇠 문 locked(보라 문판·자홍 등) → 열면 door, B3F 봉인 문 sealed(검붉은 문판·붉은 등·빗장, 세계 상태와 상관없이).
+func test_lock_styles() -> void:
+	var defs := Fx.arbor()
+	var b2 := defs.floor_by_id("b2f")
+	var lock: Vector3i = b2.edges_of_kind(FloorModel.Edge.LOCK)[0]
+	var w := WorldState.new()
+	check_eq(DungeonMeshBuilder.edge_style(b2, w, lock), "locked", "닫힌 열쇠 문")
+	var shut := DungeonMeshBuilder.build(b2, w)
+	check(_colors(shut, "plate").has(DungeonMeshBuilder.LOCK_PLATE[0]) and _colors(shut, "glow").has(DungeonMeshBuilder.LAMP_LOCKED), "잠긴 문 문판·등 색")
+	w.open_lock(lock)
+	check_eq(DungeonMeshBuilder.edge_style(b2, w, lock), "door", "연 열쇠 문 = 문")
+	var open := DungeonMeshBuilder.build(b2, w)
+	check(not _colors(open, "plate").has(DungeonMeshBuilder.LOCK_PLATE[0]) and _colors(open, "plate").has(DungeonMeshBuilder.DOOR_PLATE[0]), "연 뒤 문 색")
+	var b3 := defs.floor_by_id("b3f")
+	var seal := Vector3i(-1, -1, -1)
+	for e in b3.edges_of_kind(FloorModel.Edge.LOCK):
+		if b3.is_sealed(e):
+			seal = e
+	var w3 := WorldState.new()
+	w3.open_lock(seal)  # 규칙은 열지 않지만 겉모습은 세계 상태와 상관없다
+	check_eq(DungeonMeshBuilder.edge_style(b3, w3, seal), "sealed", "봉인 문")
+	var sealed := DungeonMeshBuilder.build(b3, WorldState.new())
+	check(_colors(sealed, "plate").has(DungeonMeshBuilder.SEAL_PLATE[0]) and _colors(sealed, "plate").has(DungeonMeshBuilder.SEAL_BAR)
+		and _colors(sealed, "glow").has(DungeonMeshBuilder.LAMP_SEALED), "봉인 문판·빗장·등 색")
+
+
+## B1F 상자 칸과 그 네 이웃(닫힌 상자 = 정점이 가장 많다): 칸 가운데 회전(0.5° 간격, 보정 뒤 최소 |w| ≥ 0.025m)과
+## 이동·막힘 궤적(2ε 안에 답). §9.2.1 ② 의 f1_test 훑기와 같은 기준.
+func test_sweep_around_b1f_chests() -> void:
+	_reset_stats()
+	var f := Fx.arbor().floor_by_id("b1f")
+	var world := WorldState.new()
+	for e in f.edges_of_kind(FloorModel.Edge.SHORTCUT):
+		world.open_shortcut(e)
+	for e in f.edges_of_kind(FloorModel.Edge.PASSAGE):
+		world.find_passage(e)
+	var built := DungeonMeshBuilder.build(f, world)
+	_radius = CameraGuard.reach(built.max_triangle)
+	var cells := {}
+	for ch in f.chest_list():
+		cells[ch.at] = true
+		for d in 4:
+			var n := ch.at + Dir.vec(d)
+			if f.is_cell(n):
+				cells[n] = true
+	for c in cells:
+		var cam := DungeonMeshBuilder.cell_center(c) + Vector3.UP * DungeonView.EYE_HEIGHT
+		_sweep_rotation(built.verts, cam, "B1F 칸 %s" % c)
+		for d in 4:
+			var v2 := Dir.vec(d)
+			var reach := BUMP if ExplorationRules.block_reason(f, world, c, d) != "" else DungeonMeshBuilder.CELL
+			_sweep_line(built.verts, cam, Vector3(v2.x, 0, v2.y), reach, "B1F 칸 %s 방향 %s" % [c, Dir.name_of(d)])
+	check(cells.size() >= 2 * f.chest_list().size(), "훑은 칸 %d(상자마다 이웃 하나 이상)" % cells.size())
+	print("  B1F 상자 둘레 보정 통계: ", _stats)

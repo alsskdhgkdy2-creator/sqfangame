@@ -192,8 +192,8 @@ func test_questions_clear_ordinary_toasts() -> void:
 	# 저장 실패 안내는 남는다: 전멸 창(가져오기 뒤 자동 저장 실패는 알림 창이라 안내로 직접 띄운다) → 지도 물음.
 	await _import_wiped(s, "지도 둘")
 	var why := "시험 실패"
-	s._show_toast(s.texts.t("msg.save_failed", {"reason": why}), true)
+	s._warn(s.texts.t("msg.save_failed", {"reason": why}))  # M3 A3b(검토 R2~R4): 저장 실패 안내는 자기 글줄(SaveWarning)
 	await kit.tap(kit.center_of(_button(s, "WipeNewGame")))
 	await kit.frames(2)
 	check_eq(s.modal.kind, "wipe_map", "준비: 다시 지도 물음")
-	check(s._toast.text == s.texts.t("msg.save_failed", {"reason": why}) and s._toast.modulate.a > 0.9, "저장 실패 안내는 물음이 떠도 남는다")
+	check(s._warn_label.text == s.texts.t("msg.save_failed", {"reason": why}) and s._warn_label.modulate.a > 0.9, "저장 실패 안내는 물음이 떠도 남는다")

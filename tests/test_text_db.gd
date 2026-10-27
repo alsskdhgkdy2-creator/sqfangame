@@ -60,6 +60,10 @@ func test_several_holders_and_plain_format() -> void:
 
 
 ## 실제 문구: 조사 묶음은 전투 문구(자리표시 바로 뒤)에만 있고, 다른 문구는 고르기 전과 같은 글이다.
+## 전투·상점 밖에서 조사 고르기를 쓰는 안내(M3 A3: 전투 드롭 「{item}을(를) 얻었다」와 같은 말씨). 정확한 키만 더한다.
+const PARTICLE_MSG_KEYS := ["msg.chest_one", "msg.chest_full", "msg.lock_opened"]
+
+
 func test_real_texts_only_battle_lines_change() -> void:
 	var db := TextDb.load_path("res://data/text/ko.json")
 	var holder := RegEx.create_from_string("\\{(\\w+)\\}")
@@ -74,7 +78,8 @@ func test_real_texts_only_battle_lines_change() -> void:
 				if tpl.contains("{%s}%s" % [name, p]):
 					has_pattern = true
 		if has_pattern:
-			check(str(key).begins_with("battle.") or str(key).begins_with("shop."), "조사 고르기는 전투·상점 문구에만(08 §7.6 shop.confirm.buy_unfit): " + str(key))
+			check(str(key).begins_with("battle.") or str(key).begins_with("shop.") or PARTICLE_MSG_KEYS.has(key),
+				"조사 고르기는 전투·상점 문구와 상자·잠긴 문 안내에만(08 §7.6 shop.confirm.buy_unfit, M3 A3): " + str(key))
 			for p in PATTERNS:
 				check(not db.t(key, args).contains(p), "%s: 묶음이 남지 않는다 (%s)" % [key, db.t(key, args)])
 		elif not args.is_empty():
