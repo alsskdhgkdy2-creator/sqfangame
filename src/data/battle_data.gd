@@ -690,7 +690,7 @@ func _read_gather_table(ck: _Ck, d: Dictionary, path: String) -> void:
 				lo = SaveCodec.to_int(c[0])
 				hi = SaveCodec.to_int(c[1])
 			if lo == null or hi == null or not BattleLimits.in_range("gather_count", lo) or not BattleLimits.in_range("gather_count", hi) or lo > hi:
-				ck.err(_p(lp, "count"), "[lo, hi] 정수 쌍이어야 한다(1 ≤ lo ≤ hi ≤ %d)" % BattleLimits.GATHER_COUNT_MAX)
+				ck.err(_p(lp, "count"), "[lo, hi] 정수 쌍이어야 한다(둘 다 1~%d, lo 는 hi 이하)" % BattleLimits.GATHER_COUNT_MAX)
 				ok = false
 				continue
 			if item.is_empty() or w == null:
