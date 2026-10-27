@@ -5,6 +5,8 @@
 ## 뿌리 「팔기」 → sell(판매 목록 §8.8: 소재·장비·소모품 탭, 「여러 개」 단추). 구매·판매 목록은 같은 짜임(ShopFrame·탭 줄·칸 목록)을 쓴다.
 ## 팔기 흐름(§8.8): 한 줄(2개 이상 = 수량 창, 1개 = 확인 창) 또는 여러 개(고른 줄 모두를 한 묶음) → ShopRules.sell → 입하 알림.
 ## 사기 흐름(§8.6): 줄 → 확인 창(ShopRules.buy) → 장착 물음 → 무기는 칸 0, 방어구·장신구는 칸 고르기 창(GrowthRules.equip).
+## 「아이템」 갈래(M3 A4b §6.4, 원작 III HD 상점 아이템 목록·수량 창): 소모품 줄 → 수량 창(최대 = 공용 가방에 드는 수·소지금으로 살 수 있는 수,
+## 「예」 먼저) → ShopRules.buy(수량) → 자동 저장. 장착 물음은 없다.
 ## 창이 이어지는 동안 대상 물건·대원은 확인 창을 연 때의 것으로 고정한다(ask_item·ask_member).
 ## 상태는 규칙 함수(ShopRules.buy·GrowthRules.equip)로만 바꾸고, 받아들여지면 save_hook(자동 저장) 뒤 changed 를 낸다. 저장이 실패해도
 ## 메모리 상태를 되돌리거나 규칙을 다시 부르지 않고 차례를 이어 간다(§8.11 F6, 실패 안내는 탐색 화면의 토스트).
@@ -28,9 +30,9 @@ const ROOT_KEYS := ["buy", "sell", "talk", "equip", "leave"]
 const ROOT_DIM := ["talk", "equip"]
 ## 구매 갈래(숫자 키 1~4).
 const BRANCH_KEYS := ["weapon", "armor", "accessory", "item"]
-## 탭 줄이 있는 갈래(ShopTabs.SETS 이름). 없는 갈래의 종류: 장신구, 아이템(소모품은 다음 단계라 빈 목록, D24).
+## 탭 줄이 있는 갈래(ShopTabs.SETS 이름). 없는 갈래의 종류: 장신구, 아이템(소모품, M3 A4b: 원작 아이템 목록도 탭이 없다).
 const BRANCH_TABS := ["weapon", "armor"]
-const BRANCH_KINDS := {"accessory": ["accessory"], "item": []}
+const BRANCH_KINDS := {"accessory": ["accessory"], "item": ["consumable"]}
 ## 뿌리 명령 목록(§8.3): x 0~430, y 166~510(줄 64, 사이 4, 안쪽 여백 4).
 const ROOT_TOP := 166.0
 const ROOT_GAP := 4.0
@@ -615,6 +617,17 @@ func _buy_row(i: int) -> bool:
 	if BagRules.fit(state, item, 1) < 1:  # 공용 가방 60칸(D31, M3 A4)
 		show_notice(texts.t("shop.why.bag_full"))
 		return true
+	if item.begins_with("use."):
+		# 소모품: 수량 창(원작 「メディカ ×10 ▲▼」). 최대 = 가방에 드는 수(fit)·소지금으로 살 수 있는 수(·한정이면 남은 수), 「예」 먼저.
+		var price := int(line["price"])
+		var most := mini(BagRules.fit(state, item, BattleLimits.RANGES["buy_qty"][1]), state.money / maxi(1, price))
+		if bool(line["limited"]):
+			most = mini(most, int(line["stock"]))
+		ask = "buy_item"
+		ask_item = item
+		ask_member = member
+		dialog.open_qty(icon_of(item), PartyNames.item_name(state, texts, item), price, most, "shop.qty.buy", true)
+		return true
 	ask = "buy"
 	ask_item = item
 	ask_member = member
@@ -648,6 +661,8 @@ func _on_answered(yes: bool, qty: int) -> void:
 				return
 			ask = "slots"
 			dialog.open_slots(slot_rows(ask_item, ask_member), best_slot(ask_item, ask_member, state.gear_bag))
+		"buy_item":
+			_apply_shop(ShopRules.buy(state, SHOP_ID, ask_item, qty))
 		"sell":
 			_do_sell([{"item": ask_item, "qty": qty}])
 		"sell_multi":
@@ -811,7 +826,8 @@ func buy_lines() -> Array[Dictionary]:
 	for k in kinds:
 		for line in cat:
 			var e := state.defs.battle.equip(line["item"])
-			if e != null and e.kind == k:
+			var lk := e.kind if e != null else ("consumable" if str(line["item"]).begins_with("use.") else "")
+			if lk == k:
 				var l := line.duplicate()
 				l["kind"] = k
 				out.append(l)
@@ -830,11 +846,9 @@ func rows_of(ls: Array[Dictionary]) -> Array:
 
 
 ## 판매 줄(§8.8): 가방 줄(BagRows, 캠프 소지품과 같은 곳·같은 차례)에 판매값을 붙인다. 소재 탭 = 가진 소재(정의 자료 차례),
-## 장비 탭 = 가방 장비(자료 차례), 소모품 탭 = 빈 목록.
+## 장비 탭 = 가방 장비(자료 차례), 소모품 탭 = 가진 소모품(정의 차례, 판매값 = 값 ÷ 2, M3 A4b).
 func sell_lines() -> Array[Dictionary]:
 	var k := str(SELL_KINDS[clampi(tab, 0, SELL_KINDS.size() - 1)])
-	if k == "consumable":
-		return [] as Array[Dictionary]
 	var out := BagRows.bag(state, [k])
 	for line in out:
 		line["price"] = ShopRules.sell_price(state.defs, str(line["item"]))
@@ -863,6 +877,8 @@ static func sold_out(line: Dictionary) -> bool:
 
 func icon_of(item: String) -> String:
 	var e := state.defs.battle.equip(item)
+	if e == null and item.begins_with("use."):
+		return BagRows.CONSUMABLE_ICON
 	return str(ShopTabs.ICONS.get(e.kind, "")) if e != null else ""
 
 
@@ -1160,6 +1176,12 @@ func _refresh_buy() -> void:
 		frame.show_desc("", [] as Array[String])
 		return
 	var item: String = lines[at]["item"]
+	var c := state.defs.battle.consumable(item)
+	if c != null:
+		# 소모품(M3 A4b): 설명 글만(비교 판·머리글자 칸 없음, 원작 아이템 목록도 능력치 비교가 없다).
+		frame.panel.show_member(state, texts, member, null, -1)
+		frame.show_desc(PartyNames.item_name(state, texts, item), [texts.t(c.desc_key)] as Array[String])
+		return
 	# 본문 = 값 줄. 바뀌는 값은 판이 보이므로 되풀이하지 않고, 둘째 줄은 이유가 있을 때만(§8.5).
 	var desc: Array[String] = [values_text(item)]
 	if not can_wear(item, member):
@@ -1193,6 +1215,8 @@ func _refresh_sell() -> void:
 	var item: String = line["item"]
 	if line["kind"] == "material":
 		frame.show_desc(sell_name(item), [texts.t("shop.tab.material")] as Array[String])
+	elif line["kind"] == "consumable":
+		frame.show_desc(sell_name(item), [texts.t(state.defs.battle.consumable(item).desc_key)] as Array[String])
 	else:
 		frame.show_desc(sell_name(item), [values_text(item)] as Array[String], badges(item))
 

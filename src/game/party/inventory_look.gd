@@ -21,6 +21,9 @@ func paint(r: PartyButton, m: Dictionary) -> void:
 	lb.show_row(str(m.get("name", "")), str(m.get("right", "")), "", bool(m.get("dim", false)))
 
 
-## 커서 표시: at = 이 칸이 커서 칸. 캠프는 "cursor" 모양(노랑, 흐린 줄이면 흐린 커서 모양)만 쓴다.
+## 커서 표시: at = 이 칸이 커서 칸. "cursor" = 노랑(흐린 줄이면 흐린 커서 모양), "chosen" = 밝은 시안(그 줄에 대한 알약·카드·창이
+## 떠 있다, 상점 줄과 같은 「cmd:chosen」, M3 A4b), "none" = 표시 없음.
 func mark(r: PartyButton, at: bool, mode: String) -> void:
 	r.selected = at and mode == "cursor"
+	if r is ListButton:  # 묶음 머리의 단추(PartyButton)는 cursor 만
+		(r as ListButton).chosen = at and mode == "chosen"

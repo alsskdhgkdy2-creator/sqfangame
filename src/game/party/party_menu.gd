@@ -103,6 +103,8 @@ var member := 0
 var dialog_kind := ""
 ## 확인 창에서 고른 단추: 0 「돌아가기」 · 1 「버리기」·「확정」·「새 게임」
 var dialog_pick := 0
+## 확인 창 글에 넣을 값(소지품 버리기의 물건 이름 등, M3 A4b).
+var dialog_args := {}
 var notice := ""
 ## 받아들인 입력 수(시험용).
 var accepted_inputs := 0
@@ -452,6 +454,10 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 		return _dispatch_root(kind, arg)
 	if page == "pick":
 		return _dispatch_pick(kind, arg)
+	if tab == 3 and items_tab.qty_open():
+		return items_tab.dispatch(kind, arg) if kind == "qty" else false  # 소지품 수량 창: 그 창 입력만
+	if tab == 3 and items_tab.mode == "pick" and kind == "member":
+		return items_tab.dispatch("pick_member", arg)  # 소지품 고르기: 카드 누르기 = 그 대원에게 쓰기
 	match kind:
 		"tab":
 			var t := int(arg) if arg != null else -1
@@ -477,6 +483,8 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 		"back":
 			if tab == 2 and equip_tab.list_open:
 				return equip_tab.dispatch("list_close", null)
+			if tab == 3 and items_tab.mode != "list":
+				return items_tab.dispatch("mode_back", null)  # 소지품: 고르기 → 알약 → 목록 → 뿌리
 			_guard(_to_root)
 			return true
 		"to_root":
@@ -646,9 +654,10 @@ func _set_member(i: int) -> void:
 		t.call("member_changed")
 
 
-func open_dialog(kind: String, after: Callable = Callable()) -> void:
+func open_dialog(kind: String, after: Callable = Callable(), args: Dictionary = {}) -> void:
 	dialog_kind = kind
 	dialog_pick = 0  # 처음은 늘 「돌아가기」(Enter 만 눌러도 안전한 쪽, 07 §4.6)
+	dialog_args = args.duplicate()
 	_after_discard = after
 
 
@@ -705,6 +714,19 @@ func key_action(code: int) -> Array:
 		if code == KEY_ESCAPE:
 			return ["dialog_back", null]
 		return ["dialog_ok", null] if enter else []
+	if page == "sub" and tab == 3 and items_tab.qty_open():
+		# 소지품 수량 창(상점 수량 창과 같은 키): ←→ 예·아니오, ↑↓ ±1, PageUp·PageDown ±10, Enter 고름, Esc 취소.
+		if code == KEY_ESCAPE or code == KEY_BACKSPACE:
+			return ["qty", ["cancel", null]]
+		if enter:
+			return ["qty", ["confirm", null]]
+		if dir.x != 0:
+			return ["qty", ["pick", dir.x]]
+		if dir.y != 0:
+			return ["qty", ["step", -dir.y]]
+		if code == KEY_PAGEUP or code == KEY_PAGEDOWN:
+			return ["qty", ["step", 10 if code == KEY_PAGEUP else -10]]
+		return []
 	if code == KEY_ESCAPE:
 		return ["back", null]
 	var num := _number(code)
@@ -718,6 +740,8 @@ func key_action(code: int) -> Array:
 		return ["camp_cursor", dir.y] if dir.y != 0 else []
 	if num >= 0 and num < CAMP_ROWS:
 		return ["tab", camp_tab(num)]  # 하위 화면도 명령 줄 차례(07 §9.8: 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록)
+	if tab == 3 and items_tab.mode == "pick" and dir != Vector2i.ZERO:
+		return ["pick_move", dir]  # 소지품 고르기: 방향 = 카드 사이(캠프 고르기와 같다)
 	if (tab == 3 or (tab == 2 and equip_tab.list_open)) and (code == KEY_Q or code == KEY_E):
 		return []  # 소지품에는 대원이 없다(E2-b). 장비 목록이 열려 있으면 대원을 넘기지 않는다(E2-c)
 	match code:
@@ -835,10 +859,11 @@ func _notification(what: int) -> void:
 
 # ---- 규칙 결과 ----
 
-## 규칙 함수의 이벤트 열을 받는다. 거부면 이유를 알림 줄에 띄우고 false. 받아들여졌으면 저장 갈고리 → 알림 → changed.
-func apply(events: Array[Dictionary]) -> bool:
+## 규칙 함수의 이벤트 열을 받는다. 거부면 이유(why_prefix + 이유 키, 성장 = growth.reason., 소모품 = item.why.)를 알림 줄에 띄우고 false.
+## 받아들여졌으면 저장 갈고리 → 알림 → changed.
+func apply(events: Array[Dictionary], why_prefix: String = "growth.reason.") -> bool:
 	if events.size() == 1 and events[0]["type"] == "rejected":
-		show_notice(reason_text(str(events[0]["reason"])))
+		show_notice(texts.t(why_prefix + str(events[0]["reason"])))
 		return false
 	if save_hook.is_valid():
 		save_hook.call()
@@ -868,6 +893,15 @@ func events_text(events: Array[Dictionary]) -> String:
 					lines.append(texts.t("growth.event.equipped", {"member": who, "item": item_name(str(ev["item"]))}))
 			"supplied":
 				lines.append(texts.t("growth.event.supplied_capped" if ev["capped"] else "growth.event.supplied", {"item": item_name(str(ev["item"])), "amount": ev["amount"]}))
+			# 소모품(M3 A4b): 쓰기 결과는 알림 줄(D2, 원작 띠 「Used Beast Bell.」 자리). used·returned 는 줄이 없다(비콘은 마을 도착 안내).
+			"healed":
+				lines.append(texts.t("item.event.used_heal", {"member": who, "amount": ev["amount"]}))
+			"tp_restored":
+				lines.append(texts.t("item.event.used_tp", {"member": who, "amount": ev["amount"]}))
+			"revived":
+				lines.append(texts.t("item.event.used_revive", {"member": who}))
+			"discarded":
+				lines.append(texts.t("item.event.discarded", {"item": item_name(str(ev["item"])), "qty": ev["qty"]}))
 	return "\n".join(lines.slice(0, 2))
 
 
@@ -922,12 +956,14 @@ func _refresh() -> void:
 	var top_band := not sub or root_band()
 	for c in [camp_plate, ribbon, money_plate]:
 		(c as Control).visible = top_band
-	for c in [camp_list, cards]:
-		(c as Control).visible = not sub
+	camp_list.visible = not sub
+	cards.visible = not sub or items_pick()
 	if top_band:
 		_refresh_top()
 	if not sub:
 		_refresh_camp()
+	elif items_pick():
+		_refresh_item_pick()
 	# 안내 자리(알림 줄·하위 화면의 띠)는 쪽·화면이 바뀔 때마다 다시 정한다(숫자 키로 바로 바꿔도). 안내 글·남은 시간은 건드리지 않는다.
 	_refresh_notice()
 	_refresh_dialog()
@@ -969,6 +1005,22 @@ func _refresh_camp() -> void:
 		c.queue_redraw()
 
 
+## 소지품 「쓰기」 고르기(M3 A4b, D3): 캠프 고르기와 같은 파티 카드(설명 상자 자리)에 커서 카드 하나만 노란 테두리.
+func items_pick() -> bool:
+	return page == "sub" and tab == 3 and items_tab.mode == "pick"
+
+
+func _refresh_item_pick() -> void:
+	display.sync_party(state)
+	var on := dialog_kind.is_empty()
+	for c in cards.cards:
+		c.target_mark = "pick" if on and c == cards.card(pick_cursor) else ""
+		c.cursor = false
+		c.current = false
+		c.mouse_filter = MOUSE_FILTER_STOP
+		c.queue_redraw()
+
+
 ## 안내(거부 이유·성장 결과 등): 뿌리·고르기는 알림 줄(있을 때만 보인다), 기록은 알림 줄(늘 보이고 안내가 없으면 「기록」),
 ## 소지품도 알림 줄(늘 보이고 안내가 없으면 「소지품   장비 n · 소재 n」), 다른 하위 화면은 제 자리(스킬·장비 = 위 정보 띠).
 func _refresh_notice() -> void:
@@ -994,7 +1046,14 @@ func _draw_notice_line() -> void:
 	notice_line.draw_rect(Rect2(0, r.end.y - 2.0, r.size.x, 2.0), UiTheme.FAC_PLATE_EDGE)
 	var font := notice_line.get_theme_default_font()
 	notice_line.draw_string(font, Vector2(PlaceRibbon.PAD, r.get_center().y + NOTICE_FS * 0.36), notice_line_text(),
-		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 2.0 * PlaceRibbon.PAD, NOTICE_FS, UiTheme.BATTLE_BANNER_NOTICE)
+		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 2.0 * PlaceRibbon.PAD, NOTICE_FS, notice_line_color())
+
+
+## 알림 줄 글자 색: 소지품 띠가 넘친 가방(「… · 가방이 넘쳤다」)이면 경고 색, 아니면 안내 색.
+func notice_line_color() -> Color:
+	if notice.is_empty() and page == "sub" and tab == 3 and items_tab.mode != "pick" and items_tab.over():
+		return UiTheme.CAMP_NOTICE_WARN
+	return UiTheme.BATTLE_BANNER_NOTICE
 
 
 func _refresh_dialog() -> void:
@@ -1008,6 +1067,12 @@ func _refresh_dialog() -> void:
 		"new_game":
 			_dialog_text.text = texts.t("menu.confirm_new_game")
 			dialog_buttons[1].text = texts.t("menu.new_game")
+		"drop":  # 소지품 버리기 1개(M3 A4b, D4)
+			_dialog_text.text = texts.t("party.items.drop_ask", {"item": str(dialog_args.get("item", ""))})
+			dialog_buttons[1].text = texts.t("party.items.drop")
+		"beacon":  # 귀환 비콘(M3 A4b §6.3)
+			_dialog_text.text = texts.t("item.beacon.ask")
+			dialog_buttons[1].text = texts.t("item.beacon.go")
 		_:
 			_dialog_text.text = texts.t("party.dialog.commit_text", {"n": skill_tab.draft_sp()})
 			dialog_buttons[1].text = texts.t("party.dialog.commit")
@@ -1119,6 +1184,11 @@ func debug_info(css: Callable) -> Dictionary:
 		"notice": notice, "strip": notice_line_text() if notice_line.visible else "", "debug": debug, "supply_open": items_tab.supply_open, "equip_rows": rows,
 		# 소지품(M3 A3): 줄의 물건 ID 차례와 설명 상자(머리 글 + 줄).
 		"item_rows": items_tab.row_items.duplicate(), "item_desc": [items_tab.desc.title] + items_tab.desc.lines,
+		# 소지품 쓰기·버리기(M3 A4b): 쪽·알약 커서·보이는 알약(흐림 포함)·수량 창·고르기 커서.
+		"items": {"mode": items_tab.mode, "pill": items_tab.pill, "item": items_tab.pill_item(),
+			"use": "dim" if items_tab.use_button.dimmed else "on" if items_tab.use_button.visible else "",
+			"drop": "on" if items_tab.drop_button.visible else "", "qty": items_tab.qty.qty if items_tab.qty_open() else 0,
+			"qty_pick": items_tab.qty.pick if items_tab.qty_open() else -1, "pick": pick_cursor if items_pick() else -1},
 		"records": {"cursor": [records_tab.cur_row, records_tab.cur_col], "cards": [0, 1, 2].map(records_tab.card_lines),
 			"save_ok": records_tab.save_ok(), "help": records_tab.help_text()} if tab == 4 else {},
 		"buttons": buttons, "nodes": nodes, "pad": pad_state(),

@@ -70,6 +70,20 @@ func test_v8_roundtrip_with_consumables() -> void:
 		check_eq([r.state.consumables, r.from_schema, SaveCodec.state_hash(r.state)], [s.consumables, 8, SaveCodec.state_hash(s)], "같은 소모품·8판·같은 해시")
 
 
+## M-S5(shop.bought 가 장비 ID 만 받음): 상점에서 소모품을 사면(ShopRules.buy, NEW 를 끄려고 bought 에 남는다) 그 상태를 쓰고 다시 읽을 수 있다.
+## 웹 부분 E 가 찾은 실패(A4b): 사고 난 뒤 자동 저장이 「shop.bought 의 use.medica 는 모르는 장비다」로 실패했다.
+func test_v8_roundtrip_after_buying_consumables() -> void:
+	var s := ExplorationRules.new_game(Fx.defs(), 5, "floor")
+	s.money = 1000
+	for id in ["use.medica", "use.ariadne_beacon"]:
+		check_eq(ShopRules.buy(s, JUNK, id, 2)[0]["type"], "bought", "준비: %s 사기" % id)
+	check(s.shop.bought.has("use.medica") and s.shop.bought.has("use.ariadne_beacon"), "준비: bought 에 소모품")
+	var r := SaveCodec.decode(SaveCodec.encode(s), s.defs)
+	check(r.ok(), "읽기 %s" % r.error)
+	if r.ok():
+		check_eq([r.state.shop.bought_list(), SaveCodec.state_hash(r.state)], [s.shop.bought_list(), SaveCodec.state_hash(s)], "같은 bought·같은 해시")
+
+
 ## M-S3(범위 1~9,999).
 func test_v8_rejects_bad_consumables() -> void:
 	var s := ExplorationRules.new_game(Fx.defs(), 5, "floor")

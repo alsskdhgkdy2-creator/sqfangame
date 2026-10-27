@@ -5,8 +5,8 @@ extends RefCounted
 
 ## 귀중품 줄 아이콘(VectorIcons 종류 아이콘).
 const KEY_ICON := "kind_key"
-## 캠프 소지품의 종류 차례: 장비 → 소재 → 귀중품(M3 A3). 소모품 줄(consumable)은 소지품 화면이 쓰기·버리기를 갖출 때(M3 A4b) 맨 앞에 더한다.
-const CAMP_KINDS := ["gear", "material", "key"]
+## 캠프 소지품의 종류 차례: 소모품 → 장비 → 소재 → 귀중품(M3 A3·A4b Q3, 원작 소지품도 소모품이 앞).
+const CAMP_KINDS := ["consumable", "gear", "material", "key"]
 ## 소모품 줄 아이콘(VectorIcons 종류 아이콘, 상점 소모품 탭과 같다).
 const CONSUMABLE_ICON := "kind_consumable"
 

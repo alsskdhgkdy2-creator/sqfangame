@@ -2200,7 +2200,13 @@ func _check_items_layers(pm: PartyMenu, size: Vector2, debug: bool, tag: String)
 	check(lw.encloses(sb) and sb.position.x >= it.list.get_global_position().x + it.list.size.x, tag + ": 스크롤 막대는 창 안 오른쪽, 줄 자리 오른쪽")
 	check_eq(it.supply_button.is_visible_in_tree(), debug, tag + ": 「임시 보급」은 디버그만")
 	if debug:
-		check_eq(_rect(it.supply_button), Rect2(735, 278, 240, 64), tag + ": 알약 x 735~975 · y 278~342")
+		check_eq(_rect(it.supply_button), Rect2(735, 430, 240, 64), tag + ": 「임시 보급」 알약 x 735~975 · y 430~494(D5: 使う 자리에서 아래로, M3 A4b)")
+	# 「쓰기」·「버리기」(M3 A4b 설계 §6.1): 원작 使う·捨てる 자리. 커서 줄이 장비·소재면 「쓰기」 자리는 비고 「버리기」는 제자리.
+	check_eq(it.use_button.is_visible_in_tree(), it.row_kind(it.cursor_item()) == "consumable", tag + ": 「쓰기」는 소모품 줄에서만")
+	if it.use_button.is_visible_in_tree():
+		check_eq(_rect(it.use_button), Rect2(735, 278, 240, 64), tag + ": 「쓰기」 x 735~975 · y 278~342")
+	if it.drop_button.is_visible_in_tree():
+		check_eq(_rect(it.drop_button), Rect2(735, 350, 240, 64), tag + ": 「버리기」 x 735~975 · y 350~414")
 	check(pm.notice_line.is_visible_in_tree(), tag + ": 띠(알림 줄 자리)가 보인다")
 	check_eq(_rect(pm.notice_line), Rect2(176, 70, size.x - 16 - 176, 38), tag + ": 띠 x 176~W−16 · y 70~108")
 	check([pm.camp_plate, pm.ribbon, pm.money_plate].all(func(c: Control) -> bool: return c.is_visible_in_tree()), tag + ": 뿌리의 맨 위 띠(걸음·장소·소지금)")
@@ -2210,14 +2216,18 @@ func _check_items_layers(pm: PartyMenu, size: Vector2, debug: bool, tag: String)
 		"list": lw, "desc": desc, "dir": _rect(pm.dir_pad), "keys": _rect(pm.key_pad_stacked)}
 	if debug:
 		parts["pill"] = _rect(it.supply_button)
+	for b in [it.use_button, it.drop_button]:
+		if (b as Control).is_visible_in_tree():
+			parts[b.name] = _rect(b)
 	var keys := parts.keys()
 	for i in keys.size():
 		check(Rect2(Vector2.ZERO, size).encloses(parts[keys[i]]), "%s: %s %s 화면 안" % [tag, keys[i], str(parts[keys[i]])])
 		for j in range(i + 1, keys.size()):
 			var a: Rect2 = parts[keys[i]]
 			check(not a.intersects(parts[keys[j]]), "%s: %s %s 와 %s %s 가 겹친다" % [tag, keys[i], str(a), keys[j], str(parts[keys[j]])])
-	check(it.window.get_index() < it.supply_button.get_index() and it.supply_button.get_index() < it.desc.get_index(),
-		tag + ": 트리 차례 목록 창 → 알약 → 설명 상자")
+	check(it.window.get_index() < it.use_button.get_index() and it.use_button.get_index() < it.drop_button.get_index()
+		and it.drop_button.get_index() < it.supply_button.get_index() and it.supply_button.get_index() < it.desc.get_index()
+		and it.desc.get_index() < it.qty.get_index(), tag + ": 트리 차례 목록 창 → 쓰기 → 버리기 → 보급 알약 → 설명 상자 → 수량 창")
 	check(pm.notice_line.get_index() < it.get_index() and it.get_index() < pm.dir_pad.get_index(), tag + ": 띠 → 소지품 → 키패드")
 	check(it.find_children("*", "CharPanel", true, false).is_empty() and it.find_children("*", "ShopFrame", true, false).is_empty(),
 		tag + ": 대원 판·상점 틀 없음")
@@ -2231,8 +2241,9 @@ func _check_items_layers(pm: PartyMenu, size: Vector2, debug: bool, tag: String)
 ## 소지품이 그린 캔버스(목록 창·보이는 줄·알약·설명 상자).
 static func _items_canvases(it: PartyItemsTab) -> Array:
 	var out: Array = [it.window, it.desc]
-	if it.supply_button.is_visible_in_tree():
-		out.append(it.supply_button)
+	for b in [it.supply_button, it.use_button, it.drop_button]:
+		if (b as Control).is_visible_in_tree():
+			out.append(b)
 	for r in it.rows:
 		if r.is_visible_in_tree():
 			out.append(r)
@@ -2300,16 +2311,18 @@ func test_items_screen_follows_the_reference_table() -> void:
 		if first.has(px):
 			check_eq(snap, first[px], tag + ": 크기를 바꿨다 돌아와도 같은 자리(앵커)")
 		first[px] = snap
-	# 띠: 「소지품   장비 n · 소재 n」(가진 종류 수), 알림이 뜨면 알림이 대신하고 지나면 돌아온다. 스냅숏 strip 도 같다.
-	var n_gear := s.state.defs.battle.equipment_ids.size()
-	var n_mat := s.state.defs.battle.material_ids.size()
-	var caption := s.texts.t("party.items.strip", {"gear": n_gear, "materials": n_mat, "keys": 0})  # 시험 층: 귀중품 없음(M3 A3)
-	check_eq([pm.notice_line_text(), s.debug_snapshot()["party_menu"]["strip"]], [caption, caption], "띠 글 = 종류 수")
+	# 띠(M3 A4b, 원작 「ITEM 12/60」): 「소지품   n/60」(공용 가방 칸 수), 알림이 뜨면 알림이 대신하고 지나면 돌아온다. 스냅숏 strip 도 같다.
+	var used := BagRules.used(s.state)
+	var caption := "소지품   %d/60" % used
+	check_eq([pm.notice_line_text(), s.debug_snapshot()["party_menu"]["strip"]], [caption, caption], "띠 글 = 가방 칸 수")
+	var g0 := int(s.state.gear_bag.get(s.state.defs.battle.equipment_ids[0], 0))
+	var m0 := int(s.state.materials.get(s.state.defs.battle.material_ids[0], 0))
+	check(g0 > 0 and m0 > 0, "준비: 첫 장비·첫 소재를 가졌다")
 	s.state.gear_bag[s.state.defs.battle.equipment_ids[0]] = 0
 	s.state.materials[s.state.defs.battle.material_ids[0]] = 0
 	pm.refresh_view()
-	caption = s.texts.t("party.items.strip", {"gear": n_gear - 1, "materials": n_mat - 1, "keys": 0})
-	check_eq(s.debug_snapshot()["party_menu"]["strip"], caption, "개수 0 은 세지 않는다")
+	caption = "소지품   %d/60" % (used - g0 - m0)
+	check_eq(s.debug_snapshot()["party_menu"]["strip"], caption, "개수 0 은 세지 않는다(장비·소재 개수만큼 준다)")
 	pm.show_notice("시험 안내 B")
 	await kit.frames(1)
 	check_eq(s.debug_snapshot()["party_menu"]["strip"], "시험 안내 B", "알림이 띠를 대신한다")
@@ -2422,7 +2435,7 @@ func test_items_cursor_walks_scrolls_taps_and_drags() -> void:
 		var last := it.row_items.size() - 1
 		check(last > 8 and list.max_scroll() > 0.0, tag + ": 준비: 넘치는 가방(%d 줄)" % (last + 1))
 		check_eq([it.cursor, list.scroll], [0, 0.0], tag + ": 들어오면 커서는 첫 줄, 맨 위")
-		check(not pm.pad_state()["ok"], tag + ": 가방 줄에서 「선택」 흐림")
+		check(pm.pad_state()["ok"], tag + ": 장비·소재 줄에서 「선택」 켜짐(알약 쪽으로, M3 A4b)")
 		for k in last:
 			await kit.press_key(KEY_DOWN)
 			await kit.frames(1)
@@ -2765,30 +2778,36 @@ func test_items_first_row_up_reveals_the_cursor_in_a_normal_build() -> void:
 	_check_cursor_yellow(it, "첫 줄")
 
 
-## 검토 2차 R2-1: 일반 실행에서 가방 줄은 「선택」이 흐리다. 커서 줄을 손으로 내려 가린 뒤 Enter·Space·키패드 「선택」은 모두 아무 일도
-## 하지 않는다(내림·커서·상태 그대로, 받은 입력 없음: 키패드 = 키).
+## 검토 2차 R2-1: 일반 실행에서 「선택」이 흐린 가방 줄(M3 A4b 부터 귀중품 줄, 다른 줄은 알약 쪽으로 간다). 커서 줄을 손으로 내려 가린 뒤
+## Enter·Space·키패드 「선택」은 모두 아무 일도 하지 않는다(내림·커서·쪽·상태 그대로, 받은 입력 없음: 키패드 = 키).
 func test_items_dimmed_confirm_on_a_bag_row_changes_nothing() -> void:
 	var s := await _open_plain()
 	var pm := s.party_menu
 	_fill_bag(s, 1, 2)
+	s.state.key_items["key.moss_card"] = true
 	await _window(Vector2(1280, 720))
 	await kit.press_key(KEY_P)
 	await kit.press_key(KEY_1)
 	var it := pm.items_tab
-	check_eq([pm.debug, it.cursor_stop(), pm.pad_state()["ok"]], [false, it.rows[0], false], "준비: 일반 실행, 커서 = 첫 가방 줄, 「선택」 흐림")
-	it.list.scroll_to(it.list.max_scroll())
+	check_eq([pm.debug, it.cursor_stop(), pm.pad_state()["ok"]], [false, it.rows[0], true], "준비: 일반 실행, 커서 = 첫 가방 줄, 「선택」 켜짐(알약 쪽으로)")
+	var last := it.row_items.size() - 1
+	check_eq(it.row_kind(it.row_items[last]), "key", "준비: 마지막 줄 = 귀중품")
+	for k in last:
+		await kit.press_key(KEY_DOWN)
+	check_eq([it.cursor_stop(), pm.pad_state()["ok"]], [it.rows[last], false], "준비: 커서 = 귀중품 줄, 「선택」 흐림")
+	it.list.scroll_to(0.0)
 	await kit.frames(1)
 	var scroll := it.list.scroll
-	check(scroll > 0.0 and not it.shown(it.cursor_stop()), "준비: 커서 줄을 손으로 가렸다(내림 %.0f)" % scroll)
+	check(not it.shown(it.cursor_stop()), "준비: 커서 줄을 손으로 가렸다(내림 %.0f)" % scroll)
 	var h := SaveCodec.state_hash(s.state)
 	var n := pm.accepted_inputs
 	for k in [KEY_ENTER, KEY_SPACE]:
 		await kit.press_key(k)
-		check_eq([it.list.scroll, it.cursor, SaveCodec.state_hash(s.state), pm.accepted_inputs], [scroll, 0, h, n], "%s: 아무 일 없음" % OS.get_keycode_string(k))
+		check_eq([it.list.scroll, it.cursor, it.mode, SaveCodec.state_hash(s.state), pm.accepted_inputs], [scroll, last, "list", h, n], "%s: 아무 일 없음" % OS.get_keycode_string(k))
 	var ok := pm.key_pad_stacked.button("ok")
 	check(ok.is_visible_in_tree() and ok.disabled, "키패드 「선택」은 흐림")
 	await kit.tap(kit.center_of(ok))
-	check_eq([it.list.scroll, it.cursor, SaveCodec.state_hash(s.state), pm.accepted_inputs], [scroll, 0, h, n], "키패드 「선택」: 아무 일 없음")
+	check_eq([it.list.scroll, it.cursor, it.mode, SaveCodec.state_hash(s.state), pm.accepted_inputs], [scroll, last, "list", h, n], "키패드 「선택」: 아무 일 없음")
 
 
 ## M2: 보급 대원 단추를 누르거나 Enter 로 누르면 그 대원 이름 줄과 단추가 함께 보인다(끌기만으로는 커서도 일도 없다).

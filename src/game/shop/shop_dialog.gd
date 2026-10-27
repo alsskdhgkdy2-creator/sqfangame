@@ -73,6 +73,8 @@ var step_buttons: Array[PartyButton] = []
 ## 통과시킨 뒤 이 창의 handle 을 부른다. 없으면(부품 혼자) 바로 handle.
 var route: Callable
 var _qty_key := "shop.qty.buy"
+## 값 없는 수량 창(open_count, M3 A4b 캠프 버리기): 둘째 줄은 key 문구({n} = 고른 수).
+var _count_only := false
 var _label := Label.new()
 
 
@@ -166,7 +168,21 @@ func open_qty(icon_name: String, name_text: String, unit_price: int, most: int, 
 	max_qty = maxi(1, most)
 	qty = 1
 	_qty_key = key
+	_count_only = false
 	_open("qty", yes_first)
+
+
+## 값 없는 수량 창(M3 A4b 캠프 「버리기」, D4): 첫 줄은 수량 창과 같고, 둘째 줄은 key 문구({n} = 고른 수, 예 「{n}개 버릴까?」).
+## 처음 커서는 「아니오」(D25: 잃는 쪽은 아니오 먼저). 1~most.
+func open_count(icon_name: String, name_text: String, most: int, key: String) -> void:
+	item_icon = icon_name
+	item_name = name_text
+	unit = 0
+	max_qty = maxi(1, most)
+	qty = 1
+	_qty_key = key
+	_count_only = true
+	_open("qty", false)
 
 
 ## 입하 알림. items: [{icon, name}] (진열 차례).
@@ -276,8 +292,10 @@ func handle(kind: String, arg: Variant = null) -> bool:
 	return false
 
 
-## 수량 창 둘째 줄(합계).
+## 수량 창 둘째 줄(합계, 값 없는 창이면 고른 수 문구).
 func total_text() -> String:
+	if _count_only:
+		return texts.t(_qty_key, {"n": qty})
 	return texts.t(_qty_key, {"total": ShopRow.grouped(unit * qty)})
 
 

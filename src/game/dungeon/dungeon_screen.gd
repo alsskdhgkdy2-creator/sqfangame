@@ -1051,7 +1051,23 @@ func _on_party_closed() -> void:
 	_retry_stairs.call_deferred()
 
 
-## 파티 메뉴 저장 갈고리(배분 확정·장착 변경·임시 보급이 받아들여진 직후).
+## 파티 메뉴가 규칙 결과를 받아들였다(저장 갈고리 뒤). 귀환 비콘(M3 A4b §5.3·§6.3)이면 관문 도착(_step 의 located)과 같은 차례:
+## 캠프를 닫고(눌림·남은 물음을 버린다, _on_party_closed) 장소 안내 「뿌리마을」 → 층 문패·지도를 첫 층으로 → 광장을 연다.
+## 광장이 열리며 그 안내는 지워진다(_settle_toast "window"): 광장 장소 문패 「뿌리마을 광장」이 이미 있어 관문 도착도 같은 안내를 내지 않는다.
+## 자동 저장은 이미 한 번 했다(save_hook). 실패했으면 그 안내는 _warn_sync 가 05 §16.9 차례로 마을 안내 줄에 옮긴다.
+func _on_party_changed(events: Array) -> void:
+	_debug_dirty = true
+	if not events.any(func(e: Dictionary) -> bool: return e["type"] == "returned"):
+		return
+	_stairs_ask = false
+	party_menu.close_menu()
+	_show_toast(texts.t("town.name"))
+	_show_floor()
+	_apply_location()
+	_refresh_hud()
+
+
+## 파티 메뉴 저장 갈고리(배분 확정·장착 변경·임시 보급·소모품 쓰기·버리기가 받아들여진 직후).
 func _on_party_save() -> void:
 	_autosave()
 
@@ -1505,7 +1521,7 @@ func _build_ui() -> void:
 		_debug_settle = 2)
 	party_menu.closed.connect(_on_party_closed)
 	party_menu.visibility_changed.connect(_layout)
-	party_menu.changed.connect(func(_e: Array) -> void: _debug_dirty = true)
+	party_menu.changed.connect(_on_party_changed)
 	shop_screen = ShopScreen.new()
 	shop_screen.name = "ShopScreen"
 	windows_root.add_child(shop_screen)
@@ -2020,10 +2036,11 @@ func _process(delta: float) -> void:
 func _debug_publish() -> void:
 	var busy := _is_busy() if state != null else false
 	# 전투 층·파티 메뉴가 입력을 받으면 상태 요약을 다시 낸다(메뉴 안 탭·초안·확인 창도 요약에 있다).
-	var sig := "%s/%s/%d/%s/%s/%d/%s/%d/%s/%d/%s/%d" % [battle_layer.phase, battle_layer.sub, battle_layer.member,
+	# 캠프 안내가 시간으로 사라질 때도(M3 A4b: 소지품 띠가 결과 안내 → 「소지품   n/60」로 돌아온다).
+	var sig := "%s/%s/%d/%s/%s/%d/%s/%d/%s/%d/%s/%d/%s" % [battle_layer.phase, battle_layer.sub, battle_layer.member,
 		str(battle_layer.log_view.visible), str(party_menu.is_open()), party_menu.accepted_inputs, str(shop_screen.is_open()),
 		shop_screen.accepted_inputs, str(town_screen.is_open()), town_screen.accepted_inputs, str(title_screen.is_open()),
-		title_screen.accepted_inputs]
+		title_screen.accepted_inputs, party_menu.notice]
 	if sig != _debug_battle_sig:
 		_debug_battle_sig = sig
 		_debug_dirty = true
@@ -2131,7 +2148,9 @@ func debug_snapshot() -> Dictionary:
 		"memo_texts": memo_texts,
 		# 상자·잠긴 문·귀중품(M3 A3): 지금 층의 연 상자·연 문 수, 귀중품 ID(정렬), 발밑의 닫힌 상자 ID, 지금 알림 줄 글(사라졌으면 "").
 		"chests_opened": state.world.chests_opened.size(), "locks_open": state.world.locks_open.size(),
-		"key_items": _sorted_keys(state.key_items), "chest_here": _chest_here(), "toast": _toast.text if _toast.modulate.a > 0.0 else "", "warning": warning_shown(),
+		"key_items": _sorted_keys(state.key_items), "chest_here": _chest_here(),
+		# 소모품·공용 가방(M3 A4b): 소모품 ID → 개수, 가방 칸 수(BagRules.used).
+		"consumables": state.consumables, "bag_used": BagRules.used(state), "toast": _toast.text if _toast.modulate.a > 0.0 else "", "warning": warning_shown(),
 		"set": _set_name(), "save_dir": save_dir,
 		"user_dir": OS.get_user_data_dir(), "buttons": buttons, "map": map_info, "tool": map.tool, "map_open": _map_open, "lens_cover": view.lens_cover,
 		"guard_delta": view.last_guard_delta, "guard_radius": view.guard_radius,
@@ -2215,7 +2234,7 @@ func _is_busy() -> bool:
 
 
 ## 요청 JSON: {"op": "snapshot"} | {"op": "simulate", "actions": ["forward", …]} | {"op": "hash_save", "text": 저장 글}
-##   | {"op": "battle_auto"} | {"op": "battle_finish"} | {"op": "supply", "item": 장비 ID, "n": 개수} | {"op": "grant_exp", "member": 칸, "n": 양}
+##   | {"op": "battle_auto"} | {"op": "battle_finish"} | {"op": "supply", "item": 장비·소모품 ID(M3 A4), "n": 개수} | {"op": "grant_exp", "member": 칸, "n": 양}
 ## hash_save: 저장 글을 읽어 그 상태 해시·세대를 돌려준다(웹 확인이 IndexedDB 의 자동 저장이 화면 상태와 같은지 본다).
 ## simulate: 지금 상태의 복사본(저장 형식으로 옮긴 것)에서 행동열을 돌려 행동마다의 해시를 돌려준다.
 ## 전투 중이면 다음 행동 전에 battle_finish 와 같이 규칙의 finish(승리)로 끝낸다(전투 승패와 상관없이 같은 해시). 진짜 상태는 바꾸지 않는다.

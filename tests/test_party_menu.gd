@@ -794,7 +794,7 @@ func test_items_keyboard_walks_rows_without_debug() -> void:
 	var pm := await _full_bag_items_tab(false)
 	var it := pm.items_tab
 	check(not it.supply_button.visible and it.stops()[0] == it.rows[0] and it.cursor == 0, "일반 실행: 알약 없음, 커서는 첫 줄")
-	check(not pm.pad_state()["ok"], "가방 줄에서 「선택」 흐림")
+	check(pm.pad_state()["ok"], "장비·소재 줄에서 「선택」 켜짐(알약 쪽으로, M3 A4b)")
 	await kit.press_key(KEY_UP)
 	check_eq(it.cursor, 0, "첫 줄에서 ↑ → 그대로")
 	for k in 8:
@@ -979,8 +979,19 @@ func test_drag_from_list_released_on_tab_changes_nothing() -> void:
 	check(it.supply_open and it.list.max_scroll() > 0.0, "준비: 넘치는 보급 목록")
 	var bag := s.state.gear_bag.duplicate()
 	var n := s.autosave_count
-	var from := kit.center_of(it.plus_buttons[3])  # 넷째 줄(y 약 428)에서 위의 알약(y 278~342)으로: 위로 끌기 = 내리기
+	# 알약은 목록 창 오른쪽 y 430~494(M3 A4b D5). 목록을 끝까지 내린 뒤 위쪽 「+1」에서 아래의 알약으로: 아래로 끌기 = 올리기.
+	it.list.scroll_to(it.list.max_scroll())
+	await kit.frames(1)
+	var start := it.list.scroll
+	var top: Control = null
+	for b in it.plus_buttons + it.exp_buttons:
+		if b.visible and it.shown(b) and (top == null or b.get_global_position().y < top.get_global_position().y):
+			top = b
+	check(top != null and start > 0.0, "준비: 끝까지 내렸고 보이는 보급 단추가 있다(맨 위 것)")
+	var from := kit.center_of(top)
 	var to := kit.center_of(it.supply_button)
+	var gap := it.supply_button.get_global_position().y - top.get_global_position().y
+	check(gap > 100.0, "준비: 알약이 보급 단추 아래 100 넘게(논리 좌표) 떨어져 있다(%.0f)" % gap)
 	kit.touch(0, from, true)
 	await kit.frames(1)
 	kit.drag(0, from, to)
@@ -990,7 +1001,7 @@ func test_drag_from_list_released_on_tab_changes_nothing() -> void:
 	check_eq([pm.tab, pm.member, it.supply_open], [3, 0, true], "목록에서 끌다가 「임시 보급」 알약 위에서 떼도 화면·보급 줄 그대로")
 	check_eq(s.state.gear_bag, bag, "끌기는 「+1」 누르기가 아니다")
 	check_eq(s.autosave_count, n, "자동 저장 없음")
-	check(it.list.scroll > 0.0, "끌기가 목록을 내렸다 (%s)" % it.list.scroll)
+	check(it.list.scroll < start, "끌기가 목록을 올렸다 (%s → %s)" % [start, it.list.scroll])
 	var before := it.list.scroll
 	var w := InputEventMouseButton.new()
 	w.position = kit.center_of(it.list)

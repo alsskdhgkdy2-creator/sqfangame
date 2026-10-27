@@ -15,6 +15,11 @@ var equipped := false:
 	set(v):
 		equipped = v
 		queue_redraw()
+## 줄: 이 줄에 대한 알약·카드·창이 떠 있다(InventoryList 커서 모드 「chosen」, 상점 줄과 같은 밝은 시안).
+var chosen := false:
+	set(v):
+		chosen = v
+		queue_redraw()
 
 
 func _init() -> void:
@@ -28,7 +33,7 @@ func _draw() -> void:
 	if style == "pill":
 		ListParts.draw_pill(self, r, text, pill_state(), look, cursor_ring and selected)
 	else:
-		ListParts.draw_row(self, r, icon_name, text, right, selected, dimmed, equipped, held)
+		ListParts.draw_row(self, r, icon_name, text, right, selected, dimmed, equipped, held, chosen)
 
 
 ## 알약 모양 상태(커서가 켜짐보다 먼저).
@@ -41,6 +46,9 @@ func pill_state() -> String:
 		if checked:
 			return "checked_pressed" if held else "checked"
 		return "pressed" if held else "normal"
+	if dimmed:
+		# 캠프 알약의 흐림(M3 A4b 「쓰기」): 흐린 줄과 같은 모양, 커서가 서면 노란 테만(07 §9.9 E2-b).
+		return "dim_selected" if selected else "dim"
 	if selected:
 		return "selected_pressed" if held else "selected"
 	if checked:

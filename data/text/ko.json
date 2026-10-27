@@ -524,7 +524,14 @@
   "party.totals.compare": "지금 → 바꾸면",
   "party.items.materials": "소재",
   "party.items.none": "없음",
-  "party.items.strip": "소지품   장비 {gear} · 소재 {materials} · 귀중품 {keys}",
+  "party.items.strip": "소지품   {used}/{slots}",
+  "party.items.strip_over": "소지품   {used}/{slots} · 가방이 넘쳤다",
+  "party.items.use": "쓰기",
+  "party.items.drop": "버리기",
+  "party.items.pick": "{item}: 누구에게 쓸까?",
+  "party.items.drop_ask": "{item}을(를) 버릴까?",
+  "party.items.drop_qty": "{n}개 버릴까?",
+  "party.items.consumable": "소모품",
   "party.items.key": "귀중품",
   "party.items.key_line": "귀중품 · 팔 수 없다",
   "party.items.fits": "낄 수 있는 직업: {classes}",
@@ -613,5 +620,7 @@
   "item.why.hp_full": "HP가 가득하다",
   "item.why.tp_full": "TP가 가득하다",
   "item.why.key_item": "귀중품은 버릴 수 없다",
-  "item.why.bad_amount": "수가 올바르지 않다"
+  "item.why.bad_amount": "수가 올바르지 않다",
+  "item.beacon.ask": "아리아드네 비콘을 써서 마을로 돌아갈까?",
+  "item.beacon.go": "돌아간다"
 }

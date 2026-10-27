@@ -257,7 +257,7 @@ func _face(s: DungeonScreen, d: int) -> void:
 
 
 ## U4 (M-U4a 상점 판매에 귀중품 줄, M-U4b 띠에 귀중품 수 없음): 소지품 — 장비 → 소재 → 귀중품 차례, 귀중품 줄은 열쇠 아이콘·「귀중품」,
-## 설명 상자 = 이름·아이콘·설명 글·「귀중품 · 팔 수 없다」, 띠에 「귀중품 1」. 상점 판매 목록(세 탭)에는 귀중품이 없다.
+## 설명 상자 = 이름·아이콘·설명 글·「귀중품 · 팔 수 없다」, 띠는 「소지품   n/60」(M3 A4b: 원작 띠, 귀중품은 칸을 세지 않는다). 상점 판매 목록(세 탭)에는 귀중품이 없다.
 func test_key_rows_in_items_and_not_in_shop() -> void:
 	var s := await _open()
 	s.state.materials[RAT] = 2
@@ -275,11 +275,11 @@ func test_key_rows_in_items_and_not_in_shop() -> void:
 	check_eq(it.cursor_stop(), it.rows[1], "준비: 커서 = 귀중품 줄")
 	check_eq([it.desc.title, it.desc.icon, it.desc.lines],
 		["이끼 낀 출입 카드", "kind_key", ["B2F의 잠긴 문을 여는 카드. 이끼가 단자에 엉겨 붙었다", "귀중품 · 팔 수 없다"]], "설명 상자")
-	check_eq(s.debug_snapshot()["party_menu"]["strip"], "소지품   장비 0 · 소재 1 · 귀중품 1", "띠 글: 귀중품 수")
+	check_eq(s.debug_snapshot()["party_menu"]["strip"], "소지품   2/60", "띠 글: 공용 가방 칸 수, 귀중품은 세지 않는다(M3 A4b·D31: 소재 2 만)")
 	var pmsnap: Dictionary = s.debug_snapshot()["party_menu"]
 	check_eq([pmsnap.get("tab"), pmsnap.get("item_rows"), pmsnap.get("item_desc")],
 		["items", [RAT, MOSS], ["이끼 낀 출입 카드", "B2F의 잠긴 문을 여는 카드. 이끼가 단자에 엉겨 붙었다", "귀중품 · 팔 수 없다"]], "스냅숏 소지품 줄·설명")
-	check(not it.can_confirm(), "귀중품 줄에서 「선택」은 흐림(가방 줄과 같다)")
+	check(not it.can_confirm(), "귀중품 줄에서 「선택」은 흐림(가방 줄과 달리 알약이 없다, M3 A4b)")
 	s.shop_screen.state = s.state
 	for i in ShopScreen.SELL_KINDS.size():
 		s.shop_screen.tab = i

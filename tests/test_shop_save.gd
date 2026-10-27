@@ -153,8 +153,9 @@ func test_v4_rejects_each_check() -> void:
 		["pool 키가 sold 에 없음", func(d): d["shop"]["pool"]["item.glow_scale"] = 1, "shop.pool.item.glow_scale 가 shop.sold 에 없다"],
 		["pool > sold", func(d): d["shop"]["pool"][BEETLE] = 5, "shop.pool.%s 가 shop.sold.%s(4)보다 크다" % [BEETLE, BEETLE]],
 		["bought 객체", func(d): d["shop"]["bought"] = {}, "shop.bought 가 배열이 아니다"],
-		["bought 모르는 장비", func(d): d["shop"]["bought"].append("equip.nope"), "shop.bought 의 equip.nope 는 모르는 장비다"],
-		["bought 소재 ID", func(d): d["shop"]["bought"].append(RAT), "shop.bought 의 %s 는 모르는 장비다" % RAT],
+		["bought 모르는 장비", func(d): d["shop"]["bought"].append("equip.nope"), "shop.bought 의 equip.nope 는 모르는 장비·소모품이다"],
+		["bought 소재 ID", func(d): d["shop"]["bought"].append(RAT), "shop.bought 의 %s 는 모르는 장비·소모품이다" % RAT],
+		["bought 모르는 소모품", func(d): d["shop"]["bought"].append("use.nope"), "shop.bought 의 use.nope 는 모르는 장비·소모품이다"],
 		["bought 숫자", func(d): d["shop"]["bought"].append(3), "shop.bought 의 3"],
 		["bought 겹침", func(d): d["shop"]["bought"].append(AEGIS), "shop.bought 에 %s 가 두 번 있다" % AEGIS],
 	]

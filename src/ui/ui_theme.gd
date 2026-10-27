@@ -178,6 +178,8 @@ const RIBBON_TEXT := Color("0a323a")
 const RIBBON_EDGE := Color("1f6d63")
 ## 캠프 알림 줄 바탕(장소 띠 아래, 거의 불투명한 짙은 청록: 안내 글자 BATTLE_BANNER_NOTICE 대비 4.5:1 이상).
 const CAMP_NOTICE_BG := Color(0.02, 0.1, 0.11, 0.92)
+## 캠프 알림 줄의 경고 글자(M3 A4b: 넘친 가방 띠 「… · 가방이 넘쳤다」, 바탕 대비 4.5:1 이상). 색만으로 알리지 않도록 글도 붙는다.
+const CAMP_NOTICE_WARN := Color("ff8f7a")
 ## 상태 화면(원작 HD gs2_653218·653223·653241): 위 줄은 대원 띠 한 벌(MEMBER_*, Lv·TP 글자 ST_LV_TEXT), 직업 문패,
 ## 능력치 줄(이름 상자 + 값 + 노랑 막대), 공격·방어 판, 장비 줄, 오른쪽 아래 문패(원작 FORCE 자리). ST_INFO_TOP 은 기록 카드의 이름 띠.
 const ST_LV_TEXT := Color("fff0a0")

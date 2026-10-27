@@ -98,8 +98,9 @@ export async function partD() {
         }
         m = await waitFor((x) => x.party_menu.item_desc?.[0] === '이끼 낀 출입 카드', '귀중품 줄 커서(설명 상자)', 3000);
         check(rows[rows.length - 1] === 'key.moss_card' && m.party_menu.item_desc[0] === '이끼 낀 출입 카드'
-          && m.party_menu.item_desc[2] === '귀중품 · 팔 수 없다' && / · 귀중품 1$/.test(m.party_menu.strip),
-        '소지품: 귀중품 줄(마지막)·설명 상자·띠 「귀중품 1」', { rows, desc: m.party_menu.item_desc, strip: m.party_menu.strip });
+          && m.party_menu.item_desc[2] === '귀중품 · 팔 수 없다' && m.party_menu.strip === `소지품   ${m.bag_used}/60`,
+        '소지품: 귀중품 줄(마지막)·설명 상자·띠 「소지품   n/60」(공용 가방 칸 수, 귀중품은 세지 않는다)',
+        { rows, desc: m.party_menu.item_desc, strip: m.party_menu.strip, bag_used: m.bag_used });
         await shot('d04_items_key');
         await clickButton('VPad_back');
         await waitFor((x) => x.party_menu?.page === 'root', '캠프 뿌리');

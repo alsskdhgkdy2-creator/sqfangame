@@ -588,7 +588,7 @@ static func _read_money(d: Dictionary, s: ExplorationState) -> String:
 
 
 ## 4판 shop(08 §4): 키가 정확히 sold·pool·bought. sold·pool 은 아는 소재 → 범위 안 정수, pool 의 키는 sold 에도 있고 pool ≤ sold.
-## bought 는 서로 겹치지 않는 아는 장비 ID 문자열의 배열(차례는 보지 않는다. 쓸 때 정렬한다).
+## bought 는 서로 겹치지 않는 아는 장비·소모품 ID 문자열의 배열(차례는 보지 않는다. 쓸 때 정렬한다. 소모품은 M3 A4: 상점 「아이템」 NEW 표시).
 static func _read_shop(d: Dictionary, defs: GameDefs, s: ExplorationState) -> String:
 	var v: Variant = d.get("shop")
 	if typeof(v) != TYPE_DICTIONARY:
@@ -619,8 +619,8 @@ static func _read_shop(d: Dictionary, defs: GameDefs, s: ExplorationState) -> St
 	if typeof(v["bought"]) != TYPE_ARRAY:
 		return "shop.bought 가 배열이 아니다"
 	for id in v["bought"]:
-		if typeof(id) != TYPE_STRING or defs.battle.equip(id) == null:
-			return "shop.bought 의 %s 는 모르는 장비다" % str(id)
+		if typeof(id) != TYPE_STRING or (defs.battle.equip(id) == null and defs.battle.consumable(id) == null):
+			return "shop.bought 의 %s 는 모르는 장비·소모품이다" % str(id)
 		if shop.bought.has(id):
 			return "shop.bought 에 %s 가 두 번 있다" % id
 		shop.bought[id] = true

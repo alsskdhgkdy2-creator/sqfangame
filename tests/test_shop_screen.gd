@@ -75,6 +75,17 @@ func _sold_state() -> ExplorationState:
 	return s
 
 
+## 「아이템」 진열이 없는 묶음(상점 파일에서 소모품 줄을 뺀 정의)의 새 게임, 소지금 1000. 빈 구매 목록 시험용:
+## M3 A4b 부터 실제 「아이템」 갈래는 늘 파는 소모품 넷이 있어 빈 목록이 아니다(설계 §7.2: 빈 구매 목록은 빈 갈래로 계속 본다).
+func _no_items_state() -> ExplorationState:
+	var files := Fx.battle_files()
+	files["shop/junk_workshop.json"]["stock"] = (files["shop/junk_workshop.json"]["stock"] as Array).filter(
+		func(l: Dictionary) -> bool: return not str(l["item"]).begins_with("use."))
+	var s := ExplorationRules.new_game(Fx.defs_from(files), 1, "floor")
+	s.money = 1000
+	return s
+
+
 ## 판매용 상태: 소재(자료 차례) 네온 쥐 꼬리 3 · 케이블 인분 1 · 포자 주머니 2 · 드릴 발톱 4, 가방에 트윈 엣지 1, 소지금 1000.
 ## 꼬리 3 을 팔면 바이저, 드릴 발톱 3 이상을 팔면 전술 배턴·마그 부츠가 풀린다.
 func _sell_state() -> ExplorationState:
@@ -267,9 +278,10 @@ func test_pages_go_forward_and_back_one_step_at_a_time() -> void:
 	check(sc.page == "buy" and not sc.buy_tabs.visible and sc.frame.list_top == ShopFrame.LIST_TOP, "장신구: 탭 없음, 목록 창 위 172")
 	await kit.tap(kit.center_of(sc.frame.back_button))
 	await kit.press_key(KEY_4)
-	check(sc.lines.is_empty() and sc.buy_list.empty_count() > 0, "아이템: 빈 칸만")
-	check_eq(sc.frame.banner.lines()[1], texts.t("shop.why.empty_buy"), "빈 목록 이유")
-	check(not sc.pad_state()["ok"] and not sc.pad_state()["up"], "빈 목록: 선택·↑ 흐림")
+	check_eq(sc.lines.map(func(l: Dictionary) -> String: return l["item"]), ["use.medica", "use.theriaca_a", "use.theriaca_b", "use.ariadne_beacon"],
+		"아이템: 늘 파는 소모품 넷, 진열 차례(M3 A4b)")
+	check(not sc.buy_tabs.visible and sc.frame.list_top == ShopFrame.LIST_TOP, "아이템: 탭 없음(원작 아이템 목록), 목록 창 위 172")
+	check(sc.pad_state()["ok"] and sc.buy_list.cursor == 0, "아이템: 커서 첫 줄, 선택 켜짐")
 	await kit.press_key(KEY_ESCAPE)
 	await kit.press_key(KEY_1)
 	check_eq([sc.branch, sc.tab], [0, 0], "다른 갈래로 들어오면 탭 0")
@@ -683,7 +695,6 @@ func test_pad_matches_keys_on_the_list_and_dialogs() -> void:
 		["목록 ↑(가장자리)", ls, "up", true, true], ["목록 ↓", ls, "down", true, false],
 		["목록 ←", ls, "left", true, false], ["목록 →", ls, "right", true, false],
 		["목록 선택", ls, "ok", true, false], ["목록 취소", ls, "back", true, false],
-		["빈 목록 ↓", empty, "down", false, false], ["빈 목록 선택", empty, "ok", false, false],
 		["확인 ↑", cf, "up", false, false], ["확인 ↓", cf, "down", false, false],
 		["확인 ←(가장자리)", cf, "left", true, true], ["확인 →", cf, "right", true, false],
 		["확인 선택", cf, "ok", true, false], ["확인 취소", cf, "back", true, false],
@@ -692,6 +703,8 @@ func test_pad_matches_keys_on_the_list_and_dialogs() -> void:
 		["칸 ←", sl, "left", false, false], ["칸 →", sl, "right", false, false],
 		["칸 선택", sl, "ok", true, false], ["칸 취소", sl, "back", true, false],
 	])
+	# 빈 구매 목록(소모품 진열이 없는 묶음의 「아이템」 갈래, M3 A4b).
+	await _parity([["빈 목록 ↓", empty, "down", false, false], ["빈 목록 선택", empty, "ok", false, false]], _no_items_state)
 
 
 # ---- 키 시점(F2) ----
@@ -942,6 +955,11 @@ func test_one_yellow_fill_per_screen() -> void:
 	await _step(sc, "dialog", ["cancel", null])
 	await _step(sc, "back")
 	await _step(sc, "branch", 3)
+	check_eq(_yellow(sc), ["Row_0"], "아이템(M3 A4b): 줄 커서 하나")
+	sc = await _fresh(_no_items_state())
+	await _step(sc, "root", 0)
+	await _step(sc, "branch", 3)
+	check(sc.lines.is_empty(), "준비: 빈 구매 목록")
 	check_eq(_yellow(sc), [], "빈 목록: 노랑 없음")
 
 
@@ -1524,7 +1542,7 @@ func test_list_reveals_the_cursor_when_its_rows_change() -> void:
 func test_empty_lists_have_cursor_minus_one_and_take_no_input() -> void:
 	_kit()
 	var cases := [
-		["구매 아이템", func() -> ExplorationState: return _state(), [["root", 0], ["branch", 3]]],
+		["구매 아이템(소모품 진열 없음)", func() -> ExplorationState: return _no_items_state(), [["root", 0], ["branch", 3]]],
 		["판매 소모품 탭", func() -> ExplorationState: return _sell_state(), [["root", 1], ["tab", 2]]],
 		["판매 소재 없음", func() -> ExplorationState:
 			var s := _state()
@@ -1539,6 +1557,7 @@ func test_empty_lists_have_cursor_minus_one_and_take_no_input() -> void:
 		check(sc.lines.is_empty() and sc.buy_list.row_count == 0, tag + ": 준비: 빈 목록")
 		check_eq([sc.buy_list.cursor, sc.debug_info(_no_css)["cursor"]["row"]], [-1, -1], tag + ": 커서 -1(snapshot 도)")
 		check_eq(sc.frame.desc_title, "", tag + ": 설명 비움")
+		check_eq(sc.frame.banner.lines()[1], texts.t("shop.why.empty_buy" if sc.page == "buy" else "shop.why.empty_sell"), tag + ": 빈 목록 이유")
 		var pad := sc.pad_state()
 		check(not pad["ok"] and not pad["up"] and not pad["down"], tag + ": 선택·↑↓ 흐림")
 		var pre := _sig(sc)
@@ -1551,3 +1570,68 @@ func test_empty_lists_have_cursor_minus_one_and_take_no_input() -> void:
 			await kit.tap(kit.center_of(_pad_button(sc, k)), FINGER)
 		check_eq(_sig(sc), pre, tag + ": 아무것도 바뀌지 않는다")
 		check_eq([sc.buy_list.cursor, sc.dialog.mode, sc.notice], [-1, "", ""], tag + ": 커서 -1·창 없음·알림 없음")
+
+
+# ---- 「아이템」 갈래·소모품 판매(M3 A4b §6.4) ----
+
+const MEDICA := "use.medica"
+const BEACON := "use.ariadne_beacon"
+
+
+## 「아이템」 갈래 = 소모품 줄(진열 차례, 풀린 줄만, 탭 없음). 줄 → 수량 창(「예」 먼저, 최대 = 공용 가방에 드는 수·소지금으로 살 수 있는 수),
+## 「예」 → 산 수만큼·저장 하나. 가방 60/60 은 창 없이 이유만. 죽이는 변이: M-P1(최대가 가방 빈칸을 보지 않음)·M-P2(산 수가 늘 1).
+func test_item_branch_buys_consumables_by_quantity() -> void:
+	_kit()
+	var s := _state(1000)
+	s.materials = {"item.spore_pouch": 3, "item.glow_scale": 2}
+	ShopRules.sell(s, JUNK, [{"item": "item.spore_pouch", "qty": 3}, {"item": "item.glow_scale", "qty": 2}])
+	s.money = 100
+	var sc := await _fresh(s)
+	await _to_list(sc, 3)
+	check_eq(sc.lines.map(func(l: Dictionary) -> String: return l["item"]),
+		[MEDICA, "use.amrita", "use.nectar", "use.theriaca_a", "use.theriaca_b", BEACON], "풀린 줄(포자 3 → 암리타, 발광 비늘 2 → 넥타)까지 진열 차례")
+	check(not sc.buy_tabs.visible, "탭 없음")
+	check_eq(sc.buy_list.rows[0].text, texts.t("use.medica"), "줄 이름")
+	await kit.tap(kit.center_of(sc.buy_list.rows[0]))
+	check_eq([sc.dialog.mode, sc.ask, sc.dialog.pick, sc.dialog.qty, sc.dialog.max_qty], ["qty", "buy_item", ShopDialog.YES, 1, 5],
+		"수량 창, 「예」 먼저, 최대 = 100엔 ÷ 20")
+	check_eq([sc.dialog.item_icon, sc.dialog.item_name, sc.dialog.total_text()], [BagRows.CONSUMABLE_ICON, texts.t("use.medica"), "20엔이다. 살까?"],
+		"창 머리·합계")
+	check_eq(_yellow(sc), ["Yes"], "노랑은 「예」 하나")
+	await kit.press_key(KEY_UP)
+	await kit.press_key(KEY_UP)
+	check_eq(sc.dialog.total_text(), "60엔이다. 살까?", "↑↑ → 3개")
+	await kit.press_key(KEY_ENTER)
+	check_eq([s.money, s.consumables, saves, sc.dialog.mode, sc.page], [40, {MEDICA: 3}, 1, "", "buy"], "3개 사기·저장 하나·목록 그대로")
+	# 가방 58/60 → 최대 2(소지금이 넉넉해도).
+	s.money = 1000
+	s.materials = {TAIL: 55}
+	await _step(sc, "row", 0)
+	check_eq([sc.dialog.mode, sc.dialog.max_qty], ["qty", 2], "가방 58/60: 최대 = 빈칸 2")
+	await kit.press_key(KEY_ESCAPE)
+	check_eq([s.consumables, saves, sc.dialog.mode], [{MEDICA: 3}, 1, ""], "취소: 그대로")
+	# 가방 60/60 → 창 없이 이유만.
+	s.materials = {TAIL: 57}
+	var h := SaveCodec.state_hash(s)
+	await _step(sc, "row", 0)
+	check_eq([sc.dialog.mode, sc.notice, SaveCodec.state_hash(s), saves], ["", texts.t("shop.why.bag_full"), h, 1], "가방 60/60: 「더 가질 수 없다」만")
+
+
+## 판매 「소모품」 탭 = 가진 소모품(정의 차례), 판매값 = 값 ÷ 2, 팔면 소지금·저장 하나(소모품 판매는 입하에 쓰이지 않는다).
+func test_sell_consumables_tab_lists_and_sells_owned_consumables() -> void:
+	_kit()
+	var s := _state(1000)
+	s.consumables = {BEACON: 2, MEDICA: 1}
+	var sc := await _fresh(s)
+	await kit.press_key(KEY_2)
+	await kit.press_key(KEY_X)
+	await kit.press_key(KEY_X)
+	check_eq([sc.tab, sc.lines.map(func(l: Dictionary) -> String: return l["item"])], [2, [MEDICA, BEACON]], "소모품 탭: 정의 차례")
+	check_eq(sc.buy_list.rows.slice(0, 2).map(func(r: ShopRow) -> Array: return [r.text, r.count, r.right]),
+		[[texts.t("use.medica"), "1개", "10"], [texts.t("use.ariadne_beacon"), "2개", "75"]], "줄: 이름·「N개」·한 개 판매값(값 ÷ 2)")
+	await _step(sc, "row", 0)
+	check_eq([sc.dialog.mode, sc.dialog.message, sc.dialog.item_icon], ["confirm", "10엔이다. 팔까?", BagRows.CONSUMABLE_ICON], "1개: 확인 창")
+	await _step(sc, "dialog", ["confirm", 0])
+	check_eq([s.money, s.consumables, saves, s.shop.sold.has(MEDICA)], [1010, {BEACON: 2}, 1, false], "메디카 팔기: +10엔·저장 하나·판 수에 안 들어감")
+	await _step(sc, "row", 0)
+	check_eq([sc.dialog.mode, sc.dialog.max_qty, sc.dialog.total_text()], ["qty", 2, "75엔이다. 팔까?"], "2개: 수량 창")

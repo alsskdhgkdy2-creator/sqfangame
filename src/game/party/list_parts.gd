@@ -28,6 +28,8 @@ const CURSOR := UiTheme.CMD_PICK
 const CURSOR_TEXT := UiTheme.CMD_PICK_TEXT
 ## 흐린 줄 위 커서의 노란 테(흐린 커서 모양, 채움 아님).
 const CURSOR_EDGE := UiTheme.BTN_PICK
+## 고른 줄(chosen)의 테마 항목: 상점 줄(ShopRow)과 같은 하나(07 §9.2).
+const CHOSEN_LOOK := "cmd:chosen"
 const ICON_CELL := SheetParts.ICON_BOX
 const ICON := SheetParts.ICON
 ## 장비 화면의 「E」 표(낀 것): 어두운 남색 칸에 흰 글자(노랑 채움이 아니다).
@@ -284,12 +286,18 @@ static func row_icon_rect(r: Rect2) -> Rect2:
 
 ## 줄 하나. icon: VectorIcons 이름(""이면 빈 칸). cursor: 노랑 커서 줄. dim: 흐린 줄(못 고름·「없음」). equipped: 「E」 표(장비 화면).
 ## held: 누르는 중(밝은 테두리, 채움은 그대로). 흐린 줄에 커서가 서면 흐린 커서 모양(흐린 몸 + 노란 테, 노랑 채움 없음, 07 §9.9 E2-b).
+## chosen: 이 줄에 대한 알약·카드·창이 떠 있다(노랑은 그쪽, M3 A4b). 상점 줄 chosen 과 같은 모양 하나: 테마 「cmd:chosen」의 채움·글자색
+## (UiTheme.look, ShopRow 도 같은 항목으로 그린다, 07 §9.2).
 static func draw_row(ci: Control, r: Rect2, icon: String, text: String, right: String, cursor: bool, dim: bool = false,
-		equipped: bool = false, held: bool = false) -> void:
+		equipped: bool = false, held: bool = false, chosen: bool = false) -> void:
 	var b := row_boxes(r)
 	var body: Rect2 = b["body"]
 	var fill := ROW_DIM if dim else (CURSOR if cursor else ROW_BODY)
 	var fg := ROW_DIM_TEXT if dim else (CURSOR_TEXT if cursor else ROW_TEXT)
+	if chosen and not cursor and not dim:
+		var lk := UiTheme.look(CHOSEN_LOOK)
+		fill = lk["top"]
+		fg = lk["text"]
 	SheetParts._fill(ci, b["icon"], ICON_CELL)
 	SheetParts._fill(ci, body, fill)
 	if not icon.is_empty():
@@ -577,6 +585,8 @@ static func pill_colors(st: String, look: String = "camp") -> Array[Color]:
 				return [OPT_OFF, OPT_OFF_TEXT]
 		return [OPT_PILL, OPT_TEXT]
 	match st:
+		"dim", "dim_selected":
+			return [ROW_DIM, ROW_DIM_TEXT]
 		"selected", "selected_pressed":
 			return [CURSOR, CURSOR_TEXT]
 		"checked":
@@ -597,3 +607,5 @@ static func draw_pill(ci: Control, r: Rect2, text: String, st: String, look: Str
 		HORIZONTAL_ALIGNMENT_CENTER)
 	if ring:
 		_ring(ci, r, OPT_RING, OPT_RING_W, int(r.size.y / 2.0))
+	elif st == "dim_selected":
+		_ring(ci, r, CURSOR_EDGE, int(UiTheme.BTN_PICK_W), int(r.size.y / 2.0))
