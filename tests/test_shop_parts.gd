@@ -117,7 +117,7 @@ func _buy_rows(s: ExplorationState, set_name: String, kind: String) -> Array:
 			continue
 		for line in cat:
 			var e := s.defs.battle.equip(line["item"])
-			if e.kind != k:
+			if e == null or e.kind != k:  # 진열의 소모품(M3 A4)은 장비 탭에 들지 않는다(화면 buy_lines 와 같다)
 				continue
 			var sold_out: bool = line["limited"] and int(line["stock"]) < 1
 			out.append({"icon": ShopTabs.ICONS[e.kind], "name": texts.t(e.name_key), "new": line["new"],

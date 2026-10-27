@@ -33,6 +33,8 @@ var materials := {}
 var gear_bag := {}
 ## 귀중품(열쇠, M3 A3): 열쇠 ID → true. 쓰지 않고 남는다(문을 열어도 그대로). 상자에서만 얻는다.
 var key_items := {}
+## 소모품(M3 A4): 소모품 ID → 개수(1~99, 0개는 키를 두지 않는다). 소재·가방 장비와 함께 공용 가방 60칸을 쓴다(D31, BagRules).
+var consumables := {}
 ## 소지금(08 §2): 0~MONEY_MAX. 새 게임과 1·2·3판 이전은 START_MONEY 다.
 var money := 0
 ## 상점 상태(08 §2). 상점 규칙(ShopRules)만 바꾼다.

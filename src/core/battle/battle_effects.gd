@@ -105,13 +105,25 @@ static func renumber_seq(b: BattleState) -> void:
 
 ## 해제(06 §3.10): 일반 상태이상과 세 봉인을 모두 지운다. 지운 것 목록.
 static func cure(t: BattleUnit) -> Array[String]:
+	var removed := cure_ailment(t)
+	removed.append_array(cure_bind(t))
+	return removed
+
+
+## 상태 이상만 푼다(M3 A4 테리아카 A). 지운 것 [상태 이상 ID] 또는 빈 배열.
+static func cure_ailment(t: BattleUnit) -> Array[String]:
 	var removed: Array[String] = []
 	if not t.ailment.is_empty():
 		removed.append(t.ailment)
-	removed.append_array(t.bind_list())
 	t.ailment = ""
 	t.ailment_turns = 0
 	t.ailment_damage = 0
+	return removed
+
+
+## 잠금만 모두 푼다(M3 A4 테리아카 B). 지운 부위(bind_list 차례).
+static func cure_bind(t: BattleUnit) -> Array[String]:
+	var removed: Array[String] = t.bind_list()
 	t.binds.clear()
 	return removed
 

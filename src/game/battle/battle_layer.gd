@@ -967,6 +967,10 @@ func _show_result() -> void:
 					line = texts.t("battle.result.drop_capped", {"item": texts.t(item)}) if line.is_empty() else line + " " + texts.t("battle.result.capped")
 				lines.append(line)
 				kinds.append("item")
+			# 공용 가방(D31, M3 A4)이 차서 못 가진 드롭이 있으면 맺음 줄 하나: 지금 가방 수(넘친 옛 저장이면 75/60 처럼 그대로).
+			if not capped.is_empty() and state != null:
+				lines.append(texts.t("battle.result.bag_full", {"used": BagRules.used(state), "slots": BagRules.SLOTS}))
+				kinds.append("line")
 		for r in growth_rows(end_event):
 			lines.append(r["text"])
 			kinds.append(r["kind"])

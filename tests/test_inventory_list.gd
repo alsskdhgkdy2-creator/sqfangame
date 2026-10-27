@@ -434,7 +434,7 @@ static func _old_rows(s: ExplorationState, i: int, slot: int) -> Dictionary:
 			continue
 		if GrowthRules.slot_block(defs.battle, defs.class_of(i), m.equip, slot, id) == "slot_kind":
 			continue
-		var why := GrowthRules.equip_block(defs, i, m, bag, slot, id)
+		var why := GrowthRules.equip_block(defs, i, m, bag, slot, id, BagRules.free_slots(s))
 		if why.is_empty():
 			items.append(id)
 			block.append("")
@@ -444,7 +444,7 @@ static func _old_rows(s: ExplorationState, i: int, slot: int) -> Dictionary:
 	items.append_array(di)
 	block.append_array(dw)
 	items.append("")
-	block.append(GrowthRules.equip_block(defs, i, m, bag, slot, ""))
+	block.append(GrowthRules.equip_block(defs, i, m, bag, slot, "", BagRules.free_slots(s)))
 	return {"items": items, "block": block, "equipped": eq}
 
 

@@ -629,9 +629,11 @@ func test_equip_rejections_keep_state() -> void:
 	check_eq(_equip(s, 0, 0, "equip.tactical_baton")[0]["type"], "equipped", "택티컬 배턴은 홀로나이트가 낀다(종류 규칙 밖 예외)")
 	var f := _new()
 	GrowthRules.supply(f, "equip.padded_coat", 99)
-	_reject("가방 99 에 벗기기", f, func(): return _equip(f, 0, 2, ""), "bag_full")
-	GrowthRules.supply(f, "equip.medic_coat", 1)
-	_reject("가방 99 장비를 바꿔 벗기기", f, func(): return _equip(f, 0, 2, "equip.medic_coat"), "bag_full")
+	check_eq(BagRules.used(f), BagRules.SLOTS, "보급 99 는 공용 60칸에서 멈춘다(D31)")
+	_reject("가방 60/60 에 벗기기", f, func(): return _equip(f, 0, 2, ""), "bag_full")
+	f.gear_bag["equip.padded_coat"] = BattleLimits.BAG_MAX  # 60칸을 넘은 옛 저장만 종류 상한 99 에 닿는다
+	f.gear_bag["equip.medic_coat"] = 1
+	_reject("옛 저장: 가방 99 장비를 바꿔 벗기기", f, func(): return _equip(f, 0, 2, "equip.medic_coat"), "bag_full")
 
 
 ## 장착의 대원 칸 밖(unknown_member)·같은 장비 다시 끼기(unchanged), 경험치 보급의 대원 칸 밖: rejected 하나, 상태 해시·가방·장비 칸 그대로.
@@ -653,7 +655,7 @@ func test_equip_unknown_member_and_same_item_unchanged() -> void:
 		var eq: String = equips.call()
 		_reject(c[0], s, c[1], c[2])
 		check_eq([s.gear_bag, equips.call()], [bag, eq], "%s: 가방·장비 칸 그대로" % c[0])
-	check_eq(GrowthRules.equip_block(s.defs, 0, s.party.members[0], s.gear_bag, 0, "equip.training_sword"), "unchanged", "읽기 함수도 unchanged")
+	check_eq(GrowthRules.equip_block(s.defs, 0, s.party.members[0], s.gear_bag, 0, "equip.training_sword", BagRules.free_slots(s)), "unchanged", "읽기 함수도 unchanged")
 
 
 # ---- 능력치 묶음 ----
@@ -768,8 +770,8 @@ func test_start_party_matches_m2_values() -> void:
 func test_supply_and_grant_exp() -> void:
 	var s := _new()
 	check_eq(GrowthRules.supply(s, ION, 3), [{"type": "supplied", "item": ION, "amount": 3, "capped": false}] as Array[Dictionary], "더함")
-	check_eq(GrowthRules.supply(s, ION, 99)[0], {"type": "supplied", "item": ION, "amount": 96, "capped": true}, "99 포화")
-	check_eq([GrowthRules.supply(s, ION, 1)[0]["amount"], s.gear_bag[ION]], [0, 99], "이미 99")
+	check_eq(GrowthRules.supply(s, ION, 99)[0], {"type": "supplied", "item": ION, "amount": 57, "capped": true}, "공용 60칸 포화(D31): 빈 칸 57 만")
+	check_eq([GrowthRules.supply(s, ION, 1)[0]["amount"], s.gear_bag[ION]], [0, 60], "이미 60/60")
 	for bad in [0, 100, 1.5, true, "3"]:
 		_reject("보급 개수 %s" % str(bad), s, func(): return GrowthRules.supply(s, ION, bad), "bad_amount")
 	_reject("모르는 장비", s, func(): return GrowthRules.supply(s, "equip.nope", 1), "unknown_item")
@@ -795,8 +797,8 @@ func test_boundary_growth_state_roundtrips() -> void:
 	var s := _new(defs)
 	_set_level(s, 0, 30, _cum(defs, 30))
 	check_eq(GrowthRules.allocate(s, 0, {SHIELD_M: 10})[0]["type"], "skills_learned", "패시브 Lv10(스킬 레벨 상한)")
-	GrowthRules.supply(s, ION, 99)
 	GrowthRules.supply(s, "equip.t_lead", 1)
 	_equip(s, 0, 3, "equip.t_lead")  # equip_delta 경계 ±3000
+	s.gear_bag[ION] = BattleLimits.BAG_MAX  # 종류 상한 99(저장 범위 경계): 60칸을 넘은 옛 저장의 값(D31)
 	check_eq([s.party.members[0].level, s.party.members[0].exp, s.party.members[0].skills[SHIELD_M], s.gear_bag[ION]], [30, _cum(defs, 30), 10, 99], "경계 상태")
 	_saves_same(s, "경계값 상태")

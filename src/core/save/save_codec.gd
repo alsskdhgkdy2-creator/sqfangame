@@ -1,12 +1,14 @@
-## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
+## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3, 8판 M3 A4). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
 class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 7
-const RULES := "m3k"
-## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~6판은 읽을 때 7판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1·A2·A3).
-const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k"}
+const SCHEMA := 8
+const RULES := "m3i"
+## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~7판은 읽을 때 8판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1·A2·A3·A4).
+## 가방 합계(공용 60칸, D31)는 어느 판에서도 검사하지 않는다: 옛 저장이 60을 넘어도 그대로 읽고(지우지 않는다), 새로 얻는 길만
+## BagRules 가 막는다(M3 A4 설계 §3.3). 종류마다의 범위(소모품·장비 1~99, 소재 1~9999)만 본다.
+const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i"}
 ## 7판 층 기록의 world 키(M3 A3: 연 잠긴 문·연 보물상자가 더해졌다). 6판까지는 앞의 둘만 보고 다른 키는 보지 않는다.
 const WORLD_KEYS := ["shortcuts_open", "passages_found", "locks_open", "chests_opened"]
 ## 5판 층 기록(floor_states.<층 ID>)의 키. 1~4판은 이 셋이 state 바로 아래에 있다(층 하나).
@@ -114,6 +116,7 @@ static func now_utc() -> String:
 
 ## 5판 state(M3 A1): 지금 층(floor)·위치는 전체 몫이고, 세계 상태·방문 기록·지도 그림은 들어가 본 층마다 floor_states.<층 ID> 에 둔다.
 ## 6판(M3 A2): 파티가 있는 곳(location: town·labyrinth)과 날(day)을 더한다. 7판(M3 A3): 귀중품(key_items, 정렬한 집합 배열).
+## 8판(M3 A4): 소모품(consumables, ID → 개수).
 static func state_to_dict(s: ExplorationState) -> Dictionary:
 	var members: Array = []
 	for m in s.party.members:
@@ -134,6 +137,7 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 		"materials": s.materials.duplicate(),
 		"gear_bag": s.gear_bag.duplicate(),
 		"key_items": _str_set(s.key_items),
+		"consumables": s.consumables.duplicate(),
 		"money": s.money,
 		"shop": {"sold": s.shop.sold.duplicate(), "pool": s.shop.pool.duplicate(), "bought": s.shop.bought_list()},
 		"battle": s.battle.to_dict() if s.battle != null else null,
@@ -222,6 +226,8 @@ static func _decode_doc(doc: Dictionary, defs: GameDefs) -> LoadResult:
 			return migrate_v5(doc, defs)
 		6:
 			return migrate_v6(doc, defs)
+		7:
+			return migrate_v7(doc, defs)
 	var s := ExplorationState.new()
 	r.error = _read_state(doc["state"], defs, [], SCHEMA, s)
 	if not r.error.is_empty():
@@ -369,6 +375,23 @@ static func migrate_v6(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
+## 7판 → 8판(M3 A4). doc 은 머리 검사를 통과한 7판 문서. ① 7판 규칙으로 다 검사 ② 원본 saved_at·generation 으로 8판 encode
+## (7판 저장에는 소모품이 없다: 빈 consumables. 60칸을 넘은 가방도 그대로) ③ 8판 읽기를 그대로 거친 결과만 돌려준다.
+static func migrate_v7(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, [], 7, old)
+	if not err.is_empty():
+		r.error = "7판 검사 실패: " + err
+		return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "7판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 7
+	return again
+
+
 ## 문서의 지금 층이 지금 묶음에는 없고 은퇴한 묶음(defs.retired)에 있는지(M3 A3). 두 묶음의 층 ID 는 겹치지 않는다(GameDefs 가 본다).
 static func _names_retired(doc: Dictionary, defs: GameDefs) -> bool:
 	if defs.retired == null:
@@ -380,7 +403,7 @@ static func _names_retired(doc: Dictionary, defs: GameDefs) -> bool:
 ## 은퇴한 층(시험 층)의 저장을 새 미궁으로 옮긴다(M3 A3, 설계 §4.3).
 ## ① 은퇴한 묶음의 정의로 그 판의 길(1~6판 이전 포함)을 그대로 다 검사한다 — 실패하면 「옛 시험 층 저장 검사 실패」, 아무것도 바꾸지 않는다.
 ## ② 새 상태: 대원(레벨·경험치·스킬·장비·HP·TP)·소지금·소재·가방·상점·귀중품·날·난수·걸음·한계값은 그대로, 위험도 0, 전투 대기는 버린다.
-##    마을(첫 층 시작 칸)에 둔다. 전멸한 저장은 첫 층 시작 칸에서 전멸 그대로(전멸 창이 뜬다). 층 기록은 첫 층의 빈 것 하나 —
+##    소모품(M3 A4)도 그대로 옮긴다(60칸을 넘은 가방도 지우지 않는다). 마을(첫 층 시작 칸)에 둔다. 전멸한 저장은 첫 층 시작 칸에서 전멸 그대로(전멸 창이 뜬다). 층 기록은 첫 층의 빈 것 하나 —
 ##    시험 층의 세계·방문 기록·지도 그림은 남지 않는다(화면이 알린다).
 ## ③ 원본 saved_at·generation 으로 지금 판 encode → 지금 정의로 다시 읽은 결과만 돌려준다(from_schema 는 원본 판, relocated 참).
 static func _relocate(doc: Dictionary, defs: GameDefs) -> LoadResult:
@@ -402,6 +425,7 @@ static func _relocate(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	n.money = o.money
 	n.shop = o.shop
 	n.key_items = o.key_items.duplicate()
+	n.consumables = o.consumables.duplicate()
 	n.day = o.day
 	n.rng.set_state(o.rng.get_state())
 	n.steps = o.steps
@@ -466,6 +490,7 @@ static func _check_header(doc: Dictionary) -> String:
 ## schema 5: 층 기록이 floor_states.<층 ID> 에 있다(M3 A1). 1~4판은 state 바로 아래의 world·knowledge·annotation 이 state.floor 층의 기록이다.
 ## schema 6: location·day(M3 A2). 마을이면 층이 첫 층·위치가 그 시작 칸이고 전투 대기·전투·전멸이 아니다. 5판 이하는 미궁·1일째.
 ## schema 7: key_items(M3 A3), 층 기록 world 의 locks_open·chests_opened(키가 정확히 WORLD_KEYS), 열쇠·상자·잠긴 문 맞물림(_check_keys).
+## schema 8: consumables(M3 A4). 가방 합계(60칸)는 보지 않는다(옛 저장을 지우지 않는다, 설계 §3.3).
 ## 위치(party.at)와 전투 편성은 지금 층(state.floor)으로, 층 기록은 각자 그 층으로 검사한다.
 ## schema 2 의 battle 은 검사만 하고 만들지 않는다(옮긴 대원으로 migrate_v2 가 만든다).
 static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int, s: ExplorationState) -> String:
@@ -505,6 +530,10 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 		err = _read_key_items(d, defs, s)
 		if err.is_empty():
 			err = _check_keys(s)
+		if not err.is_empty():
+			return err
+	if schema >= 8:
+		err = _read_consumables(d, defs, s)
 		if not err.is_empty():
 			return err
 	if not d.has("battle"):
@@ -804,6 +833,21 @@ static func _read_world(d: Dictionary, s: FloorState, schema: int = SCHEMA) -> S
 		if s.world.chests_opened.has(id):
 			return "world.chests_opened: %s 가 두 번 있다" % id
 		s.world.chests_opened[id] = true
+	return ""
+
+
+## 8판 consumables(M3 A4): 아는 소모품 ID → 정수 1~99(0개는 키를 두지 않는다). 가방 합계는 보지 않는다.
+static func _read_consumables(d: Dictionary, defs: GameDefs, s: ExplorationState) -> String:
+	if typeof(d.get("consumables")) != TYPE_DICTIONARY:
+		return "consumables 가 객체가 아니다"
+	for k in d["consumables"]:
+		if typeof(k) != TYPE_STRING or defs.battle.consumable(k) == null:
+			return "consumables 의 %s 는 모르는 소모품이다" % str(k)
+		var v: Variant = d["consumables"][k]
+		var n: Variant = to_int(v) if typeof(v) != TYPE_BOOL else null
+		if not BattleLimits.in_range("consumable", n):
+			return "consumables.%s 가 정수 %s 가 아니다" % [k, BattleLimits.range_text("consumable")]
+		s.consumables[k] = n
 	return ""
 
 

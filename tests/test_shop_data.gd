@@ -18,6 +18,11 @@ const TABLE := [
 	["grip_gloves", 40, {}, false], ["servo_gauntlet", 240, {"intact_pincer": 2}, false], ["mag_boots", 200, {"drill_claw": 3}, false],
 	["signal_charm", 80, {}, false], ["antitox_chip", 320, {"spore_pouch": 2}, false], ["thermal_ring", 300, {"coated_scale": 2, "beetle_plate": 1}, true],
 ]
+## 소모품 진열(M3 A4 설계 §2.4): 장비 21줄 뒤 [ID 꼬리, 풀림, 값].
+const ITEM_TABLE := [
+	["medica", {}, 20], ["amrita", {"spore_pouch": 3}, 100], ["nectar", {"glow_scale": 2}, 150],
+	["theriaca_a", {}, 40], ["theriaca_b", {}, 40], ["ariadne_beacon", {}, 150],
+]
 const SELL := {"neon_rat_tail": 8, "cable_scale": 12, "glow_scale": 20, "spore_pouch": 10, "coated_scale": 14, "drill_claw": 16, "beetle_plate": 18, "intact_pincer": 30}
 
 
@@ -63,7 +68,7 @@ func test_real_shop_data() -> void:
 		check(BattleLimits.in_range("sell", db.material_sell[id]), "%s: sell 1~99,999" % id)
 	var sh := db.shop(JUNK)
 	check_eq(sh.name_key, JUNK, "name_key")
-	check_eq(sh.stock.size(), TABLE.size(), "진열 21줄")
+	check_eq(sh.stock.size(), TABLE.size() + ITEM_TABLE.size(), "진열 27줄: 장비 21 + 소모품 6(M3 A4)")
 	for i in TABLE.size():
 		var row: Array = TABLE[i]
 		var unlock := {}
@@ -71,6 +76,13 @@ func test_real_shop_data() -> void:
 			unlock["item." + m] = row[2][m]
 		check_eq(sh.stock[i], {"item": "equip." + row[0], "unlock": unlock, "limited": row[3]}, "진열 %d 차례·풀림·한정(08 §1.3)" % (i + 1))
 		check_eq(db.equip("equip." + row[0]).price, row[1], "%s 값" % row[0])
+	for j in ITEM_TABLE.size():
+		var row: Array = ITEM_TABLE[j]
+		var unlock := {}
+		for m in row[1]:
+			unlock["item." + m] = row[1][m]
+		check_eq(sh.stock[TABLE.size() + j], {"item": "use." + row[0], "unlock": unlock, "limited": false}, "소모품 진열 %d 차례·풀림(M3 A4)" % (j + 1))
+		check_eq(db.consumable("use." + row[0]).price, row[2], "%s 값" % row[0])
 	for m in SELL:
 		check_eq(db.material_sell["item." + m], SELL[m], "%s 판매값" % m)
 	check_eq(db.material_ids.size(), SELL.size(), "소재 여덟")
@@ -149,4 +161,6 @@ func test_unstocked_equipment_is_a_warning_not_an_error() -> void:
 	files.erase(SH)
 	var none := Fx.battle_db(files)
 	check(none.ok() and none.shop_ids.is_empty(), "상점 파일이 없어도 읽힌다")
-	check_eq(none.warnings.size(), none.equipment_ids.size(), "상점이 없으면 모든 장비가 경고")
+	check_eq(none.warnings.size(), none.equipment_ids.size() + none.consumable_ids.size(), "상점이 없으면 모든 장비·소모품(M3 A4)이 경고")
+	for id in none.consumable_ids:
+		check(none.warnings.has("%s: 어느 상점에도 없는 소모품" % id), "%s: 소모품 경고 글" % id)

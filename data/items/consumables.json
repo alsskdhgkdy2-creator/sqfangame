@@ -1,0 +1,55 @@
+{
+  "consumables": [
+    {
+      "id": "use.medica",
+      "name_key": "use.medica",
+      "desc_key": "use.medica.desc",
+      "price": 20,
+      "effect": "heal",
+      "amount": 50,
+      "where": ["battle", "camp"]
+    },
+    {
+      "id": "use.amrita",
+      "name_key": "use.amrita",
+      "desc_key": "use.amrita.desc",
+      "price": 100,
+      "effect": "tp",
+      "amount": 20,
+      "where": ["battle", "camp"]
+    },
+    {
+      "id": "use.nectar",
+      "name_key": "use.nectar",
+      "desc_key": "use.nectar.desc",
+      "price": 150,
+      "effect": "revive",
+      "hp_permille": 100,
+      "where": ["battle", "camp"]
+    },
+    {
+      "id": "use.theriaca_a",
+      "name_key": "use.theriaca_a",
+      "desc_key": "use.theriaca_a.desc",
+      "price": 40,
+      "effect": "cure_ailment",
+      "where": ["battle"]
+    },
+    {
+      "id": "use.theriaca_b",
+      "name_key": "use.theriaca_b",
+      "desc_key": "use.theriaca_b.desc",
+      "price": 40,
+      "effect": "cure_bind",
+      "where": ["battle"]
+    },
+    {
+      "id": "use.ariadne_beacon",
+      "name_key": "use.ariadne_beacon",
+      "desc_key": "use.ariadne_beacon.desc",
+      "price": 150,
+      "effect": "return",
+      "where": ["camp"]
+    }
+  ]
+}

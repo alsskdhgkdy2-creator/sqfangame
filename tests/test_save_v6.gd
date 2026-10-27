@@ -40,12 +40,12 @@ func _town(day: int = 1) -> ExplorationState:
 func test_v6_roundtrip_town_and_labyrinth() -> void:
 	var t := _town(7)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(t))
-	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [7.0, "m3k", "town", 7.0], "7판 머리·마을·7일째")
+	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [8.0, "m3i", "town", 7.0], "8판 머리·마을·7일째")
 	var r := SaveCodec.decode(JSON.stringify(doc), _defs())
 	check(r.ok(), "마을 읽기 %s" % r.error)
 	if r.ok():
 		check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.state.location, r.state.day, r.state.party.at],
-			[SaveCodec.state_hash(t), 7, "town", 7, t.party.at], "마을: 같은 해시·장소·날·위치")
+			[SaveCodec.state_hash(t), 8, "town", 7, t.party.at], "마을: 같은 해시·장소·날·위치")
 	var t8 := _town(8)
 	check(SaveCodec.state_hash(t8) != SaveCodec.state_hash(t), "날이 다르면 해시가 다르다")
 	var l := _two()
@@ -118,9 +118,9 @@ func _migrates(text: String, from: int, label: String) -> SaveCodec.LoadResult:
 	check_eq([r.from_schema, r.saved_at, r.generation, r.state.location, r.state.day], [from, orig["saved_at"], int(orig["generation"]), "labyrinth", 1],
 		"%s: from_schema·saved_at·generation·미궁·1일째" % label)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
-	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [7.0, "m3k", "labyrinth", 1.0], "%s: 7판으로 쓴다" % label)
+	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [8.0, "m3i", "labyrinth", 1.0], "%s: 8판으로 쓴다" % label)
 	var again := SaveCodec.decode(JSON.stringify(doc), _defs())
-	check(again.ok() and again.from_schema == 7 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 7판 다시 읽기 같은 해시" % label)
+	check(again.ok() and again.from_schema == 8 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 8판 다시 읽기 같은 해시" % label)
 	return r
 
 
@@ -149,8 +149,8 @@ func test_v5_fixed_values_survive() -> void:
 			o["floor_states"][id]["world"].merge({"locks_open": [], "chests_opened": []})
 		for k in o:
 			check_eq(_norm(now[k]), _norm(o[k]), "%s 보존 (%s)" % [k, str(o["party"]["at"])])
-		check_eq(now.keys().filter(func(k: String) -> bool: return not o.has(k)), ["location", "day", "key_items"], "6·7판에서 더해진 필드는 location·day·key_items 뿐")
-		check_eq(now["key_items"], [], "귀중품은 비었다")
+		check_eq(now.keys().filter(func(k: String) -> bool: return not o.has(k)), ["location", "day", "key_items", "consumables"], "6·7·8판에서 더해진 필드는 location·day·key_items·consumables 뿐")
+		check_eq([now["key_items"], now["consumables"]], [[], {}], "귀중품·소모품(8판)은 비었다")
 	var two := SaveCodec.decode(V5_TWO_FLOORS, _defs()).state
 	check_eq([two.floor_def.id, two.party.at, two.annotation.memos, two.floor_states["f1_test"].annotation.memos],
 		["f2_test", Vector2i(3, 1), {Vector2i(4, 1): "아래층"}, {Vector2i(2, 17): "입구 앞"}], "5판 두 층: 지금 층·위치·두 층 메모")

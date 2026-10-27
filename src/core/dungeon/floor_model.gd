@@ -52,6 +52,9 @@ var stairs := {}
 var chests := {}
 ## 예약 구역(M3 A3, A9 보스 방 자리): 아직 닿지 않아도 되는 칸들의 사각형(Rect2i). 분석이 「닿을 수 없다」를 내지 않는다.
 var reserved: Array[Rect2i] = []
+## 귀환 비콘을 쓸 수 없는 칸(M3 A4 갈고리, A9 보스 방): 칸 Vector2i → true. 지금 층 파일에는 키가 없어 늘 비어 있다.
+## A9 가 층 키로 채운다. ItemRules.return_block 이 「sealed」로 막는다.
+var no_return := {}
 
 var _cells := PackedByteArray()
 var _h := PackedByteArray()

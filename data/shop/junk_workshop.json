@@ -100,6 +100,30 @@
         "item.beetle_plate": 1
       },
       "limited": true
+    },
+    {
+      "item": "use.medica"
+    },
+    {
+      "item": "use.amrita",
+      "unlock": {
+        "item.spore_pouch": 3
+      }
+    },
+    {
+      "item": "use.nectar",
+      "unlock": {
+        "item.glow_scale": 2
+      }
+    },
+    {
+      "item": "use.theriaca_a"
+    },
+    {
+      "item": "use.theriaca_b"
+    },
+    {
+      "item": "use.ariadne_beacon"
     }
   ]
 }

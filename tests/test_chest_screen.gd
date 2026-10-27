@@ -290,7 +290,7 @@ func test_key_rows_in_items_and_not_in_shop() -> void:
 
 
 ## U5 (M-U5 알리지 않고 옮김): 시험 층 저장은 읽는 길마다 옮김 알림(msg.relocated, 「알림」 창)을 띄운다.
-## 시작(자동 저장) → 마을, 알림을 닫으면 광장 · 다음 자동 저장이 7판, .bak = 6판 원본.
+## 시작(자동 저장) → 마을, 알림을 닫으면 광장 · 다음 자동 저장이 8판(M3 A4), .bak = 6판 원본.
 func test_relocation_alert_on_start_and_bak() -> void:
 	timeout_sec = 60.0
 	kit = Kit.new(tree)
@@ -307,7 +307,7 @@ func test_relocation_alert_on_start_and_bak() -> void:
 	s._enter_labyrinth()
 	await kit.frames(2)
 	var doc: Dictionary = JSON.parse_string(_read_slot("auto"))
-	check_eq([doc["schema"], doc["state"]["floor"], doc["state"]["location"]], [7.0, "b1f", "labyrinth"], "다음 자동 저장은 7판")
+	check_eq([doc["schema"], doc["state"]["floor"], doc["state"]["location"]], [8.0, "b1f", "labyrinth"], "다음 자동 저장은 8판")
 	check_eq(_read_slot("auto", "bak"), V7.V6_TOWN, ".bak = 6판 원본")
 
 
@@ -329,7 +329,7 @@ func test_relocation_alert_on_continue() -> void:
 	check_eq(s.modal.kind, "alert", "다시 열어 이어하면 다시 알린다(저장하지 않았다)")
 
 
-## U5: 수동 슬롯 불러오기·가져오기·전멸 뒤 기록으로 돌아가기는 안내 줄과 옮김 알림, 자동 저장 7판.
+## U5: 수동 슬롯 불러오기·가져오기·전멸 뒤 기록으로 돌아가기는 안내 줄과 옮김 알림, 자동 저장 8판.
 ## 전멸한 저장은 B1F 시작 칸에서 전멸 그대로: 알림을 닫으면 전멸 창. 옮기지 않은 저장은 알림이 없다.
 ## 자동 저장에 실패하면 실패와 옮김을 한 알림에 함께 적는다.
 func test_relocation_alert_on_load_import_and_wipe() -> void:
@@ -341,7 +341,7 @@ func test_relocation_alert_on_load_import_and_wipe() -> void:
 	check_eq([s.modal.kind, s._toast.modulate.a, s.state.location, s.autosave_count], ["alert", 0.0, "town", saves + 1],
 		"불러오기: 알림(알림 줄은 「확인」을 가리지 않게 쓰지 않는다)·자동 저장")
 	check(_labels(s).has("불러왔다\n" + s.texts.t("msg.relocated")), "불러오기 알림 글 = 안내 + 옮김 %s" % str(_labels(s)))
-	check_eq(JSON.parse_string(_read_slot("auto"))["schema"], 7.0, "자동 저장 7판")
+	check_eq(JSON.parse_string(_read_slot("auto"))["schema"], 8.0, "자동 저장 8판")
 	await kit.click(kit.center_of(s.modal.find_child("AlertOk", true, false)))
 	await kit.frames(1)
 	# 가져오기(전멸한 6판): 알림 → 닫으면 전멸 창.
@@ -365,8 +365,8 @@ func test_relocation_alert_on_load_import_and_wipe() -> void:
 	check(_labels(s).has("불러왔다\n" + s.texts.t("msg.relocated")), "전멸 뒤 알림 글 = 안내 + 옮김")
 	await kit.click(kit.center_of(s.modal.find_child("AlertOk", true, false)))
 	await kit.frames(1)
-	# 옮기지 않은 저장(지금 7판)은 알림이 없다.
-	check(s.import_text(SaveCodec.encode(s.state)), "7판 가져오기")
+	# 옮기지 않은 저장(지금 8판)은 알림이 없다.
+	check(s.import_text(SaveCodec.encode(s.state)), "8판 가져오기")
 	await kit.frames(2)
 	check_eq([s.modal.kind, s.town_screen.notice, s._toast.modulate.a], ["", "가져왔다", 0.0], "옮기지 않은 저장은 알림 없이 안내(광장이 열려 있어 광장 안내 줄)")
 	# 자동 저장 실패: 한 알림에 실패와 옮김(남은 안내 줄 「가져왔다」는 지운다).

@@ -60,6 +60,8 @@ const RANGES := {
 	"money": [0, 9999999],
 	"sold": [1, 9999999],
 	"buy_qty": [1, 99], "sell_qty": [1, 9999],
+	# 소모품(M3 A4): 한 종류 개수(저장 범위)·회복량.
+	"consumable": [1, 99], "item_amount": [1, 999],
 	"battle_turn": [0, TURN_MAX], "battle_seq": [1, SEQ_MAX],
 }
 const MATERIAL_MAX := 9999
@@ -69,6 +71,11 @@ const WEAPON_KINDS := ["sword", "staff"]
 const ARMOR_KINDS := ["shield", "body", "head", "hands", "feet", "accessory"]
 const KIND_LIMIT := {"shield": 1, "body": 1, "head": 1, "hands": 1, "feet": 1, "accessory": 2}
 const BAG_MAX := 99
+## 소모품(M3 A4, 01 §9): 한 종류 상한(저장 범위). 공용 가방 60칸(D31, BagRules) 안에서는 새로 얻어 닿지 않는다.
+const CONSUMABLE_MAX := 99
+## 소모품 효과 종류와 쓰는 곳(M3 A4).
+const ITEM_EFFECTS := ["heal", "tp", "revive", "cure_ailment", "cure_bind", "return"]
+const ITEM_WHERE := ["battle", "camp"]
 ## 상점(08 §2): 소지금 상한, 누적 판 수(sold·pool) 상한.
 const MONEY_MAX := 9999999
 const SOLD_MAX := 9999999

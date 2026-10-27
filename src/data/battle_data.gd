@@ -27,6 +27,16 @@ const EQUIP_KEYS := ["id", "name_key", "kind", "price", "atk", "matk", "def", "m
 const MATERIAL_KEYS := ["id", "name_key", "sell"]
 ## 귀중품(열쇠, M3 A3, data/items/key_items.json): 값이 없고 팔 수 없다.
 const KEY_ITEM_KEYS := ["id", "name_key", "desc_key"]
+## 소모품(M3 A4, data/items/consumables.json): 이 키는 모두 필수, 효과마다 더 받는 키(CONSUMABLE_EXTRA). 대상은 효과가 정한다(CONSUMABLE_TARGET).
+const CONSUMABLE_KEYS := ["id", "name_key", "desc_key", "price", "effect", "where"]
+const CONSUMABLE_EXTRA := {"heal": ["amount"], "tp": ["amount"], "revive": ["hp_permille"]}
+const CONSUMABLE_TARGET := {
+	"heal": "ally_one", "tp": "ally_one", "cure_ailment": "ally_one", "cure_bind": "ally_one", "revive": "ally_dead", "return": "",
+}
+## 전투 대리 스킬의 effect(규칙 BattleRules._execute 가 이 이름으로 가른다). 회복은 스킬 heal 줄(base = amount, wis_pct 0)을 그대로 쓴다.
+const CONSUMABLE_SKILL_EFFECT := {
+	"heal": "heal", "tp": "tp_heal", "revive": "revive", "cure_ailment": "cure_ailment", "cure_bind": "cure_bind",
+}
 ## 상점 파일(08 §1.2): 위 단계 키는 모두 필수, 진열 줄은 item 필수·unlock·limited 선택.
 const SHOP_KEYS := ["id", "name_key", "stock"]
 const STOCK_KEYS := ["item"]
@@ -208,7 +218,32 @@ class EquipDef:
 		return only_classes.has(c.id) if not only_classes.is_empty() else c.equip_kinds.has(kind)
 
 
-## 상점 하나(08 §1.2). stock 줄은 {item: 장비 ID, unlock: {소재 ID: 수}(처음부터 팔면 빈 사전), limited: 참·거짓}, 진열 차례.
+## 소모품 하나(M3 A4). where ⊆ battle·camp. skill 은 전투에서 쓰는 대리 스킬(쓰는 곳에 battle 이 있을 때만, 아니면 null):
+## 대상 규칙·후보·대상 다시 보기·순서(speed 1000 = AGI 계수 1)를 스킬과 같은 함수로 돌린다. 스킬 사전(skills)에는 넣지 않는다.
+class ConsumableDef:
+	extends RefCounted
+	var id := ""
+	var name_key := ""
+	var desc_key := ""
+	var price := 1
+	var effect := ""
+	## heal·tp 의 양, revive 의 HP 천분율(쓰지 않는 효과는 0).
+	var amount := 0
+	var hp_permille := 0
+	var where: Array[String] = []
+	var skill: SkillDef
+
+	func target() -> String:
+		return BattleDb.CONSUMABLE_TARGET.get(effect, "")
+
+	func in_battle() -> bool:
+		return where.has("battle")
+
+	func in_camp() -> bool:
+		return where.has("camp")
+
+
+## 상점 하나(08 §1.2). stock 줄은 {item: 장비 또는 소모품 ID(M3 A4), unlock: {소재 ID: 수}(처음부터 팔면 빈 사전), limited: 참·거짓}, 진열 차례.
 class ShopDef:
 	extends RefCounted
 	var id := ""
@@ -271,6 +306,8 @@ var materials := {}
 var material_sell := {}
 ## 귀중품(열쇠) ID → {name_key, desc_key}(M3 A3)
 var key_items := {}
+## 소모품 ID → ConsumableDef(M3 A4)
+var consumables := {}
 ## 상점 ID → ShopDef
 var shops := {}
 ## 장비 ID → EquipDef
@@ -284,6 +321,7 @@ var encounter_ids: Array[String] = []
 var material_ids: Array[String] = []
 var equipment_ids: Array[String] = []
 var key_item_ids: Array[String] = []
+var consumable_ids: Array[String] = []
 var shop_ids: Array[String] = []
 var errors: Array[String] = []
 var warnings: Array[String] = []
@@ -357,6 +395,8 @@ static func parse(files: Dictionary) -> BattleDb:
 					db._read_list(ck, data, "equipment", db._read_equipment)
 				elif data.has("key_items"):
 					db._read_list(ck, data, "key_items", db._read_key_item)
+				elif data.has("consumables"):
+					db._read_list(ck, data, "consumables", db._read_consumable)
 				else:
 					db._read_list(ck, data, "materials", db._read_material)
 			"shop":
@@ -387,7 +427,18 @@ func shop(id: String) -> ShopDef:
 	return shops.get(id)
 
 
-## 모든 name_key(직업·스킬·적·소재·장비·귀중품(이름·설명)·상점). GameDefs 가 ko.json 에 있는지 본다.
+## 소모품 정의(M3 A4). 모르면 null.
+func consumable(id: String) -> ConsumableDef:
+	return consumables.get(id)
+
+
+## 소모품의 전투 대리 스킬(M3 A4). 모르거나 전투에서 쓰지 않으면 null.
+func item_skill(id: String) -> SkillDef:
+	var c: ConsumableDef = consumables.get(id)
+	return c.skill if c != null else null
+
+
+## 모든 name_key(직업·스킬·적·소재·장비·귀중품(이름·설명)·소모품(이름·설명)·상점). GameDefs 가 ko.json 에 있는지 본다.
 func name_keys() -> Array[String]:
 	var out: Array[String] = []
 	for id in class_ids:
@@ -403,6 +454,9 @@ func name_keys() -> Array[String]:
 	for id in key_item_ids:
 		out.append(key_items[id]["name_key"])
 		out.append(key_items[id]["desc_key"])
+	for id in consumable_ids:
+		out.append(consumables[id].name_key)
+		out.append(consumables[id].desc_key)
 	for id in shop_ids:
 		out.append(shops[id].name_key)
 	return out
@@ -497,6 +551,64 @@ func _read_key_item(ck: _Ck, d: Dictionary, path: String) -> void:
 		return
 	key_items[id] = {"name_key": nk, "desc_key": dk}
 	key_item_ids.append(id)
+
+
+## 소모품(M3 A4). 효과마다 더 받는 키가 정확히 있어야 한다. 쓰는 곳 규칙: return 은 camp 만(전투 중 귀환 없음),
+## cure_ailment·cure_bind 는 camp 를 가질 수 없다(상태 이상·잠금은 전투가 끝나면 풀린다, 06 §3.17).
+func _read_consumable(ck: _Ck, d: Dictionary, path: String) -> void:
+	var effect: Variant = d.get("effect")
+	var extra: Array = CONSUMABLE_EXTRA.get(effect, []) if typeof(effect) == TYPE_STRING else []
+	if not ck.keys(d, path, CONSUMABLE_KEYS + extra, []):
+		return
+	var c := ConsumableDef.new()
+	c.id = ck.id_of(d, "id", path, "use.")
+	c.name_key = ck.str_of(d, "name_key", path)
+	c.desc_key = ck.str_of(d, "desc_key", path)
+	var price: Variant = ck.int_of(d, "price", path, "price")
+	c.price = price if price != null else 1
+	c.effect = ck.enum_of(d, "effect", path, BattleLimits.ITEM_EFFECTS)
+	c.where = ck.enum_set(d, "where", path, BattleLimits.ITEM_WHERE, false)
+	if extra.has("amount"):
+		var a: Variant = ck.int_of(d, "amount", path, "item_amount")
+		c.amount = a if a != null else 1
+	if extra.has("hp_permille"):
+		var h: Variant = ck.int_of(d, "hp_permille", path, "hp_permille")
+		c.hp_permille = h if h != null else 1
+	if c.effect == "return" and not c.where.is_empty() and not (c.where.size() == 1 and c.where[0] == "camp"):
+		ck.err(path + ".where", "return 은 [\"camp\"] 만 쓸 수 있다(전투 중에는 귀환하지 않는다)")
+	if c.effect.begins_with("cure_") and c.where.has("camp"):
+		ck.err(path + ".where", "상태 이상·잠금은 전투가 끝나면 풀리므로 camp 에서 쓸 수 없다")
+	if c.id.is_empty() or not _claim(ck, c.id, path):
+		return
+	if c.in_battle() and CONSUMABLE_SKILL_EFFECT.has(c.effect):
+		c.skill = _item_skill_of(c)
+	consumables[c.id] = c
+	consumable_ids.append(c.id)
+
+
+## 소모품의 전투 대리 스킬(M3 A4 설계 §2.3): 사거리 원거리·부위 없음(잠금이 막지 않는다)·보통 우선·속도 1000(AGI 계수 1)·필중, TP 0.
+static func _item_skill_of(c: ConsumableDef) -> SkillDef:
+	var s := SkillDef.new()
+	s.id = c.id
+	s.name_key = c.name_key
+	s.user = "item"
+	s.effect = CONSUMABLE_SKILL_EFFECT[c.effect]
+	s.range_kind = "ranged"
+	s.target = c.target()
+	s.priority = "normal"
+	s.speed = 1000
+	s.sure_hit = true
+	var row := {"tp": 0}
+	match c.effect:
+		"heal":
+			row["base"] = c.amount
+			row["wis_pct"] = 0
+		"tp":
+			row["amount"] = c.amount
+		"revive":
+			row["hp_permille"] = c.hp_permille
+	s.levels = [row]
+	return s
 
 
 func _read_material(ck: _Ck, d: Dictionary, path: String) -> void:
@@ -1063,7 +1175,8 @@ func _read_stock_line(ck: _Ck, v: Variant, path: String) -> Dictionary:
 	if not ck.keys(v, path, STOCK_KEYS, STOCK_OPTIONAL):
 		return {}
 	var before := errors.size()
-	var item := ck.id_of(v, "item", path, "equip.")
+	var raw: Variant = v.get("item")
+	var item := ck.id_of(v, "item", path, "use." if typeof(raw) == TYPE_STRING and raw.begins_with("use.") else "equip.")
 	var unlock := {}
 	if v.has("unlock"):
 		var u: Variant = v["unlock"]
@@ -1121,7 +1234,10 @@ func _check_refs() -> void:
 			var line: Dictionary = sh.stock[i]
 			var p := "stock[%d]" % sh.stock_at[i]
 			stocked[line["item"]] = true
-			if not equipment.has(line["item"]):
+			if line["item"].begins_with("use."):
+				if not consumables.has(line["item"]):
+					ck.err(p + ".item", "없는 소모품 %s" % line["item"])
+			elif not equipment.has(line["item"]):
 				ck.err(p + ".item", "없는 장비 %s" % line["item"])
 			for m in line["unlock"]:
 				if not materials.has(m):
@@ -1129,6 +1245,9 @@ func _check_refs() -> void:
 	for id in equipment_ids:
 		if not stocked.has(id):
 			warnings.append("%s: 어느 상점에도 없는 장비" % id)
+	for id in consumable_ids:
+		if not stocked.has(id):
+			warnings.append("%s: 어느 상점에도 없는 소모품" % id)
 	for eid in enemy_ids:
 		var e: EnemyDef = enemies[eid]
 		var ck := _Ck.new(self, _ids[eid])

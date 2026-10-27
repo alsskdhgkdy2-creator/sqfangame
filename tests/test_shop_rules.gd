@@ -1,5 +1,5 @@
 extends TestCase
-## 상점 규칙 시험(08 §3, §5 「규칙」·「새 게임」): 진열·NEW·affordable, 사기·팔기 통과와 거부 갈래마다 하나, 가방 99 경계,
+## 상점 규칙 시험(08 §3, §5 「규칙」·「새 게임」): 진열·NEW·affordable, 사기·팔기 통과와 거부 갈래마다 하나, 공용 가방 60칸 경계(D31),
 ## 한정 재고 소모·바닥·다시 참, 풀림(처음 한 번, 진열 차례, 나눠 판 소재 누적). 거부하면 정규화 상태가 그대로다.
 ## 모두 기능 확인이다(D15): 준비에 필요한 소재·소지금은 상태에 바로 넣는다.
 
@@ -18,9 +18,12 @@ const GLOW := "item.glow_scale"
 const SPORE := "item.spore_pouch"
 const BEETLE := "item.beetle_plate"
 const PINCER := "item.intact_pincer"
-## 처음부터 파는 줄(08 §1.3), 진열 차례.
+const MEDICA := "use.medica"
+const AMRITA := "use.amrita"
+const NECTAR := "use.nectar"
+## 처음부터 파는 줄(08 §1.3), 진열 차례. 장비 뒤에 늘 파는 소모품 넷(M3 A4 설계 §2.4, 풀림 없는 줄).
 const OPEN := ["training_sword", "twin_edge", "nano_rod", "glyph_stylus", "padded_coat", "medic_coat", "glyph_robe",
-	"training_shield", "sensor_cap", "grip_gloves", "signal_charm"]
+	"training_shield", "sensor_cap", "grip_gloves", "signal_charm", "use.medica", "use.theriaca_a", "use.theriaca_b", "use.ariadne_beacon"]
 
 
 func _game() -> ExplorationState:
@@ -111,14 +114,22 @@ func test_buy_passes_and_fills_bag() -> void:
 	check_eq([s.shop.sold, s.shop.pool], [{}, {}], "한정이 아니면 pool 을 건드리지 않는다")
 
 
-func test_buy_bag_99_boundary() -> void:
+## 공용 가방 60칸(D31): 소재 55 + 장비 3 = 58 칸에서 셋은 거부, 둘은 받아 딱 60, 그 뒤 하나도 거부.
+## 종류 상한 99 는 60칸을 넘은 옛 저장에서만 닿는다: 장비 99 개 가방은 넘친 가방이라 하나도 못 산다.
+func test_buy_bag_shared_60_boundary() -> void:
 	var s := _game()
 	s.money = 100000
-	s.gear_bag[SWORD] = 97
-	_rejected("97 + 3", s, func(): return ShopRules.buy(s, JUNK, SWORD, 3), "bag_full")
-	check_eq(ShopRules.buy(s, JUNK, SWORD, 2)[0]["type"], "bought", "97 + 2 = 99 는 받는다")
-	_rejected("99 + 1", s, func(): return ShopRules.buy(s, JUNK, SWORD, 1), "bag_full")
-	check_eq(s.gear_bag[SWORD], 99, "가방 99")
+	s.materials[RAT] = 55
+	s.gear_bag[SWORD] = 3
+	_rejected("58 + 3", s, func(): return ShopRules.buy(s, JUNK, SWORD, 3), "bag_full")
+	check_eq(ShopRules.buy(s, JUNK, SWORD, 2)[0]["type"], "bought", "58 + 2 = 60 은 받는다")
+	_rejected("60 + 1", s, func(): return ShopRules.buy(s, JUNK, SWORD, 1), "bag_full")
+	_rejected("60 + 소모품 1", s, func(): return ShopRules.buy(s, JUNK, MEDICA, 1), "bag_full")
+	check_eq([s.gear_bag[SWORD], BagRules.used(s)], [5, 60], "장비 5·가방 60")
+	var old := _game()
+	old.money = 100000
+	old.gear_bag[SWORD] = 99
+	_rejected("옛 저장 장비 99 + 1", old, func(): return ShopRules.buy(old, JUNK, SWORD, 1), "bag_full")
 
 
 ## 08 §3.2 거부 갈래마다 하나 + 판정 순서.
@@ -252,14 +263,40 @@ func test_unlock_fires_once_in_stock_order_and_accumulates() -> void:
 	check_eq(Fx.types(ShopRules.sell(s, JUNK, [{"item": CABLE, "qty": 2}])), ["sold"] as Array[String], "케이블 2: 아직(3 필요)")
 	check_eq(Fx.types(ShopRules.sell(s, JUNK, [{"item": CABLE, "qty": 1}])), ["sold"] as Array[String], "케이블 누적 3: 발광 인분이 아직")
 	var ev := ShopRules.sell(s, JUNK, [{"item": SPORE, "qty": 3}, {"item": GLOW, "qty": 1}])
-	check_eq(ev[1], {"type": "unlocked", "shop": JUNK, "items": [SABER, FOCUS, "equip.antitox_chip"]}, "한 번에 셋이 풀리고 진열 차례(받은 줄 차례가 아니다)")
+	check_eq(ev[1], {"type": "unlocked", "shop": JUNK, "items": [SABER, FOCUS, "equip.antitox_chip", AMRITA]}, "한 번에 넷이 풀리고 진열 차례(받은 줄 차례가 아니다, 포자 3 → 아므리타 M3 A4)")
 	check_eq(_items(ShopRules.catalog(s.defs, s, JUNK)).slice(0, 4), ["training_sword", "twin_edge", "ion_saber", "nano_rod"], "풀린 줄은 진열 차례 자리에 보인다")
 	check(_row(s, SABER)["new"], "풀린 줄은 NEW")
-	check_eq(Fx.types(ShopRules.sell(s, JUNK, [{"item": GLOW, "qty": 1}, {"item": CABLE, "qty": 1}])), ["sold"] as Array[String], "이미 풀린 줄은 다시 unlocked 를 내지 않는다")
+	ev = ShopRules.sell(s, JUNK, [{"item": GLOW, "qty": 1}, {"item": CABLE, "qty": 1}])
+	check_eq(Fx.types(ev), ["sold", "unlocked"] as Array[String], "발광 누적 2 → 넥타가 풀린다(M3 A4)")
+	check_eq(ev[1]["items"], [NECTAR], "이미 풀린 줄은 다시 unlocked 에 들지 않는다(넥타 하나만)")
 	s.shop.sold[PINCER] = 1
 	s.materials[PINCER] = 1
 	ev = ShopRules.sell(s, JUNK, [{"item": PINCER, "qty": 1}])
 	check_eq(ev[1]["items"], [SERVO], "누적 2(상태 1 + 이번 1)로 풀림")
+
+
+# ---- 소모품(M3 A4) ----
+
+## 소모품을 사면 소모품 묶음에 들고(가방 장비가 아니다, M-H1), 팔면 price ÷ 2(M-H3), sold·pool 은 그대로(M-H2).
+func test_consumable_buy_and_sell() -> void:
+	var s := _game()
+	check_eq([ShopRules.buy_price(s.defs, MEDICA), ShopRules.sell_price(s.defs, MEDICA), ShopRules.sell_price(s.defs, NECTAR)], [20, 10, 75], "소모품 값·판매값(÷ 2)")
+	var ev := ShopRules.buy(s, JUNK, MEDICA, 3)
+	check_eq(ev, [{"type": "bought", "item": MEDICA, "qty": 3, "cost": 60, "money": 140}] as Array[Dictionary], "메디카 3 사기")
+	check_eq([s.consumables, s.gear_bag, s.materials, BagRules.used(s)], [{MEDICA: 3}, {}, {}, 3], "소모품 묶음에만 들고 가방 3칸")
+	check_eq(s.shop.bought, {MEDICA: true}, "bought 에 남는다(NEW 끄기)")
+	ev = ShopRules.sell(s, JUNK, [{"item": MEDICA, "qty": 2}])
+	check_eq(ev, [{"type": "sold", "lines": [{"item": MEDICA, "qty": 2, "gain": 20}], "gain": 20, "money": 160}] as Array[Dictionary], "메디카 2 팔기 = 10 × 2")
+	check_eq([s.consumables, s.shop.sold, s.shop.pool], [{MEDICA: 1}, {}, {}], "소모품 판매는 sold·pool 에 들지 않는다")
+	ShopRules.sell(s, JUNK, [{"item": MEDICA, "qty": 1}])
+	check_eq(s.consumables, {}, "0 이 되면 키를 지운다")
+	_rejected("not_owned: 소모품", s, func(): return ShopRules.sell(s, JUNK, [{"item": MEDICA, "qty": 1}]), "not_owned")
+	_rejected("locked: 아므리타", s, func(): return ShopRules.buy(s, JUNK, AMRITA, 1), "locked")
+	s.materials = {SPORE: 3}
+	ShopRules.sell(s, JUNK, [{"item": SPORE, "qty": 3}])
+	s.money = 1000
+	check_eq(ShopRules.buy(s, JUNK, AMRITA, 2)[0]["type"], "bought", "포자 3 판매 뒤 아므리타를 산다")
+	check_eq([s.consumables, s.shop.pool], [{AMRITA: 2}, {SPORE: 3}], "한정이 아니라 pool 을 쓰지 않는다")
 
 
 func test_sold_and_pool_stop_at_cap() -> void:

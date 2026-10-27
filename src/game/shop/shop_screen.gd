@@ -612,7 +612,7 @@ func _buy_row(i: int) -> bool:
 	if not bool(line["affordable"]):
 		show_notice(texts.t("shop.why.no_money"))
 		return true
-	if int(state.gear_bag.get(item, 0)) >= BattleLimits.BAG_MAX:
+	if BagRules.fit(state, item, 1) < 1:  # 공용 가방 60칸(D31, M3 A4)
 		show_notice(texts.t("shop.why.bag_full"))
 		return true
 	ask = "buy"
@@ -711,7 +711,7 @@ func slot_rows(item: String, i: int) -> Array:
 	for slot in range(1, BattleLimits.EQUIP_SLOTS):
 		var id: String = m.equip[slot]
 		var now := texts.t("party.slot.empty") if id.is_empty() else PartyNames.item_name(state, texts, id)
-		var why := GrowthRules.equip_block(state.defs, i, m, state.gear_bag, slot, item)
+		var why := GrowthRules.equip_block(state.defs, i, m, state.gear_bag, slot, item, BagRules.free_slots(state))
 		out.append({"text": "%s  %s" % [PartyNames.slot_name(texts, slot), now], "why": "" if why.is_empty() else texts.t("growth.reason." + why)})
 	return out
 
@@ -745,7 +745,7 @@ func best_slot(item: String, i: int, bag: Dictionary) -> int:
 			if not order.has(slot):
 				order.append(slot)
 	for slot in order:
-		if GrowthRules.equip_block(defs, i, m, bag, slot, item).is_empty():
+		if GrowthRules.equip_block(defs, i, m, bag, slot, item, BagRules.free_slots(state)).is_empty():
 			return slot
 	return -1
 

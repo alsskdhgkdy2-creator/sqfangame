@@ -52,17 +52,23 @@ static func shortage(defs: GameDefs, state: ExplorationState, shop_id: String, i
 	return out
 
 
-## 장비의 구매값. 모르면 0.
+## 장비·소모품(M3 A4)의 구매값. 모르면 0.
 static func buy_price(defs: GameDefs, item_id: String) -> int:
 	var e := defs.battle.equip(item_id)
-	return e.price if e != null else 0
+	if e != null:
+		return e.price
+	var c := defs.battle.consumable(item_id)
+	return c.price if c != null else 0
 
 
-## 판매값: 장비 = price ÷ 2(버림, 최소 1), 소재 = sell, 모르면 0.
+## 판매값: 장비·소모품 = price ÷ 2(버림, 최소 1), 소재 = sell, 모르면 0.
 static func sell_price(defs: GameDefs, item_id: String) -> int:
 	var e := defs.battle.equip(item_id)
 	if e != null:
 		return maxi(1, e.price / 2)
+	var c := defs.battle.consumable(item_id)
+	if c != null:
+		return maxi(1, c.price / 2)
 	return defs.battle.material_sell.get(item_id, 0)
 
 
@@ -86,6 +92,7 @@ static func stock_of(shop: ShopState, line: Dictionary) -> int:
 # ---- 사기 (08 §3.2) ----
 
 ## 판정 순서: not_now → unknown_shop → unknown_item(그 상점 진열에 없음) → locked → bad_amount(1~99 정수) → sold_out → no_money → bag_full.
+## bag_full: 공용 가방 60칸에 qty 가 다 들어가지 않는다(D31, BagRules.fit). 장비는 가방 장비, 소모품(M3 A4)은 소모품 묶음에 넣는다.
 static func buy(state: ExplorationState, shop_id: String, item_id: String, qty: Variant) -> Array[Dictionary]:
 	if _busy(state):
 		return [_reject("not_now")]
@@ -106,11 +113,10 @@ static func buy(state: ExplorationState, shop_id: String, item_id: String, qty: 
 	var cost: int = buy_price(defs, item_id) * n
 	if state.money < cost:
 		return [_reject("no_money")]
-	var have: int = state.gear_bag.get(item_id, 0)
-	if have + n > BattleLimits.BAG_MAX:
+	if BagRules.fit(state, item_id, n) < n:
 		return [_reject("bag_full")]
 	state.money -= cost
-	state.gear_bag[item_id] = have + n
+	BagRules.add(state, item_id, n)
 	if line["limited"]:
 		for m in line["unlock"]:
 			var left: int = state.shop.pool[m] - line["unlock"][m] * n
@@ -125,7 +131,7 @@ static func buy(state: ExplorationState, shop_id: String, item_id: String, qty: 
 # ---- 팔기 (08 §3.3) ----
 
 ## lines = [{item, qty}]. 판정 순서: not_now → unknown_shop → bad_lines → 줄마다 unknown_item·bad_amount(1~9,999 정수)·not_owned → money_full.
-## 통과하면 한 묶음으로 처리한다. 소재만 sold·pool 에 더하고(SOLD_MAX 에서 멈춤) 이 판매로 처음 풀린 줄이 있으면 unlocked 를 잇는다.
+## 소모품(M3 A4)도 판다(판매값 price ÷ 2). 통과하면 한 묶음으로 처리한다. 소재만 sold·pool 에 더하고(SOLD_MAX 에서 멈춤) 이 판매로 처음 풀린 줄이 있으면 unlocked 를 잇는다.
 static func sell(state: ExplorationState, shop_id: String, lines: Variant) -> Array[Dictionary]:
 	if _busy(state):
 		return [_reject("not_now")]
@@ -147,13 +153,13 @@ static func sell(state: ExplorationState, shop_id: String, lines: Variant) -> Ar
 	var gain := 0
 	for x in lines:
 		var item: Variant = x["item"]
-		var material := typeof(item) == TYPE_STRING and defs.battle.materials.has(item)
-		if not material and (typeof(item) != TYPE_STRING or defs.battle.equip(item) == null):
+		var known := typeof(item) == TYPE_STRING and BagRules.known(state, item)
+		if not known:
 			return [_reject("unknown_item")]
 		var n: Variant = _amount(x["qty"])
 		if not BattleLimits.in_range("sell_qty", n):
 			return [_reject("bad_amount")]
-		var bag: Dictionary = state.materials if material else state.gear_bag
+		var bag: Dictionary = BagRules.store(state, item)
 		if n > bag.get(item, 0):
 			return [_reject("not_owned")]
 		var g: int = sell_price(defs, item) * n
@@ -169,7 +175,7 @@ static func sell(state: ExplorationState, shop_id: String, lines: Variant) -> Ar
 	for r in rows:
 		var item: String = r["item"]
 		var material: bool = defs.battle.materials.has(item)
-		var bag: Dictionary = state.materials if material else state.gear_bag
+		var bag: Dictionary = BagRules.store(state, item)
 		bag[item] -= r["qty"]
 		if bag[item] == 0:
 			bag.erase(item)

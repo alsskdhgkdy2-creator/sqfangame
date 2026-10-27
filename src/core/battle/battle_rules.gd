@@ -6,6 +6,7 @@
 ##   {"kind": "skill", "skill": 스킬 ID, "target": 칸}   대상 규칙이 전체·자기면 target 은 없어도 된다(무시)
 ##   {"kind": "guard"}
 ##   {"kind": "escape"}
+##   {"kind": "item", "item": 소모품 ID, "target": 대원 칸}   (M3 A4) 모든 소모품은 단일 대상. 소모품은 실행 시점에 하나 줄어든다(01 §4.1).
 ## target 은 스킬 대상 쪽의 칸 번호다: enemy_* 는 적 칸, ally_* 는 대원 칸. 줄 대상은 그 줄의 아무 유효 대상.
 ##
 ## 이벤트는 {"type": …} 사전이다. 유닛은 {"side": "party"|"enemy", "slot": n}. 목록은 BattleRules.EVENT_TYPES.
@@ -14,15 +15,16 @@ extends RefCounted
 
 const PRIORITY_ORDER := {"first": 0, "normal": 1, "last": 2}
 const OUTCOMES := ["victory", "escaped", "wiped"]
-const COMMAND_KINDS := ["attack", "skill", "guard", "escape"]
+const COMMAND_KINDS := ["attack", "skill", "guard", "escape", "item"]
 ## 명령 종류마다 받는 키. 다른 키가 있으면 unknown_command 로 거부한다(검사는 상태·난수를 건드리기 전에 끝난다).
-const COMMAND_KEYS := {"attack": ["kind", "target"], "skill": ["kind", "skill", "target"], "guard": ["kind"], "escape": ["kind"]}
+const COMMAND_KEYS := {"attack": ["kind", "target"], "skill": ["kind", "skill", "target"], "guard": ["kind"], "escape": ["kind"],
+	"item": ["kind", "item", "target"]}
 ## 규칙이 내는 이벤트 종류(화면·시험 참고용).
 const EVENT_TYPES := [
 	"rejected", "battle_start", "guarding", "idle", "action", "failed", "covered", "missed", "damaged", "defeated", "woke",
 	"ailment", "ailment_resisted", "ailment_blocked", "bound", "bind_resisted", "buffed", "healed", "cured", "revived",
 	"front_guard", "cover_set", "charging", "charge_lost", "row_shift", "escaped", "escape_failed",
-	"turn_end", "poison_tick", "expired", "drop", "exp", "level_up", "battle_end",
+	"turn_end", "poison_tick", "expired", "drop", "exp", "level_up", "battle_end", "item_used", "tp_healed",
 ]
 
 
@@ -95,6 +97,48 @@ static func escape_block_reason(state: ExplorationState, member_index: int) -> S
 	if state.battle.party[member_index].bound("leg"):
 		return "bound_leg"
 	return ""
+
+
+## 소모품(M3 A4): 이 턴 commands 가운데 before 칸보다 앞 칸들이 고른 그 소모품 수(예약). before 가 -1 이면 모든 칸.
+static func items_reserved(commands: Array, item: String, before: int = -1) -> int:
+	var n := 0
+	for i in commands.size():
+		if before >= 0 and i >= before:
+			break
+		var c: Variant = commands[i]
+		if typeof(c) == TYPE_DICTIONARY and c.get("kind") == "item" and c.get("item") == item:
+			n += 1
+	return n
+
+
+## 소모품(M3 A4)을 대원 member_index 가 지금 고를 수 없는 이유. 되면 "". (unknown_item·item_not_here·no_item·no_target)
+## commands 는 이 턴에 이미 정한 명령(다른 대원의 예약을 뺀다, 그 대원 자기 칸은 세지 않는다).
+static func item_block_reason(state: ExplorationState, member_index: int, item: String, commands: Array = []) -> String:
+	var cd := state.defs.battle.consumable(item)
+	if cd == null:
+		return "unknown_item"
+	if not cd.in_battle():
+		return "item_not_here"
+	var others := 0
+	for i in commands.size():
+		if i != member_index and typeof(commands[i]) == TYPE_DICTIONARY and commands[i].get("kind") == "item" and commands[i].get("item") == item:
+			others += 1
+	if int(state.consumables.get(item, 0)) - others < 1:
+		return "no_item"
+	if candidates(state.battle, state.battle.party[member_index], cd.skill).is_empty():
+		return "no_target"
+	return ""
+
+
+## 그 소모품으로 지금 고를 수 있는 대상 칸 번호(칸 오름차순, M3 A4). 모르거나 전투에서 쓰지 않으면 빈 배열.
+static func item_targets(state: ExplorationState, member_index: int, item: String) -> Array[int]:
+	var out: Array[int] = []
+	var sk := state.defs.battle.item_skill(item)
+	if sk == null:
+		return out
+	for t in candidates(state.battle, state.battle.party[member_index], sk):
+		out.append(t.slot)
+	return out
 
 
 ## 그 스킬로 지금 고를 수 있는 대상 칸 번호(칸 오름차순). 전체·자기 대상도 효과를 받을 칸을 돌려준다.
@@ -178,10 +222,16 @@ static func submit(state: ExplorationState, commands: Array) -> Array[Dictionary
 			continue
 		var u := b.party[i]
 		var s: BattleDb.SkillDef = null
-		if c["kind"] != "escape":
+		if c["kind"] == "item":
+			s = state.defs.battle.item_skill(c["item"])
+		elif c["kind"] != "escape":
 			s = skill_of(state, i, "attack" if c["kind"] == "attack" else c["skill"])
 		var target: int = c["target"] if c.has("target") else -1
-		b.queue.append(_action(u, c["kind"], s, u.skills.get(s.id, 1) if s != null else 1, target))
+		var level: int = u.skills.get(s.id, 1) if s != null and c["kind"] != "item" else 1
+		var a := _action(u, c["kind"], s, level, target)
+		if c["kind"] == "item":
+			a["item"] = c["item"]  # 대리 스킬 id 와 같다(실행 때 소모품을 하나 뺀다)
+		b.queue.append(a)
 	for j in b.enemies.size():
 		var ch: Variant = enemy_choices[j]
 		if ch != null:
@@ -225,6 +275,7 @@ static func check_commands(state: ExplorationState, commands: Array) -> Dictiona
 	var b := state.battle
 	if commands.size() != b.party.size():
 		return {"reason": "length", "slot": -1}
+	var reserved := {}  # 소모품 ID → 앞 칸부터 센 수(M3 A4: 마지막 하나를 둘이 고를 수 없다)
 	for i in b.party.size():
 		var c: Variant = commands[i]
 		var u := b.party[i]
@@ -246,6 +297,20 @@ static func check_commands(state: ExplorationState, commands: Array) -> Dictiona
 				var why := escape_block_reason(state, i)
 				if not why.is_empty():
 					return {"reason": why, "slot": i}
+			"item":
+				var iid: Variant = c.get("item")
+				var cd: BattleDb.ConsumableDef = state.defs.battle.consumable(iid) if typeof(iid) == TYPE_STRING else null
+				if cd == null:
+					return {"reason": "unknown_item", "slot": i}
+				if not cd.in_battle():
+					return {"reason": "item_not_here", "slot": i}
+				reserved[iid] = int(reserved.get(iid, 0)) + 1
+				if reserved[iid] > int(state.consumables.get(iid, 0)):
+					return {"reason": "no_item", "slot": i}
+				var cands := candidates(b, u, cd.skill)
+				var t: Variant = c.get("target")
+				if typeof(t) != TYPE_INT or cands.filter(func(x): return x.slot == t).is_empty():
+					return {"reason": "invalid_target", "slot": i}
 			_:
 				var sid: Variant = "attack" if c["kind"] == "attack" else c.get("skill")
 				if typeof(sid) != TYPE_STRING or (c["kind"] == "skill" and sid == "attack"):
@@ -319,6 +384,15 @@ static func _execute(state: ExplorationState, a: Dictionary, events: Array[Dicti
 	for t in targets:
 		refs.append(t.ref())
 	events.append({"type": "action", "unit": u.ref(), "kind": a["kind"], "skill": s.id, "tp": cost, "targets": refs, "order": a["order"]})
+	if a["kind"] == "item":
+		# 소모품은 모든 관문을 지난 실행 시점에만 하나 줄어든다(01 §4.1: 취소·쓰러짐·마비·대상 없음·먼저 끝난 전투는 쓰지 않는다).
+		var iid: String = a["item"]
+		var left: int = int(state.consumables.get(iid, 0)) - 1
+		if left > 0:
+			state.consumables[iid] = left
+		else:
+			state.consumables.erase(iid)
+		events.append({"type": "item_used", "unit": u.ref(), "item": iid, "left": maxi(left, 0)})
 	var row: Dictionary = s.level_row(a["level"])
 	match s.effect:
 		"damage":
@@ -336,6 +410,15 @@ static func _execute(state: ExplorationState, a: Dictionary, events: Array[Dicti
 		"cure":
 			for t in targets:
 				events.append({"type": "cured", "unit": u.ref(), "target": t.ref(), "removed": BattleEffects.cure(t)})
+		"cure_ailment", "cure_bind":
+			for t in targets:
+				var removed := BattleEffects.cure_ailment(t) if s.effect == "cure_ailment" else BattleEffects.cure_bind(t)
+				events.append({"type": "cured", "unit": u.ref(), "target": t.ref(), "removed": removed})
+		"tp_heal":
+			for t in targets:
+				var amount := mini(int(row["amount"]), t.max_tp - t.tp)
+				t.tp += amount
+				events.append({"type": "tp_healed", "unit": u.ref(), "target": t.ref(), "amount": amount, "tp": t.tp})
 		"revive":
 			for t in targets:
 				t.hp = mini(t.max_hp, maxi(1, BattleCalc.mul(t.max_hp, row["hp_permille"])))
@@ -601,10 +684,9 @@ static func finish(state: ExplorationState, outcome: String, events: Array[Dicti
 			for d in state.defs.battle.enemies[u.def_id].drops:
 				if drop_condition_met(d["if"], u.kill) and BattleCalc.roll(state.rng, d["chance"]):
 					var item: String = d["item"]
-					var have: int = state.materials.get(item, 0)
-					var now := mini(BattleLimits.MATERIAL_MAX, have + 1)
-					state.materials[item] = now
-					var drop := {"item": item, "amount": now - have, "capped": have + 1 > BattleLimits.MATERIAL_MAX, "enemy": u.slot}
+					# 난수는 위에서 먼저 뽑는다(가방이 차도 같은 난수열, 설계 §3.4). 공용 가방(D31)에 드는 만큼만 넣고 앞 드롭부터 채운다.
+					var got := BagRules.add(state, item, 1)
+					var drop := {"item": item, "amount": got, "capped": got < 1, "enemy": u.slot}
 					drops.append(drop)
 					var ev := drop.duplicate()
 					ev["type"] = "drop"

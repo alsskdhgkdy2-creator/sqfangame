@@ -237,16 +237,19 @@ func test_finish_contract() -> void:
 	check_eq(BattleRules.submit(s, []), [{"type": "rejected", "reason": "no_battle"}] as Array[Dictionary], "전투 없으면 submit 거부")
 
 
+## 공용 가방 60칸(D31): 59 에서 둘이 떨어지면 앞의 하나만 들고 뒤는 버리고 capped.
+## 60칸을 넘은 옛 저장(종류 상한 안의 9998)은 하나도 들지 않고 수가 그대로다.
 func test_material_cap_saturates() -> void:
-	var s := _game({"d": [["enemy.t_dropper", "front"], ["enemy.t_dropper", "front"]]}, "d")
-	s.materials["item.neon_rat_tail"] = 9998
-	s.battle.enemies[0].hp = 1
-	s.battle.enemies[1].hp = 1
-	var ev := BattleRules.submit(s, Fx.cmds(s, {1: Fx.atk(0), 2: Fx.atk(1)}))
-	var d := Fx.of_type(ev, "drop")
-	check_eq(d.map(func(e): return [e["amount"], e["capped"]]), [[1, false], [0, true]], "9998 → 9999, 넘친 수는 버리고 capped")
-	check_eq(s.materials["item.neon_rat_tail"], 9999, "상한 9999")
-	check_eq(Fx.of_type(ev, "battle_end")[0]["drops"].size(), 2, "끝 이벤트에도 드롭")
+	for x in [[59, [[1, false], [0, true]], 60, "59 → 60, 넘친 수는 버리고 capped"], [9998, [[0, true], [0, true]], 9998, "넘친 옛 가방 9998: 둘 다 capped, 수 그대로"]]:
+		var s := _game({"d": [["enemy.t_dropper", "front"], ["enemy.t_dropper", "front"]]}, "d")
+		s.materials["item.neon_rat_tail"] = x[0]
+		s.battle.enemies[0].hp = 1
+		s.battle.enemies[1].hp = 1
+		var ev := BattleRules.submit(s, Fx.cmds(s, {1: Fx.atk(0), 2: Fx.atk(1)}))
+		var d := Fx.of_type(ev, "drop")
+		check_eq(d.map(func(e): return [e["amount"], e["capped"]]), x[1], x[3])
+		check_eq(s.materials["item.neon_rat_tail"], x[2], "%s: 가방 수" % x[3])
+		check_eq(Fx.of_type(ev, "battle_end")[0]["drops"].size(), 2, "%s: 끝 이벤트에도 드롭" % x[3])
 
 
 # ---- 제출 거부 ----

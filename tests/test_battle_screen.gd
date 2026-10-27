@@ -1789,6 +1789,24 @@ func test_result_has_no_exp_line_when_total_is_zero() -> void:
 	check_eq(layer.result_lines, [texts.t("battle.result.no_drops")] as Array[String], "드롭 줄만, 경험치 줄 없음")
 
 
+## M3 A4(D31, N2): 공용 가방이 차서 못 가진 드롭이 있으면 드롭 줄 뒤에 맺음 줄 「가방이 가득하다 (n/60)」 하나, n 은 지금 가방 수 그대로
+## (넘친 옛 가방이면 75/60). 다 가진 드롭만 있으면 그 줄이 없다.
+func test_result_bag_full_line_shows_the_bag_count() -> void:
+	var zero := _growth([_exp_row(0, "received", 0), _exp_row(1, "received", 0), _exp_row(2, "received", 0),
+		_exp_row(3, "received", 0), _exp_row(4, "received", 0)], 0)
+	for x in [[75, true, ["얻은 소재", "네온 쥐 꼬리 1개 (더는 가질 수 없다)", "가방이 가득하다 (75/60)"]], [10, false, ["얻은 소재", "네온 쥐 꼬리 2개"]]]:
+		var s := _calm_state()
+		s.materials = {ITEMS[0]: x[0]}
+		await _open(s)
+		var end := {"type": "battle_end", "outcome": "victory", "enemy_hp": [0, 0, 0],
+			"drops": [{"item": ITEMS[0], "amount": 1, "capped": false, "enemy": 0}, {"item": ITEMS[0], "amount": 0 if x[1] else 1, "capped": x[1], "enemy": 1}]}
+		end.merge(zero, true)
+		layer._commit([end] as Array[Dictionary])
+		await kit.frames(2)
+		check_eq(layer.phase, "result", "준비: 결과 창")
+		check_eq(layer.result_lines, x[2] as Array[String], "가방 %d: 드롭 줄과 맺음 줄" % x[0])
+
+
 func test_result_level_up_lines_with_and_without_sp() -> void:
 	var rows := [_exp_row(0, "received", 30, false, 1, 2, 0), _exp_row(1, "received", 30, false, 1, 3, 2), _exp_row(2, "received", 30),
 		_exp_row(3, "received", 30), _exp_row(4, "received", 30)]

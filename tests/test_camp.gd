@@ -2735,11 +2735,12 @@ func test_items_end_key_reveals_the_cursor_and_refresh_keeps_manual_scroll() -> 
 	check(it.shown(b), "준비: 손으로 조금 내렸고 커서 칸은 보인다(내림 %.0f)" % keep)
 	var id: String = s.state.defs.battle.equipment_ids[3]
 	var bag := int(s.state.gear_bag.get(id, 0))
+	check_eq(BagRules.fit(s.state, id, 2), 2, "준비: 공용 가방(D31)에 둘이 들어갈 자리")
 	await kit.press_key(KEY_ENTER)
 	await kit.tap(kit.center_of(b))
 	pm.refresh_view()
 	await kit.frames(1)
-	check_eq(int(s.state.gear_bag.get(id, 0)), mini(bag + 2, BattleLimits.BAG_MAX), "Enter·누르기 → 「+1」 두 번")
+	check_eq(int(s.state.gear_bag.get(id, 0)), bag + 2, "Enter·누르기 → 「+1」 두 번")
 	check_eq(it.list.scroll, keep, "보급 누르기·다시 그리기 뒤에도 손으로 내린 자리 그대로")
 
 

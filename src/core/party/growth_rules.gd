@@ -406,15 +406,17 @@ static func equip_problem(db: BattleDb, c: BattleDb.ClassDef, equip: Array) -> A
 
 
 ## 화면이 부르는 장착 판정(07 §5.7, 가방 포함). item_id "" 은 빼기.
+## bag_free = 공용 가방의 빈 칸(D31, BagRules.free_slots). 빼기는 빈 칸이 하나 있어야 하고, 바꾸기(낀 것 ↔ 가방 것)는 칸 수가 그대로라 보지 않는다.
+## 종류 상한(가방에 그 장비 99)은 옛 저장(60칸을 넘은 가방)에서만 닿는다.
 ## "" | bad_slot | unchanged | unknown_item | not_in_bag | slot_kind | class | kind_limit | bag_full
-static func equip_block(defs: GameDefs, i: int, member: PartyState.Member, bag: Dictionary, slot: int, item_id: String) -> String:
+static func equip_block(defs: GameDefs, i: int, member: PartyState.Member, bag: Dictionary, slot: int, item_id: String, bag_free: int) -> String:
 	if slot < 0 or slot >= BattleLimits.EQUIP_SLOTS:
 		return "bad_slot"
 	var cur: String = member.equip[slot]
 	if item_id.is_empty():
 		if cur.is_empty():
 			return "unchanged"
-		return "bag_full" if bag.get(cur, 0) >= BattleLimits.BAG_MAX else ""
+		return "bag_full" if bag_free < 1 or bag.get(cur, 0) >= BattleLimits.BAG_MAX else ""
 	if defs.battle.equip(item_id) == null:
 		return "unknown_item"
 	if item_id == cur:
@@ -436,7 +438,7 @@ static func equip(state: ExplorationState, i: int, slot: int, item_id: String) -
 	if i < 0 or i >= state.party.members.size():
 		return [_reject("unknown_member")]
 	var m := state.party.members[i]
-	var why := equip_block(state.defs, i, m, state.gear_bag, slot, item_id)
+	var why := equip_block(state.defs, i, m, state.gear_bag, slot, item_id, BagRules.free_slots(state))
 	if not why.is_empty():
 		return [_reject(why)]
 	var cur: String = m.equip[slot]
@@ -453,19 +455,17 @@ static func equip(state: ExplorationState, i: int, slot: int, item_id: String) -
 	return events
 
 
-## 디버그 장비 보급(07 §5.7): 가방에 n(1~99)개 더하고 99 에서 멈춘다.
+## 디버그 보급(07 §5.7, M3 A4 부터 소모품도): 장비·소모품을 n(1~99)개 더하되 공용 가방(D31)에 드는 만큼만(BagRules.fit) 넣는다.
 static func supply(state: ExplorationState, item_id: String, n: Variant) -> Array[Dictionary]:
 	if _busy(state):
 		return [_reject("not_now")]
-	if state.defs.battle.equip(item_id) == null:
+	if state.defs.battle.equip(item_id) == null and state.defs.battle.consumable(item_id) == null:
 		return [_reject("unknown_item")]
 	var amount: Variant = SaveCodec.to_int(n) if typeof(n) != TYPE_BOOL else null
 	if not BattleLimits.in_range("bag", amount):
 		return [_reject("bad_amount")]
-	var have: int = state.gear_bag.get(item_id, 0)
-	var now := mini(BattleLimits.BAG_MAX, have + amount)
-	state.gear_bag[item_id] = now
-	return [{"type": "supplied", "item": item_id, "amount": now - have, "capped": have + amount > BattleLimits.BAG_MAX}]
+	var got := BagRules.add(state, item_id, amount)
+	return [{"type": "supplied", "item": item_id, "amount": got, "capped": got < amount}]
 
 
 # ---- 공통 ----

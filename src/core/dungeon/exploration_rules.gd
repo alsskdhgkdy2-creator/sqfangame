@@ -298,7 +298,7 @@ static func question_here(s: ExplorationState) -> Dictionary:
 	return {}
 
 
-## 서 있는 칸의 닫힌 상자를 연다(M3 A3). 상자가 없거나 이미 열었으면 막힘 not_chest. 넣을 자리가 없으면(소재 9999·가방 99·소지금 상한)
+## 서 있는 칸의 닫힌 상자를 연다(M3 A3). 상자가 없거나 이미 열었으면 막힘 not_chest. 넣을 자리가 없으면(공용 가방 60칸 BagRules.fit·소지금 상한)
 ## 아무것도 바꾸지 않고 chest_full(상자는 닫힌 채 남는다, 일부만 꺼내지 않는다). 걸음·위험도·난수는 그대로다.
 static func _open_chest(s: ExplorationState, events: Array[Dictionary]) -> void:
 	var chest := s.floor_def.chest_at(s.party.at)
@@ -316,18 +316,12 @@ static func _open_chest(s: ExplorationState, events: Array[Dictionary]) -> void:
 	var item := chest.item
 	if item.begins_with("key."):
 		s.key_items[item] = true
-	elif item.begins_with("equip."):
-		var have: int = s.gear_bag.get(item, 0)
-		if have + chest.count > BattleLimits.BAG_MAX:
-			events.append({"type": "chest_full", "chest": chest.id, "item": item})
-			return
-		s.gear_bag[item] = have + chest.count
 	else:
-		var have: int = s.materials.get(item, 0)
-		if have + chest.count > BattleLimits.MATERIAL_MAX:
+		# 공용 가방(D31, M3 A4): 다 들어가지 않으면 아무것도 꺼내지 않는다(일부만 꺼내지 않는다, A3 규칙 그대로).
+		if BagRules.fit(s, item, chest.count) < chest.count:
 			events.append({"type": "chest_full", "chest": chest.id, "item": item})
 			return
-		s.materials[item] = have + chest.count
+		BagRules.add(s, item, chest.count)
 	s.world.open_chest(chest.id)
 	events.append({"type": "chest_opened", "chest": chest.id, "item": item, "count": chest.count})
 

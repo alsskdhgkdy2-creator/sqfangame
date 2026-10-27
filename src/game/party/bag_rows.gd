@@ -5,18 +5,26 @@ extends RefCounted
 
 ## 귀중품 줄 아이콘(VectorIcons 종류 아이콘).
 const KEY_ICON := "kind_key"
-## 캠프 소지품의 종류 차례: 장비 → 소재 → 귀중품(M3 A3).
+## 캠프 소지품의 종류 차례: 장비 → 소재 → 귀중품(M3 A3). 소모품 줄(consumable)은 소지품 화면이 쓰기·버리기를 갖출 때(M3 A4b) 맨 앞에 더한다.
 const CAMP_KINDS := ["gear", "material", "key"]
+## 소모품 줄 아이콘(VectorIcons 종류 아이콘, 상점 소모품 탭과 같다).
+const CONSUMABLE_ICON := "kind_consumable"
 
 
 ## 가방 줄 [{item, count, kind, icon}, …]. kinds 차례로: "gear" = 장비(자료 차례, gear_bag 1 이상),
 ## "material" = 소재(정의 자료 차례 = data/items/materials.json, 몬스터 차례를 따른다, 1 이상). 캠프 소지품과 상점 판매가 같은 차례(D28-b).
 ## "key" = 귀중품(열쇠, M3 A3, 정의 차례 = data/items/key_items.json, 개수는 늘 1). 캠프 소지품만 넣는다(상점은 종류를 따로 넘겨 팔 수 없다).
+## "consumable" = 소모품(M3 A4, 정의 차례 = data/items/consumables.json, 1 이상).
 static func bag(state: ExplorationState, kinds: Array = ["gear", "material"]) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var defs := state.defs
 	for kind in kinds:
 		match str(kind):
+			"consumable":
+				for id in defs.battle.consumable_ids:
+					var n := int(state.consumables.get(id, 0))
+					if n >= 1:
+						out.append({"item": id, "count": n, "kind": "consumable", "icon": CONSUMABLE_ICON})
 			"gear":
 				for id in defs.battle.equipment_ids:
 					var n := int(state.gear_bag.get(id, 0))
@@ -41,6 +49,7 @@ static func for_slot(state: ExplorationState, i: int, slot: int) -> Dictionary:
 	var defs := state.defs
 	var m: PartyState.Member = state.party.members[i]
 	var bag_now := state.gear_bag
+	var bag_free := BagRules.free_slots(state)
 	var items: Array[String] = []
 	var block: Array[String] = []
 	var equipped := -1
@@ -55,7 +64,7 @@ static func for_slot(state: ExplorationState, i: int, slot: int) -> Dictionary:
 		var id: String = line["item"]
 		if GrowthRules.slot_block(defs.battle, defs.class_of(i), m.equip, slot, id) == "slot_kind":
 			continue
-		var why := GrowthRules.equip_block(defs, i, m, bag_now, slot, id)
+		var why := GrowthRules.equip_block(defs, i, m, bag_now, slot, id, bag_free)
 		if why.is_empty():
 			items.append(id)
 			block.append("")
@@ -65,5 +74,5 @@ static func for_slot(state: ExplorationState, i: int, slot: int) -> Dictionary:
 	items.append_array(dim_items)
 	block.append_array(dim_why)
 	items.append("")
-	block.append(GrowthRules.equip_block(defs, i, m, bag_now, slot, ""))
+	block.append(GrowthRules.equip_block(defs, i, m, bag_now, slot, "", bag_free))
 	return {"items": items, "block": block, "equipped": equipped}

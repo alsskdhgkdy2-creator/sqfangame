@@ -104,9 +104,10 @@ func test_open_each_content() -> void:
 
 
 ## R3 (M-R3 일부만 꺼내거나 상한에서 자름): 넣을 자리가 없으면 아무것도 바꾸지 않고 상자는 닫힌 채.
+## 자리는 공용 가방 60칸(D31)으로 센다: 소재 3 상자는 58 에서 닫힌 채·57 에서 딱 60, 장비 1 상자는 60 에서 닫힌 채·59 에서 열린다.
 func test_full_keeps_chest_closed() -> void:
-	for x in [["m", 1, "materials", {"item.neon_rat_tail": 9997}, {"item.neon_rat_tail": 9990}, "item.neon_rat_tail"],
-			["g", 2, "gear_bag", {"equip.twin_edge": 99}, {"equip.twin_edge": 98}, "equip.twin_edge"]]:
+	for x in [["m", 1, "materials", {"item.neon_rat_tail": 58}, {"item.neon_rat_tail": 57}, "item.neon_rat_tail"],
+			["g", 2, "gear_bag", {"equip.twin_edge": 60}, {"equip.twin_edge": 59}, "equip.twin_edge"]]:
 		var s := _game()
 		s.set(x[2], (x[3] as Dictionary).duplicate())
 		s.party.at = Vector2i(x[1], 0)
@@ -120,9 +121,23 @@ func test_full_keeps_chest_closed() -> void:
 	check_eq(_game().materials.get("item.neon_rat_tail", 0), 0, "준비 상태가 공유되지 않음")
 	var m := _game()
 	m.party.at = Vector2i(1, 0)
-	m.materials = {"item.neon_rat_tail": 9996}
+	m.materials = {"item.neon_rat_tail": 57}
 	_do(m, A.OPEN)
-	check_eq(m.materials["item.neon_rat_tail"], 9999, "딱 상한까지는 연다")
+	check_eq([m.materials["item.neon_rat_tail"], BagRules.used(m)], [60, 60], "딱 60칸까지는 연다")
+	var mix := _game()
+	mix.party.at = Vector2i(1, 0)
+	mix.materials = {"item.neon_rat_tail": 30}
+	mix.gear_bag = {"equip.twin_edge": 25}
+	mix.consumables = {"use.medica": 3}
+	var before_mix := SaveCodec.state_hash(mix)
+	check_eq(_do(mix, A.OPEN)[0]["type"], "chest_full", "소재·장비·소모품을 함께 센다(30 + 25 + 3 = 58 + 3)")
+	check_eq(SaveCodec.state_hash(mix), before_mix, "섞인 가방: 상태 그대로")
+	var over := _game()
+	over.party.at = Vector2i(1, 0)
+	over.materials = {"item.neon_rat_tail": 9990}
+	var before_over := SaveCodec.state_hash(over)
+	check_eq(_do(over, A.OPEN)[0]["type"], "chest_full", "60칸을 넘은 옛 저장(종류 상한 안의 9990)은 닫힌 채")
+	check_eq(SaveCodec.state_hash(over), before_over, "넘친 가방: 상태 그대로")
 	var y := _game()
 	y.party.at = Vector2i(3, 0)
 	y.money = BattleLimits.MONEY_MAX - 99
