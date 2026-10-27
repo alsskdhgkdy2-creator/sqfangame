@@ -57,6 +57,11 @@
     {"id": "c2", "at": [15, 2], "item": "equip.servo_gauntlet"},
     {"id": "c3", "at": [3, 6], "money": 200}
   ],
+  "gathering": [
+    {"id": "g1", "at": [2, 7], "kind": "take", "uses": 2, "table": "gather.b3f.take"},
+    {"id": "g2", "at": [14, 16], "kind": "chop", "uses": 2, "table": "gather.b3f.chop"},
+    {"id": "g3", "at": [14, 1], "kind": "mine", "uses": 2, "table": "gather.b3f.mine"}
+  ],
   "reserved": [[3, 1, 8, 3]],
   "encounter": {"danger_per_step": 12, "threshold_min": 100, "threshold_max": 200, "table": "encounter.b3f"},
   "zones": [{"id": "ice", "rect": [5, 6, 14, 13], "danger_per_step": 8}],

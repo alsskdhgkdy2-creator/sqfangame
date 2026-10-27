@@ -55,6 +55,10 @@
     {"id": "c3", "at": [18, 9], "money": 100},
     {"id": "c4", "at": [17, 4], "item": "item.glow_scale", "count": 2}
   ],
+  "gathering": [
+    {"id": "g1", "at": [8, 17], "kind": "take", "uses": 2, "table": "gather.b1f.take"},
+    {"id": "g2", "at": [16, 16], "kind": "chop", "uses": 2, "table": "gather.b1f.chop"}
+  ],
   "encounter": {"danger_per_step": 10, "threshold_min": 120, "threshold_max": 240, "table": "encounter.b1f"},
   "zones": [{"id": "gate", "rect": [8, 16, 10, 18], "danger_per_step": 0}]
 }

@@ -25,6 +25,16 @@ class Chest:
 	var count := 1
 	var money := 0
 
+## 채집 지점 하나(M3 A5, 01 §3.6): 종류(take 채취·chop 절단·mine 추출), 하루 횟수, 채집 표 ID.
+## 저장은 칸이 아니라 id(층 안에서 하나)로 그날 쓴 횟수를 기억한다(상자와 같다). id 를 바꾸거나 지우면 저장 이전이 필요하다.
+class GatherPoint:
+	extends RefCounted
+	var id := ""
+	var at := Vector2i.ZERO
+	var kind := ""
+	var uses := 1
+	var table := ""
+
 enum Cell { VOID, FLOOR, DAMAGE, ICE }
 ## LOCK(M3 A3, 격자 K): 잠긴 문. 열쇠 문(locks 의 key)은 열쇠를 가지고 어느 쪽에서나 열고, 봉인 문(seal)은 A3 에서 열리지 않는다.
 ## 값이 밀리지 않게 새 종류는 맨 뒤에 둔다.
@@ -50,6 +60,8 @@ var zones: Array[Dictionary] = []
 var stairs := {}
 ## 보물상자(M3 A3): id → Chest(읽은 차례). 칸 → id 는 _chest_cells.
 var chests := {}
+## 채집 지점(M3 A5): id → GatherPoint(읽은 차례). 칸 → id 는 _point_cells.
+var points := {}
 ## 예약 구역(M3 A3, A9 보스 방 자리): 아직 닿지 않아도 되는 칸들의 사각형(Rect2i). 분석이 「닿을 수 없다」를 내지 않는다.
 var reserved: Array[Rect2i] = []
 ## 귀환 비콘을 쓸 수 없는 칸(M3 A4 갈고리, A9 보스 방): 칸 Vector2i → true. 지금 층 파일에는 키가 없어 늘 비어 있다.
@@ -64,6 +76,7 @@ var _shortcut_opener := {}  # Vector3i → 열 수 있는 쪽 칸 Vector2i
 var _lock_key := {}  # Vector3i → 열쇠 ID(봉인 문은 "")
 var _lock_seal := {}  # Vector3i → 봉인 이유(열쇠 문에는 없다)
 var _chest_cells := {}  # Vector2i → 상자 id
+var _point_cells := {}  # Vector2i → 채집 지점 id
 
 
 func _init(w: int = 1, h: int = 1) -> void:
@@ -248,6 +261,24 @@ func chest_list() -> Array[Chest]:
 	var out: Array[Chest] = []
 	for id in chests:
 		out.append(chests[id])
+	return out
+
+
+func add_point(p: GatherPoint) -> void:
+	points[p.id] = p
+	_point_cells[p.at] = p.id
+
+
+## 칸 c 의 채집 지점. 없으면 null.
+func point_at(c: Vector2i) -> GatherPoint:
+	return points.get(_point_cells.get(c, ""))
+
+
+## 채집 지점 목록(읽은 차례).
+func point_list() -> Array[GatherPoint]:
+	var out: Array[GatherPoint] = []
+	for id in points:
+		out.append(points[id])
 	return out
 
 

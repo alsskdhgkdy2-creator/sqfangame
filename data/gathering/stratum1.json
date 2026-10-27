@@ -1,0 +1,204 @@
+{
+  "gather_tables": [
+    {
+      "id": "gather.b1f.take",
+      "kind": "take",
+      "items": [
+        {
+          "item": "item.neon_moss",
+          "weight": 70,
+          "count": [
+            1,
+            2
+          ]
+        },
+        {
+          "item": "item.spore_pouch",
+          "weight": 30,
+          "count": [
+            1,
+            1
+          ]
+        }
+      ],
+      "rare": {
+        "item": "item.lumen_sap",
+        "permille": 80
+      }
+    },
+    {
+      "id": "gather.b1f.chop",
+      "kind": "chop",
+      "items": [
+        {
+          "item": "item.scrap_wire",
+          "weight": 80,
+          "count": [
+            1,
+            2
+          ]
+        },
+        {
+          "item": "item.cable_scale",
+          "weight": 20,
+          "count": [
+            1,
+            1
+          ]
+        }
+      ],
+      "rare": {
+        "item": "item.copper_coil",
+        "permille": 80
+      }
+    },
+    {
+      "id": "gather.b2f.take",
+      "kind": "take",
+      "items": [
+        {
+          "item": "item.neon_moss",
+          "weight": 60,
+          "count": [
+            1,
+            2
+          ]
+        },
+        {
+          "item": "item.spore_pouch",
+          "weight": 40,
+          "count": [
+            1,
+            2
+          ]
+        }
+      ],
+      "rare": {
+        "item": "item.lumen_sap",
+        "permille": 120
+      }
+    },
+    {
+      "id": "gather.b2f.chop",
+      "kind": "chop",
+      "items": [
+        {
+          "item": "item.scrap_wire",
+          "weight": 60,
+          "count": [
+            1,
+            2
+          ]
+        },
+        {
+          "item": "item.coated_scale",
+          "weight": 40,
+          "count": [
+            1,
+            1
+          ]
+        }
+      ],
+      "rare": {
+        "item": "item.copper_coil",
+        "permille": 120
+      }
+    },
+    {
+      "id": "gather.b2f.mine",
+      "kind": "mine",
+      "items": [
+        {
+          "item": "item.ether_crystal",
+          "weight": 80,
+          "count": [
+            1,
+            1
+          ]
+        },
+        {
+          "item": "item.glow_scale",
+          "weight": 20,
+          "count": [
+            1,
+            1
+          ]
+        }
+      ],
+      "rare": {
+        "item": "item.data_core",
+        "permille": 60
+      }
+    },
+    {
+      "id": "gather.b3f.take",
+      "kind": "take",
+      "items": [
+        {
+          "item": "item.neon_moss",
+          "weight": 40,
+          "count": [
+            1,
+            2
+          ]
+        },
+        {
+          "item": "item.frost_lichen",
+          "weight": 60,
+          "count": [
+            1,
+            2
+          ]
+        }
+      ],
+      "rare": {
+        "item": "item.lumen_sap",
+        "permille": 150
+      }
+    },
+    {
+      "id": "gather.b3f.chop",
+      "kind": "chop",
+      "items": [
+        {
+          "item": "item.scrap_wire",
+          "weight": 50,
+          "count": [
+            1,
+            3
+          ]
+        },
+        {
+          "item": "item.coated_scale",
+          "weight": 50,
+          "count": [
+            1,
+            2
+          ]
+        }
+      ],
+      "rare": {
+        "item": "item.copper_coil",
+        "permille": 150
+      }
+    },
+    {
+      "id": "gather.b3f.mine",
+      "kind": "mine",
+      "items": [
+        {
+          "item": "item.ether_crystal",
+          "weight": 100,
+          "count": [
+            1,
+            2
+          ]
+        }
+      ],
+      "rare": {
+        "item": "item.data_core",
+        "permille": 100
+      }
+    }
+  ]
+}

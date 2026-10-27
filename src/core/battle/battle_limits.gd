@@ -62,6 +62,8 @@ const RANGES := {
 	"buy_qty": [1, 99], "sell_qty": [1, 9999],
 	# 소모품(M3 A4): 한 종류 개수(저장 범위)·회복량.
 	"consumable": [1, 99], "item_amount": [1, 999],
+	# 채집(M3 A5): 지점의 하루 횟수, 표 한 줄의 무게·개수, 희귀 확률(천분율). 저장의 하루 쓴 횟수도 gather_uses 범위다.
+	"gather_uses": [1, 9], "gather_weight": [1, 1000], "gather_count": [1, 5], "gather_permille": [1, 1000],
 	"battle_turn": [0, TURN_MAX], "battle_seq": [1, SEQ_MAX],
 }
 const MATERIAL_MAX := 9999
@@ -76,6 +78,11 @@ const CONSUMABLE_MAX := 99
 ## 소모품 효과 종류와 쓰는 곳(M3 A4).
 const ITEM_EFFECTS := ["heal", "tp", "revive", "cure_ailment", "cure_bind", "return"]
 const ITEM_WHERE := ["battle", "camp"]
+## 채집(M3 A5, 01 §3.6·04 §2.2): 지점 종류(채취 take·절단 chop·추출 mine, 원작 Take·Chop·Mine), 하루 횟수 상한, 표 한 줄의 개수 상한, 표의 줄 수 상한.
+const GATHER_KINDS := ["take", "chop", "mine"]
+const GATHER_USES_MAX := 9
+const GATHER_COUNT_MAX := 5
+const GATHER_ITEMS_MAX := 8
 ## 상점(08 §2): 소지금 상한, 누적 판 수(sold·pool) 상한.
 const MONEY_MAX := 9999999
 const SOLD_MAX := 9999999

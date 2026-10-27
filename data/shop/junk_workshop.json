@@ -124,6 +124,33 @@
     },
     {
       "item": "use.ariadne_beacon"
+    },
+    {
+      "item": "equip.coil_blade",
+      "unlock": {
+        "item.scrap_wire": 4,
+        "item.copper_coil": 1
+      }
+    },
+    {
+      "item": "equip.moss_weave",
+      "unlock": {
+        "item.neon_moss": 5,
+        "item.lumen_sap": 1
+      }
+    },
+    {
+      "item": "equip.ether_lens",
+      "unlock": {
+        "item.ether_crystal": 3,
+        "item.data_core": 1
+      }
+    },
+    {
+      "item": "equip.lichen_charm",
+      "unlock": {
+        "item.frost_lichen": 3
+      }
     }
   ]
 }

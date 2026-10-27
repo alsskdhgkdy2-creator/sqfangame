@@ -1,16 +1,18 @@
-## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3, 8판 M3 A4). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
+## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3, 8판 M3 A4, 9판 M3 A5). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
 class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 8
-const RULES := "m3i"
-## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~7판은 읽을 때 8판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1·A2·A3·A4).
+const SCHEMA := 9
+const RULES := "m3g"
+## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~8판은 읽을 때 9판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1·A2·A3·A4·A5).
 ## 가방 합계(공용 60칸, D31)는 어느 판에서도 검사하지 않는다: 옛 저장이 60을 넘어도 그대로 읽고(지우지 않는다), 새로 얻는 길만
 ## BagRules 가 막는다(M3 A4 설계 §3.3). 종류마다의 범위(소모품·장비 1~99, 소재 1~9999)만 본다.
-const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i"}
-## 7판 층 기록의 world 키(M3 A3: 연 잠긴 문·연 보물상자가 더해졌다). 6판까지는 앞의 둘만 보고 다른 키는 보지 않는다.
-const WORLD_KEYS := ["shortcuts_open", "passages_found", "locks_open", "chests_opened"]
+const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i", 9: "m3g"}
+## 7·8판 층 기록의 world 키(M3 A3: 연 잠긴 문·연 보물상자가 더해졌다). 6판까지는 앞의 둘만 보고 다른 키는 보지 않는다.
+const WORLD_KEYS_V7 := ["shortcuts_open", "passages_found", "locks_open", "chests_opened"]
+## 9판 층 기록의 world 키(M3 A5: 오늘 쓴 채집 횟수 gather_used 가 더해졌다). 정확히 이 다섯이다.
+const WORLD_KEYS := ["shortcuts_open", "passages_found", "locks_open", "chests_opened", "gather_used"]
 ## 5판 층 기록(floor_states.<층 ID>)의 키. 1~4판은 이 셋이 state 바로 아래에 있다(층 하나).
 const FLOOR_STATE_KEYS := ["world", "knowledge", "annotation"]
 ## 1판 검사에 쓰는 옛 대원 표(06 §8.6 2단계): [id, 최대 HP], 칸 순서.
@@ -147,7 +149,8 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 	}
 
 
-## 한 층 기록 → {world, knowledge, annotation}(4판까지의 같은 이름 객체와 모양이 같다). 7판 world 는 연 잠긴 문·연 상자 id 도 쓴다.
+## 한 층 기록 → {world, knowledge, annotation}(4판까지의 같은 이름 객체와 모양이 같다). 7판 world 는 연 잠긴 문·연 상자 id 도,
+## 9판 world 는 오늘 쓴 채집 횟수(지점 id → 횟수, 키 정렬)도 쓴다.
 static func floor_state_to_dict(r: FloorState) -> Dictionary:
 	var k_edges := {}
 	for e in r.knowledge.edges:
@@ -168,10 +171,21 @@ static func floor_state_to_dict(r: FloorState) -> Dictionary:
 		memos[GridKey.cell(c)] = a.memos[c]
 	return {
 		"world": {"shortcuts_open": _edge_set(r.world.shortcuts_open), "passages_found": _edge_set(r.world.passages_found),
-			"locks_open": _edge_set(r.world.locks_open), "chests_opened": _str_set(r.world.chests_opened)},
+			"locks_open": _edge_set(r.world.locks_open), "chests_opened": _str_set(r.world.chests_opened),
+			"gather_used": _sorted_counts(r.world.gather_used)},
 		"knowledge": {"visited": _cell_set(r.knowledge.visited), "edges": k_edges},
 		"annotation": {"floors": a_floors, "edges": a_edges, "auto_edges": _edge_set(a.auto_edges), "icons": icons, "memos": memos},
 	}
+
+
+## 이름 → 정수 사전을 키 차례로(채집 횟수, M3 A5).
+static func _sorted_counts(d: Dictionary) -> Dictionary:
+	var keys := d.keys()
+	keys.sort()
+	var out := {}
+	for k in keys:
+		out[k] = int(d[k])
+	return out
 
 
 static func _edge_set(d: Dictionary) -> Array[String]:
@@ -228,6 +242,8 @@ static func _decode_doc(doc: Dictionary, defs: GameDefs) -> LoadResult:
 			return migrate_v6(doc, defs)
 		7:
 			return migrate_v7(doc, defs)
+		8:
+			return migrate_v8(doc, defs)
 	var s := ExplorationState.new()
 	r.error = _read_state(doc["state"], defs, [], SCHEMA, s)
 	if not r.error.is_empty():
@@ -375,8 +391,8 @@ static func migrate_v6(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
-## 7판 → 8판(M3 A4). doc 은 머리 검사를 통과한 7판 문서. ① 7판 규칙으로 다 검사 ② 원본 saved_at·generation 으로 8판 encode
-## (7판 저장에는 소모품이 없다: 빈 consumables. 60칸을 넘은 가방도 그대로) ③ 8판 읽기를 그대로 거친 결과만 돌려준다.
+## 7판 → 지금 판(M3 A4 에서 8판, A5 부터 9판). doc 은 머리 검사를 통과한 7판 문서. ① 7판 규칙으로 다 검사 ② 원본 saved_at·generation 으로 지금 판 encode
+## (7판 저장에는 소모품이 없다: 빈 consumables. 60칸을 넘은 가방도 그대로) ③ 지금 판 읽기를 그대로 거친 결과만 돌려준다.
 static func migrate_v7(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	var r := LoadResult.new()
 	var old := ExplorationState.new()
@@ -389,6 +405,23 @@ static func migrate_v7(doc: Dictionary, defs: GameDefs) -> LoadResult:
 		r.error = "7판 이전 결과 검사 실패: " + again.error
 		return r
 	again.from_schema = 7
+	return again
+
+
+## 8판 → 9판(M3 A5). doc 은 머리 검사를 통과한 8판 문서. ① 8판 규칙으로 다 검사 ② 원본 saved_at·generation 으로 9판 encode
+## (8판 저장에는 채집 기록이 없다: 층 기록마다 빈 gather_used. 60칸을 넘은 가방도 그대로) ③ 9판 읽기를 그대로 거친 결과만 돌려준다.
+static func migrate_v8(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, [], 8, old)
+	if not err.is_empty():
+		r.error = "8판 검사 실패: " + err
+		return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "8판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 8
 	return again
 
 
@@ -491,6 +524,7 @@ static func _check_header(doc: Dictionary) -> String:
 ## schema 6: location·day(M3 A2). 마을이면 층이 첫 층·위치가 그 시작 칸이고 전투 대기·전투·전멸이 아니다. 5판 이하는 미궁·1일째.
 ## schema 7: key_items(M3 A3), 층 기록 world 의 locks_open·chests_opened(키가 정확히 WORLD_KEYS), 열쇠·상자·잠긴 문 맞물림(_check_keys).
 ## schema 8: consumables(M3 A4). 가방 합계(60칸)는 보지 않는다(옛 저장을 지우지 않는다, 설계 §3.3).
+## schema 9: 층 기록 world 의 gather_used(M3 A5, 키가 정확히 WORLD_KEYS 다섯). 7·8판 world 는 정확히 WORLD_KEYS_V7 넷이다.
 ## 위치(party.at)와 전투 편성은 지금 층(state.floor)으로, 층 기록은 각자 그 층으로 검사한다.
 ## schema 2 의 battle 은 검사만 하고 만들지 않는다(옮긴 대원으로 migrate_v2 가 만든다).
 static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int, s: ExplorationState) -> String:
@@ -807,11 +841,12 @@ static func _read_world(d: Dictionary, s: FloorState, schema: int = SCHEMA) -> S
 	if schema >= 7:
 		if typeof(d.get("world")) != TYPE_DICTIONARY:
 			return "world 가 객체가 아니다"
-		for k in WORLD_KEYS:
+		var wkeys: Array = WORLD_KEYS if schema >= 9 else WORLD_KEYS_V7
+		for k in wkeys:
 			if not w.has(k):
 				return "world.%s 가 없다" % k
 		for k in w:
-			if not WORLD_KEYS.has(k):
+			if not wkeys.has(k):
 				return "world.%s 는 모르는 필드다" % str(k)
 	var err := _read_edge_set(w.get("shortcuts_open"), s.floor_def, FloorModel.Edge.SHORTCUT, s.world.shortcuts_open)
 	if not err.is_empty():
@@ -833,6 +868,23 @@ static func _read_world(d: Dictionary, s: FloorState, schema: int = SCHEMA) -> S
 		if s.world.chests_opened.has(id):
 			return "world.chests_opened: %s 가 두 번 있다" % id
 		s.world.chests_opened[id] = true
+	if schema >= 9:
+		return _read_gather_used(w["gather_used"], s)
+	return ""
+
+
+## 9판 world.gather_used(M3 A5): 이 층의 채집 지점 id → 오늘 쓴 횟수 정수 1~GATHER_USES_MAX(0 은 적지 않는다).
+## 지점의 지금 uses 와는 견주지 않는다: 자료를 고쳐 횟수가 줄어도 저장은 읽히고 그 지점은 다 쓴 것으로 보인다(설계 §3.2). id 는 엄격하다.
+static func _read_gather_used(v: Variant, s: FloorState) -> String:
+	if typeof(v) != TYPE_DICTIONARY:
+		return "world.gather_used: 객체가 아니다"
+	for id in v:
+		if typeof(id) != TYPE_STRING or not s.floor_def.points.has(id):
+			return "world.gather_used: %s 는 이 층의 채집 지점이 아니다" % str(id)
+		var n: Variant = to_int(v[id]) if typeof(v[id]) != TYPE_BOOL else null
+		if n == null or not BattleLimits.in_range("gather_uses", n):
+			return "world.gather_used.%s: 정수 1~%d 이어야 한다" % [id, BattleLimits.GATHER_USES_MAX]
+		s.world.gather_used[id] = n
 	return ""
 
 

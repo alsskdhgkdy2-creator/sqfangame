@@ -327,6 +327,67 @@
       "ailment_vuln": {},
       "bind_vuln": {},
       "price": 300
+    },
+    {
+      "id": "equip.coil_blade",
+      "name_key": "equip.coil_blade",
+      "kind": "sword",
+      "atk": 18,
+      "matk": 0,
+      "def": 0,
+      "mdef": 0,
+      "element": "volt",
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "price": 300
+    },
+    {
+      "id": "equip.moss_weave",
+      "name_key": "equip.moss_weave",
+      "kind": "body",
+      "atk": 0,
+      "matk": 0,
+      "def": 6,
+      "mdef": 4,
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "price": 240
+    },
+    {
+      "id": "equip.ether_lens",
+      "name_key": "equip.ether_lens",
+      "kind": "head",
+      "atk": 0,
+      "matk": 0,
+      "def": 2,
+      "mdef": 4,
+      "stats": {
+        "INT": 2
+      },
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "price": 260
+    },
+    {
+      "id": "equip.lichen_charm",
+      "name_key": "equip.lichen_charm",
+      "kind": "accessory",
+      "atk": 0,
+      "matk": 0,
+      "def": 0,
+      "mdef": 2,
+      "stats": {},
+      "resist": {
+        "ice": -300
+      },
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "price": 280
     }
   ]
 }

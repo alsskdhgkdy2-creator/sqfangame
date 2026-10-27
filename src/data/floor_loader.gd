@@ -9,13 +9,15 @@ const FLOOR_ID_PATTERN := "^[a-z][a-z0-9_]*$"
 const SET_KEYS := ["id", "floors", "entrance", "retired"]
 ## 층 파일 맨 위 키(M3 A3부터 모르는 키는 오류: 오타로 상자·잠긴 문이 소리 없이 빠지지 않게).
 const FLOOR_KEYS := ["id", "name_key", "theme", "size", "grid", "start", "stairs", "shortcuts", "encounter", "zones", "damage_floor",
-	"locks", "chests", "reserved"]
+	"locks", "chests", "reserved", "gathering"]
 ## 상자 ID(층 안에서 하나, 저장 키가 된다)·내용 범위(M3 A3, 기능 값).
 const CHEST_ID_PATTERN := "^[a-z0-9_]+$"
 const CHEST_COUNT_MAX := 99
 const CHEST_MONEY_MAX := 99999
 const CHEST_ITEM_PREFIXES := ["item.", "equip.", "key."]
 const STAIR_WAYS := ["up", "down"]
+## 채집 지점(M3 A5): 키·ID 꼴(상자와 같다, 저장 키가 된다). 종류·횟수 범위는 BattleLimits(GATHER_KINDS·gather_uses).
+const GATHER_KEYS := ["id", "at", "kind", "uses", "table"]
 
 const MAX_SIZE := 64
 const CELL_CHARS := {".": FloorModel.Cell.FLOOR, "#": FloorModel.Cell.VOID, "~": FloorModel.Cell.DAMAGE, "=": FloorModel.Cell.ICE}
@@ -441,6 +443,7 @@ static func _build(ctx: _Ctx, d: Dictionary) -> FloorModel:
 	_read_start(ctx, d, f)
 	_read_stairs(ctx, d, f)
 	_read_chests(ctx, d, f)
+	_read_gathering(ctx, d, f)
 	_read_reserved(ctx, d, f)
 	_read_encounter(ctx, d, f)
 	_read_zones(ctx, d, f)
@@ -698,7 +701,80 @@ static func _read_chests(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 			f.add_chest(c)
 
 
-## 예약 구역(M3 A3): [[x0, y0, x1, y1], …] 양 끝 포함. 시작 칸·계단·상자를 담을 수 없다.
+## 채집 지점(M3 A5): [{id, at, kind, uses, table}, …]. 키는 정확히 GATHER_KEYS, id 는 층 안에서 하나(상자 ID 꼴),
+## 칸은 바닥(.)이고 시작 칸·계단·상자·다른 지점이 아니다. 종류는 take·chop·mine, 하루 횟수 1~GATHER_USES_MAX,
+## 표 ID 는 gather. 로 시작한다(표가 있는지·종류가 맞는지는 GameDefs 가 본다).
+static func _read_gathering(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
+	if not d.has("gathering"):
+		return
+	if typeof(d["gathering"]) != TYPE_ARRAY:
+		ctx.fail_key("gathering", "gathering은 배열이어야 한다")
+		return
+	var pid_re := RegEx.create_from_string(CHEST_ID_PATTERN)
+	var id_re := RegEx.create_from_string(BattleDb.ID_PATTERN)
+	var list: Array = d["gathering"]
+	for i in list.size():
+		var item: Variant = list[i]
+		var label := "gathering[%d]" % i
+		if typeof(item) != TYPE_DICTIONARY:
+			ctx.fail_key("gathering", "%s 는 객체여야 한다" % label)
+			continue
+		var bad := false
+		for k in item:
+			if not GATHER_KEYS.has(k):
+				ctx.fail_key("gathering", "%s.%s 는 모르는 필드다" % [label, str(k)])
+				bad = true
+		for k in GATHER_KEYS:
+			if not item.has(k):
+				ctx.fail_key("gathering", "%s.%s 가 없다" % [label, k])
+				bad = true
+		if bad:
+			continue
+		var p := FloorModel.GatherPoint.new()
+		var idv: Variant = item["id"]
+		if typeof(idv) != TYPE_STRING or pid_re.search(idv) == null:
+			ctx.fail_key("gathering", "%s.id 는 %s 꼴 문자열이어야 한다" % [label, CHEST_ID_PATTERN])
+			bad = true
+		else:
+			p.id = idv
+		p.at = ctx.cell_value(item["at"], "gathering", label + ".at")
+		if typeof(item["kind"]) != TYPE_STRING or not BattleLimits.GATHER_KINDS.has(item["kind"]):
+			ctx.fail_key("gathering", "%s.kind 는 %s 가운데 하나여야 한다" % [label, "·".join(BattleLimits.GATHER_KINDS)])
+			bad = true
+		else:
+			p.kind = item["kind"]
+		var n: Variant = SaveCodec.to_int(item["uses"]) if typeof(item["uses"]) != TYPE_BOOL else null
+		if n == null or not BattleLimits.in_range("gather_uses", n):
+			ctx.fail_key("gathering", "%s.uses 는 1~%d 정수여야 한다" % [label, BattleLimits.GATHER_USES_MAX])
+			bad = true
+		else:
+			p.uses = n
+		var tv: Variant = item["table"]
+		if typeof(tv) != TYPE_STRING or id_re.search(tv) == null or not str(tv).begins_with("gather.") or str(tv).length() == 7:
+			ctx.fail_key("gathering", "%s.table 은 gather. 로 시작하는 ID 문자열이어야 한다" % label)
+			bad = true
+		else:
+			p.table = tv
+		if bad or p.at == GridKey.BAD_CELL:
+			continue
+		var where := "%s %d:%d" % [label, p.at.x, p.at.y]
+		if f.cell_kind(p.at) != FloorModel.Cell.FLOOR:
+			ctx.fail_key("gathering", "%s 이 바닥 칸(.)이 아니다" % where)
+		elif f.has_start() and p.at == f.start_at:
+			ctx.fail_key("gathering", "%s 이 시작 칸이다" % where)
+		elif f.stairs.has(p.at):
+			ctx.fail_key("gathering", "%s 에 계단이 있다" % where)
+		elif f.chest_at(p.at) != null:
+			ctx.fail_key("gathering", "%s 에 상자가 있다" % where)
+		elif f.point_at(p.at) != null:
+			ctx.fail_key("gathering", "%s 에 채집 지점이 이미 있다" % where)
+		elif f.points.has(p.id):
+			ctx.fail_key("gathering", "%s 의 id %s 가 중복이다" % [label, p.id])
+		else:
+			f.add_point(p)
+
+
+## 예약 구역(M3 A3): [[x0, y0, x1, y1], …] 양 끝 포함. 시작 칸·계단·상자·채집 지점(M3 A5)을 담을 수 없다.
 static func _read_reserved(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 	if not d.has("reserved"):
 		return
@@ -726,6 +802,10 @@ static func _read_reserved(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 		for c in f.chest_list():
 			if r.has_point(c.at):
 				inside.append("상자")
+				break
+		for p in f.point_list():
+			if r.has_point(p.at):
+				inside.append("채집 지점")
 				break
 		if not inside.is_empty():
 			ctx.fail_key("reserved", "reserved[%d] 에 %s 가 있다" % [i, "·".join(inside)])

@@ -59,6 +59,11 @@
     {"id": "c4", "at": [17, 13], "item": "equip.visor"},
     {"id": "c5", "at": [2, 11], "item": "item.cable_scale", "count": 3}
   ],
+  "gathering": [
+    {"id": "g1", "at": [4, 10], "kind": "take", "uses": 2, "table": "gather.b2f.take"},
+    {"id": "g2", "at": [3, 6], "kind": "chop", "uses": 2, "table": "gather.b2f.chop"},
+    {"id": "g3", "at": [14, 16], "kind": "mine", "uses": 2, "table": "gather.b2f.mine"}
+  ],
   "encounter": {"danger_per_step": 10, "threshold_min": 110, "threshold_max": 220, "table": "encounter.b2f"},
   "zones": [{"id": "current", "rect": [8, 3, 8, 11], "danger_per_step": 15}]
 }

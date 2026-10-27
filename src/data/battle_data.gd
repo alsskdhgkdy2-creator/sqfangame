@@ -1,4 +1,5 @@
 ## 전투 정의 데이터(data/ 의 rules·classes·skills·enemies·encounters·items) 읽기·검사 → BattleDb (06 §5).
+## 채집 표(data/gathering, M3 A5)도 여기서 읽는다(소재 참조를 한곳에서 본다).
 ## 성장 정의(성장 규칙·레벨 표·스킬 트리·패시브·장비, 07 §7)와 상점 정의(값·판매값·진열, 08 §1)도 여기서 읽는다.
 ## 오류는 "파일: 필드 경로: 내용". 오류가 하나라도 있으면 이 정의를 쓰지 않는다(06 §5.6).
 ## 값 범위는 BattleLimits 한 곳에서 온다. 모르는 필드는 거부한다(층 정의와 다르다).
@@ -7,7 +8,7 @@ extends RefCounted
 
 ## \A·\z: 문자열 전체와 맞춘다($ 는 끝 줄바꿈 앞에서도 맞는다).
 const ID_PATTERN := "\\A[a-z0-9_.]+\\z"
-const KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items", "shop"]
+const KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items", "shop", "gathering"]
 const RULES_FILE := "rules/battle.json"
 const GROWTH_FILE := "rules/growth.json"
 const EFFECTS := ["damage", "ailment", "heal", "cure", "revive", "buff", "debuff", "front_guard", "cover", "charge", "passive"]
@@ -24,7 +25,12 @@ const PASSIVE_KEYS := ["id", "name_key", "user", "effect", "levels"]
 const CLASS_KEYS := ["id", "name_key", "levels", "attack", "resist", "ailment_vuln", "bind_vuln", "equip_kinds", "tree"]
 const TREE_KEYS := ["skill", "pos", "requires", "min_level"]
 const EQUIP_KEYS := ["id", "name_key", "kind", "price", "atk", "matk", "def", "mdef", "stats", "resist", "ailment_vuln", "bind_vuln"]
-const MATERIAL_KEYS := ["id", "name_key", "sell"]
+## 소재: 설명 글(desc_key)은 M3 A5부터 필수다(소지품 설명 상자).
+const MATERIAL_KEYS := ["id", "name_key", "desc_key", "sell"]
+## 채집 표(M3 A5, data/gathering/*.json 의 gather_tables): rare 는 선택. 줄은 {item, weight, count: [lo, hi]}.
+const GATHER_TABLE_KEYS := ["id", "kind", "items"]
+const GATHER_LINE_KEYS := ["item", "weight", "count"]
+const GATHER_RARE_KEYS := ["item", "permille"]
 ## 귀중품(열쇠, M3 A3, data/items/key_items.json): 값이 없고 팔 수 없다.
 const KEY_ITEM_KEYS := ["id", "name_key", "desc_key"]
 ## 소모품(M3 A4, data/items/consumables.json): 이 키는 모두 필수, 효과마다 더 받는 키(CONSUMABLE_EXTRA). 대상은 효과가 정한다(CONSUMABLE_TARGET).
@@ -218,6 +224,23 @@ class EquipDef:
 		return only_classes.has(c.id) if not only_classes.is_empty() else c.equip_kinds.has(kind)
 
 
+## 채집 표 하나(M3 A5): 지점 종류, 무게로 고르는 줄(소재 하나·개수 범위), 희귀 소재와 그 확률(천분율, 없으면 rare_item "").
+class GatherTableDef:
+	extends RefCounted
+	var id := ""
+	var kind := ""
+	## [{item, weight, lo, hi}] 파일 차례.
+	var items: Array[Dictionary] = []
+	var rare_item := ""
+	var rare_permille := 0
+
+	func total_weight() -> int:
+		var n := 0
+		for x in items:
+			n += int(x["weight"])
+		return n
+
+
 ## 소모품 하나(M3 A4). where ⊆ battle·camp. skill 은 전투에서 쓰는 대리 스킬(쓰는 곳에 battle 이 있을 때만, 아니면 null):
 ## 대상 규칙·후보·대상 다시 보기·순서(speed 1000 = AGI 계수 1)를 스킬과 같은 함수로 돌린다. 스킬 사전(skills)에는 넣지 않는다.
 class ConsumableDef:
@@ -304,6 +327,10 @@ var encounters := {}
 var materials := {}
 ## 소재 ID → 판매값(08 §1.1)
 var material_sell := {}
+## 소재 ID → 설명 글 키(M3 A5)
+var material_desc := {}
+## 채집 표 ID → GatherTableDef(M3 A5)
+var gather_tables := {}
 ## 귀중품(열쇠) ID → {name_key, desc_key}(M3 A3)
 var key_items := {}
 ## 소모품 ID → ConsumableDef(M3 A4)
@@ -323,6 +350,7 @@ var equipment_ids: Array[String] = []
 var key_item_ids: Array[String] = []
 var consumable_ids: Array[String] = []
 var shop_ids: Array[String] = []
+var gather_table_ids: Array[String] = []
 var errors: Array[String] = []
 var warnings: Array[String] = []
 
@@ -401,6 +429,8 @@ static func parse(files: Dictionary) -> BattleDb:
 					db._read_list(ck, data, "materials", db._read_material)
 			"shop":
 				db._read_shop(ck, data)
+			"gathering":
+				db._read_list(ck, data, "gather_tables", db._read_gather_table)
 	db._check_refs()
 	return db
 
@@ -449,6 +479,7 @@ func name_keys() -> Array[String]:
 		out.append(enemies[id].name_key)
 	for id in material_ids:
 		out.append(materials[id])
+		out.append(material_desc[id])
 	for id in equipment_ids:
 		out.append(equipment[id].name_key)
 	for id in key_item_ids:
@@ -616,12 +647,78 @@ func _read_material(ck: _Ck, d: Dictionary, path: String) -> void:
 		return
 	var id := ck.id_of(d, "id", path, "item.")
 	var nk := ck.str_of(d, "name_key", path)
+	var dk := ck.str_of(d, "desc_key", path)
 	var sell: Variant = ck.int_of(d, "sell", path, "sell")
 	if id.is_empty() or not _claim(ck, id, path):
 		return
 	materials[id] = nk
+	material_desc[id] = dk
 	material_sell[id] = sell if sell != null else 1
 	material_ids.append(id)
+
+
+## 채집 표(M3 A5): 키가 정확히 id·kind·items(+ 선택 rare). 줄은 1~GATHER_ITEMS_MAX 개, 소재 ID(item.)·무게 1~1000·개수 [lo, hi]
+## (1 ≤ lo ≤ hi ≤ GATHER_COUNT_MAX). rare 는 {item, permille 1~1000}. 소재가 있는지는 _check_refs 가 본다(파일 차례와 무관하게).
+func _read_gather_table(ck: _Ck, d: Dictionary, path: String) -> void:
+	if not ck.keys(d, path, GATHER_TABLE_KEYS, ["rare"]):
+		return
+	var g := GatherTableDef.new()
+	g.id = ck.id_of(d, "id", path, "gather.")
+	g.kind = ck.enum_of(d, "kind", path, BattleLimits.GATHER_KINDS)
+	var ok := not g.id.is_empty() and not g.kind.is_empty()
+	var list: Variant = d["items"]
+	if typeof(list) != TYPE_ARRAY or list.is_empty() or list.size() > BattleLimits.GATHER_ITEMS_MAX:
+		ck.err(_p(path, "items"), "줄이 1~%d 개인 배열이어야 한다" % BattleLimits.GATHER_ITEMS_MAX)
+		ok = false
+	else:
+		for i in list.size():
+			var lp := "%s[%d]" % [_p(path, "items"), i]
+			var x: Variant = list[i]
+			if typeof(x) != TYPE_DICTIONARY:
+				ck.err(lp, "객체여야 한다")
+				ok = false
+				continue
+			if not ck.keys(x, lp, GATHER_LINE_KEYS, []):
+				ok = false
+				continue
+			var item := ck.id_of(x, "item", lp, "item.")
+			var w: Variant = ck.int_of(x, "weight", lp, "gather_weight")
+			var c: Variant = x["count"]
+			var lo: Variant = null
+			var hi: Variant = null
+			if typeof(c) == TYPE_ARRAY and c.size() == 2 and typeof(c[0]) != TYPE_BOOL and typeof(c[1]) != TYPE_BOOL:
+				lo = SaveCodec.to_int(c[0])
+				hi = SaveCodec.to_int(c[1])
+			if lo == null or hi == null or not BattleLimits.in_range("gather_count", lo) or not BattleLimits.in_range("gather_count", hi) or lo > hi:
+				ck.err(_p(lp, "count"), "[lo, hi] 정수 쌍이어야 한다(1 ≤ lo ≤ hi ≤ %d)" % BattleLimits.GATHER_COUNT_MAX)
+				ok = false
+				continue
+			if item.is_empty() or w == null:
+				ok = false
+				continue
+			g.items.append({"item": item, "weight": w, "lo": lo, "hi": hi})
+	if d.has("rare"):
+		var rp := _p(path, "rare")
+		if typeof(d["rare"]) != TYPE_DICTIONARY:
+			ck.err(rp, "객체여야 한다")
+			ok = false
+		elif ck.keys(d["rare"], rp, GATHER_RARE_KEYS, []):
+			g.rare_item = ck.id_of(d["rare"], "item", rp, "item.")
+			var pm: Variant = ck.int_of(d["rare"], "permille", rp, "gather_permille")
+			if g.rare_item.is_empty() or pm == null:
+				ok = false
+			else:
+				g.rare_permille = pm
+		else:
+			ok = false
+	if not ok or not _claim(ck, g.id, path):
+		return
+	gather_tables[g.id] = g
+	gather_table_ids.append(g.id)
+
+
+func gather_table(id: String) -> GatherTableDef:
+	return gather_tables.get(id)
 
 
 ## 장비(07 §7.5). 무기 종류만 element(필수), 그 밖은 element 가 있으면 오류. only_classes 만 선택.
@@ -1248,6 +1345,15 @@ func _check_refs() -> void:
 	for id in consumable_ids:
 		if not stocked.has(id):
 			warnings.append("%s: 어느 상점에도 없는 소모품" % id)
+	# 채집 표의 소재(M3 A5): 줄과 희귀 소재가 정의에 있는 소재인지.
+	for gid in gather_table_ids:
+		var g: GatherTableDef = gather_tables[gid]
+		var ck := _Ck.new(self, _ids[gid])
+		for i in g.items.size():
+			if not materials.has(g.items[i]["item"]):
+				ck.err("%s.items[%d].item" % [gid, i], "없는 소재 %s" % g.items[i]["item"])
+		if not g.rare_item.is_empty() and not materials.has(g.rare_item):
+			ck.err(gid + ".rare.item", "없는 소재 %s" % g.rare_item)
 	for eid in enemy_ids:
 		var e: EnemyDef = enemies[eid]
 		var ck := _Ck.new(self, _ids[eid])

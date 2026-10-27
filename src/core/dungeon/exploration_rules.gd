@@ -7,13 +7,14 @@ extends RefCounted
 ## ENTER(M3 A2): 마을에서 미궁 B1F 시작 칸으로 들어간다(아보르 입구 「탐사 시작」). 값이 바뀌지 않게 새 행동은 맨 뒤에 둔다.
 ## 7 은 비어 있다: 시작 칸 휴식(REST, 06 §8.8 자리표시)은 숙소 숙박(M3 A2b, TownRules.stay)으로 바뀌어 없앴고 STAIRS 는 8 그대로다.
 ## OPEN(M3 A3): 서 있는 칸의 닫힌 보물상자를 연다(화면이 상자 물음 「예」 뒤에 부른다).
-enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, STAIRS = 8, ENTER, OPEN }
+## GATHER(M3 A5): 서 있는 채집 지점에서 한 번 채집한다(GatherRules.gather, 화면이 채집 물음 「예」 뒤에 부른다).
+enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, STAIRS = 8, ENTER, OPEN, GATHER }
 
 ## 행동 이름(공략 행동열 파일·디버그용) → Action.
 const ACTION_NAMES := {
 	"forward": Action.FORWARD, "back": Action.BACK, "strafe_left": Action.STRAFE_LEFT, "strafe_right": Action.STRAFE_RIGHT,
 	"turn_left": Action.TURN_LEFT, "turn_right": Action.TURN_RIGHT, "investigate": Action.INVESTIGATE,
-	"stairs": Action.STAIRS, "enter": Action.ENTER, "open": Action.OPEN,
+	"stairs": Action.STAIRS, "enter": Action.ENTER, "open": Action.OPEN, "gather": Action.GATHER,
 }
 const AUTOMAP_OFF := "off"
 const AUTOMAP_FLOOR := "floor"
@@ -83,6 +84,8 @@ static func apply(s: ExplorationState, action: int, automap: String) -> Array[Di
 			events.append({"type": "blocked", "reason": "not_town"})
 		Action.OPEN:
 			_open_chest(s, events)
+		Action.GATHER:
+			GatherRules.gather(s, events)
 		_:
 			_move(s, _move_dir(s.party.facing, action), action == Action.FORWARD, events, automap)
 	return events
@@ -229,6 +232,9 @@ static func _investigate(s: ExplorationState, events: Array[Dictionary], automap
 		else:
 			events.append({"type": "chest", "chest": chest.id})
 		return
+	# 채집 지점에서 조사하면 남은 횟수가 있으면 다시 묻고, 다 썼으면 그 알림(M3 A5). 지점은 상자·계단과 한 칸에 겹치지 않는다.
+	if GatherRules.point_event(s, events):
+		return
 	# 계단 위에서 조사하면 계단 확인을 다시 묻는다(거절·전투·새로고침 뒤, M3 A1).
 	if _stairs_event(s, events):
 		return
@@ -264,11 +270,13 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 		events.append({"type": "encounter", "formation": formation})
 		return
 	# 계단 칸에서 멈췄으면(전멸·인카운트가 아닐 때만) 화면이 확인 창을 띄운다(M3 A1). 닫힌 상자 칸이면 상자 물음(M3 A3).
-	# 계단과 상자는 한 칸에 겹치지 않는다(층 형식 검사).
+	# 채집 지점이면 채집 물음(gather) 또는 다 썼다는 알림(gather_spent, M3 A5). 계단·상자·지점은 한 칸에 겹치지 않는다(층 형식 검사).
 	if not _stairs_event(s, events):
 		var chest := f.chest_at(s.party.at)
 		if chest != null and not s.world.is_chest_opened(chest.id):
 			events.append({"type": "chest", "chest": chest.id})
+		else:
+			GatherRules.point_event(s, events)
 
 
 ## 서 있는 칸의 계단: {way, to}(계단이면 짝 층 ID, B1F 마을 문이면 to = "town", M3 A2). 아니면 빈 사전.
@@ -283,7 +291,8 @@ static func stair_here(s: ExplorationState) -> Dictionary:
 	return {}
 
 
-## 서 있는 칸의 물음(M3 A3): 계단(마을 문 포함)이면 {kind: "stairs", way, to}, 닫힌 상자면 {kind: "chest", chest: id}, 아니면 빈 사전.
+## 서 있는 칸의 물음(M3 A3): 계단(마을 문 포함)이면 {kind: "stairs", way, to}, 닫힌 상자면 {kind: "chest", chest: id},
+## 오늘 남은 횟수가 있는 채집 지점이면 {kind: "gather", point: id}(M3 A5), 아니면 빈 사전.
 ## 화면이 남은 물음이 아직 맞는지 볼 때 쓴다.
 static func question_here(s: ExplorationState) -> Dictionary:
 	var st := stair_here(s)
@@ -295,6 +304,9 @@ static func question_here(s: ExplorationState) -> Dictionary:
 	var chest := s.floor_def.chest_at(s.party.at)
 	if chest != null and not s.world.is_chest_opened(chest.id):
 		return {"kind": "chest", "chest": chest.id}
+	var p := s.floor_def.point_at(s.party.at)
+	if p != null and s.world.gather_left(p) > 0:
+		return {"kind": "gather", "point": p.id}
 	return {}
 
 

@@ -63,7 +63,7 @@ func test_real_growth_data() -> void:
 		check_eq(c.levels.size(), 30, "%s 레벨 표 30줄" % cid)
 		check(c.tree.size() >= 6 and c.tree.size() <= 7, "%s 트리 6~7개" % cid)
 		check_eq(c.skills, c.tree.map(func(e): return e["skill"]), "%s: ClassDef.skills = 트리 순서" % cid)
-	check_eq(db.equipment_ids.size(), 21, "장비 21종")
+	check_eq(db.equipment_ids.size(), 25, "장비 25종(M3 A5 채집 소재로 푸는 넷을 더함, 01 §9)")
 	check_eq(db.skill_ids.filter(func(id): return db.skill(id).passive()).size(), 4, "패시브 넷")
 	check_eq(db.skill_ids.filter(func(id): return db.skill(id).user == "party" and not db.skill(id).passive()).size(), 21, "액티브 21(M2 13 + 새 8)")
 	for sid in db.skill_ids:

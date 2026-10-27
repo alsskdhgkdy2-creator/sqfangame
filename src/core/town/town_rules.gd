@@ -48,9 +48,11 @@ static func stay(s: ExplorationState) -> Array[Dictionary]:
 	return events
 
 
-## 날이 바뀔 때 한 번(지금은 숙박만 부른다). 다음 단계가 여기에 더한다: A5 층마다 채집 횟수 되돌리기, A6 FOE 되살리기(AfterDays).
-## 밖에서 고칠 상태 이상은 없다(전투가 끝나면 지운다, 06 §3.17).
-static func new_day(_s: ExplorationState) -> void:
+## 날이 바뀔 때 한 번(지금은 숙박만 부른다). 들어가 본 모든 층의 오늘 쓴 채집 횟수를 비운다(M3 A5, 01 §3.6: 지금 층만이 아니다).
+## 다음 단계가 여기에 더한다: A6 FOE 되살리기(AfterDays). 밖에서 고칠 상태 이상은 없다(전투가 끝나면 지운다, 06 §3.17).
+static func new_day(s: ExplorationState) -> void:
+	for id in s.floor_states:
+		s.floor_states[id].world.gather_used.clear()
 	if new_day_hook.is_valid():
 		new_day_hook.call()
 

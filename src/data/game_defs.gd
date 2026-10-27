@@ -95,6 +95,7 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 				r.errors.append("%s: encounter.table: 없는 출현 표 %s" % [f.id, f.encounter_table])
 	if db.ok():
 		r.errors.append_array(check_chests_and_locks(floor_list, db))
+		r.errors.append_array(check_gathering(floor_list, db))
 	if text_db != null and db.ok():
 		var keys := db.name_keys()
 		keys.append_array(party.name_keys)
@@ -113,6 +114,19 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 		d.battle = db
 		r.defs = d
 	return r
+
+
+## 채집 지점 참조(M3 A5): 지점의 표가 정의에 있고, 표의 종류가 지점 종류와 같은지.
+static func check_gathering(floor_list: Array[FloorModel], db: BattleDb) -> Array[String]:
+	var out: Array[String] = []
+	for f in floor_list:
+		for p in f.point_list():
+			var g := db.gather_table(p.table)
+			if g == null:
+				out.append("%s: gathering: 지점 %s 의 표 %s 가 없다" % [f.id, p.id, p.table])
+			elif g.kind != p.kind:
+				out.append("%s: gathering: 지점 %s 의 종류 %s 와 표 %s 의 종류 %s 가 다르다" % [f.id, p.id, p.kind, p.table, g.kind])
+	return out
 
 
 ## 상자·잠긴 문 참조(M3 A3): 상자의 물건이 있는 소재·장비·귀중품인지, 열쇠는 묶음 전체에서 한 상자에만 있는지,

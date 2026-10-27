@@ -3,42 +3,92 @@
     {
       "id": "item.neon_rat_tail",
       "name_key": "item.neon_rat_tail",
+      "desc_key": "item.neon_rat_tail.desc",
       "sell": 8
     },
     {
       "id": "item.cable_scale",
       "name_key": "item.cable_scale",
+      "desc_key": "item.cable_scale.desc",
       "sell": 12
     },
     {
       "id": "item.glow_scale",
       "name_key": "item.glow_scale",
+      "desc_key": "item.glow_scale.desc",
       "sell": 20
     },
     {
       "id": "item.spore_pouch",
       "name_key": "item.spore_pouch",
+      "desc_key": "item.spore_pouch.desc",
       "sell": 10
     },
     {
       "id": "item.coated_scale",
       "name_key": "item.coated_scale",
+      "desc_key": "item.coated_scale.desc",
       "sell": 14
     },
     {
       "id": "item.drill_claw",
       "name_key": "item.drill_claw",
+      "desc_key": "item.drill_claw.desc",
       "sell": 16
     },
     {
       "id": "item.beetle_plate",
       "name_key": "item.beetle_plate",
+      "desc_key": "item.beetle_plate.desc",
       "sell": 18
     },
     {
       "id": "item.intact_pincer",
       "name_key": "item.intact_pincer",
+      "desc_key": "item.intact_pincer.desc",
       "sell": 30
+    },
+    {
+      "id": "item.neon_moss",
+      "name_key": "item.neon_moss",
+      "desc_key": "item.neon_moss.desc",
+      "sell": 5
+    },
+    {
+      "id": "item.lumen_sap",
+      "name_key": "item.lumen_sap",
+      "desc_key": "item.lumen_sap.desc",
+      "sell": 35
+    },
+    {
+      "id": "item.frost_lichen",
+      "name_key": "item.frost_lichen",
+      "desc_key": "item.frost_lichen.desc",
+      "sell": 18
+    },
+    {
+      "id": "item.scrap_wire",
+      "name_key": "item.scrap_wire",
+      "desc_key": "item.scrap_wire.desc",
+      "sell": 6
+    },
+    {
+      "id": "item.copper_coil",
+      "name_key": "item.copper_coil",
+      "desc_key": "item.copper_coil.desc",
+      "sell": 40
+    },
+    {
+      "id": "item.ether_crystal",
+      "name_key": "item.ether_crystal",
+      "desc_key": "item.ether_crystal.desc",
+      "sell": 24
+    },
+    {
+      "id": "item.data_core",
+      "name_key": "item.data_core",
+      "desc_key": "item.data_core.desc",
+      "sell": 60
     }
   ]
 }
