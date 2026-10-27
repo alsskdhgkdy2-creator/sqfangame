@@ -2499,14 +2499,15 @@ func test_items_description_box_shows_the_cursor_item() -> void:
 		"bind_vuln": _received_of(defs, gear, "bind_vuln")}).filter(func(l: String) -> bool: return l != t.t("party.received_none")).reduce(
 		func(a: String, b: String) -> String: return b if a.is_empty() else a + "  " + b, ""), "받는 배율 줄 = 상태 화면과 같은 글")
 	_check_desc(it, pm.item_name(gear), SheetParts.kind_icon(defs, gear), lines, "장비")
-	# 소재: 「소재」 · 판매값. 상점에서 무엇을 푸는지는 쓰지 않는다.
+	# 소재: 설명 글 · 「소재」 · 판매값(M3 A5, 설계 §2.6). 상점에서 무엇을 푸는지는 쓰지 않는다.
 	var mat: String = it.row_items[it.row_items.size() - 1]
 	for j in it.row_items.size():
 		await kit.press_key(KEY_DOWN)
 	await kit.frames(1)
 	check_eq(it.cursor_stop(), it.rows[it.row_items.size() - 1], "준비: 커서 = 마지막 소재")
 	var mlines := it.item_lines(mat)
-	check_eq(mlines, [t.t("party.items.materials"), t.t("party.items.sell", {"money": ShopRules.sell_price(defs, mat)})] as Array[String], "소재 설명 줄")
+	check(not t.t(defs.battle.material_desc[mat]).is_empty() and t.t(defs.battle.material_desc[mat]) != defs.battle.material_desc[mat], "준비: 소재 설명 글이 있다")
+	check_eq(mlines, [t.t(defs.battle.material_desc[mat]), t.t("party.items.materials"), t.t("party.items.sell", {"money": ShopRules.sell_price(defs, mat)})] as Array[String], "소재 설명 줄")
 	_check_desc(it, t.t(mat), "kind_material", mlines, "소재")
 	check(_items_yellow(it).size() == 1 and _yellow(pm) == [str(it.rows[it.row_items.size() - 1].name)], "노랑은 커서 줄 하나")
 	# 디버그 보급: 알약 = 보급 설명 한 줄, 「+1」 = 그 장비, 대원 단추 = 이름·Lv·경험치·다음 레벨까지.

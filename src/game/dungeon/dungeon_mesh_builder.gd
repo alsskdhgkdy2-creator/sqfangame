@@ -55,6 +55,15 @@ const CHEST_STRIPE := 0.25
 const CHEST_CLOSED := Color(0.85, 0.55, 0.15)
 const CHEST_LID_GLOW := Color(1.0, 0.85, 0.3)
 const CHEST_OPENED := Color(0.22, 0.18, 0.14)
+## 채집 지점(M3 A5 자리표시, 그림 단계 B 에서 모형): 칸 가운데 ±0.25m(0.25m 격자) 기둥, 높이 0.75m. 남은 횟수가 있으면 종류 색 몸통(0~0.5m)
+## + 밝은 띠(0.5~0.75m, 윗면 포함), 다 썼으면 회색 몸통뿐(띠 없음). 상자 호박색·잠긴 문 보라·계단 색과 다르다(D15 기능 색:
+## 절단은 설계의 주황 1.0·0.6·0.2 가 상자 호박색과 너무 가까워 짙은 주황 1.0·0.5·0.0 으로 했다).
+const POINT_HALF := 0.25
+const POINT_H := 0.75
+const POINT_BAND := 0.5
+const POINT_COLORS := {"take": Color(0.35, 0.9, 0.45), "chop": Color(1.0, 0.5, 0.0), "mine": Color(0.35, 0.85, 1.0)}
+const POINT_GLOW := {"take": Color(0.7, 1.0, 0.75), "chop": Color(1.0, 0.78, 0.45), "mine": Color(0.7, 0.95, 1.0)}
+const POINT_SPENT := Color(0.25, 0.27, 0.3)
 
 
 class Built:
@@ -129,6 +138,8 @@ static func build(f: FloorModel, world: WorldState) -> Built:
 			b.edge(f, world, Vector3i(x, y, 1))
 	for c in f.chest_list():
 		b.chest(c.at, world.is_chest_opened(c.id))
+	for p in f.point_list():
+		b.point(p.at, p.kind, world.gather_left(p) <= 0)
 	return b.finish()
 
 
@@ -271,6 +282,25 @@ class _Builder:
 		quad("plate", [o + Vector3(-h, y1, -h), o + Vector3(h, y1, -h), o + Vector3(h, y1, -t), o + Vector3(-h, y1, -t)], full, Vector3.UP, body)
 		quad("glow", [o + Vector3(-h, y1, -t), o + Vector3(h, y1, -t), o + Vector3(h, y1, t), o + Vector3(-h, y1, t)], full, Vector3.UP, CHEST_LID_GLOW)
 		quad("plate", [o + Vector3(-h, y1, t), o + Vector3(h, y1, t), o + Vector3(h, y1, h), o + Vector3(-h, y1, h)], full, Vector3.UP, body)
+
+	## 채집 지점(칸 c): 네 옆면과 윗면의 기둥. 남았으면 몸통 plate(종류 색) + 띠·윗면 glow, 다 썼으면 frame 회색 하나(남음 → 다 씀은 다시 만들기로).
+	func point(c: Vector2i, kind: String, spent: bool) -> void:
+		var o := DungeonMeshBuilder.cell_center(c)
+		var h := POINT_HALF
+		var full: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+		var bands: Array = [["frame", 0.0, POINT_H, POINT_SPENT]] if spent else \
+			[["plate", 0.0, POINT_BAND, POINT_COLORS[kind]], ["glow", POINT_BAND, POINT_H, POINT_GLOW[kind]]]
+		for band in bands:
+			var surf: String = band[0]
+			var y0: float = band[1]
+			var y1: float = band[2]
+			var col: Color = band[3]
+			quad(surf, [o + Vector3(-h, y0, -h), o + Vector3(h, y0, -h), o + Vector3(h, y1, -h), o + Vector3(-h, y1, -h)], full, Vector3.FORWARD, col)
+			quad(surf, [o + Vector3(-h, y0, h), o + Vector3(h, y0, h), o + Vector3(h, y1, h), o + Vector3(-h, y1, h)], full, Vector3.BACK, col)
+			quad(surf, [o + Vector3(-h, y0, -h), o + Vector3(-h, y0, h), o + Vector3(-h, y1, h), o + Vector3(-h, y1, -h)], full, Vector3.LEFT, col)
+			quad(surf, [o + Vector3(h, y0, -h), o + Vector3(h, y0, h), o + Vector3(h, y1, h), o + Vector3(h, y1, -h)], full, Vector3.RIGHT, col)
+		var top: Array = bands[-1]
+		quad(top[0], [o + Vector3(-h, POINT_H, -h), o + Vector3(h, POINT_H, -h), o + Vector3(h, POINT_H, h), o + Vector3(-h, POINT_H, h)], full, Vector3.UP, top[3])
 
 	## 봉인 문의 가로 빗장: 문판 앞(문틀 깊이만큼 나와) 출입구 폭, 0.75~1.0m.
 	func seal_bar(fr: EdgeFrame, sides: Array) -> void:

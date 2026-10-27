@@ -70,6 +70,9 @@ const PANEL_OPT_RADIUS := 24
 const PANEL_OPT_EDGE_W := 2
 const PANEL_OPT_RIM_W := 4
 const PANEL_OPT_TEXT := Color.WHITE
+## 채집 알약 판(M3 A5, 원작 III HD 캠프 yt_eo3hd_06): 어두운 남색 반투명 캡슐(테 없음).
+const PANEL_COUNT := Color(0x07 / 255.0, 0x1e / 255.0, 0x26 / 255.0, 0.8)
+const PANEL_COUNT_RADIUS := 24
 
 # ---- OPTION 알약·줄(원작 잼: 초록 #0E5F53 에 #7DF1DD 5.57:1, 길 #1C3F4F) ----
 const OPT_PILL := Color("0e5f53")
@@ -523,7 +526,11 @@ static func draw_banner(ci: CanvasItem, r: Rect2) -> void:
 # ---- 둥근 판 ----
 
 ## 판 r. look "tree": 스킬 트리 판(바깥 어두운 선 + 불투명 파랑). "option": 기록 판(밝은 바깥 선 + 테 + 반투명 청록 몸).
+## "count": 캠프 채집 알약(M3 A5, 테 없는 어두운 남색 반투명 캡슐).
 static func draw_panel(ci: CanvasItem, r: Rect2, look: String) -> void:
+	if look == "count":
+		SheetParts._fill_round(ci, r, PANEL_COUNT, PANEL_COUNT_RADIUS)
+		return
 	if look == "option":
 		_ring(ci, r, PANEL_OPT_EDGE, PANEL_OPT_EDGE_W, PANEL_OPT_RADIUS)
 		SheetParts._fill_round(ci, r.grow(-PANEL_OPT_EDGE_W), PANEL_OPT, PANEL_OPT_RADIUS - PANEL_OPT_EDGE_W, PANEL_OPT_RIM, PANEL_OPT_RIM_W)

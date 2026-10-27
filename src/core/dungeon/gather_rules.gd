@@ -96,3 +96,19 @@ static func gather(s: ExplorationState, events: Array[Dictionary]) -> void:
 	ambush(s, p)
 	events.append({"type": "gathered", "point": p.id, "kind": p.kind, "items": items, "lost": lost,
 		"left": s.world.gather_left(p), "uses": p.uses})
+
+
+## 캠프 알약(07 §9.8, 설계 §5.3): 종류마다 [오늘 남은 횟수 합, 하루 횟수 합]. 모든 층에서 파티가 서 본 지점만 센다(지도에 없는 곳은 알리지 않는다).
+## 원작 III 은 파티 전체의 하루 몫이지만 여기는 지점마다라 서 본 지점을 더한다(이름 붙은 차이). 마을과 미궁에서 같다.
+static func kind_counts(s: ExplorationState) -> Dictionary:
+	var out := {}
+	for k in BattleLimits.GATHER_KINDS:
+		out[k] = [0, 0]
+	for id in s.floor_states:
+		var fs: FloorState = s.floor_states[id]
+		for p in fs.floor_def.point_list():
+			if not fs.knowledge.is_visited(p.at):
+				continue
+			out[p.kind][0] += fs.world.gather_left(p)
+			out[p.kind][1] += p.uses
+	return out

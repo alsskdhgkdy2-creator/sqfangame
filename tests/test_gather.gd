@@ -256,6 +256,35 @@ func test_determinism() -> void:
 	check(kinds.size() >= 3, "여러 결과가 나온다 %d" % kinds.size())
 
 
+## R6b (A5a 검토 L1; M-R6c 씨앗에 날을 넣지 않음, M-R6d 층 ID 를 넣지 않음, M-R6e 본 난수 상태를 넣지 않음): 씨앗의 입력을
+## 하나씩만 바꾸면(나머지는 그대로) 씨앗과 그 씨앗으로 만든 난수의 첫 뽑기가 바뀐다. 수확(무작위 결과)이 아니라 씨앗을 본다.
+func test_seed_changes_with_each_input() -> void:
+	var arbor := Fx.arbor()
+	var s := ExplorationRules.new_game(arbor, 3, "full", true)
+	var p: FloorModel.GatherPoint = s.floor_def.points["g1"]
+	var base := GatherRules.roll_seed(s, p, 0)
+	check_eq(GatherRules.roll_seed(s, p, 0), base, "같은 입력 → 같은 씨앗")
+	var first := func(seed_value: int) -> int: return GameRng.new(seed_value).randi_range(0, 1 << 30)
+	# 날만 바꾼다.
+	s.day += 1
+	var by_day := GatherRules.roll_seed(s, p, 0)
+	s.day -= 1
+	check(by_day != base and first.call(by_day) != first.call(base), "날만 바뀌면 씨앗·첫 뽑기가 다르다")
+	# 층만 바꾼다(B2F 에도 g1 이 있다: 같은 지점 ID·날·쓴 횟수·본 난수 상태).
+	var rng_state := s.rng.get_state()
+	s.enter_floor(arbor.floor_by_id("b2f"))
+	var by_floor := GatherRules.roll_seed(s, p, 0)
+	s.enter_floor(arbor.first_floor())
+	check_eq([s.rng.get_state(), s.floor_def.id], [rng_state, "b1f"], "준비: 층만 바꿨다 되돌림")
+	check(by_floor != base and first.call(by_floor) != first.call(base), "층만 바뀌면 씨앗·첫 뽑기가 다르다")
+	# 본 난수 상태만 바꾼다(읽기만 하므로 상태를 직접 바꾼다).
+	s.rng.set_state(rng_state + 1)
+	var by_rng := GatherRules.roll_seed(s, p, 0)
+	s.rng.set_state(rng_state)
+	check(by_rng != base and first.call(by_rng) != first.call(base), "본 난수 상태만 바뀌면 씨앗·첫 뽑기가 다르다")
+	check_eq(GatherRules.roll_seed(s, p, 0), base, "되돌리면 같은 씨앗")
+
+
 ## R7 (M-R7 스킬 보너스를 무시): 채집 스킬 갈고리는 개수·희귀 확률을 올린다. 습격 갈고리는 지금 늘 없다.
 func test_hooks() -> void:
 	var s := _game()

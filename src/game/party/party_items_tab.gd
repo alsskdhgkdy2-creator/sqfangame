@@ -664,8 +664,8 @@ func _refresh_desc() -> void:
 		desc.show_desc(menu.member_name(k), "", member_lines(k))
 
 
-## 장비·소재 설명(07 §9.9 E2-b): 장비 = 값 · 받는 배율 · 낄 수 있는 직업 · 판매값(빈 줄은 뺀다), 소재 = 「소재」 · 판매값,
-## 소모품(M3 A4) = 설명 글 · 「소모품」 · 판매값.
+## 장비·소재 설명(07 §9.9 E2-b): 장비 = 값 · 받는 배율 · 낄 수 있는 직업 · 판매값(빈 줄은 뺀다),
+## 소모품(M3 A4) = 설명 글 · 「소모품」 · 판매값. 소재(M3 A5) = 설명 글 · 「소재」 · 판매값.
 ## 소재가 상점에서 무엇을 푸는지는 쓰지 않는다(원작도 쓰지 않는다).
 func item_lines(id: String) -> Array[String]:
 	var out: Array[String] = []
@@ -686,6 +686,10 @@ func item_lines(id: String) -> Array[String]:
 		if not fits.is_empty():
 			out.append(t.t("party.items.fits", {"classes": fits}))
 	else:
+		# 소재(M3 A5, 설계 §2.6): 소모품처럼 설명 글 · 「소재」 · 판매값.
+		var dk := str(menu.state.defs.battle.material_desc.get(id, ""))
+		if not dk.is_empty():
+			out.append(t.t(dk))
 		out.append(t.t("party.items.materials"))
 	out.append(t.t("party.items.sell", {"money": ShopRules.sell_price(menu.state.defs, id)}))
 	return out

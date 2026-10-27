@@ -39,6 +39,10 @@ const NOTICE_TOP := 70.0
 const NOTICE_BOTTOM := 108.0
 const NOTICE_RIGHT := 16.0
 const NOTICE_FS := 20
+## 채집 알약 자리(오른쪽 위 앵커: 오른쪽 끝 기준 x, 위 기준 y). 원작 III HD 캠프는 x 822~1258 · y 140~205(research 07 l.38)이지만
+## 우리 그림 창의 오른쪽 끝이 y 204 에서 W − 42 라(CampBackdrop.window_right) 테두리에 걸리지 않게 오른쪽 끝을 W − 50 에 둔다(이름 붙은 차이).
+const PILLS_RIGHT := 50.0
+const PILLS_TOP := 140.0
 ## 규칙 함수가 상태를 바꿨다(저장 갈고리 뒤). 탐색 화면이 상태 칸을 새로 그린다.
 signal changed(events: Array)
 
@@ -113,6 +117,8 @@ var accepted_inputs := 0
 ## 캠프 뿌리·대원 고르기(07 §9.8): 걸음 문패·장소 띠·소지금·알림 줄·명령 목록·파티 카드(전투와 같은 부품, 값은 탐색 상태의 파티).
 ## 캠프 바탕(07 §9.8 ④, §9.9 E1): 무늬 판 + 그림 창. 하위 화면도 같은 판이다(CAMP_DIM 없음).
 var backdrop_board: CampBackdrop
+## 채집 알약 셋(M3 A5, 07 §9.8): 그림 창 오른쪽 위. 뿌리·대원 고르기에서만 보인다(하위 화면은 제 판이 있다).
+var gather_pills: GatherPills
 var camp_plate: FacilityPlate
 var ribbon: PlaceRibbon
 var money_plate: Control
@@ -177,12 +183,18 @@ func build(text_db: TextDb) -> void:
 	_layout()
 
 
-## 캠프 뿌리 부품(앵커로 붙인다, 07 §9.8 층 표). 트리 순서 = 그리는·누르는 순서: 무늬 판 → 카드 → 걸음 문패 → 장소 띠 → 소지금 →
-## 알림 줄(판·문패·띠·소지금·알림 줄은 장식) → 명령 목록.
+## 캠프 뿌리 부품(앵커로 붙인다, 07 §9.8 층 표). 트리 순서 = 그리는·누르는 순서: 무늬 판 → 채집 알약 → 카드 → 걸음 문패 → 장소 띠 → 소지금 →
+## 알림 줄(판·알약·문패·띠·소지금·알림 줄은 장식) → 명령 목록.
 func _build_camp() -> void:
 	backdrop_board = CampBackdrop.new()
 	backdrop_board.name = "CampBackdrop"
 	add_child(backdrop_board)
+	gather_pills = GatherPills.new()
+	gather_pills.name = "GatherPills"
+	gather_pills.texts = texts
+	add_child(gather_pills)
+	place(gather_pills, Vector2(1, 0), Vector2(1, 0),
+		Vector4(-PILLS_RIGHT - GatherPills.WIDTH, PILLS_TOP, -PILLS_RIGHT, PILLS_TOP + GatherPills.PILL.y))
 	cards = PartyCards.new()
 	cards.name = "CampCards"
 	add_child(cards)
@@ -957,6 +969,7 @@ func _refresh() -> void:
 	for c in [camp_plate, ribbon, money_plate]:
 		(c as Control).visible = top_band
 	camp_list.visible = not sub
+	gather_pills.visible = not sub
 	cards.visible = not sub or items_pick()
 	if top_band:
 		_refresh_top()
@@ -988,6 +1001,7 @@ func _refresh_top() -> void:
 
 func _refresh_camp() -> void:
 	var pick := page == "pick"
+	gather_pills.show_state(state)
 	var live := []
 	for i in CAMP_ROWS:
 		camp_list.set_row_text(i, camp_label(i))
@@ -1192,6 +1206,8 @@ func debug_info(css: Callable) -> Dictionary:
 		"records": {"cursor": [records_tab.cur_row, records_tab.cur_col], "cards": [0, 1, 2].map(records_tab.card_lines),
 			"save_ok": records_tab.save_ok(), "help": records_tab.help_text()} if tab == 4 else {},
 		"buttons": buttons, "nodes": nodes, "pad": pad_state(),
+		# 채집 알약(M3 A5): 그린 차례의 [{kind, left, max}], 보이지 않으면 빈 목록.
+		"gather_pills": gather_pills.counts.duplicate(true) if gather_pills.visible else [],
 	}
 
 

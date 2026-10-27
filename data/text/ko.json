@@ -49,7 +49,7 @@
   "msg.gathered": "{items}를 얻었다 (남은 횟수 {left}/{uses})",
   "msg.gathered_lost": "{items}를 얻었다. {lost}개는 가방에 들어가지 않았다",
   "msg.gather_full": "가방이 가득하다. 채집하지 않았다",
-  "msg.gather_spent": "오늘은 더 채집할 수 없다. 마을에서 하루를 보내면 돌아온다",
+  "msg.gather_spent": "오늘은 더 채집할 수 없다. 마을에서 하루를 보내면 다시 채집할 수 있다",
   "msg.not_gather": "여기에는 채집할 곳이 없다",
   "msg.locked": "잠긴 문이다. 열쇠가 필요하다",
   "msg.lock_closed": "열쇠가 맞는다. 문을 마주 보고 열자",

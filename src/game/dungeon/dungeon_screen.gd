@@ -442,6 +442,23 @@ func chest_text(ev: Dictionary) -> String:
 	return texts.t("msg.chest_item", {"item": item, "count": n}) if n > 1 else texts.t("msg.chest_one", {"item": item})
 
 
+## 채집 이벤트의 안내 글(M3 A5, 상자처럼 원작의 메시지 창 대신 알림 한 줄, 이름 붙은 차이): gathered·gather_full·gather_spent.
+## 얻은 것은 「이름 n개」를 「 · 」로 잇는다(늘 「n개」라 조사는 「를」). 가방에 못 넣은 것이 있으면 남은 횟수 대신 그 수를 쓴다.
+func gather_text(ev: Dictionary) -> String:
+	match str(ev["type"]):
+		"gather_full":
+			return texts.t("msg.gather_full")
+		"gather_spent":
+			return texts.t("msg.gather_spent")
+	var parts: Array[String] = []
+	for x in ev["items"]:
+		parts.append(texts.t("gather.item", {"item": item_text(str(x["item"])), "count": int(x["count"])}))
+	var items := " · ".join(parts)
+	if int(ev["lost"]) > 0:
+		return texts.t("msg.gathered_lost", {"items": items, "lost": int(ev["lost"])})
+	return texts.t("msg.gathered", {"items": items, "left": int(ev["left"]), "uses": int(ev["uses"])})
+
+
 # ---- 행동 ----
 
 ## 화면 단추·키보드·미리 받은 입력·누르고 있기 반복이 모두 이리로 온다(05 §9.3).
@@ -520,7 +537,7 @@ func _do_action(action: int) -> void:
 	var located := false
 	for ev in events:
 		match ev["type"]:
-			"stairs", "chest":
+			"stairs", "chest", "gather":
 				_stairs_ask = true
 			"floor_changed":
 				changed = true
@@ -539,6 +556,12 @@ func _do_action(action: int) -> void:
 				_show_toast(chest_text(ev))
 			"chest_full", "chest_empty":
 				_show_toast(chest_text(ev))
+			"gathered":
+				if int(ev["left"]) <= 0:
+					rebuild = true  # 지점 겉모습(남음 → 다 씀)
+				_show_toast(gather_text(ev))
+			"gather_full", "gather_spent":
+				_show_toast(gather_text(ev))
 			"nothing_found":
 				_show_toast(texts.t("msg.nothing_found"))
 			"damaged":
@@ -660,12 +683,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return  # 상점이 키를 받는다(08 §8: 열린 동안 캠프·지도·이동은 열리거나 움직이지 않는다)
 	if _title_open() or _in_town():
 		return  # 타이틀·마을 화면이 키를 받는다(마을에서는 이동·지도·Esc 캠프가 없다, P 는 마을 화면이 캠프로)
-	if modal.kind == "stairs" or modal.kind == "chest":
-		# 계단 확인·상자 물음(M3 A3): Esc·Backspace = 「아니오」. Enter·Space·방향 키는 창 안의 포커스 단추가 받는다(05 §9.3).
+	if modal.kind in ["stairs", "chest", "gather"]:
+		# 계단 확인·상자 물음(M3 A3)·채집 물음(M3 A5): Esc·Backspace = 「아니오」. Enter·Space·방향 키는 창 안의 포커스 단추가 받는다(05 §9.3).
 		if event.is_action_pressed("open_menu") or k.keycode == KEY_BACKSPACE or k.physical_keycode == KEY_BACKSPACE:
 			get_viewport().set_input_as_handled()
 			if modal.kind == "chest":
 				_answer_chest(false)
+			elif modal.kind == "gather":
+				_answer_gather(false)
 			else:
 				_answer_stairs(false)
 		return
@@ -1101,7 +1126,7 @@ func _on_shop_save() -> void:
 	_autosave()
 
 
-## 남은 물음(계단·마을 문, M3 A3 부터 닫힌 상자도)을 띄울 수 있으면 띄운다. 전멸·전투 대기거나 물을 것이 없으면(question_here) 물음을 버린다.
+## 남은 물음(계단·마을 문, M3 A3 부터 닫힌 상자도, M3 A5 부터 남은 채집 지점도)을 띄울 수 있으면 띄운다. 전멸·전투 대기거나 물을 것이 없으면(question_here) 물음을 버린다.
 ## 창(알림·메모·전투·캠프·상점)이 열려 있거나 연출 중이면 남겨 둔다. 지도 손짓은 막지 않는다: 창이 열리며 취소한다(05 §9.3).
 func _try_stairs() -> void:
 	if not _stairs_ask:
@@ -1137,6 +1162,9 @@ func _open_stairs() -> bool:
 	if q.get("kind") == "chest":
 		_open_chest_question()
 		return true
+	if q.get("kind") == "gather":
+		_open_gather_question()
+		return true
 	var st := ExplorationRules.stair_here(state)
 	if st.is_empty():
 		return false
@@ -1167,6 +1195,28 @@ func _answer_chest(yes: bool) -> void:
 	modal.close()
 	if yes:
 		request_action(A.OPEN)
+
+
+## 채집 물음(M3 A5, 층 3 kind "gather"). 원작 프레임을 찾지 못해 상자·계단 물음과 같은 창이다(이름 붙은 차이, 설계 §5.1).
+## 제목은 종류(채취·절단·추출 지점), 글 두 줄(종류의 물음 · 「오늘 남은 횟수 n/m」), 처음 커서는 「예」(D25).
+## 「예」면 규칙 행동 GATHER(안내·자동 저장), 「아니오」·Esc 면 닫기만(지점 위에 그대로, 저장 없음). 채집 뒤에 다시 묻지 않는다(조사로 묻는다).
+func _open_gather_question() -> void:
+	var p := state.floor_def.point_at(state.party.at)
+	var yes := _named(ModalLayer.button(texts.t("ui.yes"), _answer_gather.bind(true)), "GatherYes")
+	var no := _named(ModalLayer.button(texts.t("ui.no"), _answer_gather.bind(false)), "GatherNo")
+	var rows: Array[Control] = [ModalLayer.label(texts.t("gather.ask." + p.kind)),
+		ModalLayer.label(texts.t("gather.left", {"left": state.world.gather_left(p), "uses": p.uses})),
+		ModalLayer.row([yes, no] as Array[Control])]
+	_open_question("gather", texts.t("gather.title." + p.kind), rows)
+	yes.grab_focus.call_deferred()
+
+
+func _answer_gather(yes: bool) -> void:
+	if modal.kind != "gather":
+		return
+	modal.close()
+	if yes:
+		request_action(A.GATHER)
 
 
 ## 층 3 물음 창(계단·마을 문·상자·전멸·지도 물음)을 연다. 알림 줄과 창의 규칙은 modal.opened 한곳에 있다(_on_modal_toast).
@@ -2149,6 +2199,8 @@ func debug_snapshot() -> Dictionary:
 		# 상자·잠긴 문·귀중품(M3 A3): 지금 층의 연 상자·연 문 수, 귀중품 ID(정렬), 발밑의 닫힌 상자 ID, 지금 알림 줄 글(사라졌으면 "").
 		"chests_opened": state.world.chests_opened.size(), "locks_open": state.world.locks_open.size(),
 		"key_items": _sorted_keys(state.key_items), "chest_here": _chest_here(),
+		# 채집(M3 A5): 발밑 지점(남은 횟수가 있든 없든)과 지금 층의 오늘 쓴 횟수.
+		"gather_here": _gather_here(), "gather_used": state.world.gather_used.duplicate(),
 		# 소모품·공용 가방(M3 A4b): 소모품 ID → 개수, 가방 칸 수(BagRules.used).
 		"consumables": state.consumables, "bag_used": BagRules.used(state), "toast": _toast.text if _toast.modulate.a > 0.0 else "", "warning": warning_shown(),
 		"set": _set_name(), "save_dir": save_dir,
@@ -2184,6 +2236,16 @@ static func _sorted_keys(d: Dictionary) -> Array[String]:
 	out.assign(d.keys())
 	out.sort()
 	return out
+
+
+## 발밑의 채집 지점(M3 A5): {point, kind, left, uses}. 남은 횟수가 없어도 돌려준다. 지점이 아니거나 마을이면 {}.
+func _gather_here() -> Dictionary:
+	if state.in_town():
+		return {}
+	var p := state.floor_def.point_at(state.party.at)
+	if p == null:
+		return {}
+	return {"point": p.id, "kind": p.kind, "left": state.world.gather_left(p), "uses": p.uses}
 
 
 ## 발밑의 닫힌 상자 ID(없으면 "").

@@ -329,3 +329,87 @@ func test_sweep_around_b1f_chests() -> void:
 			_sweep_line(built.verts, cam, Vector3(v2.x, 0, v2.y), reach, "B1F 칸 %s 방향 %s" % [c, Dir.name_of(d)])
 	check(cells.size() >= 2 * f.chest_list().size(), "훑은 칸 %d(상자마다 이웃 하나 이상)" % cells.size())
 	print("  B1F 상자 둘레 보정 통계: ", _stats)
+
+
+# ---- M3 A5: 채집 지점(실제 미궁 arbor) ----
+
+## 지점 칸 c 의 정점(칸 가운데 ±0.5m 안, 벽 높이 아래). 바닥·벽 정점은 칸 가운데에서 1m 이상 떨어져 들지 않는다.
+static func _point_verts(b: DungeonMeshBuilder.Built, c: Vector2i) -> Array[Vector3]:
+	var o := DungeonMeshBuilder.cell_center(c)
+	var out: Array[Vector3] = []
+	for v in b.verts:
+		if absf(v.x - o.x) <= 0.5 and absf(v.z - o.z) <= 0.5 and v.y <= DungeonMeshBuilder.WALL_H - 0.01:
+			out.append(v)
+	return out
+
+
+## (M-M1 기둥 모서리 ±0.3m: 격자 밖) 지점 기둥: 평면 ±0.25m(0.25m 격자), 높이 0.75m 이하. 남음 = 몸통 + 띠 경계(12 정점), 다 씀 = 8 정점.
+## 남음 = 종류 색 몸통(plate)·밝은 띠(glow), 다 씀 = 회색(frame) 하나(종류 색·띠 없음). 세 층의 모든 지점 정점이 0.25m 격자.
+func test_point_geometry_and_colors() -> void:
+	var defs := Fx.arbor()
+	for id in defs.floor_ids:
+		var f := defs.floor_by_id(id)
+		if f.point_list().is_empty():
+			continue
+		var fresh := DungeonMeshBuilder.build(f, WorldState.new())
+		var w := WorldState.new()
+		for p in f.point_list():
+			for i in p.uses:
+				w.take_gather(p.id)
+		var spent := DungeonMeshBuilder.build(f, w)
+		for p in f.point_list():
+			var o := DungeonMeshBuilder.cell_center(p.at)
+			for x in [[fresh, 12, "남음"], [spent, 8, "다 씀"]]:
+				var vs := _point_verts(x[0], p.at)
+				check_eq(vs.size(), x[1], "%s %s %s: 기둥 정점 수" % [id, p.id, x[2]])
+				for v in vs:
+					var off := Vector2(v.x - o.x, v.z - o.z)
+					check(absf(absf(off.x) - DungeonMeshBuilder.POINT_HALF) < 1e-4 and absf(absf(off.y) - DungeonMeshBuilder.POINT_HALF) < 1e-4
+						and v.y <= DungeonMeshBuilder.POINT_H + 1e-4, "%s %s %s: 정점 %s 이 ±0.25m·0.75m 기둥 모서리" % [id, p.id, x[2], v])
+					check(absf(v.x * 4.0 - roundf(v.x * 4.0)) < 1e-4 and absf(v.z * 4.0 - roundf(v.z * 4.0)) < 1e-4, "%s %s: 정점 %s 이 0.25m 격자" % [id, p.id, v])
+		for k in DungeonMeshBuilder.POINT_COLORS:
+			var has_kind := f.point_list().any(func(p: FloorModel.GatherPoint) -> bool: return p.kind == k)
+			check_eq(_colors(fresh, "plate").has(DungeonMeshBuilder.POINT_COLORS[k]), has_kind, "%s 남음: %s 몸통 색" % [id, k])
+			check_eq(_colors(fresh, "glow").has(DungeonMeshBuilder.POINT_GLOW[k]), has_kind, "%s 남음: %s 띠 색" % [id, k])
+			check(not _colors(spent, "plate").has(DungeonMeshBuilder.POINT_COLORS[k]) and not _colors(spent, "glow").has(DungeonMeshBuilder.POINT_GLOW[k]),
+				"%s 다 씀: %s 색·띠 없음" % [id, k])
+		check(_colors(spent, "frame").has(DungeonMeshBuilder.POINT_SPENT) and not _colors(fresh, "frame").has(DungeonMeshBuilder.POINT_SPENT),
+			"%s: 다 쓴 회색은 다 썼을 때만" % id)
+		check_eq(fresh.mesh.get_surface_count(), spent.mesh.get_surface_count(), "%s: 남음·다 씀 표면 수 같음(재질 재사용)" % id)
+	var cols := [DungeonMeshBuilder.CHEST_CLOSED, DungeonMeshBuilder.LOCK_PLATE[0], DungeonMeshBuilder.STAIRS_TINT["down"], DungeonMeshBuilder.STAIRS_TINT["up"],
+		DungeonMeshBuilder.FLOOR_TINT[FloorModel.Cell.DAMAGE], DungeonMeshBuilder.FLOOR_TINT[FloorModel.Cell.ICE]]
+	for k in DungeonMeshBuilder.POINT_COLORS:
+		for c in cols:
+			var d: Color = DungeonMeshBuilder.POINT_COLORS[k]
+			check(absf(d.r - c.r) + absf(d.g - c.g) + absf(d.b - c.b) > 0.3, "%s 색은 상자·잠긴 문·계단·피해·얼음 바닥 색과 다르다" % k)
+
+
+## B1F 지점 칸(g1·g2)과 그 네 이웃: 상자 둘레와 같은 기준으로 회전·이동·막힘 궤적을 훑는다(기둥은 칸 안, 눈높이 아래).
+func test_sweep_around_b1f_points() -> void:
+	_reset_stats()
+	var f := Fx.arbor().floor_by_id("b1f")
+	var world := WorldState.new()
+	for e in f.edges_of_kind(FloorModel.Edge.SHORTCUT):
+		world.open_shortcut(e)
+	for e in f.edges_of_kind(FloorModel.Edge.PASSAGE):
+		world.find_passage(e)
+	var built := DungeonMeshBuilder.build(f, world)
+	check(DungeonMeshBuilder.POINT_H < DungeonView.EYE_HEIGHT, "기둥 높이 %s < 눈높이 %s" % [DungeonMeshBuilder.POINT_H, DungeonView.EYE_HEIGHT])
+	_radius = CameraGuard.reach(built.max_triangle)
+	var cells := {}
+	for p in f.point_list():
+		cells[p.at] = true
+		for d in 4:
+			var n := p.at + Dir.vec(d)
+			if f.is_cell(n):
+				cells[n] = true
+	for c in cells:
+		var cam := DungeonMeshBuilder.cell_center(c) + Vector3.UP * DungeonView.EYE_HEIGHT
+		_sweep_rotation(built.verts, cam, "B1F 칸 %s" % c)
+		for d in 4:
+			var v2 := Dir.vec(d)
+			var reach := BUMP if ExplorationRules.block_reason(f, world, c, d) != "" else DungeonMeshBuilder.CELL
+			_sweep_line(built.verts, cam, Vector3(v2.x, 0, v2.y), reach, "B1F 칸 %s 방향 %s" % [c, Dir.name_of(d)])
+	check_eq(f.point_list().size(), 2, "B1F 지점 둘")
+	check(cells.size() >= 2 * f.point_list().size(), "훑은 칸 %d(지점마다 이웃 하나 이상)" % cells.size())
+	print("  B1F 지점 둘레 보정 통계: ", _stats)
