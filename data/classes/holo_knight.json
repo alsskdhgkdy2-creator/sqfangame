@@ -1,6 +1,7 @@
 {
   "id": "class.holo_knight",
   "name_key": "class.holo_knight",
+  "desc_key": "class.holo_knight.desc",
   "levels": {
     "1": {
       "hp": 60,
@@ -318,7 +319,9 @@
   "ailment_vuln": {
     "poison": 1000,
     "paralysis": 1000,
-    "sleep": 1000
+    "sleep": 1000,
+    "confusion": 1000,
+    "blind": 1000
   },
   "bind_vuln": {
     "head": 1000,

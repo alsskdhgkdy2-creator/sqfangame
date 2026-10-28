@@ -1,6 +1,7 @@
 {
   "id": "class.blade_duelist",
   "name_key": "class.blade_duelist",
+  "desc_key": "class.blade_duelist.desc",
   "levels": {
     "1": {
       "hp": 52,
@@ -318,7 +319,9 @@
   "ailment_vuln": {
     "poison": 1000,
     "paralysis": 1000,
-    "sleep": 1000
+    "sleep": 1000,
+    "confusion": 1000,
+    "blind": 1000
   },
   "bind_vuln": {
     "head": 1000,

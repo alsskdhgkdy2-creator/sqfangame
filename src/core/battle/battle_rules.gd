@@ -1,7 +1,10 @@
 ## 전투 규칙 함수(06 §3). 노드·시간·엔진에 기대지 않는다. 상태를 바꾸고 화면 연출용 이벤트를 차례대로 돌려준다.
 ## 화면·자동 정책·시뮬레이션이 모두 이 함수들을 부른다(06 §4.2). 유닛은 배열 순서(칸 번호)로만 돈다.
 ##
-## 명령(submit 의 commands[i], 대원 순서 5칸): 명령을 받는 대원(살아 있고 수면이 아님)만 사전, 나머지는 null.
+## 명령(submit 의 commands[i], 대원 순서): 명령을 받는 대원(살아 있고 수면·혼란이 아님)만 사전, 나머지는 null.
+## 혼란한 대원(M3 A7)은 명령 없이 그 턴에 kind "confused" 행동(일반 공격, 대상은 실행 때 양쪽에서 고름)을 한다.
+## 실행 때 다시 본다: 큐를 만든 뒤 혼란에 걸린 유닛의 행동은 그 자리에서 혼란 공격으로 바뀌고, 혼란이 풀린 유닛의 혼란 행동은 failed recovered 로 없어진다.
+## 방어는 큐 전에 이미 걸려 행동이 없으므로 그 턴에 혼란에 걸려도 방어는 그대로이고 혼란 공격도 없다.
 ##   {"kind": "attack", "target": 적 칸}
 ##   {"kind": "skill", "skill": 스킬 ID, "target": 칸}   대상 규칙이 전체·자기면 target 은 없어도 된다(무시)
 ##   {"kind": "guard"}
@@ -14,6 +17,8 @@ class_name BattleRules
 extends RefCounted
 
 const PRIORITY_ORDER := {"first": 0, "normal": 1, "last": 2}
+## 혼란한 유닛의 행동 종류(M3 A7). action 이벤트의 kind 도 이 값이다.
+const CONFUSED := "confused"
 const OUTCOMES := ["victory", "escaped", "wiped"]
 const COMMAND_KINDS := ["attack", "skill", "guard", "escape", "item"]
 ## 명령 종류마다 받는 키. 다른 키가 있으면 unknown_command 로 거부한다(검사는 상태·난수를 건드리기 전에 끝난다).
@@ -63,10 +68,10 @@ static func start(state: ExplorationState, formation_id: String, foe: String = "
 
 # ---- 읽기 도우미 (화면·정책·시험) ----
 
-## 명령을 받는 대원인지(살아 있고 수면이 아님, 06 §3.3).
+## 명령을 받는 대원인지(살아 있고 수면·혼란이 아님, 06 §3.3·M3 A7 설계 §4.5).
 static func can_command(state: ExplorationState, member_index: int) -> bool:
 	var u := state.battle.party[member_index]
-	return u.alive() and not u.asleep()
+	return u.alive() and not u.asleep() and not u.confused()
 
 
 ## 대원이 쓸 스킬 정의. "attack" 이면 그 직업의 일반 공격. 모르면 null.
@@ -237,10 +242,14 @@ static func submit(state: ExplorationState, commands: Array) -> Array[Dictionary
 		if c["kind"] == "item":
 			a["item"] = c["item"]  # 대리 스킬 id 와 같다(실행 때 소모품을 하나 뺀다)
 		b.queue.append(a)
+	# 혼란(M3 A7 설계 §4.5): 명령한 대원 뒤에, 살아 있는 혼란 대원마다 일반 공격 하나(레벨 1, 대상은 실행 때 고른다).
+	for u in b.party:
+		if u.alive() and u.confused():
+			b.queue.append(_action(u, CONFUSED, u.attack, 1, -1))
 	for j in b.enemies.size():
 		var ch: Variant = enemy_choices[j]
 		if ch != null:
-			b.queue.append(_action(b.enemies[j], "skill", ch["skill"], ch["level"], ch["target"]))
+			b.queue.append(_action(b.enemies[j], str(ch.get("kind", "skill")), ch["skill"], ch["level"], ch["target"]))
 	for a in b.queue:
 		var r := state.rng.randi_range(rules.speed_roll[0], rules.speed_roll[1])
 		a["order"] = BattleCalc.order_value(a["unit"].stats["AGI"], a["speed"], r)
@@ -356,11 +365,27 @@ static func _execute(state: ExplorationState, a: Dictionary, events: Array[Dicti
 	if not u.alive():
 		_release_charge(u, charged, "down", events)
 		return
+	if a["kind"] != CONFUSED and u.confused():
+		# 혼란(M3 A7 seq=5): 큐를 만든 뒤 혼란에 걸린 유닛은 그 자리(순서 그대로, 속도 다시 굴리지 않음)에서 혼란 공격을 한다.
+		# 원래 행동(스킬·아이템·도주)의 비용은 내지 않고 맡긴 아이템도 쓰지 않는다. 적의 준비는 혼란한 적의 길(EnemyAi.choose)처럼 풀린다.
+		if not u.charging.is_empty():
+			events.append({"type": "charge_lost", "unit": u.ref(), "skill": u.charging, "reason": "no_target"})
+			u.charging = ""
+		charged = false
+		s = u.attack if u.is_party() else BattleDb.confused_attack()
+		a["kind"] = CONFUSED
+		a["skill"] = s
+		a["level"] = 1
+		a["target"] = -1
+		a.erase("item")
 	var reason := ""
 	if u.asleep():
 		reason = "asleep"
 	elif u.ailment == "paralysis" and BattleCalc.roll(state.rng, rules.paralysis_fail):
 		reason = "paralysis"
+	elif a["kind"] == CONFUSED and not u.confused():
+		# 혼란이 풀린(해제·덮어쓰기) 유닛의 혼란 행동은 없어진다: 공격·대상 뽑기 없음. 잠듦·마비는 위 관문이 먼저 정한다.
+		reason = "recovered"
 	elif s != null and not u.bound_part_of(s).is_empty():
 		reason = "bound_" + u.bound_part_of(s)
 	elif s == null and u.bound("leg"):
@@ -368,7 +393,13 @@ static func _execute(state: ExplorationState, a: Dictionary, events: Array[Dicti
 	elif s != null and u.tp < tp_cost(u, s):
 		reason = "no_tp"
 	var targets: Array[BattleUnit] = []
-	if reason.is_empty() and s != null:
+	if reason.is_empty() and a["kind"] == CONFUSED:
+		var t := confused_target(state, u, s)
+		if t == null:
+			reason = "no_target"
+		else:
+			targets.append(t)
+	elif reason.is_empty() and s != null:
 		targets = _resolve_targets(b, u, s, a["target"])
 		if targets.is_empty():
 			reason = "no_target"
@@ -399,6 +430,10 @@ static func _execute(state: ExplorationState, a: Dictionary, events: Array[Dicti
 			state.consumables.erase(iid)
 		events.append({"type": "item_used", "unit": u.ref(), "item": iid, "left": maxi(left, 0)})
 	var row: Dictionary = s.level_row(a["level"])
+	if a["kind"] == CONFUSED:
+		# 혼란: 고른 하나에 보통 피해 판정(아군이면 명중 판정 없음, 커버는 쓰지 않는다).
+		_hit(state, u, s, row, targets[0], events)
+		return
 	match s.effect:
 		"damage":
 			for t in targets:
@@ -450,6 +485,21 @@ static func _release_charge(u: BattleUnit, charged: bool, reason: String, events
 	if charged and not u.charging.is_empty():
 		events.append({"type": "charge_lost", "unit": u.ref(), "skill": u.charging, "reason": reason})
 		u.charging = ""
+
+
+## 혼란한 유닛의 대상(M3 A7 설계 §4.5): 쓰는 유닛을 뺀 양쪽의 살아 있고 닿는 유닛(대원 칸 차례 → 적 칸 차례).
+## 0 이면 null, 하나면 그 유닛(뽑지 않음), 둘 이상이면 난수 하나 randi_range(0, n − 1).
+static func confused_target(state: ExplorationState, u: BattleUnit, s: BattleDb.SkillDef) -> BattleUnit:
+	var b := state.battle
+	var cands: Array[BattleUnit] = []
+	for t in b.party + b.enemies:
+		if t != u and t.alive() and reachable(b, u, s, t):
+			cands.append(t)
+	if cands.is_empty():
+		return null
+	if cands.size() == 1:
+		return cands[0]
+	return cands[state.rng.randi_range(0, cands.size() - 1)]
 
 
 ## 대상 다시 보기(06 §3.7 5단계). 빈 배열이면 no_target.
@@ -511,12 +561,15 @@ static func _covered(b: BattleState, u: BattleUnit, s: BattleDb.SkillDef, t: Bat
 	return k
 
 
-## 명중 판정(06 §3.8). 필중·수면 대상·아군 대상은 판정하지 않는다. 빗나가면 missed 이벤트.
+## 명중 판정(06 §3.8). 필중·수면 대상·아군 대상은 판정하지 않는다. 쓰는 쪽이 맹목이면 자른 명중률 × blind_hit_mult(M3 A7). 빗나가면 missed 이벤트.
 static func _hits(state: ExplorationState, u: BattleUnit, s: BattleDb.SkillDef, row: Dictionary, t: BattleUnit, events: Array[Dictionary], calc: Dictionary = {}) -> bool:
 	if s.sure_hit or t.asleep() or t.side == u.side:
 		return true
 	var rules := state.defs.battle.rules
 	var p := BattleCalc.hit_p(rules, row["accuracy"], u.stats["AGI"], t.evasion_agi(rules))
+	if u.ailment == "blind":
+		# 맹목(M3 A7 설계 §4.5): 자른 명중률에 blind_hit_mult 를 곱한다(판정하는 길에서만: 필중·수면·아군은 그대로).
+		p = BattleCalc.mul(p, rules.blind_hit_mult)
 	calc["hit_p"] = p
 	if p >= 1000:
 		return true

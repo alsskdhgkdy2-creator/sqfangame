@@ -19,6 +19,7 @@
   "bind_stat_mult": 700,
   "leg_evasion_mult": 500,
   "paralysis_fail": 500,
+  "blind_hit_mult": 500,
   "status_luck": 20,
   "status_luck_clamp": [
     500,

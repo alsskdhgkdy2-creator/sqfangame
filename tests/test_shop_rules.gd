@@ -23,7 +23,8 @@ const AMRITA := "use.amrita"
 const NECTAR := "use.nectar"
 ## 처음부터 파는 줄(08 §1.3), 진열 차례. 장비 뒤에 늘 파는 소모품 넷(M3 A4 설계 §2.4, 풀림 없는 줄).
 const OPEN := ["training_sword", "twin_edge", "nano_rod", "glyph_stylus", "padded_coat", "medic_coat", "glyph_robe",
-	"training_shield", "sensor_cap", "grip_gloves", "signal_charm", "use.medica", "use.theriaca_a", "use.theriaca_b", "use.ariadne_beacon"]
+	"training_shield", "sensor_cap", "grip_gloves", "signal_charm", "use.medica", "use.theriaca_a", "use.theriaca_b", "use.ariadne_beacon",
+	"rail_bow", "hex_pistol", "scout_hood", "hex_mask"]  # 끝 넷: M3 A7 레인저·해커 장비(풀림 없는 줄)
 
 
 func _game() -> ExplorationState:

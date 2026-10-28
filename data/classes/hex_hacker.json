@@ -1,0 +1,442 @@
+{
+  "id": "class.hex_hacker",
+  "name_key": "class.hex_hacker",
+  "desc_key": "class.hex_hacker.desc",
+  "levels": {
+    "1": {
+      "hp": 44,
+      "tp": 52,
+      "STR": 10,
+      "INT": 17,
+      "VIT": 10,
+      "WIS": 18,
+      "AGI": 12,
+      "LUC": 19
+    },
+    "2": {
+      "hp": 46,
+      "tp": 54,
+      "STR": 10,
+      "INT": 18,
+      "VIT": 10,
+      "WIS": 19,
+      "AGI": 12,
+      "LUC": 20
+    },
+    "3": {
+      "hp": 49,
+      "tp": 56,
+      "STR": 11,
+      "INT": 19,
+      "VIT": 11,
+      "WIS": 20,
+      "AGI": 13,
+      "LUC": 21
+    },
+    "4": {
+      "hp": 52,
+      "tp": 58,
+      "STR": 11,
+      "INT": 19,
+      "VIT": 11,
+      "WIS": 20,
+      "AGI": 13,
+      "LUC": 22
+    },
+    "5": {
+      "hp": 55,
+      "tp": 60,
+      "STR": 11,
+      "INT": 20,
+      "VIT": 12,
+      "WIS": 21,
+      "AGI": 14,
+      "LUC": 23
+    },
+    "6": {
+      "hp": 57,
+      "tp": 64,
+      "STR": 12,
+      "INT": 21,
+      "VIT": 12,
+      "WIS": 22,
+      "AGI": 14,
+      "LUC": 24
+    },
+    "7": {
+      "hp": 61,
+      "tp": 66,
+      "STR": 12,
+      "INT": 22,
+      "VIT": 12,
+      "WIS": 23,
+      "AGI": 15,
+      "LUC": 25
+    },
+    "8": {
+      "hp": 63,
+      "tp": 68,
+      "STR": 12,
+      "INT": 23,
+      "VIT": 13,
+      "WIS": 24,
+      "AGI": 15,
+      "LUC": 26
+    },
+    "9": {
+      "hp": 66,
+      "tp": 70,
+      "STR": 13,
+      "INT": 23,
+      "VIT": 13,
+      "WIS": 25,
+      "AGI": 16,
+      "LUC": 26
+    },
+    "10": {
+      "hp": 69,
+      "tp": 75,
+      "STR": 13,
+      "INT": 24,
+      "VIT": 14,
+      "WIS": 25,
+      "AGI": 16,
+      "LUC": 27
+    },
+    "11": {
+      "hp": 72,
+      "tp": 77,
+      "STR": 13,
+      "INT": 25,
+      "VIT": 14,
+      "WIS": 26,
+      "AGI": 17,
+      "LUC": 28
+    },
+    "12": {
+      "hp": 75,
+      "tp": 79,
+      "STR": 14,
+      "INT": 26,
+      "VIT": 15,
+      "WIS": 27,
+      "AGI": 17,
+      "LUC": 29
+    },
+    "13": {
+      "hp": 80,
+      "tp": 81,
+      "STR": 14,
+      "INT": 27,
+      "VIT": 15,
+      "WIS": 28,
+      "AGI": 18,
+      "LUC": 30
+    },
+    "14": {
+      "hp": 83,
+      "tp": 85,
+      "STR": 14,
+      "INT": 27,
+      "VIT": 15,
+      "WIS": 29,
+      "AGI": 18,
+      "LUC": 31
+    },
+    "15": {
+      "hp": 87,
+      "tp": 87,
+      "STR": 15,
+      "INT": 28,
+      "VIT": 16,
+      "WIS": 30,
+      "AGI": 19,
+      "LUC": 32
+    },
+    "16": {
+      "hp": 90,
+      "tp": 89,
+      "STR": 15,
+      "INT": 29,
+      "VIT": 16,
+      "WIS": 30,
+      "AGI": 19,
+      "LUC": 33
+    },
+    "17": {
+      "hp": 94,
+      "tp": 93,
+      "STR": 16,
+      "INT": 30,
+      "VIT": 17,
+      "WIS": 31,
+      "AGI": 20,
+      "LUC": 34
+    },
+    "18": {
+      "hp": 98,
+      "tp": 95,
+      "STR": 16,
+      "INT": 30,
+      "VIT": 17,
+      "WIS": 32,
+      "AGI": 20,
+      "LUC": 35
+    },
+    "19": {
+      "hp": 101,
+      "tp": 97,
+      "STR": 16,
+      "INT": 31,
+      "VIT": 17,
+      "WIS": 33,
+      "AGI": 21,
+      "LUC": 36
+    },
+    "20": {
+      "hp": 105,
+      "tp": 101,
+      "STR": 17,
+      "INT": 32,
+      "VIT": 18,
+      "WIS": 34,
+      "AGI": 21,
+      "LUC": 37
+    },
+    "21": {
+      "hp": 109,
+      "tp": 103,
+      "STR": 17,
+      "INT": 33,
+      "VIT": 18,
+      "WIS": 35,
+      "AGI": 22,
+      "LUC": 38
+    },
+    "22": {
+      "hp": 114,
+      "tp": 105,
+      "STR": 17,
+      "INT": 34,
+      "VIT": 19,
+      "WIS": 35,
+      "AGI": 22,
+      "LUC": 39
+    },
+    "23": {
+      "hp": 119,
+      "tp": 109,
+      "STR": 18,
+      "INT": 34,
+      "VIT": 19,
+      "WIS": 36,
+      "AGI": 23,
+      "LUC": 39
+    },
+    "24": {
+      "hp": 123,
+      "tp": 112,
+      "STR": 18,
+      "INT": 35,
+      "VIT": 20,
+      "WIS": 37,
+      "AGI": 23,
+      "LUC": 40
+    },
+    "25": {
+      "hp": 128,
+      "tp": 116,
+      "STR": 18,
+      "INT": 36,
+      "VIT": 20,
+      "WIS": 38,
+      "AGI": 24,
+      "LUC": 41
+    },
+    "26": {
+      "hp": 132,
+      "tp": 118,
+      "STR": 19,
+      "INT": 37,
+      "VIT": 20,
+      "WIS": 39,
+      "AGI": 24,
+      "LUC": 42
+    },
+    "27": {
+      "hp": 136,
+      "tp": 120,
+      "STR": 19,
+      "INT": 38,
+      "VIT": 21,
+      "WIS": 40,
+      "AGI": 25,
+      "LUC": 43
+    },
+    "28": {
+      "hp": 141,
+      "tp": 124,
+      "STR": 19,
+      "INT": 38,
+      "VIT": 21,
+      "WIS": 40,
+      "AGI": 25,
+      "LUC": 44
+    },
+    "29": {
+      "hp": 145,
+      "tp": 126,
+      "STR": 20,
+      "INT": 39,
+      "VIT": 22,
+      "WIS": 41,
+      "AGI": 26,
+      "LUC": 45
+    },
+    "30": {
+      "hp": 150,
+      "tp": 130,
+      "STR": 20,
+      "INT": 40,
+      "VIT": 22,
+      "WIS": 42,
+      "AGI": 26,
+      "LUC": 46
+    }
+  },
+  "attack": {
+    "element": "bash",
+    "range": "melee"
+  },
+  "resist": {
+    "slash": 1000,
+    "pierce": 1000,
+    "bash": 1000,
+    "fire": 1000,
+    "ice": 1000,
+    "volt": 1000
+  },
+  "ailment_vuln": {
+    "poison": 1000,
+    "paralysis": 1000,
+    "sleep": 1000,
+    "confusion": 1000,
+    "blind": 1000
+  },
+  "bind_vuln": {
+    "head": 1000,
+    "arm": 1000,
+    "leg": 1000
+  },
+  "equip_kinds": [
+    "gun",
+    "body",
+    "head",
+    "feet",
+    "accessory"
+  ],
+  "start_equip": [
+    "equip.hex_pistol",
+    "equip.glyph_robe",
+    "equip.hex_mask",
+    null
+  ],
+  "tree": [
+    {
+      "skill": "skill.hex_hacker.glitch_hex",
+      "pos": [
+        0,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.hex_hacker.weak_hex",
+      "pos": [
+        1,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.hex_hacker.frail_hex",
+      "pos": [
+        2,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.hex_hacker.hex_mastery",
+      "pos": [
+        3,
+        0
+      ],
+      "requires": [],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.hex_hacker.jam_hex",
+      "pos": [
+        1,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.hex_hacker.weak_hex",
+          "level": 2
+        }
+      ],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.hex_hacker.numb_hex",
+      "pos": [
+        3,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.hex_hacker.hex_mastery",
+          "level": 2
+        }
+      ],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.hex_hacker.head_crack",
+      "pos": [
+        0,
+        1
+      ],
+      "requires": [
+        {
+          "skill": "skill.hex_hacker.glitch_hex",
+          "level": 2
+        }
+      ],
+      "min_level": 1
+    },
+    {
+      "skill": "skill.hex_hacker.mass_glitch",
+      "pos": [
+        0,
+        2
+      ],
+      "requires": [
+        {
+          "skill": "skill.hex_hacker.glitch_hex",
+          "level": 3
+        },
+        {
+          "skill": "skill.hex_hacker.hex_mastery",
+          "level": 3
+        }
+      ],
+      "min_level": 5
+    }
+  ]
+}

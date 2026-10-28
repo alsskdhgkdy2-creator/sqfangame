@@ -5,7 +5,7 @@ extends RefCounted
 
 const MAP_ICONS := ["door", "shortcut", "stairs_up", "stairs_down", "chest", "gather", "event", "danger", "foe", "arrow", "warp", "pin"]
 ## 상점 종류 아이콘(08 §7.2).
-const KIND_ICONS := ["kind_sword", "kind_staff", "kind_body", "kind_shield", "kind_head", "kind_hands", "kind_feet", "kind_accessory",
+const KIND_ICONS := ["kind_sword", "kind_staff", "kind_bow", "kind_gun", "kind_body", "kind_shield", "kind_head", "kind_hands", "kind_feet", "kind_accessory",
 	"kind_material", "kind_consumable", "kind_key"]
 
 
@@ -106,7 +106,7 @@ static func draw(ci: CanvasItem, name: String, rect: Rect2, color: Color, dir: i
 		"pin":
 			ci.draw_circle(p.call(0.5, 0.38), rect.size.x * 0.18, color)
 			ci.draw_colored_polygon(PackedVector2Array([p.call(0.36, 0.46), p.call(0.64, 0.46), p.call(0.5, 0.86)]), color)
-		"kind_sword", "kind_staff", "kind_body", "kind_shield", "kind_head", "kind_hands", "kind_feet", "kind_accessory", \
+		"kind_sword", "kind_staff", "kind_bow", "kind_gun", "kind_body", "kind_shield", "kind_head", "kind_hands", "kind_feet", "kind_accessory", \
 				"kind_material", "kind_consumable", "kind_key":
 			_kind(ci, name, rect, color)
 		_:
@@ -156,6 +156,17 @@ static func kind_shapes(name: String, rect: Rect2) -> Array[Dictionary]:
 			out.append(line.call(0.3, 0.88, 0.56, 0.36, 1.3))
 			out.append({"type": "arc", "center": p.call(0.62, 0.26), "radius": s * 0.14, "from": deg_to_rad(120), "to": deg_to_rad(470), "width": w * 1.2})
 			out.append({"type": "circle", "center": p.call(0.64, 0.27), "radius": s * 0.05})
+		"kind_bow":
+			# 활(M3 A7): 왼쪽으로 휜 활대 + 시위 + 가로지른 화살.
+			out.append({"type": "arc", "center": p.call(0.62, 0.5), "radius": s * 0.4, "from": deg_to_rad(120), "to": deg_to_rad(240), "width": w * 1.4})
+			out.append(line.call(0.42, 0.15, 0.42, 0.85, 0.6))
+			out.append(line.call(0.14, 0.5, 0.8, 0.5, 0.9))
+			out.append(poly.call([[0.9, 0.5], [0.76, 0.4], [0.76, 0.6]]))
+		"kind_gun":
+			# 총(M3 A7): 가로 총열 + 아래로 비스듬한 손잡이 + 방아쇠울.
+			out.append(box.call(0.12, 0.28, 0.76, 0.18))
+			out.append(poly.call([[0.5, 0.44], [0.72, 0.44], [0.62, 0.86], [0.4, 0.86]]))
+			out.append({"type": "arc", "center": p.call(0.44, 0.52), "radius": s * 0.1, "from": deg_to_rad(0), "to": deg_to_rad(180), "width": w})
 		"kind_body":
 			# 가슴 갑옷: 어깨가 넓고 허리가 좁은 판, 목 파임.
 			out.append(poly.call([[0.2, 0.2], [0.38, 0.14], [0.5, 0.24], [0.62, 0.14], [0.8, 0.2], [0.72, 0.5], [0.68, 0.86], [0.32, 0.86], [0.28, 0.5]]))

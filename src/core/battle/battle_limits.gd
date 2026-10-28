@@ -8,10 +8,11 @@ const STATS := ["STR", "INT", "VIT", "WIS", "AGI", "LUC"]
 const GEAR := ["atk", "matk", "def", "mdef"]
 const ELEMENTS := ["slash", "pierce", "bash", "fire", "ice", "volt"]
 const PHYSICAL := ["slash", "pierce", "bash"]
-const AILMENTS := ["poison", "paralysis", "sleep"]
+## 상태이상(06 §3.11). M3 A7 이 혼란(confusion 「신호 교란」)·맹목(blind 「센서 차단」)을 끝에 더했다: 옛 셋의 차례는 앞부분 그대로다.
+const AILMENTS := ["poison", "paralysis", "sleep", "confusion", "blind"]
 const PARTS := ["head", "arm", "leg"]
-## 상태이상 우선순위(06 §3.11): 새 상태가 지금 것 이상이면 덮어쓴다.
-const AILMENT_PRIORITY := {"sleep": 3, "paralysis": 2, "poison": 1}
+## 상태이상 우선순위(06 §3.11, 01 §4.6 「수면 > 혼란 > 마비 > 독 > 맹목」): 새 상태가 지금 것 이상이면 덮어쓴다. 옛 셋의 서로 차례는 그대로다.
+const AILMENT_PRIORITY := {"sleep": 5, "confusion": 4, "paralysis": 3, "poison": 2, "blind": 1}
 const EFFECT_KINDS := ["phys_atk", "elem_atk", "phys_def", "elem_def"]
 
 ## 턴 상한(06 §3.15 6단계·§8.5): 턴 끝에서 turn 이 이 값이면 도주(turn_cap)로 끝낸다.
@@ -72,7 +73,9 @@ const RANGES := {
 const MATERIAL_MAX := 9999
 ## 장비(07 §5.1·§5.2·§5.6): 대원마다 칸 넷(칸 0 은 무기만), 종류, 같은 종류 제한, 가방 한 장비 상한.
 const EQUIP_SLOTS := 4
-const WEAPON_KINDS := ["sword", "staff"]
+const WEAPON_KINDS := ["sword", "staff", "bow", "gun"]
+## 일반 공격을 원거리로 만드는 무기 종류(M3 A7 설계 §2.2: 직업이 아니라 무기가 정한다. 맨손이면 직업의 attack.range).
+const RANGED_WEAPONS := ["bow", "gun"]
 const ARMOR_KINDS := ["shield", "body", "head", "hands", "feet", "accessory"]
 const KIND_LIMIT := {"shield": 1, "body": 1, "head": 1, "hands": 1, "feet": 1, "accessory": 2}
 const BAG_MAX := 99
@@ -104,6 +107,7 @@ const RULE_INTS := {
 	"crit_base": [0, 1000], "crit_luck": [0, 100], "crit_max": [0, 1000], "crit_mult": [1000, 3000],
 	"row_melee_mult": [0, 1000], "guard_mult": [0, 1000], "bind_stat_mult": [0, 1000], "leg_evasion_mult": [0, 1000],
 	"paralysis_fail": [0, 1000],
+	"blind_hit_mult": [0, 1000],
 	"status_luck": [0, 100],
 	"resist_gain": [0, 1000], "resist_max": [0, 999], "resist_decay": [0, 1000],
 	"escape_base": [0, 1000], "escape_agi": [0, 100],

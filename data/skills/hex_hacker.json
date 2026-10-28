@@ -1,0 +1,470 @@
+{
+  "skills": [
+    {
+      "id": "skill.hex_hacker.glitch_hex",
+      "name_key": "skill.hex_hacker.glitch_hex",
+      "user": "party",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 5,
+          "ailment": {
+            "id": "confusion",
+            "chance": 500,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 5,
+          "ailment": {
+            "id": "confusion",
+            "chance": 550,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "ailment": {
+            "id": "confusion",
+            "chance": 600,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "ailment": {
+            "id": "confusion",
+            "chance": 650,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 7,
+          "ailment": {
+            "id": "confusion",
+            "chance": 700,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.hex_hacker.weak_hex",
+      "name_key": "skill.hex_hacker.weak_hex",
+      "user": "party",
+      "effect": "debuff",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 4,
+          "kind": "phys_atk",
+          "value": 750,
+          "turns": 3
+        },
+        {
+          "tp": 4,
+          "kind": "phys_atk",
+          "value": 725,
+          "turns": 3
+        },
+        {
+          "tp": 5,
+          "kind": "phys_atk",
+          "value": 700,
+          "turns": 3
+        },
+        {
+          "tp": 5,
+          "kind": "phys_atk",
+          "value": 675,
+          "turns": 3
+        },
+        {
+          "tp": 6,
+          "kind": "phys_atk",
+          "value": 650,
+          "turns": 3
+        }
+      ]
+    },
+    {
+      "id": "skill.hex_hacker.frail_hex",
+      "name_key": "skill.hex_hacker.frail_hex",
+      "user": "party",
+      "effect": "debuff",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 4,
+          "kind": "phys_def",
+          "value": 1250,
+          "turns": 3
+        },
+        {
+          "tp": 4,
+          "kind": "phys_def",
+          "value": 1288,
+          "turns": 3
+        },
+        {
+          "tp": 5,
+          "kind": "phys_def",
+          "value": 1325,
+          "turns": 3
+        },
+        {
+          "tp": 5,
+          "kind": "phys_def",
+          "value": 1363,
+          "turns": 3
+        },
+        {
+          "tp": 6,
+          "kind": "phys_def",
+          "value": 1400,
+          "turns": 3
+        }
+      ]
+    },
+    {
+      "id": "skill.hex_hacker.hex_mastery",
+      "name_key": "skill.hex_hacker.hex_mastery",
+      "user": "party",
+      "effect": "passive",
+      "levels": [
+        {
+          "bonus": {
+            "LUC": 1,
+            "max_tp": 3
+          }
+        },
+        {
+          "bonus": {
+            "LUC": 2,
+            "max_tp": 6
+          }
+        },
+        {
+          "bonus": {
+            "LUC": 3,
+            "max_tp": 9
+          }
+        },
+        {
+          "bonus": {
+            "LUC": 4,
+            "max_tp": 12
+          }
+        },
+        {
+          "bonus": {
+            "LUC": 5,
+            "max_tp": 15
+          }
+        },
+        {
+          "bonus": {
+            "LUC": 6,
+            "max_tp": 18
+          }
+        },
+        {
+          "bonus": {
+            "LUC": 7,
+            "max_tp": 21
+          }
+        },
+        {
+          "bonus": {
+            "LUC": 8,
+            "max_tp": 24
+          }
+        },
+        {
+          "bonus": {
+            "LUC": 9,
+            "max_tp": 27
+          }
+        },
+        {
+          "bonus": {
+            "LUC": 10,
+            "max_tp": 30
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.hex_hacker.jam_hex",
+      "name_key": "skill.hex_hacker.jam_hex",
+      "user": "party",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_row",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 6,
+          "accuracy": 950,
+          "ailment": {
+            "id": "blind",
+            "chance": 450,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "accuracy": 950,
+          "ailment": {
+            "id": "blind",
+            "chance": 500,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 7,
+          "accuracy": 950,
+          "ailment": {
+            "id": "blind",
+            "chance": 550,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 7,
+          "accuracy": 950,
+          "ailment": {
+            "id": "blind",
+            "chance": 600,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 8,
+          "accuracy": 950,
+          "ailment": {
+            "id": "blind",
+            "chance": 650,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.hex_hacker.numb_hex",
+      "name_key": "skill.hex_hacker.numb_hex",
+      "user": "party",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 5,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 450,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 5,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 500,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 550,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 600,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 7,
+          "accuracy": 950,
+          "ailment": {
+            "id": "paralysis",
+            "chance": 650,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.hex_hacker.head_crack",
+      "name_key": "skill.hex_hacker.head_crack",
+      "user": "party",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 5,
+          "power": 80,
+          "accuracy": 950,
+          "bind": {
+            "part": "head",
+            "chance": 500,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 5,
+          "power": 80,
+          "accuracy": 950,
+          "bind": {
+            "part": "head",
+            "chance": 550,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 80,
+          "accuracy": 950,
+          "bind": {
+            "part": "head",
+            "chance": 600,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 80,
+          "accuracy": 950,
+          "bind": {
+            "part": "head",
+            "chance": 650,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 7,
+          "power": 80,
+          "accuracy": 950,
+          "bind": {
+            "part": "head",
+            "chance": 700,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.hex_hacker.mass_glitch",
+      "name_key": "skill.hex_hacker.mass_glitch",
+      "user": "party",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_all",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 10,
+          "accuracy": 950,
+          "ailment": {
+            "id": "confusion",
+            "chance": 350,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 10,
+          "accuracy": 950,
+          "ailment": {
+            "id": "confusion",
+            "chance": 400,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 11,
+          "accuracy": 950,
+          "ailment": {
+            "id": "confusion",
+            "chance": 450,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 11,
+          "accuracy": 950,
+          "ailment": {
+            "id": "confusion",
+            "chance": 500,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 12,
+          "accuracy": 950,
+          "ailment": {
+            "id": "confusion",
+            "chance": 550,
+            "turns": 3
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -13,13 +13,13 @@ const GAP := 4.0
 const TOP := 166.0
 ## 갈래 → 칸 차례(종류 이름, "all" = 전체).
 const SETS := {
-	"weapon": ["all", "sword", "staff"],
+	"weapon": ["all", "sword", "staff", "bow", "gun"],
 	"armor": ["all", "body", "shield", "head", "hands", "feet"],
 	"sell": ["material", "gear", "consumable"],
 }
 ## 칸 종류 → 아이콘. 판매 「장비」 칸은 원작처럼 검 아이콘.
 const ICONS := {
-	"sword": "kind_sword", "staff": "kind_staff", "body": "kind_body", "shield": "kind_shield", "head": "kind_head",
+	"sword": "kind_sword", "staff": "kind_staff", "bow": "kind_bow", "gun": "kind_gun", "body": "kind_body", "shield": "kind_shield", "head": "kind_head",
 	"hands": "kind_hands", "feet": "kind_feet", "accessory": "kind_accessory",
 	"material": "kind_material", "gear": "kind_sword", "consumable": "kind_consumable",
 }

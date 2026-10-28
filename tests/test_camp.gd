@@ -2297,7 +2297,7 @@ func _check_drawn_text(ci: Control, tag: String) -> int:
 func test_items_screen_follows_the_reference_table() -> void:
 	var s := await _open()
 	var pm := s.party_menu
-	_fill_bag(s, 1, 2, Array(s.state.defs.battle.material_ids).slice(0, 15))  # A6 전 소재 열다섯만(장비 25 + 30 = 55칸, FOE 소재 셋을 더하면 61칸이라 넘친다)
+	_fill_bag(s, 1, 2, Array(s.state.defs.battle.material_ids).slice(0, 12))  # 소재 열둘만(장비 31 + 24 = 55칸으로 넘치지 않게. M3 A7 이 장비 여섯을 더하기 전에는 소재 열다섯, 25 + 30 = 55칸)
 	await kit.press_key(KEY_P)
 	await kit.press_key(KEY_1)
 	var it := pm.items_tab
@@ -2710,7 +2710,7 @@ func test_items_cursor_stays_in_view_after_a_tall_to_short_resize() -> void:
 func test_items_end_key_reveals_the_cursor_and_refresh_keeps_manual_scroll() -> void:
 	var s := await _open()
 	var pm := s.party_menu
-	_fill_bag(s, 1, 2, Array(s.state.defs.battle.material_ids).slice(0, 15))  # A6 전 소재 열다섯만(장비 25 + 30 = 55칸, FOE 소재 셋을 더하면 61칸이라 넘친다)
+	_fill_bag(s, 1, 2, Array(s.state.defs.battle.material_ids).slice(0, 12))  # 소재 열둘만(장비 31 + 24 = 55칸으로 넘치지 않게. M3 A7 이 장비 여섯을 더하기 전에는 소재 열다섯, 25 + 30 = 55칸)
 	await _window(Vector2(1280, 720))
 	await kit.press_key(KEY_P)
 	await kit.press_key(KEY_1)

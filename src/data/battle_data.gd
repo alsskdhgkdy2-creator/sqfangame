@@ -22,7 +22,8 @@ const ROWS := ["front", "back"]
 const SKILL_COMMON := ["id", "name_key", "user", "effect", "range", "target", "parts", "priority", "speed", "levels"]
 ## 패시브(07 §4.3·§7.4)는 이 다섯 필드만 갖는다. 대상이 없어 EFFECT_TARGETS 에 넣지 않는다.
 const PASSIVE_KEYS := ["id", "name_key", "user", "effect", "levels"]
-const CLASS_KEYS := ["id", "name_key", "levels", "attack", "resist", "ailment_vuln", "bind_vuln", "equip_kinds", "start_equip", "tree"]
+## desc_key(M3 A7): 길드 직업 고르기의 설명 글(ko.json 에 있어야 한다).
+const CLASS_KEYS := ["id", "name_key", "desc_key", "levels", "attack", "resist", "ailment_vuln", "bind_vuln", "equip_kinds", "start_equip", "tree"]
 const TREE_KEYS := ["skill", "pos", "requires", "min_level"]
 const EQUIP_KEYS := ["id", "name_key", "kind", "price", "atk", "matk", "def", "mdef", "stats", "resist", "ailment_vuln", "bind_vuln"]
 ## 소재: 설명 글(desc_key)은 M3 A5부터 필수다(소지품 설명 상자).
@@ -66,9 +67,11 @@ const EFFECT_TARGETS := {
 ## 적 revive(처치 기록을 지워야 한다)·파티 charge(예고 화면이 없다)처럼 수명 주기를 정하지 않은 조합은 읽기에서 막는다.
 ## 적 heal 은 시험의 「아무것도 안 하는 행동」(자기 대상 0 회복)으로 쓴다.
 const USER_EFFECTS := {
-	"party": ["damage", "ailment", "heal", "cure", "revive", "buff", "front_guard", "cover", "passive"],
+	"party": ["damage", "ailment", "heal", "cure", "revive", "buff", "debuff", "front_guard", "cover", "passive"],
 	"enemy": ["damage", "ailment", "debuff", "heal", "charge"],
 }
+## 혼란한 적의 내장 공격 스킬 id(confused_attack).
+const CONFUSED := "confused"
 const DROP_CONDS := ["killed_by_element", "killed_while_bound", "killed_while_ailment"]
 const AI_CONDS := ["charging", "turn_mod", "hp_below"]
 
@@ -90,6 +93,8 @@ class Rules:
 	var bind_stat_mult := 700
 	var leg_evasion_mult := 500
 	var paralysis_fail := 500
+	## 맹목(M3 A7): 명중 판정 길에서 자른 명중률에 곱한다(‰).
+	var blind_hit_mult := 500
 	var status_luck := 20
 	var status_luck_clamp: Array[int] = [500, 1500]
 	var resist_gain := 300
@@ -128,7 +133,7 @@ class GrowthDef:
 
 
 ## 스킬 하나. levels[레벨 − 1] 은 그 레벨의 줄(tp 와 effect 별 값, 06 §5.4). 없는 값은 키가 없다.
-## 패시브(effect passive)의 줄은 {bonus: {키: 값}} 하나다(07 §4.3).
+## 패시브(effect passive)의 줄은 {bonus: {키: 값}} 이고, 채집 보조 패시브(M3 A7)는 gather_rare(희귀 확률 ‰)도 가진다(07 §4.3).
 class SkillDef:
 	extends RefCounted
 	var id := ""
@@ -176,6 +181,8 @@ class ClassDef:
 	extends RefCounted
 	var id := ""
 	var name_key := ""
+	## 직업 설명 글 키(M3 A7, 길드의 직업 고르기).
+	var desc_key := ""
 	## 레벨(int) → {hp, tp, STR, INT, VIT, WIS, AGI, LUC}
 	var levels := {}
 	var resist := {}
@@ -454,6 +461,28 @@ func skill(id: String) -> SkillDef:
 	return skills.get(id)
 
 
+## 혼란한 적의 공격(M3 A7 설계 §4.5): 적에게는 일반 공격이 없어 규칙이 이 내장 스킬을 쓴다. 데이터 파일에 없다(스킬 사전에 넣지 않는다).
+## id "confused"(처치 기록 by 도 이 값), 타격 STR 위력 100·명중 950, 근접 적 하나, TP 0. 부위는 대원 일반 공격처럼 없다(잠금이 막지 않는다).
+static var _confused: SkillDef
+
+
+static func confused_attack() -> SkillDef:
+	if _confused == null:
+		var a := SkillDef.new()
+		a.id = CONFUSED
+		a.name_key = "battle.attack"
+		a.user = "enemy"
+		a.effect = "damage"
+		a.stat = "STR"
+		a.element = "bash"
+		a.range_kind = "melee"
+		a.target = "enemy_one"
+		a.can_crit = true
+		a.levels = [{"tp": 0, "power": 100, "accuracy": 950}]
+		_confused = a
+	return _confused
+
+
 ## 층의 출현 표 ID → 그 표의 편성 ID 목록(표 순서).
 func table_formations(encounter_id: String) -> Array[String]:
 	var out: Array[String] = []
@@ -488,6 +517,7 @@ func name_keys() -> Array[String]:
 	var out: Array[String] = []
 	for id in class_ids:
 		out.append(classes[id].name_key)
+		out.append(classes[id].desc_key)
 	for id in skill_ids:
 		out.append(skills[id].name_key)
 	for id in enemy_ids:
@@ -876,14 +906,21 @@ func _read_passive(ck: _Ck, d: Dictionary, path: String) -> void:
 		ck.err(path + ".id", "파티 스킬 ID 는 skill.<직업>.<이름> 꼴이어야 한다")
 	if _levels_ok(ck, d, path):
 		var first_keys: Array = []
+		var rare := []  # 줄마다 gather_rare 또는 null(M3 A7 채집 보조)
 		for i in d["levels"].size():
 			var rp := "%s.levels[%d]" % [path, i]
 			var v: Variant = d["levels"][i]
 			var row := {}
 			if typeof(v) != TYPE_DICTIONARY:
 				ck.err(rp, "객체여야 한다")
-			elif ck.keys(v, rp, ["bonus"], []):
+			elif ck.keys(v, rp, ["bonus"], ["gather_rare"]):
 				row = _read_bonus(ck, v["bonus"], rp + ".bonus")
+				if v.has("gather_rare"):
+					var gr: Variant = ck.int_of(v, "gather_rare", rp, "gather_permille")
+					if gr != null:
+						rare.append(gr)
+				else:
+					rare.append(null)
 			if i == 0:
 				first_keys = row.keys()
 				first_keys.sort()
@@ -897,7 +934,17 @@ func _read_passive(ck: _Ck, d: Dictionary, path: String) -> void:
 					for k in keys:
 						if prev.has(k) and row[k] < prev[k]:
 							ck.err("%s.bonus.%s" % [rp, k], "앞 레벨보다 작다(패시브 보정은 레벨이 오를 때 줄지 않는다)")
-			s.levels.append({"bonus": row})
+			var lr := {"bonus": row}
+			if rare.size() == i + 1 and rare[i] != null:
+				lr["gather_rare"] = rare[i]
+			s.levels.append(lr)
+		# 채집 보조(M3 A7): gather_rare 는 모든 줄에 있거나 모든 줄에 없고, 레벨이 오를 때 줄지 않는다.
+		if rare.size() == d["levels"].size() and rare.has(null) and rare.any(func(x: Variant) -> bool: return x != null):
+			ck.err(path + ".levels", "gather_rare 는 모든 줄에 있거나 모든 줄에 없어야 한다")
+		elif rare.size() == d["levels"].size() and not rare.has(null):
+			for i in range(1, rare.size()):
+				if rare[i] < rare[i - 1]:
+					ck.err("%s.levels[%d].gather_rare" % [path, i], "앞 레벨보다 작다")
 	if s.id.is_empty() or not _claim(ck, s.id, path):
 		return
 	skills[s.id] = s
@@ -1004,6 +1051,7 @@ func _read_class(ck: _Ck, d: Dictionary) -> void:
 	var c := ClassDef.new()
 	c.id = ck.id_of(d, "id", "", "class.")
 	c.name_key = ck.str_of(d, "name_key", "")
+	c.desc_key = ck.str_of(d, "desc_key", "")
 	if typeof(d["levels"]) != TYPE_DICTIONARY or d["levels"].is_empty():
 		ck.err("levels", "레벨이 하나 이상인 객체여야 한다")
 	else:

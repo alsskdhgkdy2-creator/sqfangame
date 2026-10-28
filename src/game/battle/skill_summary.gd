@@ -38,6 +38,9 @@ static func parts(texts: TextDb, s: BattleDb.SkillDef, level: int) -> Array[Stri
 		for k in bonus:
 			var v: Variant = bonus[k]
 			out.append("%s %s" % [texts.t("stat." + str(k)), _signed(int(v)) if _is_num(v) else _missing(s, level, "bonus." + str(k))])
+		if row.has("gather_rare"):
+			# 채집 보조(M3 A7 포리지 센스): 희귀 소재 확률 더하기(‰ → %).
+			out.append(texts.t("battle.info.gather_rare", {"pct": pct(int(row["gather_rare"])) if _is_num(row["gather_rare"]) else _missing(s, level, "gather_rare")}))
 		return out
 	out.append(texts.t("battle.scope." + s.target) if not s.target.is_empty() else _missing(s, level, "target"))
 	match s.effect:
@@ -49,6 +52,9 @@ static func parts(texts: TextDb, s: BattleDb.SkillDef, level: int) -> Array[Stri
 		"ailment":
 			if not row.has("ailment"):
 				out.append(_missing(s, level, "ailment"))
+			if row.has("accuracy"):
+				# 필중이 아닌 상태이상 스킬(M3 A7 재밍·넘 헥스 등)은 명중 판정을 한다: 명중을 보인다.
+				out.append(texts.t("battle.info.accuracy", {"pct": _num(row, "accuracy", s, level)}))
 		"heal":
 			out.append(texts.t("battle.info.heal", {"base": _num(row, "base", s, level), "pct": _num(row, "wis_pct", s, level)}))
 		"revive":

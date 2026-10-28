@@ -9,6 +9,8 @@
 ## 시험이 모르는 효과·대상·레벨 줄 키가 정의에 나오면 실패한다(새 스킬이 확인 없이 빠지지 않게).
 ## 패시브(effect passive, 07 §4.3)는 전투 명령이 아니라 이 파일의 반복에서 빼고 test_growth_rules 의 패시브 시험이 맡는다(07 §10.7).
 ## 쓰는 대원은 시험 파티에서 그 스킬이 트리에 있는 첫 대원이고, 선행·관문까지 채워 그 레벨로 배운다(Fx.party_with_skills, SP 99).
+## 기본 다섯에 없는 직업(M3 A7 레인저·해커)의 스킬은 시험 새 대원 파티(Fx.recruit_party_dict, 칸 3·4)에서 같은 길로 쓴다.
+## gather_rare(채집 보조 패시브 줄)는 test_new_classes 가 맡는다.
 extends TestCase
 
 const Fx := preload("res://tests/fixtures.gd")
@@ -20,7 +22,7 @@ const LEVEL_KEYS := {
 	"damage": ["tp", "power", "accuracy", "ailment", "bind"], "ailment": ["tp", "ailment", "accuracy"],
 	"heal": ["tp", "base", "wis_pct"], "cure": ["tp"], "revive": ["tp", "hp_permille"],
 	"buff": ["tp", "kind", "value", "turns"], "debuff": ["tp", "kind", "value", "turns"],
-	"front_guard": ["tp", "value"], "cover": ["tp"], "charge": ["tp"], "passive": ["bonus"],
+	"front_guard": ["tp", "value"], "cover": ["tp"], "charge": ["tp"], "passive": ["bonus", "gather_rare"],
 }
 ## 구성: 받는 쪽 취약 배율(상태 확률이 상한 1000 에 닿는다)과 전투가 끝나지 않을 HP.
 const SURE_VULN := 1000000
@@ -49,7 +51,7 @@ func test_every_definition_is_known() -> void:
 		check(EFFECT_CHECKS.has(e), "효과 %s 를 확인하는 시험이 없다" % e)
 	for t in BattleDb.TARGETS:
 		check(TARGET_CHECKS.has(t), "대상 %s 를 확인하는 시험이 없다" % t)
-	var party_classes: Array = Fx.party_dict()["members"].map(func(m: Dictionary) -> String: return m["class"])
+	var party_classes: Array = (Fx.party_dict()["members"] + Fx.recruit_party_dict()["members"]).map(func(m: Dictionary) -> String: return m["class"])
 	for sid in db.skill_ids:
 		var s := db.skill(sid)
 		check(EFFECT_CHECKS.has(s.effect), "%s: 시험이 모르는 효과 %s" % [sid, s.effect])
@@ -59,7 +61,7 @@ func test_every_definition_is_known() -> void:
 				check(LEVEL_KEYS.get(s.effect, []).has(k), "%s levels[%d]: 시험이 모르는 키 %s" % [sid, i, k])
 		if s.user == "party":
 			var owners := db.class_ids.filter(func(c: String) -> bool: return db.classes[c].tree_index.has(sid))
-			check(owners.any(func(c: String) -> bool: return party_classes.has(c)), "%s: 시험 파티에 이 스킬을 가진 직업이 없다" % sid)
+			check(owners.any(func(c: String) -> bool: return party_classes.has(c)), "%s: 시험 파티·새 대원 파티에 이 스킬을 가진 직업이 없다" % sid)
 
 
 # ---- 아군 스킬 ----
@@ -135,6 +137,11 @@ func _party_case(sid: String, level: int, fixed: bool) -> void:
 			chosen = 0
 			if fixed:
 				_make_sure_targets(b.enemies)
+		"debuff":
+			# 파티 약화(M3 A7 헥스 해커): 적 하나(줄·전체는 그 범위). 구성이면 적의 약화 칸을 미리 채워 밀어내기를 본다.
+			chosen = 0
+			if fixed:
+				prefilled = _prefill(s, b.enemies, true, row["kind"])
 		"buff":
 			if sk.target == "ally_one" or sk.target == "ally_other":
 				chosen = _other_member(b, ui)
@@ -507,7 +514,17 @@ func _defs(formations: Dictionary, ai: Dictionary, levels: Dictionary = {}) -> G
 			for e in files[path]["enemies"]:
 				if ai.has(e["id"]):
 					e["ai"] = ai[e["id"]]
-	return Fx.defs_from(files, Fx.party_with_skills(_db(), levels))
+	return Fx.defs_from(files, Fx.party_with_skills(_db(), levels, _party_for(levels)))
+
+
+## 배울 스킬이 기본 다섯의 직업에 없으면 시험 새 대원 파티(M3 A7), 아니면 빈 사전(시험 파티).
+func _party_for(levels: Dictionary) -> Dictionary:
+	var db := _db()
+	var base: Array = Fx.party_dict()["members"].map(func(m: Dictionary) -> String: return m["class"])
+	for sid in levels:
+		if not base.any(func(c: String) -> bool: return db.classes[c].tree_index.has(sid)):
+			return Fx.recruit_party_dict()
+	return {}
 
 
 ## data/ 의 모든 적이 아무것도 하지 않는 AI(자기 0 회복).

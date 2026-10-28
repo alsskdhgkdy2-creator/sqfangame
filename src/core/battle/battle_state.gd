@@ -486,7 +486,7 @@ static func _check_kill(v: Variant, path: String, defs: GameDefs, battle_turn: i
 	if k["element"] != null and (typeof(k["element"]) != TYPE_STRING or not BattleLimits.ELEMENTS.has(k["element"])):
 		return "%s.element: null 또는 속성 6종이어야 한다" % path
 	if k["ailment"] != null and (typeof(k["ailment"]) != TYPE_STRING or not BattleLimits.AILMENTS.has(k["ailment"])):
-		return "%s.ailment: null 또는 상태 3종이어야 한다" % path
+		return "%s.ailment: null 또는 상태 %d종이어야 한다" % [path, BattleLimits.AILMENTS.size()]
 	if typeof(k["binds"]) != TYPE_ARRAY:
 		return "%s.binds: 배열이어야 한다" % path
 	var at := -1
@@ -498,8 +498,9 @@ static func _check_kill(v: Variant, path: String, defs: GameDefs, battle_turn: i
 	var by: Variant = k["by"]
 	if typeof(by) != TYPE_STRING:
 		return "%s.by: 문자열이어야 한다" % path
-	if by != "attack" and by != "poison":
+	# confused(M3 A7): 혼란한 적의 내장 공격이 쓰러뜨린 적. 혼란한 대원의 일반 공격은 attack 이다.
+	if by != "attack" and by != "poison" and by != BattleDb.CONFUSED:
 		var s: BattleDb.SkillDef = defs.battle.skill(by)
 		if s == null or s.user != "party" or s.effect != "damage":
-			return "%s.by: attack·poison 또는 파티의 피해 스킬이어야 한다" % path
+			return "%s.by: attack·poison·confused 또는 파티의 피해 스킬이어야 한다" % path
 	return ""

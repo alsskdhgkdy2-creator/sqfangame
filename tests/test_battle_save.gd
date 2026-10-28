@@ -114,7 +114,7 @@ func test_v2_rejects_each_save_table_row() -> void:
 		["battle.seq 0", func(d): d["battle"]["seq"] = 0, "battle.seq: 정수"],
 		["battle.party 길이", func(d): d["battle"]["party"].pop_back(), "battle.party: 길이 5"],
 		["battle.enemies 길이", func(d): d["battle"]["enemies"].append(d["battle"]["enemies"][0].duplicate(true)), "battle.enemies: 길이 2"],
-		["ailment id", func(d): d["battle"]["party"][2]["ailment"]["id"] = "blind", "battle.party[2].ailment"],
+		["ailment id", func(d): d["battle"]["party"][2]["ailment"]["id"] = "petrify", "battle.party[2].ailment"],  # M3 A7: blind 는 이제 있는 상태다
 		["ailment turns 10", func(d): d["battle"]["party"][2]["ailment"]["turns"] = 10, "battle.party[2].ailment.turns"],
 		["독 damage 0", func(d): d["battle"]["party"][1]["ailment"]["damage"] = 0, "battle.party[1].ailment.damage"],
 		["독 damage 없음", func(d): d["battle"]["party"][1]["ailment"].erase("damage"), "battle.party[1].ailment.damage: 필수 필드가 없다"],
@@ -130,7 +130,7 @@ func test_v2_rejects_each_save_table_row() -> void:
 		["적 hp 초과", func(d): d["battle"]["enemies"][0]["hp"] = s.battle.enemies[0].max_hp + 1, "battle.enemies[0].hp: 정수 0~%d" % s.battle.enemies[0].max_hp],
 		["charging 이 강공격 아님", func(d): d["battle"]["enemies"][0]["charging"] = "skill.enemy.pinch", "battle.enemies[0].charging"],
 		["kill element", func(d): d["battle"]["enemies"][1]["kill"]["element"] = "dark", "battle.enemies[1].kill.element"],
-		["kill ailment", func(d): d["battle"]["enemies"][1]["kill"]["ailment"] = "blind", "battle.enemies[1].kill.ailment"],
+		["kill ailment", func(d): d["battle"]["enemies"][1]["kill"]["ailment"] = "petrify", "battle.enemies[1].kill.ailment"],  # M3 A7
 		["kill binds 순서", func(d): d["battle"]["enemies"][1]["kill"]["binds"] = ["arm", "head"], "battle.enemies[1].kill.binds"],
 		["HP 0 적의 kill null", func(d): d["battle"]["enemies"][1]["kill"] = null, "battle.enemies[1].kill: HP 0 인 적"],
 		["HP 있는 적의 kill", func(d): d["battle"]["enemies"][0]["kill"] = d["battle"]["enemies"][1]["kill"], "battle.enemies[0].kill: HP 가 1 이상"],

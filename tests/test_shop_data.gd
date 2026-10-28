@@ -28,6 +28,11 @@ const GATHER_TABLE := [
 	["coil_blade", 300, {"scrap_wire": 4, "copper_coil": 1}], ["moss_weave", 240, {"neon_moss": 5, "lumen_sap": 1}],
 	["ether_lens", 260, {"ether_crystal": 3, "data_core": 1}], ["lichen_charm", 280, {"frost_lichen": 3}],
 ]
+## 레일 레인저·헥스 해커 장비(M3 A7 설계 §2.3): 채집 소재 장비 4줄 뒤 [장비, 값, 풀림], 한정 아님.
+const A7_TABLE := [
+	["rail_bow", 80, {}], ["coil_longbow", 320, {"scrap_wire": 3, "copper_coil": 2}], ["hex_pistol", 80, {}],
+	["glitch_carbine", 320, {"data_core": 2, "ether_crystal": 1}], ["scout_hood", 50, {}], ["hex_mask", 50, {}],
+]
 const SELL := {"neon_rat_tail": 8, "cable_scale": 12, "glow_scale": 20, "spore_pouch": 10, "coated_scale": 14, "drill_claw": 16, "beetle_plate": 18, "intact_pincer": 30,
 	"neon_moss": 5, "lumen_sap": 35, "frost_lichen": 18, "scrap_wire": 6, "copper_coil": 40, "ether_crystal": 24, "data_core": 60,
 	"ether_horn": 150, "delver_badge": 200, "warden_core": 300}
@@ -75,7 +80,8 @@ func test_real_shop_data() -> void:
 		check(BattleLimits.in_range("sell", db.material_sell[id]), "%s: sell 1~99,999" % id)
 	var sh := db.shop(JUNK)
 	check_eq(sh.name_key, JUNK, "name_key")
-	check_eq(sh.stock.size(), TABLE.size() + ITEM_TABLE.size() + GATHER_TABLE.size(), "진열 31줄: 장비 21 + 소모품 6(M3 A4) + 채집 소재 장비 4(M3 A5)")
+	check_eq(sh.stock.size(), TABLE.size() + ITEM_TABLE.size() + GATHER_TABLE.size() + A7_TABLE.size(),
+		"진열 37줄: 장비 21 + 소모품 6(M3 A4) + 채집 소재 장비 4(M3 A5) + 활·총·머리 6(M3 A7)")
 	for i in TABLE.size():
 		var row: Array = TABLE[i]
 		var unlock := {}
@@ -97,6 +103,14 @@ func test_real_shop_data() -> void:
 			unlock["item." + m] = row[2][m]
 		check_eq(sh.stock[TABLE.size() + ITEM_TABLE.size() + k], {"item": "equip." + row[0], "unlock": unlock, "limited": false},
 			"채집 소재 장비 진열 %d 차례·풀림(M3 A5)" % (k + 1))
+		check_eq(db.equip("equip." + row[0]).price, row[1], "%s 값" % row[0])
+	for k in A7_TABLE.size():
+		var row: Array = A7_TABLE[k]
+		var unlock := {}
+		for m in row[2]:
+			unlock["item." + m] = row[2][m]
+		check_eq(sh.stock[TABLE.size() + ITEM_TABLE.size() + GATHER_TABLE.size() + k], {"item": "equip." + row[0], "unlock": unlock, "limited": false},
+			"레인저·해커 장비 진열 %d 차례·풀림(M3 A7)" % (k + 1))
 		check_eq(db.equip("equip." + row[0]).price, row[1], "%s 값" % row[0])
 	for m in SELL:
 		check_eq(db.material_sell["item." + m], SELL[m], "%s 판매값" % m)

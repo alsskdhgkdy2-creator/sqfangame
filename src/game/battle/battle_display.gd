@@ -302,6 +302,10 @@ func describe(ev: Dictionary) -> String:
 		"action":
 			if ev.get("kind") == "escape":
 				return texts.t("battle.event.try_escape", {"actor": actor})
+			if ev.get("kind") == BattleRules.CONFUSED:
+				# 혼란(M3 A7, 05 §16.9 띠 한 줄): 행동 줄 대신 「신호가 교란되어 …을(를) 공격했다!」. 피해 줄은 그대로 뒤따른다.
+				var tg: Array = ev.get("targets", [])
+				return texts.t("battle.event.confused", {"actor": actor, "target": name_of(tg[0]) if not tg.is_empty() else "?"})
 			return texts.t("battle.event.action", {"actor": actor, "skill": skill_name(str(ev["skill"]))})
 		"failed":
 			return texts.t("battle.failed." + str(ev["reason"]), {"actor": actor})

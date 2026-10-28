@@ -44,7 +44,7 @@ const BRANCH_W := 300.0
 const CARDS_GAP := 24.0
 const NOTICE_SEC := 2.5
 ## 설명 창 직업 머리글자 칸 차례(shop.badge.*, §8.5).
-const BADGE_CLASSES := ["holo_knight", "blade_duelist", "nano_medic", "glyph_wizard"]
+const BADGE_CLASSES := ["holo_knight", "blade_duelist", "nano_medic", "glyph_wizard", "rail_ranger", "hex_hacker"]
 ## 가상 키패드 단추 → 같은 일을 하는 물리 키(캠프와 같다).
 const PAD_KEYS := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "ok": KEY_ENTER, "back": KEY_ESCAPE}
 ## 키패드 자리(캠프와 같은 값): 십자 왼쪽 아래 (8, 511), 뿌리 「취소」「선택」 가로 (W − 247, 427), 그 밖 세로 (W − 118, 548).

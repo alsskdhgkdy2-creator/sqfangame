@@ -151,6 +151,32 @@
       "unlock": {
         "item.frost_lichen": 3
       }
+    },
+    {
+      "item": "equip.rail_bow"
+    },
+    {
+      "item": "equip.coil_longbow",
+      "unlock": {
+        "item.scrap_wire": 3,
+        "item.copper_coil": 2
+      }
+    },
+    {
+      "item": "equip.hex_pistol"
+    },
+    {
+      "item": "equip.glitch_carbine",
+      "unlock": {
+        "item.data_core": 2,
+        "item.ether_crystal": 1
+      }
+    },
+    {
+      "item": "equip.scout_hood"
+    },
+    {
+      "item": "equip.hex_mask"
     }
   ]
 }

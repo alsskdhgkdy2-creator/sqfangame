@@ -146,7 +146,7 @@ func _many_rows(n: int) -> Array:
 # ---- 아이콘 ----
 
 func test_ten_kind_icons_are_drawn_inside_and_tell_apart() -> void:
-	check_eq(VectorIcons.KIND_ICONS.size(), 11, "종류 아이콘 11개(M3 A3 귀중품 열쇠 포함)")
+	check_eq(VectorIcons.KIND_ICONS.size(), 13, "종류 아이콘 13개(M3 A3 귀중품 열쇠, M3 A7 활·총 포함)")
 	for side in [28.0, 40.0]:
 		var rect := Rect2(Vector2(5, 7), Vector2(side, side))
 		var sigs := {}
@@ -171,7 +171,7 @@ func test_ten_kind_icons_are_drawn_inside_and_tell_apart() -> void:
 		await kit.frames(1)
 	list.set_rows(VectorIcons.KIND_ICONS.map(func(n: String) -> Dictionary: return {"icon": n, "name": n, "right": "1"}))
 	await kit.frames(2)
-	check_eq(list.row_count, 11, "아이콘 줄 11")
+	check_eq(list.row_count, 13, "아이콘 줄 13")
 
 
 func _bounds(sh: Dictionary) -> Rect2:
@@ -199,14 +199,14 @@ func test_tabs_pick_on_release_mark_checked_and_cancel() -> void:
 	await _compose("weapon")
 	var got: Array[int] = []
 	tabs.picked.connect(func(i: int) -> void: got.append(i))
-	check_eq(tabs.kinds, ["all", "sword", "staff"] as Array[String], "무기: 전체 · 검 · 지팡이")
+	check_eq(tabs.kinds, ["all", "sword", "staff", "bow", "gun"] as Array[String], "무기: 전체 · 검 · 지팡이 · 활 · 총(M3 A7)")
 	check_eq([tabs.buttons[0].text, tabs.buttons[0].icon], [texts.t("shop.tab.all"), ""], "「전체」는 글자")
-	check_eq([tabs.buttons[1].text, tabs.buttons[1].icon, tabs.buttons[2].icon], ["", "kind_sword", "kind_staff"], "나머지는 아이콘")
+	check_eq([tabs.buttons[1].text, tabs.buttons[1].icon, tabs.buttons[2].icon, tabs.buttons[3].icon, tabs.buttons[4].icon], ["", "kind_sword", "kind_staff", "kind_bow", "kind_gun"], "나머지는 아이콘")
 	for i in tabs.buttons.size():
 		var b := tabs.buttons[i]
 		check_eq(_rect(b), Rect2(ShopFrame.PAD_SIDE + i * 68.0, 166, 64, 64), "탭 %d 자리 64×64 사이 4" % i)
 		check_eq(b.focus_mode, Control.FOCUS_NONE, "탭 %d 포커스 없음" % i)
-	check_eq(tabs.buttons.map(func(b: TouchButton) -> bool: return b.checked), [true, false, false], "처음은 「전체」 checked")
+	check_eq(tabs.buttons.map(func(b: TouchButton) -> bool: return b.checked), [true, false, false, false, false], "처음은 「전체」 checked")
 	# 누르기만으로는 고르지 않는다(뗄 때 한 번).
 	var c2 := kit.center_of(tabs.buttons[2])
 	kit.touch(0, c2, true)
@@ -216,7 +216,7 @@ func test_tabs_pick_on_release_mark_checked_and_cancel() -> void:
 	await kit.frames(2)
 	check_eq(got, [2] as Array[int], "뗄 때 picked(2) 한 번")
 	check_eq([tabs.current, tabs.kind()], [2, "staff"], "고른 칸 = 지팡이")
-	check_eq(tabs.buttons.map(func(b: TouchButton) -> bool: return b.checked), [false, false, true], "고른 칸만 checked")
+	check_eq(tabs.buttons.map(func(b: TouchButton) -> bool: return b.checked), [false, false, true, false, false], "고른 칸만 checked")
 	for b in tabs.buttons:
 		check(not b.selected, "%s: 탭에는 노랑 커서가 없다" % b.name)
 		check(not b.theme_state().contains("selected"), "%s: 모양 %s" % [b.name, b.theme_state()])
@@ -787,7 +787,7 @@ func test_route_hands_row_and_tab_presses_to_the_screen_untouched() -> void:
 	check_eq(routed, [["row", 2], ["tab", 2]], "route 가 줄·탭 번호를 받는다")
 	check_eq(got, [], "picked 는 나오지 않는다")
 	check_eq([list.cursor, list.rows[0].selected, list.rows[2].selected], [0, true, false], "줄 커서 그대로")
-	check_eq([tabs.current, tabs.buttons.map(func(b: TouchButton) -> bool: return b.checked)], [0, [true, false, false]], "고른 탭 그대로")
+	check_eq([tabs.current, tabs.buttons.map(func(b: TouchButton) -> bool: return b.checked)], [0, [true, false, false, false, false]], "고른 탭 그대로")
 	# 끌기는 여전히 고르기가 아니다.
 	var c := kit.center_of(list.rows[1])
 	kit.touch(0, c, true)

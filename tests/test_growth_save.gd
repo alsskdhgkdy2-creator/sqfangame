@@ -233,7 +233,13 @@ func test_v2_battle_units_keep_m2_inputs_and_lose_corrode() -> void:
 	var want: Array = JSON.parse_string(V2_BATTLE_UNITS)
 	for i in 5:
 		var u := s.battle.party[i]
-		var got := {"stats": u.stats, "gear": u.gear, "resist": u.resist, "ailment_vuln": u.ailment_vuln, "bind_vuln": u.bind_vuln, "attack": u.attack.element, "max_hp": u.max_hp, "max_tp": u.max_tp}
+		# M3 A7: 상태이상이 다섯이 되어 유닛의 ailment_vuln 에 혼란·맹목(직업 기본 1000)이 더해졌다. 2판 코드의 세 값은 그대로 견주고, 더한 둘은 따로 본다.
+		var old_av := {}
+		var new_av := {}
+		for k in u.ailment_vuln:
+			(old_av if ["poison", "paralysis", "sleep"].has(k) else new_av)[k] = u.ailment_vuln[k]
+		check_eq(new_av, {"confusion": 1000, "blind": 1000}, "대원 %d: 더한 혼란·맹목 취약 배율은 1000" % i)
+		var got := {"stats": u.stats, "gear": u.gear, "resist": u.resist, "ailment_vuln": old_av, "bind_vuln": u.bind_vuln, "attack": u.attack.element, "max_hp": u.max_hp, "max_tp": u.max_tp}
 		check_eq(_canon(got), _canon(want[i]), "대원 %d 전투 유닛 입력값 = 2판 코드의 값(06 §6.1)" % i)
 	check(s.battle.enemies[0].ailment == "poison" and s.battle.enemies[0].ailment_damage == 15, "적의 부식 글리프 독은 남음")
 	# 부식 글리프 상실(07 §8.4 이전 정책): 명령은 unknown_skill 로 거부, 같은 자리의 열 글리프는 받음.

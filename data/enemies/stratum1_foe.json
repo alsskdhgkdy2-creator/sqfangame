@@ -23,7 +23,9 @@
       "ailment_vuln": {
         "poison": 1000,
         "paralysis": 1000,
-        "sleep": 1000
+        "sleep": 1000,
+        "confusion": 1000,
+        "blind": 1000
       },
       "bind_vuln": {
         "head": 1000,
@@ -101,7 +103,9 @@
       "ailment_vuln": {
         "poison": 1000,
         "paralysis": 1000,
-        "sleep": 1000
+        "sleep": 1000,
+        "confusion": 1000,
+        "blind": 1000
       },
       "bind_vuln": {
         "head": 1000,
@@ -183,7 +187,9 @@
       "ailment_vuln": {
         "poison": 1000,
         "paralysis": 1000,
-        "sleep": 1000
+        "sleep": 1000,
+        "confusion": 1000,
+        "blind": 1000
       },
       "bind_vuln": {
         "head": 1000,

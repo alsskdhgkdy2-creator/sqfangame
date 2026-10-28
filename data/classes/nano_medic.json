@@ -1,6 +1,7 @@
 {
   "id": "class.nano_medic",
   "name_key": "class.nano_medic",
+  "desc_key": "class.nano_medic.desc",
   "levels": {
     "1": {
       "hp": 42,
@@ -318,7 +319,9 @@
   "ailment_vuln": {
     "poison": 1000,
     "paralysis": 1000,
-    "sleep": 1000
+    "sleep": 1000,
+    "confusion": 1000,
+    "blind": 1000
   },
   "bind_vuln": {
     "head": 1000,

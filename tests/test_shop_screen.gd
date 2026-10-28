@@ -1113,7 +1113,7 @@ func test_sell_list_rows_tabs_and_single_sales() -> void:
 	# 장비 탭: 가방 장비만(장착한 것은 없다).
 	await kit.press_key(KEY_X)
 	check_eq([sc.tab, sc.lines.map(func(l: Dictionary) -> String: return l["item"])], [1, ["equip.twin_edge"]], "장비 탭 = 가방 장비")
-	check_eq([sc.buy_list.rows[0].right, sc.frame.desc_badges.size()], ["60", 4], "장비 판매값 = 값 ÷ 2, 머리글자 칸")
+	check_eq([sc.buy_list.rows[0].right, sc.frame.desc_badges.size()], ["60", 6], "장비 판매값 = 값 ÷ 2, 머리글자 칸(M3 A7: 여섯 직업)")
 	await _step(sc, "confirm")
 	await _step(sc, "dialog", ["confirm", null])
 	check_eq([s.money, s.gear_bag.has("equip.twin_edge"), saves], [1092, false, 3], "트윈 엣지 팔기")

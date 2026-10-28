@@ -347,7 +347,7 @@ static func enemy(id: String, hp: int, stats: Array, ai: Array, extra: Dictionar
 	var d := {"id": id, "name_key": id, "max_hp": hp,
 		"stats": {"STR": stats[0], "INT": stats[1], "VIT": stats[2], "WIS": stats[3], "AGI": stats[4], "LUC": stats[5]},
 		"resist": {"slash": 1000, "pierce": 1000, "bash": 1000, "fire": 1000, "ice": 1000, "volt": 1000},
-		"ailment_vuln": {"poison": 1000, "paralysis": 1000, "sleep": 1000}, "bind_vuln": {"head": 1000, "arm": 1000, "leg": 1000},
+		"ailment_vuln": {"poison": 1000, "paralysis": 1000, "sleep": 1000, "confusion": 1000, "blind": 1000}, "bind_vuln": {"head": 1000, "arm": 1000, "leg": 1000},
 		"on_bound": "fail", "exp": 0, "ai": rules, "drops": []}
 	d.merge(extra, true)
 	return d
@@ -457,6 +457,19 @@ static func with_growth(files: Dictionary, overrides: Dictionary) -> Dictionary:
 ## 시험 파티 사전: 스킬마다 그 스킬이 트리에 있는 첫 대원에게 그 레벨로 배우게 하고, 선행을 요구 레벨까지 채우며(거슬러 올라감),
 ## 대원 level 을 배운 스킬의 관문(min_level) 가운데 가장 큰 값까지 올린다. SP 는 따지지 않으므로 with_growth(…, {"initial_sp": 99}) 와 함께 쓴다.
 ## 이미 더 높은 레벨로 배운 스킬은 내리지 않는다.
+## 시험 새 대원 파티(M3 A7): 시험 파티의 칸 3(나노 메딕)·칸 4(글리프 위저드)를 레일 레인저·헥스 해커로 바꾼 사전(ID·이름 키·열·레벨 그대로,
+## 스킬 없음, 장비는 data/ 직업 파일의 start_equip). 기본 다섯에 없는 직업의 스킬을 같은 길로 시험할 때 쓴다.
+static func recruit_party_dict() -> Dictionary:
+	var p: Dictionary = party_dict()
+	for x in [[3, "rail_ranger"], [4, "hex_hacker"]]:
+		var m: Dictionary = p["members"][x[0]]
+		var c: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/classes/%s.json" % x[1]))
+		m["class"] = c["id"]
+		m["skills"] = {}
+		m["equip"] = c["start_equip"].duplicate()
+	return p
+
+
 static func party_with_skills(db: BattleDb, levels: Dictionary, party: Dictionary = {}) -> Dictionary:
 	var p: Dictionary = (party if not party.is_empty() else party_dict()).duplicate(true)
 	for sid in levels:

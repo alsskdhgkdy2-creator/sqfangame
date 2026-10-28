@@ -47,7 +47,7 @@ func test_real_data_loads_without_errors_or_warnings() -> void:
 	check_eq(r.warnings, [] as Array[String], "경고 0")
 	check(r.ok(), "defs 있음")
 	var db := r.defs.battle
-	check_eq(db.class_ids.size(), 4, "직업 넷")
+	check_eq(db.class_ids.size(), 6, "직업 여섯(M3 A7: 레일 레인저·헥스 해커)")
 	check_eq(db.enemy_ids.size(), 9, "적 아홉(일반 여섯 + FOE 셋, M3 A6)")
 	check_eq(db.table_formations("encounter.f1_test").size(), 6, "편성 여섯")
 	check_eq(r.defs.first_floor().encounter_table, "encounter.f1_test", "층 출현 표")
@@ -150,7 +150,7 @@ func test_id_checks() -> void:
 func test_enum_checks() -> void:
 	_rejects("능력치", func(f): f[ES]["skills"][0]["stat"] = "AGI", "%s: skills[0].stat:" % ES)
 	_rejects("속성", func(f): f[ES]["skills"][0]["element"] = "dark", "%s: skills[0].element:" % ES)
-	_rejects("상태이상", func(f): f[ES]["skills"][2]["levels"][0]["ailment"]["id"] = "blind", "%s: skills[2].levels[0].ailment.id:" % ES)
+	_rejects("상태이상", func(f): f[ES]["skills"][2]["levels"][0]["ailment"]["id"] = "petrify", "%s: skills[2].levels[0].ailment.id:" % ES)  # M3 A7: blind 는 이제 있는 상태다
 	_rejects("부위", func(f): f[ES]["skills"][7]["levels"][0]["bind"]["part"] = "tail", "%s: skills[7].levels[0].bind.part:" % ES)
 	_rejects("parts 부위", func(f): f[ES]["skills"][0]["parts"] = ["tail"], "%s: skills[0].parts:" % ES)
 	_rejects("effect", func(f): f[ES]["skills"][0]["effect"] = "explode", "%s: skills[0].effect:" % ES)
@@ -278,8 +278,9 @@ func test_relation_checks() -> void:
 	var charge: Dictionary = Fx.data_files()[ES]["skills"][11].duplicate(true)
 	charge.merge({"id": "skill.blade_duelist.t_charge", "user": "party", "levels": [{"tp": 1}]}, true)
 	_rejects("파티 charge", func(f): f["skills/blade_duelist.json"]["skills"].append(charge), "skills/blade_duelist.json: skills[%d].effect: user party 에는 effect charge 를 쓸 수 없다" % bd_next)
-	_rejects("파티 debuff", func(f): f["skills/blade_duelist.json"]["skills"].append(Fx.effect_skill("skill.t.howl", false, [["phys_def", 1250, 3]]).merged({"user": "party", "effect": "debuff", "target": "enemy_one"}, true)),
-		"skills/blade_duelist.json: skills[%d].effect: user party 에는 effect debuff 를" % bd_next)
+	# M3 A7: 파티 debuff(헥스 해커)는 받는다. 값은 적 debuff 와 같은 범위로 본다: 강화 쪽 값(방어 750)은 거부.
+	_rejects("파티 debuff 에 강화 값", func(f): f["skills/blade_duelist.json"]["skills"].append(Fx.effect_skill("skill.blade_duelist.t_howl", false, [["phys_def", 750, 3]]).merged({"user": "party", "effect": "debuff", "target": "enemy_one"}, true)),
+		"skills/blade_duelist.json: skills[%d].levels[0].value: debuff phys_def 는" % bd_next)
 	_rejects("적 buff", func(f): f[ES]["skills"].append(Fx.effect_skill("skill.enemy.t_pump", true, [["phys_atk", 1300, 3]]).merged({"effect": "buff", "target": "self"}, true)),
 		"%s: skills[13].effect: user enemy 에는 effect buff 를" % ES)
 	for e in ["cure", "cover", "front_guard"]:

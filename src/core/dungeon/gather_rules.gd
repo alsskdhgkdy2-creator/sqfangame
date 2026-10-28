@@ -20,12 +20,21 @@ extends RefCounted
 static var bonus_hook := Callable()
 
 
-## 채집 스킬 보너스(01 §3.6: 수확량·희귀 확률). 지금은 0 이다. A7 이 살아 있는 대원의 패시브(01 §5 사냥꾼 계열 「채집 보조」)를
-## 종류마다 더해 채운다.
+## 채집 스킬 보너스(01 §3.6: 수확량·희귀 확률). M3 A7: 희귀 확률은 살아 있는 파티 대원(길드 대원은 빼고)이 배운 패시브의
+## gather_rare(레인저 「포리지 센스」) 가운데 가장 큰 값이다(더하지 않는다). 세 종류에 모두 같다(원작 채취·벌채·채굴 스킬을 하나로, 설계 §4.3).
+## 수확량 보너스는 아직 없다(0). 난수를 뽑지 않는다.
 static func skill_bonus(s: ExplorationState, kind: String) -> Dictionary:
 	if bonus_hook.is_valid():
 		return bonus_hook.call(s, kind)
-	return {"count": 0, "rare_permille": 0}
+	var rare := 0
+	for m in s.party.members:
+		if m.hp <= 0:
+			continue
+		for id in m.skills:
+			var sk: BattleDb.SkillDef = s.defs.battle.skill(id)
+			if sk != null and sk.passive():
+				rare = maxi(rare, int(sk.level_row(int(m.skills[id])).get("gather_rare", 0)))
+	return {"count": 0, "rare_permille": rare}
 
 
 ## 채집 습격 갈고리(슬라이스 뒤, R1 §2.5): 습격할 편성 ID, 없으면 "". 지금은 늘 "". 넣을 때는 화면이 GATHER 전에 「계속할까?」를 묻고,

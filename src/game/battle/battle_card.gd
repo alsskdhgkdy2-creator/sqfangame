@@ -10,8 +10,9 @@ extends TouchButton
 const CLASS_COLORS := {
 	"class.holo_knight": Color(1.0, 0.78, 0.25), "class.blade_duelist": Color(0.25, 0.9, 1.0),
 	"class.nano_medic": Color(0.75, 0.92, 1.0), "class.glyph_wizard": Color(0.72, 0.45, 1.0),
+	"class.rail_ranger": Color(0.55, 1.0, 0.45), "class.hex_hacker": Color(1.0, 0.42, 0.7),
 }
-## 적 자리표시 색: 직업색(금·시안·흰·하늘·보라)과 겹치지 않는 단색.
+## 적 자리표시 색: 직업색(금·시안·흰·하늘·보라·초록·분홍)과 겹치지 않는 단색.
 const ENEMY_COLORS := {
 	"enemy.neon_rat": Color(0.62, 0.27, 0.22), "enemy.cable_moth": Color(0.47, 0.5, 0.2),
 	"enemy.spore_bloom": Color(0.28, 0.46, 0.27), "enemy.wire_serpent": Color(0.7, 0.42, 0.14),

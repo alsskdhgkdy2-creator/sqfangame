@@ -148,6 +148,8 @@ func _tokens(s: BattleDb.SkillDef, row: Dictionary) -> Array:
 				for sub in v:
 					if not ["part", "chance", "turns"].has(sub):
 						out.append("<모르는 bind 필드 %s>" % sub)
+			"gather_rare":
+				out.append("희귀 채집 +" + SkillSummary.pct(int(v)))  # M3 A7 채집 보조
 			"bonus":
 				for st in v:
 					out.append("%s %s" % [texts.t("stat." + str(st)), ("+%d" % int(v[st])) if int(v[st]) >= 0 else str(int(v[st]))])

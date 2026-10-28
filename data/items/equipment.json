@@ -388,6 +388,102 @@
       "ailment_vuln": {},
       "bind_vuln": {},
       "price": 280
+    },
+    {
+      "id": "equip.rail_bow",
+      "name_key": "equip.rail_bow",
+      "kind": "bow",
+      "atk": 10,
+      "matk": 0,
+      "def": 0,
+      "mdef": 0,
+      "element": "pierce",
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "price": 80
+    },
+    {
+      "id": "equip.coil_longbow",
+      "name_key": "equip.coil_longbow",
+      "kind": "bow",
+      "atk": 18,
+      "matk": 0,
+      "def": 0,
+      "mdef": 0,
+      "element": "pierce",
+      "stats": {
+        "AGI": 2
+      },
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "price": 320
+    },
+    {
+      "id": "equip.hex_pistol",
+      "name_key": "equip.hex_pistol",
+      "kind": "gun",
+      "atk": 7,
+      "matk": 6,
+      "def": 0,
+      "mdef": 0,
+      "element": "pierce",
+      "stats": {},
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "price": 80
+    },
+    {
+      "id": "equip.glitch_carbine",
+      "name_key": "equip.glitch_carbine",
+      "kind": "gun",
+      "atk": 12,
+      "matk": 12,
+      "def": 0,
+      "mdef": 0,
+      "element": "pierce",
+      "stats": {
+        "LUC": 2
+      },
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "price": 320
+    },
+    {
+      "id": "equip.scout_hood",
+      "name_key": "equip.scout_hood",
+      "kind": "head",
+      "atk": 0,
+      "matk": 0,
+      "def": 2,
+      "mdef": 1,
+      "stats": {
+        "AGI": 1
+      },
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "price": 50
+    },
+    {
+      "id": "equip.hex_mask",
+      "name_key": "equip.hex_mask",
+      "kind": "head",
+      "atk": 0,
+      "matk": 0,
+      "def": 1,
+      "mdef": 3,
+      "stats": {
+        "LUC": 1
+      },
+      "resist": {},
+      "ailment_vuln": {},
+      "bind_vuln": {},
+      "price": 50
     }
   ]
 }

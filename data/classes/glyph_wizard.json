@@ -1,6 +1,7 @@
 {
   "id": "class.glyph_wizard",
   "name_key": "class.glyph_wizard",
+  "desc_key": "class.glyph_wizard.desc",
   "levels": {
     "1": {
       "hp": 40,
@@ -318,7 +319,9 @@
   "ailment_vuln": {
     "poison": 1000,
     "paralysis": 1000,
-    "sleep": 1000
+    "sleep": 1000,
+    "confusion": 1000,
+    "blind": 1000
   },
   "bind_vuln": {
     "head": 1000,

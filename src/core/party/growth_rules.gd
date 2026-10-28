@@ -80,6 +80,9 @@ static func profile(defs: GameDefs, _i: int, member: PartyState.Member) -> Dicti
 	var attack := c.attack.copy()
 	if weapon != null:
 		attack.element = weapon.element
+		# 활·총(M3 A7 설계 §2.2): 무기가 일반 공격을 원거리로 만든다. 맨손이면 직업의 attack.range 그대로.
+		if BattleLimits.RANGED_WEAPONS.has(weapon.kind):
+			attack.range_kind = "ranged"
 	out["attack"] = attack
 	out["weapon"] = weapon.id if weapon != null else ""
 	return out

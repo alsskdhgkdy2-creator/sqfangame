@@ -5,6 +5,7 @@ extends RefCounted
 
 
 ## 적마다 {skill: SkillDef, level: 1, target: 칸 번호(전체·자기 대상은 -1)} 또는 null(고르지 않음·idle).
+## 혼란한 적(M3 A7 설계 §4.5)은 규칙을 보지 않고(난수 없음) {kind: "confused", skill: BattleDb.confused_attack(), level: 1, target: -1}.
 static func choose_all(state: ExplorationState, events: Array[Dictionary]) -> Array:
 	var out := []
 	for u in state.battle.enemies:
@@ -15,6 +16,12 @@ static func choose_all(state: ExplorationState, events: Array[Dictionary]) -> Ar
 static func choose(state: ExplorationState, u: BattleUnit, events: Array[Dictionary]) -> Variant:
 	if not u.alive() or u.asleep():
 		return null
+	if u.confused():
+		var conf := {"kind": BattleRules.CONFUSED, "skill": BattleDb.confused_attack(), "level": 1, "target": -1}
+		if not u.charging.is_empty():
+			events.append({"type": "charge_lost", "unit": u.ref(), "skill": u.charging, "reason": "no_target"})
+			u.charging = ""
+		return conf
 	var b := state.battle
 	var db := state.defs.battle
 	var e: BattleDb.EnemyDef = db.enemies[u.def_id]

@@ -1,0 +1,435 @@
+{
+  "skills": [
+    {
+      "id": "skill.rail_ranger.sharp_shot",
+      "name_key": "skill.rail_ranger.sharp_shot",
+      "user": "party",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 4,
+          "power": 150,
+          "accuracy": 950
+        },
+        {
+          "tp": 4,
+          "power": 160,
+          "accuracy": 950
+        },
+        {
+          "tp": 5,
+          "power": 170,
+          "accuracy": 950
+        },
+        {
+          "tp": 5,
+          "power": 180,
+          "accuracy": 950
+        },
+        {
+          "tp": 6,
+          "power": 190,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.rail_ranger.flash_arrow",
+      "name_key": "skill.rail_ranger.flash_arrow",
+      "user": "party",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 5,
+          "power": 80,
+          "accuracy": 950,
+          "ailment": {
+            "id": "blind",
+            "chance": 600,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 5,
+          "power": 80,
+          "accuracy": 950,
+          "ailment": {
+            "id": "blind",
+            "chance": 650,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 80,
+          "accuracy": 950,
+          "ailment": {
+            "id": "blind",
+            "chance": 700,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 80,
+          "accuracy": 950,
+          "ailment": {
+            "id": "blind",
+            "chance": 750,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 7,
+          "power": 80,
+          "accuracy": 950,
+          "ailment": {
+            "id": "blind",
+            "chance": 800,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.rail_ranger.leg_shot",
+      "name_key": "skill.rail_ranger.leg_shot",
+      "user": "party",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 5,
+          "power": 90,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 500,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 5,
+          "power": 90,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 550,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 90,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 600,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 90,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 650,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 7,
+          "power": 90,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 700,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.rail_ranger.bow_mastery",
+      "name_key": "skill.rail_ranger.bow_mastery",
+      "user": "party",
+      "effect": "passive",
+      "levels": [
+        {
+          "bonus": {
+            "STR": 1,
+            "AGI": 1
+          }
+        },
+        {
+          "bonus": {
+            "STR": 2,
+            "AGI": 2
+          }
+        },
+        {
+          "bonus": {
+            "STR": 3,
+            "AGI": 3
+          }
+        },
+        {
+          "bonus": {
+            "STR": 4,
+            "AGI": 4
+          }
+        },
+        {
+          "bonus": {
+            "STR": 5,
+            "AGI": 5
+          }
+        },
+        {
+          "bonus": {
+            "STR": 6,
+            "AGI": 6
+          }
+        },
+        {
+          "bonus": {
+            "STR": 7,
+            "AGI": 7
+          }
+        },
+        {
+          "bonus": {
+            "STR": 8,
+            "AGI": 8
+          }
+        },
+        {
+          "bonus": {
+            "STR": 9,
+            "AGI": 9
+          }
+        },
+        {
+          "bonus": {
+            "STR": 10,
+            "AGI": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.rail_ranger.arm_shot",
+      "name_key": "skill.rail_ranger.arm_shot",
+      "user": "party",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 5,
+          "power": 90,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 500,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 5,
+          "power": 90,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 550,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 90,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 600,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 6,
+          "power": 90,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 650,
+            "turns": 3
+          }
+        },
+        {
+          "tp": 7,
+          "power": 90,
+          "accuracy": 950,
+          "bind": {
+            "part": "arm",
+            "chance": 700,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.rail_ranger.first_aim",
+      "name_key": "skill.rail_ranger.first_aim",
+      "user": "party",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "first",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 6,
+          "power": 120,
+          "accuracy": 950
+        },
+        {
+          "tp": 6,
+          "power": 125,
+          "accuracy": 950
+        },
+        {
+          "tp": 7,
+          "power": 130,
+          "accuracy": 950
+        },
+        {
+          "tp": 7,
+          "power": 135,
+          "accuracy": 950
+        },
+        {
+          "tp": 8,
+          "power": 140,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.rail_ranger.forage_sense",
+      "name_key": "skill.rail_ranger.forage_sense",
+      "user": "party",
+      "effect": "passive",
+      "levels": [
+        {
+          "bonus": {
+            "LUC": 1
+          },
+          "gather_rare": 30
+        },
+        {
+          "bonus": {
+            "LUC": 2
+          },
+          "gather_rare": 60
+        },
+        {
+          "bonus": {
+            "LUC": 3
+          },
+          "gather_rare": 90
+        },
+        {
+          "bonus": {
+            "LUC": 4
+          },
+          "gather_rare": 120
+        },
+        {
+          "bonus": {
+            "LUC": 5
+          },
+          "gather_rare": 150
+        },
+        {
+          "bonus": {
+            "LUC": 6
+          },
+          "gather_rare": 180
+        },
+        {
+          "bonus": {
+            "LUC": 7
+          },
+          "gather_rare": 210
+        },
+        {
+          "bonus": {
+            "LUC": 8
+          },
+          "gather_rare": 240
+        },
+        {
+          "bonus": {
+            "LUC": 9
+          },
+          "gather_rare": 270
+        },
+        {
+          "bonus": {
+            "LUC": 10
+          },
+          "gather_rare": 300
+        }
+      ]
+    }
+  ]
+}

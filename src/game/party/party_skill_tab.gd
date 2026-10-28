@@ -57,7 +57,7 @@ const BUTTONS_W := REVERT_SIZE.x + 8.0 + COMMIT_SIZE.x
 ## 선행 연결선: 굵기, 들어가는 쪽 화살표 길이·너비.
 const LINE_W := 3.0
 const ARROW := Vector2(9, 10)
-const PERMILLE := ["accuracy", "chance", "hp_permille", "value"]
+const PERMILLE := ["accuracy", "chance", "hp_permille", "value", "gather_rare"]
 const PERCENT := ["wis_pct"]
 
 var menu: PartyMenu

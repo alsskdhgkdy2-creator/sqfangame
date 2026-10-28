@@ -100,6 +100,11 @@ func asleep() -> bool:
 	return ailment == "sleep"
 
 
+## 혼란(M3 A7): 명령을 받지 않고 그 턴에 양쪽 가운데 하나를 일반 공격한다.
+func confused() -> bool:
+	return ailment == "confusion"
+
+
 func bound(part: String) -> bool:
 	return binds.has(part)
 

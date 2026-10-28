@@ -547,16 +547,28 @@ func test_every_passive_raises_profile_and_stays_out_of_battle() -> void:
 		if not sk.passive():
 			continue
 		n += 1
-		var i := -1
-		for j in defs.party.ids.size():
-			if defs.class_of(j).tree_index.has(sid):
-				i = j
-				break
-		check(i >= 0, "%s: 트리에 이 패시브가 있는 대원" % sid)
+		var cls := ""
+		for cid in db.class_ids:
+			if db.classes[cid].tree_index.has(sid):
+				cls = cid
+		check(not cls.is_empty(), "%s: 트리에 이 패시브가 있는 직업" % sid)
 		for level in [1, sk.max_level()]:
 			var label := "%s Lv%d" % [sid, level]
-			var s := _new(defs)
+			# M3 A7: 기본 다섯에 없는 직업(레인저·해커)은 길드에 등록해 칸 4(후열 위저드 자리)에 넣은 대원으로 본다.
+			var s := _with_class(defs, cls)
+			var i := -1
+			for j in s.party.members.size():
+				if s.party.members[j].class_id == cls:
+					i = j
+					break
+			check(i >= 0, "%s: 이 직업의 대원" % label)
+			if i < 0:
+				continue
 			var m := s.party.members[i]
+			# 선행이 있는 패시브(M3 A7 포리지 센스 ← 보우 마스터리 1)는 선행을 먼저 따로 배운다: 아래 p0 은 그 뒤 값이다.
+			for req in db.classes[cls].tree_entry(sid)["requires"]:
+				var rq := GrowthRules.allocate(s, i, {req["skill"]: req["level"]})
+				check_eq(rq[0]["type"], "skills_learned", "%s: 선행 %s %d" % [label, req["skill"], req["level"]])
 			m.hp -= 5  # 현재값이 늘어난 만큼만 오르는지 보이게
 			var p0 := GrowthRules.profile(defs, i, m)
 			var hp0 := m.hp
@@ -582,7 +594,21 @@ func test_every_passive_raises_profile_and_stays_out_of_battle() -> void:
 			BattleRules.start(s, RATS)
 			check(not s.battle.party[i].skills.has(sid), "%s: 전투 유닛 skills 에 패시브 없음" % label)
 			_reject("%s 제출" % label, s, func(): return BattleRules.submit(s, Fx.cmds(s, {i: Fx.use(sid, 0)})), "unknown_skill")
-	check_eq(n, 4, "패시브 넷")
+	check_eq(n, 7, "패시브 일곱(M3 A7: 보우 마스터리·포리지 센스·헥스 마스터리를 더함)")
+
+
+## 그 직업의 대원이 파티에 있는 새 게임(M3 A7). 기본 다섯에 있으면 그대로, 없으면 마을에서 등록해 칸 4 자리에 넣고 미궁으로 둔다.
+func _with_class(defs: GameDefs, cls: String) -> ExplorationState:
+	var s := _new(defs)
+	if s.party.members.any(func(m: PartyState.Member) -> bool: return m.class_id == cls):
+		return s
+	s.location = ExplorationState.TOWN
+	var ev := GuildRules.register(s, cls, 0, "시험")
+	assert(ev[0]["type"] == "registered", str(ev))
+	ev = GuildRules.form(s, ["holo_knight", "blade_duelist", "blade_duelist_2"], ["nano_medic", ev[0]["id"]])
+	assert(ev[0]["type"] == "formed", str(ev))
+	s.location = ExplorationState.LABYRINTH
+	return s
 
 
 # ---- 장비 ----
