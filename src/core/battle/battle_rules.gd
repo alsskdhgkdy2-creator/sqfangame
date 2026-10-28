@@ -25,7 +25,7 @@ const EVENT_TYPES := [
 	"ailment", "ailment_resisted", "ailment_blocked", "bound", "bind_resisted", "buffed", "healed", "cured", "revived",
 	"front_guard", "cover_set", "charging", "charge_lost", "row_shift", "escaped", "escape_failed",
 	"turn_end", "poison_tick", "expired", "drop", "exp", "level_up", "battle_end", "item_used", "tp_healed",
-	"foe_defeated",
+	"foe_defeated", "foe_join", "foe_joined",
 ]
 
 
@@ -664,6 +664,9 @@ static func _turn_end(state: ExplorationState, events: Array[Dictionary]) -> voi
 		finish(state, "escaped", events, "turn_cap")
 		return
 	b.turn += 1
+	# FOE 합류(M3 A6b, 설계 §4.6): 합류 범위 안의 FOE 만 한 걸음 다가오거나 맞닿았으면 붙는다. 붙은 유닛은 다음 제출부터 움직인다.
+	if FoeRules.battle_tick(state, events):
+		_check_rows(b, events)
 
 
 # ---- 전투 끝 (06 §3.17) ----

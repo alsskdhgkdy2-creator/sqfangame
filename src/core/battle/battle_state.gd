@@ -16,6 +16,9 @@ var enemies: Array[BattleUnit] = []
 var no_escape := false
 ## 접촉으로 이 전투를 연 FOE 의 id(M3 A6, 지금 층). 인카운트 전투면 "". 저장은 있을 때만 "foe" 키로 쓴다.
 var foe := ""
+## 싸움 중에 합류한 FOE(M3 A6b, 설계 §3.2): {foe, row} 합류 차례. 하나마다 enemies 끝에 유닛이 하나 붙는다(편성 칸 뒤, 칸 번호 그대로).
+## 저장은 비어 있지 않을 때만 "joined" 키로 쓴다.
+var joined: Array[Dictionary] = []
 
 # ---- 턴 한정 (저장하지 않음) ----
 ## 편 → 프론트 가드 값(그 턴 가장 센 값, 06 §6.2). 없으면 키 없음.
@@ -55,27 +58,61 @@ static func create(defs: GameDefs, members: Array[PartyState.Member], formation_
 		u.attack = p["attack"]
 		b.party.append(u)
 	for j in f.enemies.size():
-		var e: BattleDb.EnemyDef = defs.battle.enemies[f.enemies[j]["enemy"]]
-		var u := BattleUnit.new()
-		u.side = BattleUnit.ENEMY
-		u.slot = j
-		u.def_id = e.id
-		u.name_key = e.name_key
-		u.row = f.enemies[j]["row"]
-		u.stats = e.stats.duplicate()
-		u.max_hp = e.max_hp
-		u.hp = e.max_hp
-		u.resist = e.resist
-		u.ailment_vuln = e.ailment_vuln
-		u.bind_vuln = e.bind_vuln
-		u.on_bound = e.on_bound
-		for rule in e.ai:
-			for c in rule["use"]:
-				u.skills[c["skill"]] = 1
-		b.enemies.append(u)
+		b.enemies.append(_enemy_unit(defs.battle.enemies[f.enemies[j]["enemy"]], j, f.enemies[j]["row"]))
 	for side in [BattleUnit.PARTY, BattleUnit.ENEMY]:
 		b.promoted[side] = b.front_empty(side)
 	return b
+
+
+## 적 유닛 하나(HP 가득). 편성 칸과 합류 칸이 같이 쓴다.
+static func _enemy_unit(e: BattleDb.EnemyDef, slot: int, row: String) -> BattleUnit:
+	var u := BattleUnit.new()
+	u.side = BattleUnit.ENEMY
+	u.slot = slot
+	u.def_id = e.id
+	u.name_key = e.name_key
+	u.row = row
+	u.stats = e.stats.duplicate()
+	u.max_hp = e.max_hp
+	u.hp = e.max_hp
+	u.resist = e.resist
+	u.ailment_vuln = e.ailment_vuln
+	u.bind_vuln = e.bind_vuln
+	u.on_bound = e.on_bound
+	for rule in e.ai:
+		for c in rule["use"]:
+			u.skills[c["skill"]] = 1
+	return u
+
+
+## FOE 무리(적이 하나인 편성, 설계 §2.2)의 그 적 {enemy, row}. 층 FOE·정의가 없으면 빈 사전.
+static func foe_enemy(defs: GameDefs, floor_def: FloorModel, foe_id: String) -> Dictionary:
+	var sp: FloorModel.FoeSpawn = floor_def.foes.get(foe_id) if floor_def != null else null
+	var fd: BattleDb.FoeDef = defs.battle.foe(sp.foe) if sp != null else null
+	var f: BattleDb.FormationDef = defs.battle.formations.get(fd.formation) if fd != null else null
+	if f == null or f.enemies.size() != 1:
+		return {}
+	return f.enemies[0]
+
+
+## 합류(M3 A6b, 설계 §4.6): FOE foe_id 의 적을 row 열의 다음 칸(enemies 끝)에 붙이고 joined 에 적는다. 붙인 유닛(못 붙이면 null).
+func add_joiner(defs: GameDefs, floor_def: FloorModel, foe_id: String, row: String) -> BattleUnit:
+	var fe := foe_enemy(defs, floor_def, foe_id)
+	if fe.is_empty():
+		return null
+	var u := _enemy_unit(defs.battle.enemies[fe["enemy"]], enemies.size(), row)
+	enemies.append(u)
+	joined.append({"foe": foe_id, "row": row})
+	return u
+
+
+## 그 열의 유닛 수(쓰러진 유닛도 센다: 칸 자리는 그대로, 설계 §4.7).
+func row_count(row: String) -> int:
+	var n := 0
+	for u in enemies:
+		if u.row == row:
+			n += 1
+	return n
 
 
 # ---- 읽기 ----
@@ -136,6 +173,8 @@ func to_dict() -> Dictionary:
 	var out := {"formation": formation, "turn": turn, "seq": seq, "party": p, "enemies": e}
 	if not foe.is_empty():
 		out["foe"] = foe  # M3 A6: 인카운트 전투의 객체는 9판과 같게 둔다(설계 §3.3)
+	if not joined.is_empty():
+		out["joined"] = joined.duplicate(true)  # M3 A6b: 합류가 없으면 키도 없다
 	return out
 
 
@@ -157,13 +196,17 @@ static func _unit_dict(u: BattleUnit) -> Dictionary:
 
 
 ## to_dict 의 역. 값 검사는 하지 않는다(저장 검사 SaveCodec 이 먼저 한다). JSON 의 실수도 정수로 받는다.
-static func from_dict(d: Dictionary, defs: GameDefs, members: Array[PartyState.Member]) -> BattleState:
+## floor_def 는 합류 유닛(joined)의 적을 찾는 층(저장의 지금 층). joined 가 없으면 쓰지 않는다.
+static func from_dict(d: Dictionary, defs: GameDefs, members: Array[PartyState.Member], floor_def: FloorModel = null) -> BattleState:
 	var b := create(defs, members, str(d["formation"]))
 	if b == null:
 		return null
 	b.turn = int(d["turn"])
 	b.seq = int(d["seq"])
 	b.foe = str(d.get("foe", ""))
+	for jd in d.get("joined", []):
+		if b.add_joiner(defs, floor_def, str(jd["foe"]), str(jd["row"])) == null:
+			return null
 	for i in b.party.size():
 		_read_unit(b.party[i], d["party"][i])
 	for j in b.enemies.size():
@@ -209,7 +252,9 @@ static func _effect(e: Dictionary) -> Dictionary:
 
 const SAVE_KEYS := ["formation", "turn", "seq", "party", "enemies"]
 ## 10판(M3 A6)부터 더 받는 키: 접촉 전투의 FOE id(있을 때만).
-const SAVE_KEYS_OPTIONAL := ["foe"]
+## joined(M3 A6b): 싸움 중에 합류한 FOE [{foe, row}](비어 있지 않을 때만).
+const SAVE_KEYS_OPTIONAL := ["foe", "joined"]
+const JOINED_KEYS := ["foe", "row"]
 const UNIT_KEYS := ["ailment", "binds", "buffs", "debuffs", "resist"]
 const ENEMY_KEYS := ["ailment", "binds", "buffs", "debuffs", "resist", "hp", "charging", "kill"]
 const EFFECT_KEYS := ["id", "kind", "value", "turns", "seq"]
@@ -219,6 +264,8 @@ const KILL_KEYS := ["turn", "element", "ailment", "binds", "by"]
 ## 저장된 battle 객체를 검사한다. 문제가 없으면 "", 있으면 "battle.<경로>: 내용". members 는 이미 읽은 대원(HP).
 ## floor_def 는 전투가 난 층(저장의 지금 층): 편성이 그 층 출현 표에 있어야 한다(M3 A1).
 ## 10판(M3 A6)은 접촉 전투의 foe(그 층 FOE id)를 더 받고, 그때 편성은 그 FOE 의 무리여야 한다. schema 가 9 이하면 9판 키만 받는다.
+## 10판 joined(A6b, 설계 §3.3): 비어 있지 않은 [{foe, row}], FOE 는 이 층 FOE 이고 서로 다르며 접촉 FOE 가 아니다. enemies 는 편성 칸 + 합류 칸이고
+## 열마다 3 이하(쓰러진 유닛도 센다), 편성 뒤 칸 j 는 그 합류 FOE 의 적 정의로 본다.
 static func check_dict(v: Variant, defs: GameDefs, members: Array[PartyState.Member], floor_def: FloorModel, schema: int = 10) -> String:
 	if typeof(v) != TYPE_DICTIONARY:
 		return "battle: 객체 또는 null 이어야 한다"
@@ -236,6 +283,39 @@ static func check_dict(v: Variant, defs: GameDefs, members: Array[PartyState.Mem
 	elif typeof(fid) != TYPE_STRING or not defs.battle.table_formations(floor_def.encounter_table).has(fid):
 		return "battle.formation: 이 층 출현 표의 편성이 아니다"
 	var f: BattleDb.FormationDef = defs.battle.formations[fid]
+	# 칸마다 {enemy, row}: 편성 칸 뒤에 합류 칸.
+	var slots: Array[Dictionary] = []
+	slots.append_array(f.enemies)
+	if d.has("joined"):
+		var jv: Variant = d["joined"]
+		if typeof(jv) != TYPE_ARRAY or jv.is_empty():
+			return "battle.joined: 비어 있지 않은 배열이어야 한다(합류가 없으면 키가 없다)"
+		var seen := {}
+		for i in jv.size():
+			var jp := "battle.joined[%d]" % i
+			if typeof(jv[i]) != TYPE_DICTIONARY:
+				return "%s: 객체여야 한다" % jp
+			err = _exact(jv[i], JOINED_KEYS, jp)
+			if not err.is_empty():
+				return err
+			var jf: Variant = jv[i]["foe"]
+			var fe := foe_enemy(defs, floor_def, jf) if typeof(jf) == TYPE_STRING else {}
+			if fe.is_empty():
+				return "%s.foe: 이 층의 FOE 가 아니다" % jp
+			if seen.has(jf):
+				return "%s.foe: 합류 FOE %s 가 둘이다" % [jp, jf]
+			if jf == d.get("foe"):
+				return "%s.foe: 접촉한 FOE %s 는 합류하지 않는다" % [jp, jf]
+			seen[jf] = true
+			if typeof(jv[i]["row"]) != TYPE_STRING or not ["front", "back"].has(jv[i]["row"]):
+				return "%s.row: front 또는 back 이어야 한다" % jp
+			slots.append({"enemy": fe["enemy"], "row": jv[i]["row"]})
+		var per_row := {"front": 0, "back": 0}
+		for x in slots:
+			per_row[x["row"]] += 1
+		for r in ["front", "back"]:
+			if per_row[r] > BattleLimits.ROW_MAX:
+				return "battle.joined: %s 열이 %d 칸이다(열마다 %d 이하)" % [r, per_row[r], BattleLimits.ROW_MAX]
 	var turn: Variant = SaveCodec.to_int(d["turn"])
 	if not BattleLimits.in_range("battle_turn", turn):
 		return "battle.turn: 정수 %s 이어야 한다" % BattleLimits.range_text("battle_turn")
@@ -244,15 +324,15 @@ static func check_dict(v: Variant, defs: GameDefs, members: Array[PartyState.Mem
 		return "battle.seq: 정수 %s 이어야 한다" % BattleLimits.range_text("battle_seq")
 	if typeof(d["party"]) != TYPE_ARRAY or d["party"].size() != members.size():
 		return "battle.party: 길이 %d 의 배열이어야 한다" % members.size()
-	if typeof(d["enemies"]) != TYPE_ARRAY or d["enemies"].size() != f.enemies.size():
-		return "battle.enemies: 길이 %d 의 배열이어야 한다(편성의 적 수)" % f.enemies.size()
+	if typeof(d["enemies"]) != TYPE_ARRAY or d["enemies"].size() != slots.size():
+		return "battle.enemies: 길이 %d 의 배열이어야 한다(편성의 적 수 + 합류 수)" % slots.size()
 	for i in members.size():
 		err = _check_unit(d["party"][i], "battle.party[%d]" % i, members[i].hp, null, defs, seq, turn)
 		if not err.is_empty():
 			return err
 	var enemies_alive := false
-	for j in f.enemies.size():
-		var e: BattleDb.EnemyDef = defs.battle.enemies[f.enemies[j]["enemy"]]
+	for j in slots.size():
+		var e: BattleDb.EnemyDef = defs.battle.enemies[slots[j]["enemy"]]
 		var ed: Variant = d["enemies"][j]
 		var path := "battle.enemies[%d]" % j
 		if typeof(ed) != TYPE_DICTIONARY:

@@ -506,6 +506,7 @@
   "battle.event.row_shift_party": "파티의 후열이 앞으로 나왔다",
   "battle.event.row_shift_enemy": "적의 후열이 앞으로 나왔다",
   "battle.event.turn_end": "— 턴 {n} 끝 —",
+  "battle.event.foe_joined": "{name}이(가) 합류했다!",
   "battle.result.victory": "승리",
   "battle.result.escaped": "도주",
   "battle.result.ended": "전투 종료",

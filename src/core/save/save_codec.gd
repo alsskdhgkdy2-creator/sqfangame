@@ -620,7 +620,7 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 		if not err.is_empty():
 			return err
 		if schema >= 3:
-			s.battle = BattleState.from_dict(d["battle"], defs, s.party.members)
+			s.battle = BattleState.from_dict(d["battle"], defs, s.party.members, s.floor_def)
 	if s.encounter.pending != (d["battle"] != null):
 		return "전투 대기(pending)와 battle 이 맞지 않다"
 	if s.in_town():
@@ -668,6 +668,10 @@ static func _check_foes(s: ExplorationState) -> String:
 			var want: Array[String] = []
 			if not s.battle.foe.is_empty():
 				want.append(s.battle.foe)
+			for j in s.battle.joined:
+				want.append(str(j["foe"]))  # 합류한 FOE 도 battle 상태다(M3 A6b)
+			in_battle.sort()
+			want.sort()
 			if in_battle != want:
 				return "floor_states.%s.world.foes: battle 상태인 FOE %s 가 전투의 FOE %s 와 맞지 않다" % [fid, str(in_battle), str(want)]
 	return ""

@@ -263,7 +263,7 @@ func test_route_meets_no_foe() -> void:
 
 
 ## D1 (M-R2 문지기 검사를 들어오는 곳 모두에서 한꺼번에 걷기, 리뷰 R2): 아홉 칸 복도의 시작 (0,0)·계단 (8,0) 사이 문지기 (4,0) 는
-## 시작에서 계단을 끊으므로 오류다. 곁가지 끝의 문지기는 진행을 막지 않으므로 통과.
+## 시작에서 계단을 끊으므로 오류다. 곁가지 끝의 문지기는 진행을 막지 않으므로 통과. 시작 없이 계단 둘이면 계단마다 한 줄(M-R2later, A6b).
 func test_guard_progress_per_entry() -> void:
 	var st := {"at": [8, 0], "way": "down", "exit": "W", "to": {"floor": "fy", "at": [0, 0]}}
 	var cut := Fx.parse(Fx.floor_dict(Fx.row_grid(".........", "        "), {"stairs": [st], "foes": [_foe(GUARD, {"at": [4, 0]})]}))
@@ -282,6 +282,19 @@ func test_guard_progress_per_entry() -> void:
 	check(side.ok(), "준비: 곁가지 층 %s" % str(side.errors))
 	if side.ok():
 		check_eq(FloorLoader.guard_progress(side.floor_def, "fx"), [] as Array[String], "곁가지 끝 문지기는 통과")
+	# 시작 칸이 없고 계단 둘(검토 /tmp/sqf_a6a_review/fixcheck/extra_probe.gd, M-R2later 첫 들어오는 곳만 봄): 두 계단에서 따로 본다.
+	var two_d := Fx.floor_dict(Fx.row_grid(".........", "        "), {"stairs": [
+		{"at": [0, 0], "way": "up", "exit": "E", "to": {"floor": "fa", "at": [0, 0]}},
+		{"at": [8, 0], "way": "down", "exit": "W", "to": {"floor": "fb", "at": [0, 0]}},
+	], "foes": [_foe(GUARD, {"at": [4, 0], "facing": "E"})]})
+	two_d.erase("start")
+	var two := Fx.parse(two_d)
+	check(two.ok(), "준비: 시작 없는 계단 둘 층 %s" % str(two.errors))
+	if two.ok():
+		check_eq(FloorLoader.guard_progress(two.floor_def, "two"), [
+			"two: foes: 문지기가 막으면 0:0 에서 칸 8:0(계단·열쇠 상자·잠긴 문)에 닿을 수 없다",
+			"two: foes: 문지기가 막으면 8:0 에서 칸 0:0(계단·열쇠 상자·잠긴 문)에 닿을 수 없다",
+		] as Array[String], "계단마다 따로: 두 줄")
 
 
 ## 고정 공략이 지나는 칸(층 → 칸 → true): 행동 뒤 자리와 미끄러짐이 지난 칸(moved 의 to). 전투는 이겼다고 친다.

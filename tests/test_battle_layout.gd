@@ -149,6 +149,46 @@ func test_enemy_positions_identical_in_every_phase() -> void:
 		check_eq(_enemy_rects(), at, tag + ": 결과 창")
 
 
+## FOE 합류(M3 A6b 설계 §4.7)로 적이 3 + 3 인 전투: 쥐 셋(전열) + 맞닿은 숫양 셋이 첫 턴 끝에 후열로 붙는다. 적은 MEND 만 쓴다.
+func _three_and_three() -> ExplorationState:
+	var rams := []
+	for p in [["a", [4, 1], [5, 1]], ["b", [3, 0], [4, 0]], ["c", [3, 2], [4, 2]]]:
+		rams.append({"id": p[0], "foe": "foe.ether_ram", "kind": "patrol", "at": p[1], "facing": "N", "path": [p[1], p[2]], "join": 2, "respawn": "never"})
+	var grid := ["+-+-+-+-+-+-+-+", "|. . . . . . .|", "+ + + + + + + +", "|. . . . . . .|", "+ + + + + + + +", "|. . . . . . .|", "+-+-+-+-+-+-+-+"]
+	var f := Fx.floor_of(grid, {"foes": rams})
+	f.encounter_table = "encounter.f1_test"
+	var q := Fx.quiet_defs()
+	var s := ExplorationRules.new_game(GameDefs.assemble([f] as Array[FloorModel], q.party, q.battle), 5, "floor")
+	s.party.at = Vector2i(3, 1)
+	s.encounter.danger = s.encounter.threshold
+	BattleRules.start(s, "formation.f1.rats")
+	BattleRules.submit(s, Fx.cmds(s))
+	return s
+
+
+## A6b: 적 3 + 3(합류 셋) 카드가 1280×720·1728×720·1280×960 에서 적 영역 안에 겹치지 않고 줄마다 가운데다(만든 칸 rect 로 본다).
+func test_three_and_three_cards_fit() -> void:
+	for px in [Vector2(1280, 720), Vector2(1728, 720), Vector2(1280, 960)]:
+		var s := _three_and_three()
+		check_eq([s.battle.enemies.size(), s.battle.joined.size()], [6, 3], "준비: 적 여섯(합류 셋)")
+		await _layer(px, s)
+		var tag := str(px)
+		var er := _rect(layer.enemy_area)
+		var rects := _enemy_rects()
+		check_eq(rects.size(), 6, tag + ": 카드 여섯")
+		for i in rects.size():
+			check(er.encloses(rects[i]), "%s: 적 %d 는 적 영역 안 %s ⊄ %s" % [tag, i, str(rects[i]), str(er)])
+			for j in range(i + 1, rects.size()):
+				check(not rects[i].intersects(rects[j]), "%s: 적 %d·%d 가 겹치지 않는다" % [tag, i, j])
+		for row in [[0, 1, 2], [3, 4, 5]]:
+			var a: Rect2 = rects[row[0]]
+			var b: Rect2 = rects[row[2]]
+			check(absf((a.position.x + b.end.x) / 2.0 - er.get_center().x) <= 1.0, "%s: 줄 %s 가운데" % [tag, str(row)])
+			check_eq([rects[row[1]].position.y, b.position.y], [a.position.y, a.position.y], "%s: 줄 %s 같은 높이" % [tag, str(row)])
+		check_eq([rects[0].size, rects[3].size, rects[3].position.y - er.position.y, rects[0].position.y - er.position.y], [Vector2(160, 160), Vector2(150, 150), 0.0, 188.0],
+			tag + ": 전열 160·후열 150, 후열 위 0·전열 위 188(후열 150 + HP 표 38)")
+
+
 # ---- 메시지 띠 ----
 
 func test_banner_text_per_phase() -> void:

@@ -65,10 +65,10 @@ const KEYS_GAP := 8.0
 const ANNOUNCE_TEXT := UiTheme.BATTLE_BANNER_TEXT
 const NOTICE_TEXT := UiTheme.BATTLE_BANNER_NOTICE
 const NOTICE_SEC := 2.0
-## 연출 한 단계의 길이(초, anim_speed 1). 행동 하나 약 0.6초, 독 한 번 약 0.3초(06 §9.3).
-const STEP_SEC := {"action": 0.6, "failed": 0.5, "idle": 0.4, "guarding": 0.35, "poison_tick": 0.3, "turn_end": 0.15, "": 0.3}
-## 새 연출 단계를 여는 이벤트. 나머지는 앞 단계에 붙는다.
-const HEADS := ["action", "failed", "idle", "guarding", "poison_tick", "turn_end"]
+## 연출 한 단계의 길이(초, anim_speed 1). 행동 하나 약 0.6초, 독 한 번 약 0.3초(06 §9.3). FOE 합류 줄 0.8초(M3 A6b).
+const STEP_SEC := {"action": 0.6, "failed": 0.5, "idle": 0.4, "guarding": 0.35, "poison_tick": 0.3, "turn_end": 0.15, "foe_joined": 0.8, "": 0.3}
+## 새 연출 단계를 여는 이벤트. 나머지는 앞 단계에 붙는다. foe_joined(M3 A6b, 설계 §5.5): 그 단계에서 붙은 적 카드가 생긴다.
+const HEADS := ["action", "failed", "idle", "guarding", "poison_tick", "turn_end", "foe_joined"]
 ## 행동하는 쪽이 있는 단계(그 대원 카드에 시안 틀). 독·턴 끝은 행동이 아니다.
 const ACTOR_HEADS := ["action", "failed", "idle", "guarding"]
 ## 상세 이벤트를 단계 안 어느 시점에 보이는지(단계 길이의 비율).
@@ -946,6 +946,8 @@ func _begin_step(st: Dictionary, animate: bool) -> void:
 	var head: Dictionary = st["head"]
 	if head.is_empty():
 		return
+	if head["type"] == "foe_joined":
+		_rebuild_enemies()
 	display.apply(head)
 	_log(head)
 	var line := display.describe(head)
@@ -994,6 +996,16 @@ func _popup_for(ev: Dictionary) -> void:
 			c.pop(texts.t("battle.popup.miss"), Color(0.88, 0.92, 0.96))
 		"healed", "revived":
 			c.pop("+" + str(ev.get("amount", ev.get("hp", 0))), Color(0.55, 1.0, 0.62))
+
+
+## FOE 합류(M3 A6b, 설계 §5.5): 보이는 값을 규칙 상태로 다시 맞추고 적 칸을 다시 만든다(붙은 적의 카드가 생긴다).
+## 합류는 그 턴 이벤트의 끝(턴 끝 처리 뒤)이라 이때 규칙 상태가 곧 그 턴 끝 값이다.
+func _rebuild_enemies() -> void:
+	display.sync(state)
+	enemy_area.setup(display)
+	for c in enemy_area.cards:
+		c.activated.connect(_on_card.bind(c.unit_ref))
+		c.snap()
 
 
 ## 남은 연출을 끝 상태로 바로 맞춘다.

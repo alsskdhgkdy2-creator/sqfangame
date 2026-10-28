@@ -361,6 +361,9 @@ func describe(ev: Dictionary) -> String:
 			return texts.t(key, {"item": texts.t(str(ev["item"]))})
 		"turn_end":
 			return texts.t("battle.event.turn_end", {"n": int(ev["turn"]) + 1})
+		"foe_joined":
+			# M3 A6b: 붙은 유닛의 이름(층이 sync 로 그 카드를 만든 뒤 읽는다).
+			return texts.t("battle.event.foe_joined", {"name": name_of({"side": BattleUnit.ENEMY, "slot": int(ev["slot"])})})
 		"exp":
 			var who := name_of({"side": BattleUnit.PARTY, "slot": int(ev["member"])})
 			return texts.t("battle.event.exp_capped" if ev.get("capped", false) else "battle.event.exp", {"member": who, "gained": ev["gained"]})

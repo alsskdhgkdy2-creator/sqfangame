@@ -10,12 +10,15 @@
 ##   {"type": "foe_alert", "foe"}   {"type": "foe_lost", "foe"}
 ##   {"type": "foe_contact", "foe", "by": "party"|"foe"|"guard", "side": "front"|"back"|"left"|"right"} → 그 뒤 encounter {formation, foe}
 ##   전투 끝(battle_over): {"type": "foe_defeated", "foe"}   숙박(new_day): {"type": "foe_respawned", "floor", "foe"}
+##   전투 턴 끝(battle_tick, A6b): {"type": "foe_join", "foe", "n"}(한 걸음 다가옴, n = 새 거리)   {"type": "foe_joined", "foe", "slot", "row"}
 class_name FoeRules
 extends RefCounted
 
 ## 도주 뒤 FOE 가 쉬는 걸음 수(설계 §4.5): 그동안 움직이지 않고 접촉·문지기 발동도 없다.
 const ESCAPE_STUN := 2
 const SIDES := ["front", "right", "back", "left"]
+## 전투 중에 다가올 수 있는 상태(설계 §4.6). battle·defeated 와 문지기는 움직이지 않는다.
+const JOIN_FROM := ["idle", "patrol", "alert", "chase", "return", "join"]
 
 ## 시험 갈고리(M3 A6 설계 §7.2 R7): false 면 tick·전투 끝 처리를 하지 않는다(FOE 가 없는 것과 같은지 견주기용). 게임 코드는 쓰지 않는다.
 static var enabled := true
@@ -201,6 +204,74 @@ static func contact(s: ExplorationState, id: String, by: String, events: Array[D
 	var st := BattleRules.start(s, formation, id)
 	if st[0]["type"] == "battle_start":
 		events.append({"type": "encounter", "formation": formation, "foe": id})
+
+
+## 전투 턴 끝에 움직이는 FOE(설계 §4.6, §8 Q4): 지금 층의 살아 있는 문지기 아닌 FOE 중 JOIN_FROM 상태이고 쉬지 않으며(stun 0) join > 0 이고
+## 파티 칸(전투 칸)까지 FOE 걸음 거리 d 가 join 이하인 것, 층 자료 차례. [{sp, fs, d}]. dist 는 파티 칸까지의 거리.
+static func _join_candidates(s: ExplorationState, dist: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for sp in s.floor_def.foe_list():
+		var fs: WorldState.FoeState = s.world.foes.get(sp.id)
+		if sp.kind == "guard" or sp.join <= 0 or fs == null or not fs.alive() or not JOIN_FROM.has(fs.state) or fs.stun > 0:
+			continue
+		if dist.has(fs.at) and int(dist[fs.at]) <= sp.join:
+			out.append({"sp": sp, "fs": fs, "d": int(dist[fs.at])})
+	return out
+
+
+## 합류할 열(설계 §4.7): 무리의 열에 유닛이 3 미만이면 그 열, 아니면 다른 열에 자리가 있으면 그 열, 둘 다 차면 ""(기다린다).
+## 쓰러진 유닛도 센다.
+static func join_row(s: ExplorationState, id: String) -> String:
+	var fe := BattleState.foe_enemy(s.defs, s.floor_def, id)
+	if fe.is_empty():
+		return ""
+	var own: String = fe["row"]
+	for row in [own, "back" if own == "front" else "front"]:
+		if s.battle.row_count(row) < BattleLimits.ROW_MAX:
+			return row
+	return ""
+
+
+## 전투 한 턴 끝(BattleRules._turn_end 가 b.turn 을 올린 뒤, 설계 §4.6): 후보마다 join 상태가 되고, d == 1 이면 자리가 있을 때 합류
+## (battle 상태, enemies 끝에 유닛, foe_joined), 아니면 파티 쪽으로 한 걸음(foe_join, n = 새 거리; 막혔으면 그쪽을 보고 기다린다).
+## 합류가 있었으면 true(그 뒤 열 바뀜을 본다). 후보가 없으면 상태·이벤트 그대로.
+static func battle_tick(s: ExplorationState, events: Array[Dictionary]) -> bool:
+	if not enabled or s.battle == null or s.in_town() or s.world.foes.is_empty():
+		return false
+	var f := s.floor_def
+	var dist := distances(f, s.party.at)
+	var joined := false
+	for c in _join_candidates(s, dist):
+		var sp: FloorModel.FoeSpawn = c["sp"]
+		var fs: WorldState.FoeState = c["fs"]
+		fs.state = "join"
+		var d := step_toward(f, fs.at, dist)
+		if d >= 0:
+			fs.facing = d
+		if int(c["d"]) == 1:
+			var row := join_row(s, sp.id)
+			if row.is_empty():
+				continue
+			var u := s.battle.add_joiner(s.defs, f, sp.id, row)
+			fs.state = "battle"
+			events.append({"type": "foe_joined", "foe": sp.id, "slot": u.slot, "row": row})
+			joined = true
+		elif d >= 0 and _free(s, fs.at + Dir.vec(d), sp.id):
+			fs.at += Dir.vec(d)
+			events.append({"type": "foe_join", "foe": sp.id, "n": int(dist[fs.at])})
+	return joined
+
+
+## 화면이 읽는 합류 예정(설계 §4.6, 읽기만): 후보마다 {foe, n, wait}, n = 거리(그 턴 수 뒤 끝에 합류), wait = 맞닿았는데 자리가 없음.
+## 전투가 없으면 빈 배열.
+static func join_eta(s: ExplorationState) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if not enabled or s.battle == null or s.in_town() or s.world.foes.is_empty():
+		return out
+	for c in _join_candidates(s, distances(s.floor_def, s.party.at)):
+		var id: String = c["sp"].id
+		out.append({"foe": id, "n": c["d"], "wait": c["d"] == 1 and join_row(s, id).is_empty()})
+	return out
 
 
 ## 전투가 끝날 때(BattleRules.finish 가 battle 을 지우기 전에, 설계 §4.5). 승리면 전투의 FOE 는 쓰러짐(day), 도주면 그 자리에서
