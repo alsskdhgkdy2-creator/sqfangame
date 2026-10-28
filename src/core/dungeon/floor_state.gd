@@ -14,3 +14,5 @@ func _init(f: FloorModel = null) -> void:
 	floor_def = f
 	if f != null:
 		annotation = MapAnnotation.new(f.width, f.height)
+		for s in f.foe_list():
+			world.foes[s.id] = WorldState.FoeState.fresh(s)

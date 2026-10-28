@@ -800,11 +800,12 @@ func _save_slot(slot: String) -> void:
 
 
 ## 숙소 숙박(M3 A2b): 규칙(TownRules.stay)이 받아들였으면 자동 저장한다(05 §8.4). 이벤트 열을 숙소 화면에 돌려준다(안내는 그쪽).
+## 받아들인 숙박은 stayed 앞에 FOE 되살아남(foe_respawned, M3 A6)이 붙을 수 있다.
 func _inn_stay() -> Array[Dictionary]:
 	if state == null:
 		return []
 	var events := TownRules.stay(state)
-	if events.size() == 1 and events[0]["type"] == "stayed":
+	if events.any(func(e: Dictionary) -> bool: return e["type"] == "stayed"):
 		_autosave()
 		_debug_dirty = true
 	return events

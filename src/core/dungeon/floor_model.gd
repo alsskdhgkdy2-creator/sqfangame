@@ -1,4 +1,5 @@
-## 층의 정적 정의: 칸 종류, 경계 종류, 지름길 열 수 있는 쪽, 구역, 시작, 계단, 잠긴 문·보물상자·예약 구역(M3 A3). 읽은 뒤 바뀌지 않는다.
+## 층의 정적 정의: 칸 종류, 경계 종류, 지름길 열 수 있는 쪽, 구역, 시작, 계단, 잠긴 문·보물상자·예약 구역(M3 A3), 채집 지점(A5), FOE 배치(A6).
+## 읽은 뒤 바뀌지 않는다.
 class_name FloorModel
 extends RefCounted
 
@@ -35,6 +36,23 @@ class GatherPoint:
 	var uses := 1
 	var table := ""
 
+## FOE 하나의 배치(M3 A6, 01 §3.5): 정의(foe., 무리·위협 레벨), 종류(patrol 순회·chase 추적·guard 문지기), 시작 칸·방향,
+## 경로(순회는 반드시, 추적은 있으면 그 길을 돈다), 시야·추적 거리(추적), 합류 거리(순회·추적), 되살아남(never·after_days·floor_reload).
+## 저장은 id(층 안에서 하나)로 상태를 기억한다. id·경로·칸을 바꾸면 저장 이전이 필요하다.
+class FoeSpawn:
+	extends RefCounted
+	var id := ""
+	var foe := ""
+	var kind := ""
+	var at := Vector2i.ZERO
+	var facing := 0
+	var path: Array[Vector2i] = []
+	var sight := 0
+	var chase := 0
+	var join := 0
+	var respawn := ""
+	var respawn_days := 0
+
 enum Cell { VOID, FLOOR, DAMAGE, ICE }
 ## LOCK(M3 A3, 격자 K): 잠긴 문. 열쇠 문(locks 의 key)은 열쇠를 가지고 어느 쪽에서나 열고, 봉인 문(seal)은 A3 에서 열리지 않는다.
 ## 값이 밀리지 않게 새 종류는 맨 뒤에 둔다.
@@ -62,6 +80,8 @@ var stairs := {}
 var chests := {}
 ## 채집 지점(M3 A5): id → GatherPoint(읽은 차례). 칸 → id 는 _point_cells.
 var points := {}
+## FOE(M3 A6): id → FoeSpawn(읽은 차례, FOE 가 움직이는 차례이기도 하다).
+var foes := {}
 ## 예약 구역(M3 A3, A9 보스 방 자리): 아직 닿지 않아도 되는 칸들의 사각형(Rect2i). 분석이 「닿을 수 없다」를 내지 않는다.
 var reserved: Array[Rect2i] = []
 ## 귀환 비콘을 쓸 수 없는 칸(M3 A4 갈고리, A9 보스 방): 칸 Vector2i → true. 지금 층 파일에는 키가 없어 늘 비어 있다.
@@ -288,3 +308,27 @@ func is_reserved(c: Vector2i) -> bool:
 		if r.has_point(c):
 			return true
 	return false
+
+
+## FOE 배치 목록(읽은 차례 = 움직이는 차례, M3 A6).
+func foe_list() -> Array[FoeSpawn]:
+	var out: Array[FoeSpawn] = []
+	for id in foes:
+		out.append(foes[id])
+	return out
+
+
+## FOE 가 설 수 있는 칸(M3 A6, 설계 §4.2): 바닥(.)·피해 바닥(~)이고 시작 칸(마을 문)·계단·예약 구역이 아니다. 얼음·빈 곳은 아니다.
+func is_foe_cell(c: Vector2i) -> bool:
+	var k := cell_kind(c)
+	if k != Cell.FLOOR and k != Cell.DAMAGE:
+		return false
+	if has_start() and c == start_at:
+		return false
+	return not stairs.has(c) and not is_reserved(c)
+
+
+## FOE 가 칸 c 에서 d 쪽으로 한 걸음 갈 수 있는지(M3 A6): 열린 경계(문·지름길·숨은 통로·잠긴 문·일방통행은 늘 막는다)로 FOE 칸에 든다.
+## 다른 FOE·파티가 있는지는 보지 않는다(부르는 쪽이 본다).
+func foe_step(c: Vector2i, d: int) -> bool:
+	return edge_kind(edge_of(c, d)) == Edge.OPEN and is_foe_cell(c + Dir.vec(d))

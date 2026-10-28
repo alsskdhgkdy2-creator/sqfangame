@@ -48,11 +48,11 @@ func test_v7_roundtrip() -> void:
 	var s := _arbor_state(124)
 	check_eq([s.floor_def.id, s.party.at, s.floor_states.size()], ["b3f", Vector2i(1, 12), 3], "준비: B3F 열쇠 상자 위, 세 층")
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	check_eq([doc["schema"], doc["rules"], doc["state"]["key_items"]], [9.0, "m3g", ["key.moss_card", "key.relay_fuse"]], "9판 머리·귀중품(정렬)")
+	check_eq([doc["schema"], doc["rules"], doc["state"]["key_items"]], [10.0, "m3o", ["key.moss_card", "key.relay_fuse"]], "10판 머리·귀중품(정렬)")
 	for id in ["b1f", "b2f", "b3f"]:
 		var keys: Array = doc["state"]["floor_states"][id]["world"].keys()
 		keys.sort()
-		check_eq(keys, ["chests_opened", "gather_used", "locks_open", "passages_found", "shortcuts_open"], "%s: world 키 정확히 다섯(9판)" % id)
+		check_eq(keys, ["chests_opened", "foes", "gather_used", "locks_open", "passages_found", "shortcuts_open"], "%s: world 키 정확히 여섯(10판)" % id)
 	var w2: Dictionary = doc["state"]["floor_states"]["b2f"]["world"]
 	var w3: Dictionary = doc["state"]["floor_states"]["b3f"]["world"]
 	check_eq([w2["locks_open"], w3["locks_open"]], [[_lock_edge("b2f", false)], []], "B2F 문 열림, B3F 관문 닫힘")
@@ -61,7 +61,7 @@ func test_v7_roundtrip() -> void:
 	var r := SaveCodec.decode(JSON.stringify(doc), Fx.arbor())
 	check(r.ok(), "읽기 %s" % r.error)
 	if r.ok():
-		check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.relocated], [SaveCodec.state_hash(s), 9, false], "같은 해시, 9판, 옮김 없음")
+		check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.relocated], [SaveCodec.state_hash(s), 10, false], "같은 해시, 10판, 옮김 없음")
 		check(r.state.floor_states["b2f"].world.locks_open.size() == 1 and r.state.key_items.size() == 2, "문·열쇠 복원")
 	var opened := SaveCodec.state_hash(s)
 	s.floor_states["b1f"].world.chests_opened.erase("c1")
@@ -113,8 +113,8 @@ func test_v7_rejects() -> void:
 		"floor_states.b2f.world.locks_open 의 %s 가 열렸는데 열쇠 key.moss_card 가 없다" % lock2, "문만 열림")
 	# 머리.
 	_reject(s, func(d): d["schema"] = 6, "규칙 판(rules)이 schema 6 와 맞지 않다", "6판 머리에 m3i")
-	_reject(s, func(d): d["rules"] = "m3t", "규칙 판(rules)이 schema 9 와 맞지 않다", "9판 머리에 m3t")
-	_reject(s, func(d): d["schema"] = 10, "지원하지 않는 schema 다", "10판")
+	_reject(s, func(d): d["rules"] = "m3t", "규칙 판(rules)이 schema 10 와 맞지 않다", "10판 머리에 m3t")
+	_reject(s, func(d): d["schema"] = 11, "지원하지 않는 schema 다", "11판")
 
 
 ## S3 (M-S3 migrate_v6 가 day 를 버림): HEAD 코드로 만든 6판 고정 문서 셋을 시험 묶음으로 읽으면 7판, 원래 필드는 그대로이고 더해진 것은 빈 값뿐.
@@ -129,16 +129,16 @@ func test_fixed_v6_strings_migrate() -> void:
 			[6, false, orig["saved_at"], int(orig["generation"]), x[2], x[3]], "%s: 6판·옮김 없음·saved_at·generation·장소·날" % x[0])
 		var o: Dictionary = orig["state"]
 		for id in o["floor_states"]:
-			o["floor_states"][id]["world"].merge({"locks_open": [], "chests_opened": [], "gather_used": {}})
+			o["floor_states"][id]["world"].merge({"locks_open": [], "chests_opened": [], "gather_used": {}, "foes": Fx.fresh_foes(id)})
 		var now := SaveCodec.state_to_dict(r.state)
 		for k in o:
 			check_eq(_norm(now[k]), _norm(o[k]), "%s: %s 보존" % [x[0], k])
 		check_eq(now.keys().filter(func(k: String) -> bool: return not o.has(k)), ["key_items", "consumables"], "%s: 더해진 필드는 key_items·consumables(8판) 뿐" % x[0])
 		check_eq([now["key_items"], now["consumables"]], [[], {}], "%s: 빈 귀중품·빈 소모품" % x[0])
 		var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
-		check_eq([doc["schema"], doc["rules"]], [9.0, "m3g"], "%s: 9판으로 쓴다" % x[0])
+		check_eq([doc["schema"], doc["rules"]], [10.0, "m3o"], "%s: 10판으로 쓴다" % x[0])
 		var again := SaveCodec.decode(JSON.stringify(doc), Fx.defs())
-		check(again.ok() and again.from_schema == 9 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 9판 다시 읽기 같은 해시" % x[0])
+		check(again.ok() and again.from_schema == 10 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 10판 다시 읽기 같은 해시" % x[0])
 	var bad: Dictionary = JSON.parse_string(V6_TOWN)
 	bad["state"]["floor_states"].erase("f1_test")
 	var rb := SaveCodec.decode(JSON.stringify(bad), Fx.defs())
@@ -162,9 +162,9 @@ func test_every_old_schema_migrates_to_v7() -> void:
 		check_eq([r.from_schema, r.saved_at, r.generation, r.state.key_items], [x[2], orig["saved_at"], int(orig["generation"]), {}],
 			"%s: from_schema·saved_at·generation·빈 귀중품" % x[0])
 		var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
-		check_eq([doc["schema"], doc["rules"]], [9.0, "m3g"], "%s: 9판으로 쓴다" % x[0])
+		check_eq([doc["schema"], doc["rules"]], [10.0, "m3o"], "%s: 10판으로 쓴다" % x[0])
 		var again := SaveCodec.decode(JSON.stringify(doc), Fx.defs())
-		check(again.ok() and again.from_schema == 9 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 다시 읽기 같은 해시" % x[0])
+		check(again.ok() and again.from_schema == 10 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 다시 읽기 같은 해시" % x[0])
 
 
 ## S5 (M-S5a 전투 대기를 남김, M-S5b 가방을 잃음, M-S5c relocated 표시 없음): 시험 층 저장을 게임 묶음으로 읽으면 새 미궁으로 옮긴다.
@@ -177,7 +177,7 @@ func test_relocation_with_game_set() -> void:
 	var b1 := defs.first_floor()
 	var now_test := SaveCodec.encode(SaveCodec.decode(V6_BATTLE, Fx.defs()).state, "2026-10-27T09:00:00Z", 80)
 	for x in [["6판 마을", V6_TOWN, 6], ["6판 전투", V6_BATTLE, 6], ["6판 전멸", V6_WIPED, 6], ["1판 보통", BS.V1_NORMAL, 1],
-			["3판 웹 승리 고정 문서", FileAccess.get_file_as_string(V5.VICTORY_V3), 3], ["지금 판(9판) 시험 층 저장", now_test, SaveCodec.SCHEMA]]:
+			["3판 웹 승리 고정 문서", FileAccess.get_file_as_string(V5.VICTORY_V3), 3], ["지금 판(10판) 시험 층 저장", now_test, SaveCodec.SCHEMA]]:
 		var old := SaveCodec.decode(x[1], defs.retired)
 		var r := SaveCodec.decode(x[1], defs)
 		check(old.ok() and r.ok(), "%s: 읽기 %s / %s" % [x[0], old.error, r.error])
@@ -196,7 +196,7 @@ func test_relocation_with_game_set() -> void:
 			check_eq(_norm(nd[k]), _norm(od[k]), "%s: %s 그대로" % [x[0], k])
 		check_eq(_norm(nd["party"]["members"]), _norm(od["party"]["members"]), "%s: 대원 그대로" % x[0])
 		var again := SaveCodec.decode(SaveCodec.encode(n), defs)
-		check(again.ok() and not again.relocated and again.from_schema == 9 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(n),
+		check(again.ok() and not again.relocated and again.from_schema == 10 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(n),
 			"%s: 9판으로 다시 쓰고 읽으면 옮김 없이 같은 해시 %s" % [x[0], again.error])
 	var town := SaveCodec.decode(V6_TOWN, defs).state
 	check(town != null and town.gear_bag == {"equip.twin_edge": 1} and town.money == 480, "6판 마을: 가방·돈 값")
@@ -227,9 +227,9 @@ func test_relocated_autosave_keeps_v6_bak() -> void:
 	check_eq(store.save("auto", l.result.state), "", "자동 저장")
 	check_eq(FileAccess.get_file_as_string(bak), V6_TOWN, ".bak 은 6판 원본")
 	var doc: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(main))
-	check_eq([doc["schema"], doc["state"]["floor"], doc["state"]["location"], doc["generation"]], [9.0, "b1f", "town", 72.0], "본 파일은 9판 B1F 마을")
+	check_eq([doc["schema"], doc["state"]["floor"], doc["state"]["location"], doc["generation"]], [10.0, "b1f", "town", 72.0], "본 파일은 10판 B1F 마을")
 	var again := store.load_slot("auto")
-	check(again.ok() and again.source_kind == "main" and not again.result.relocated and again.result.from_schema == 9, "다시 읽으면 옮김 없음")
+	check(again.ok() and again.source_kind == "main" and not again.result.relocated and again.result.from_schema == 10, "다시 읽으면 옮김 없음")
 	Fx.clean_saves()
 
 

@@ -14,6 +14,8 @@ var party: Array[BattleUnit] = []
 var enemies: Array[BattleUnit] = []
 ## 편성의 no_escape.
 var no_escape := false
+## 접촉으로 이 전투를 연 FOE 의 id(M3 A6, 지금 층). 인카운트 전투면 "". 저장은 있을 때만 "foe" 키로 쓴다.
+var foe := ""
 
 # ---- 턴 한정 (저장하지 않음) ----
 ## 편 → 프론트 가드 값(그 턴 가장 센 값, 06 §6.2). 없으면 키 없음.
@@ -131,7 +133,10 @@ func to_dict() -> Dictionary:
 		d["charging"] = u.charging if not u.charging.is_empty() else null
 		d["kill"] = u.kill.duplicate(true) if not u.kill.is_empty() else null
 		e.append(d)
-	return {"formation": formation, "turn": turn, "seq": seq, "party": p, "enemies": e}
+	var out := {"formation": formation, "turn": turn, "seq": seq, "party": p, "enemies": e}
+	if not foe.is_empty():
+		out["foe"] = foe  # M3 A6: 인카운트 전투의 객체는 9판과 같게 둔다(설계 §3.3)
+	return out
 
 
 static func _unit_dict(u: BattleUnit) -> Dictionary:
@@ -158,6 +163,7 @@ static func from_dict(d: Dictionary, defs: GameDefs, members: Array[PartyState.M
 		return null
 	b.turn = int(d["turn"])
 	b.seq = int(d["seq"])
+	b.foe = str(d.get("foe", ""))
 	for i in b.party.size():
 		_read_unit(b.party[i], d["party"][i])
 	for j in b.enemies.size():
@@ -202,6 +208,8 @@ static func _effect(e: Dictionary) -> Dictionary:
 # 통과한 사전만 from_dict 에 넘긴다.
 
 const SAVE_KEYS := ["formation", "turn", "seq", "party", "enemies"]
+## 10판(M3 A6)부터 더 받는 키: 접촉 전투의 FOE id(있을 때만).
+const SAVE_KEYS_OPTIONAL := ["foe"]
 const UNIT_KEYS := ["ailment", "binds", "buffs", "debuffs", "resist"]
 const ENEMY_KEYS := ["ailment", "binds", "buffs", "debuffs", "resist", "hp", "charging", "kill"]
 const EFFECT_KEYS := ["id", "kind", "value", "turns", "seq"]
@@ -210,15 +218,22 @@ const KILL_KEYS := ["turn", "element", "ailment", "binds", "by"]
 
 ## 저장된 battle 객체를 검사한다. 문제가 없으면 "", 있으면 "battle.<경로>: 내용". members 는 이미 읽은 대원(HP).
 ## floor_def 는 전투가 난 층(저장의 지금 층): 편성이 그 층 출현 표에 있어야 한다(M3 A1).
-static func check_dict(v: Variant, defs: GameDefs, members: Array[PartyState.Member], floor_def: FloorModel) -> String:
+## 10판(M3 A6)은 접촉 전투의 foe(그 층 FOE id)를 더 받고, 그때 편성은 그 FOE 의 무리여야 한다. schema 가 9 이하면 9판 키만 받는다.
+static func check_dict(v: Variant, defs: GameDefs, members: Array[PartyState.Member], floor_def: FloorModel, schema: int = 10) -> String:
 	if typeof(v) != TYPE_DICTIONARY:
 		return "battle: 객체 또는 null 이어야 한다"
 	var d: Dictionary = v
-	var err := _exact(d, SAVE_KEYS, "battle")
+	var err := _exact(d, SAVE_KEYS, "battle", SAVE_KEYS_OPTIONAL if schema >= 10 else [])
 	if not err.is_empty():
 		return err
 	var fid: Variant = d["formation"]
-	if typeof(fid) != TYPE_STRING or not defs.battle.table_formations(floor_def.encounter_table).has(fid):
+	if d.has("foe"):
+		var sp: FloorModel.FoeSpawn = floor_def.foes.get(d["foe"]) if typeof(d["foe"]) == TYPE_STRING else null
+		if sp == null:
+			return "battle.foe: 이 층의 FOE 가 아니다"
+		if typeof(fid) != TYPE_STRING or defs.battle.foe(sp.foe) == null or fid != defs.battle.foe(sp.foe).formation:
+			return "battle.formation: 접촉한 FOE %s 의 무리가 아니다" % sp.id
+	elif typeof(fid) != TYPE_STRING or not defs.battle.table_formations(floor_def.encounter_table).has(fid):
 		return "battle.formation: 이 층 출현 표의 편성이 아니다"
 	var f: BattleDb.FormationDef = defs.battle.formations[fid]
 	var turn: Variant = SaveCodec.to_int(d["turn"])
@@ -259,12 +274,12 @@ static func check_dict(v: Variant, defs: GameDefs, members: Array[PartyState.Mem
 	return ""
 
 
-static func _exact(d: Dictionary, keys: Array, path: String) -> String:
+static func _exact(d: Dictionary, keys: Array, path: String, optional: Array = []) -> String:
 	for k in keys:
 		if not d.has(k):
 			return "%s.%s: 필수 필드가 없다" % [path, k]
 	for k in d:
-		if not keys.has(k):
+		if not keys.has(k) and not optional.has(k):
 			return "%s.%s: 모르는 필드" % [path, str(k)]
 	return ""
 

@@ -8,7 +8,7 @@ extends RefCounted
 
 ## \A·\z: 문자열 전체와 맞춘다($ 는 끝 줄바꿈 앞에서도 맞는다).
 const ID_PATTERN := "\\A[a-z0-9_.]+\\z"
-const KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items", "shop", "gathering"]
+const KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items", "shop", "gathering", "foes"]
 const RULES_FILE := "rules/battle.json"
 const GROWTH_FILE := "rules/growth.json"
 const EFFECTS := ["damage", "ailment", "heal", "cure", "revive", "buff", "debuff", "front_guard", "cover", "charge", "passive"]
@@ -308,6 +308,14 @@ class FormationDef:
 	var enemies: Array[Dictionary] = []
 
 
+## FOE 정의 하나(M3 A6, 설계 §2.2): 위협 레벨과 무리(적이 정확히 하나인 편성, 도주할 수 있다). 이름은 그 적의 이름이다.
+class FoeDef:
+	extends RefCounted
+	var id := ""
+	var level := 1
+	var formation := ""
+
+
 class EncounterDef:
 	extends RefCounted
 	var id := ""
@@ -331,6 +339,8 @@ var material_sell := {}
 var material_desc := {}
 ## 채집 표 ID → GatherTableDef(M3 A5)
 var gather_tables := {}
+## FOE 정의 ID → FoeDef(M3 A6)
+var foes := {}
 ## 귀중품(열쇠) ID → {name_key, desc_key}(M3 A3)
 var key_items := {}
 ## 소모품 ID → ConsumableDef(M3 A4)
@@ -351,6 +361,7 @@ var key_item_ids: Array[String] = []
 var consumable_ids: Array[String] = []
 var shop_ids: Array[String] = []
 var gather_table_ids: Array[String] = []
+var foe_ids: Array[String] = []
 var errors: Array[String] = []
 var warnings: Array[String] = []
 
@@ -431,6 +442,8 @@ static func parse(files: Dictionary) -> BattleDb:
 				db._read_shop(ck, data)
 			"gathering":
 				db._read_list(ck, data, "gather_tables", db._read_gather_table)
+			"foes":
+				db._read_list(ck, data, "foes", db._read_foe)
 	db._check_refs()
 	return db
 
@@ -715,6 +728,37 @@ func _read_gather_table(ck: _Ck, d: Dictionary, path: String) -> void:
 		return
 	gather_tables[g.id] = g
 	gather_table_ids.append(g.id)
+
+
+## FOE 정의(M3 A6, 설계 §2.2): {id, level, formation}. formation 은 편성 읽기(_read_formation)를 그대로 거쳐 formations 에 들어가고,
+## 적이 정확히 하나, no_escape 거짓이어야 한다(FOE 는 도망칠 수 있다, 보스는 A9 가 따로 정한다). 적이 있는지는 _check_refs 가 본다.
+## FOE 의 편성은 출현 표에 없어도 경고하지 않고 그 적도 쓰인 것으로 센다.
+func _read_foe(ck: _Ck, d: Dictionary, path: String) -> void:
+	if not ck.keys(d, path, ["id", "level", "formation"], []):
+		return
+	var fd := FoeDef.new()
+	fd.id = ck.id_of(d, "id", path, "foe.")
+	var lv: Variant = ck.int_of(d, "level", path, "foe_level")
+	fd.level = lv if lv != null else 1
+	var f := _read_formation(ck, d["formation"], _p(path, "formation"))
+	if f == null:
+		return
+	if f.enemies.size() != 1:
+		ck.err(_p(path, "formation.enemies"), "FOE 의 무리는 적 하나여야 한다")
+		return
+	if f.no_escape:
+		ck.err(_p(path, "formation.no_escape"), "FOE 의 무리는 도망칠 수 있어야 한다(false)")
+		return
+	fd.formation = f.id
+	if fd.id.is_empty() or not _claim(ck, fd.id, path):
+		return
+	foes[fd.id] = fd
+	foe_ids.append(fd.id)
+
+
+## FOE 정의(M3 A6). 없으면 null.
+func foe(id: String) -> FoeDef:
+	return foes.get(id)
 
 
 func gather_table(id: String) -> GatherTableDef:
@@ -1403,6 +1447,9 @@ func _check_refs() -> void:
 	for encid in encounter_ids:
 		for t in encounters[encid].table:
 			tabled[t["formation"]] = true
+	# FOE 의 무리(M3 A6)는 출현 표 대신 층의 FOE 가 쓴다.
+	for foid in foe_ids:
+		tabled[foes[foid].formation] = true
 	for fid in formation_ids:
 		if not tabled.has(fid):
 			warnings.append("%s: 어느 출현 표에도 없는 편성" % fid)

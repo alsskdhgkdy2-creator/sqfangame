@@ -59,6 +59,10 @@
     {"id": "g1", "at": [8, 17], "kind": "take", "uses": 2, "table": "gather.b1f.take"},
     {"id": "g2", "at": [16, 16], "kind": "chop", "uses": 2, "table": "gather.b1f.chop"}
   ],
+  "foes": [
+    {"id": "f1", "foe": "foe.ether_ram", "kind": "patrol", "at": [12, 9], "facing": "E",
+     "path": [[12, 9], [13, 9], [14, 9], [15, 9], [16, 9], [17, 9]], "join": 2, "respawn": "after_days", "respawn_days": 1}
+  ],
   "encounter": {"danger_per_step": 10, "threshold_min": 120, "threshold_max": 240, "table": "encounter.b1f"},
   "zones": [{"id": "gate", "rect": [8, 16, 10, 18], "danger_per_step": 0}]
 }

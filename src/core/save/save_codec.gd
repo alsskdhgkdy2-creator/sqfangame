@@ -1,18 +1,27 @@
-## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3, 8판 M3 A4, 9판 M3 A5). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
+## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3, 8판 M3 A4, 9판 M3 A5, 10판 M3 A6). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
 class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 9
-const RULES := "m3g"
-## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~8판은 읽을 때 9판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1·A2·A3·A4·A5).
+const SCHEMA := 10
+const RULES := "m3o"
+## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~9판은 읽을 때 10판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1~A6).
 ## 가방 합계(공용 60칸, D31)는 어느 판에서도 검사하지 않는다: 옛 저장이 60을 넘어도 그대로 읽고(지우지 않는다), 새로 얻는 길만
 ## BagRules 가 막는다(M3 A4 설계 §3.3). 종류마다의 범위(소모품·장비 1~99, 소재 1~9999)만 본다.
-const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i", 9: "m3g"}
+const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i", 9: "m3g", 10: "m3o"}
 ## 7·8판 층 기록의 world 키(M3 A3: 연 잠긴 문·연 보물상자가 더해졌다). 6판까지는 앞의 둘만 보고 다른 키는 보지 않는다.
 const WORLD_KEYS_V7 := ["shortcuts_open", "passages_found", "locks_open", "chests_opened"]
 ## 9판 층 기록의 world 키(M3 A5: 오늘 쓴 채집 횟수 gather_used 가 더해졌다). 정확히 이 다섯이다.
-const WORLD_KEYS := ["shortcuts_open", "passages_found", "locks_open", "chests_opened", "gather_used"]
+const WORLD_KEYS_V9 := ["shortcuts_open", "passages_found", "locks_open", "chests_opened", "gather_used"]
+## 10판 층 기록의 world 키(M3 A6: FOE 상태 foes 가 더해졌다). 정확히 이 여섯이다.
+const WORLD_KEYS := ["shortcuts_open", "passages_found", "locks_open", "chests_opened", "gather_used", "foes"]
+## 10판 world.foes 의 FOE 하나(M3 A6 설계 §3.3): 정확히 이 일곱 키. 종류마다 받는 state.
+const FOE_KEYS := ["at", "facing", "state", "path_i", "dir", "stun", "day"]
+const FOE_STATES := {
+	"patrol": ["patrol", "return", "join", "battle", "defeated"],
+	"chase": ["idle", "patrol", "alert", "chase", "return", "join", "battle", "defeated"],
+	"guard": ["idle", "battle", "defeated"],
+}
 ## 5판 층 기록(floor_states.<층 ID>)의 키. 1~4판은 이 셋이 state 바로 아래에 있다(층 하나).
 const FLOOR_STATE_KEYS := ["world", "knowledge", "annotation"]
 ## 1판 검사에 쓰는 옛 대원 표(06 §8.6 2단계): [id, 최대 HP], 칸 순서.
@@ -172,10 +181,20 @@ static func floor_state_to_dict(r: FloorState) -> Dictionary:
 	return {
 		"world": {"shortcuts_open": _edge_set(r.world.shortcuts_open), "passages_found": _edge_set(r.world.passages_found),
 			"locks_open": _edge_set(r.world.locks_open), "chests_opened": _str_set(r.world.chests_opened),
-			"gather_used": _sorted_counts(r.world.gather_used)},
+			"gather_used": _sorted_counts(r.world.gather_used), "foes": _foe_records(r.world.foes)},
 		"knowledge": {"visited": _cell_set(r.knowledge.visited), "edges": k_edges},
 		"annotation": {"floors": a_floors, "edges": a_edges, "auto_edges": _edge_set(a.auto_edges), "icons": icons, "memos": memos},
 	}
+
+
+## FOE 상태(M3 A6): id → {at, facing, state, path_i, dir, stun, day}(키 정렬은 직렬화가 한다).
+static func _foe_records(foes: Dictionary) -> Dictionary:
+	var out := {}
+	for id in foes:
+		var fs: WorldState.FoeState = foes[id]
+		out[id] = {"at": [fs.at.x, fs.at.y], "facing": Dir.name_of(fs.facing), "state": fs.state, "path_i": fs.path_i, "dir": fs.dir,
+			"stun": fs.stun, "day": fs.day}
+	return out
 
 
 ## 이름 → 정수 사전을 키 차례로(채집 횟수, M3 A5).
@@ -244,6 +263,8 @@ static func _decode_doc(doc: Dictionary, defs: GameDefs) -> LoadResult:
 			return migrate_v7(doc, defs)
 		8:
 			return migrate_v8(doc, defs)
+		9:
+			return migrate_v9(doc, defs)
 	var s := ExplorationState.new()
 	r.error = _read_state(doc["state"], defs, [], SCHEMA, s)
 	if not r.error.is_empty():
@@ -425,6 +446,23 @@ static func migrate_v8(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
+## 9판 → 10판(M3 A6 설계 §3.4): 9판 규칙으로 다 검사(FOE 는 처음 상태, 파티 칸의 FOE 는 FoeRules.settle 이 비킨다) → 원본 saved_at·generation 으로
+## 10판 encode → 10판 읽기를 그대로 거친 결과만 돌려준다. 전투 대기는 인카운트 전투(foe 없음)로 읽힌다.
+static func migrate_v9(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, [], 9, old)
+	if not err.is_empty():
+		r.error = "9판 검사 실패: " + err
+		return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "9판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 9
+	return again
+
+
 ## 문서의 지금 층이 지금 묶음에는 없고 은퇴한 묶음(defs.retired)에 있는지(M3 A3). 두 묶음의 층 ID 는 겹치지 않는다(GameDefs 가 본다).
 static func _names_retired(doc: Dictionary, defs: GameDefs) -> bool:
 	if defs.retired == null:
@@ -524,7 +562,9 @@ static func _check_header(doc: Dictionary) -> String:
 ## schema 6: location·day(M3 A2). 마을이면 층이 첫 층·위치가 그 시작 칸이고 전투 대기·전투·전멸이 아니다. 5판 이하는 미궁·1일째.
 ## schema 7: key_items(M3 A3), 층 기록 world 의 locks_open·chests_opened(키가 정확히 WORLD_KEYS), 열쇠·상자·잠긴 문 맞물림(_check_keys).
 ## schema 8: consumables(M3 A4). 가방 합계(60칸)는 보지 않는다(옛 저장을 지우지 않는다, 설계 §3.3).
-## schema 9: 층 기록 world 의 gather_used(M3 A5, 키가 정확히 WORLD_KEYS 다섯). 7·8판 world 는 정확히 WORLD_KEYS_V7 넷이다.
+## schema 9: 층 기록 world 의 gather_used(M3 A5, 키가 정확히 WORLD_KEYS_V9 다섯). 7·8판 world 는 정확히 WORLD_KEYS_V7 넷이다.
+## schema 10: 층 기록 world 의 foes(M3 A6, 키가 정확히 WORLD_KEYS 여섯), battle.foe(접촉 전투). 9판 이하는 FOE 가 처음 상태이고
+## 다 읽은 뒤 FoeRules.settle 이 파티 칸의 FOE 를 비킨다. 10판은 FOE 와 파티·전투의 맞물림(_check_foes)을 본다.
 ## 위치(party.at)와 전투 편성은 지금 층(state.floor)으로, 층 기록은 각자 그 층으로 검사한다.
 ## schema 2 의 battle 은 검사만 하고 만들지 않는다(옮긴 대원으로 migrate_v2 가 만든다).
 static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int, s: ExplorationState) -> String:
@@ -544,9 +584,12 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 		err = _read_part(part, d, s)
 	if not err.is_empty():
 		return err
-	err = _check_consistency(s, schema)
-	if not err.is_empty() or schema == 1:
+	err = _check_consistency(s, schema, _is_contact(d, schema))
+	if not err.is_empty():
 		return err
+	if schema == 1:
+		FoeRules.settle(s)  # M3 A6: 1판도 9판 이하처럼 파티 칸의 FOE 를 비킨다(아래 schema < 10 과 같다)
+		return ""
 	err = _read_materials(d, defs, s)
 	if not err.is_empty():
 		return err
@@ -573,7 +616,7 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 	if not d.has("battle"):
 		return "battle 이 없다(전투가 없으면 null)"
 	if d["battle"] != null:
-		err = BattleState.check_dict(d["battle"], defs, s.party.members, s.floor_def)
+		err = BattleState.check_dict(d["battle"], defs, s.party.members, s.floor_def, schema)
 		if not err.is_empty():
 			return err
 		if schema >= 3:
@@ -585,6 +628,48 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 			return "마을에 있으면 층은 첫 층(%s), 위치는 그 시작 칸이어야 한다" % defs.first_floor().id
 		if s.encounter.pending or s.wiped:
 			return "마을에서는 전투 대기·전멸일 수 없다"
+	if schema < 10:
+		FoeRules.settle(s)
+		return ""
+	return _check_foes(s)
+
+
+## 10판 battle 이 접촉 전투(foe 가 있다)인지(M3 A6). 위험도가 한계값 아래여도 전투 대기다(접촉은 위험도를 더하지 않는다).
+static func _is_contact(d: Dictionary, schema: int) -> bool:
+	return schema >= 10 and typeof(d.get("battle")) == TYPE_DICTIONARY and d["battle"].has("foe")
+
+
+## 10판 FOE 맞물림(M3 A6 설계 §3.1): join·battle 은 지금 층에서 전투가 있을 때만이고 battle 인 FOE 는 정확히 battle.foe 다.
+## 지금 층(미궁)의 살아 있는 FOE 는 파티 칸에 서지 않고, 살아 있는 FOE 둘이 한 칸에 서지 않는다.
+static func _check_foes(s: ExplorationState) -> String:
+	for fid in s.floor_states:
+		var r: FloorState = s.floor_states[fid]
+		var here: bool = r == s.floor_states[s.floor_def.id]
+		var cells := {}
+		var in_battle: Array[String] = []
+		for id in r.world.foes:
+			var fs: WorldState.FoeState = r.world.foes[id]
+			var path := "floor_states.%s.world.foes.%s" % [fid, id]
+			if fs.state == "join" or fs.state == "battle":
+				if not here or s.battle == null:
+					return "%s.state: %s 는 지금 층의 전투 중에만 있을 수 있다" % [path, fs.state]
+				if fs.state == "battle":
+					in_battle.append(id)
+			if not fs.alive():
+				if fs.day > s.day:
+					return "%s.day: 쓰러진 날 %d 이 지금 날 %d 보다 뒤다" % [path, fs.day, s.day]
+				continue
+			if cells.has(fs.at):
+				return "%s.at: FOE %s 와 같은 칸이다" % [path, cells[fs.at]]
+			cells[fs.at] = id
+			if here and not s.in_town() and fs.at == s.party.at:
+				return "%s.at: 파티가 선 칸이다" % path
+		if here and s.battle != null:
+			var want: Array[String] = []
+			if not s.battle.foe.is_empty():
+				want.append(s.battle.foe)
+			if in_battle != want:
+				return "floor_states.%s.world.foes: battle 상태인 FOE %s 가 전투의 FOE %s 와 맞지 않다" % [fid, str(in_battle), str(want)]
 	return ""
 
 
@@ -841,7 +926,7 @@ static func _read_world(d: Dictionary, s: FloorState, schema: int = SCHEMA) -> S
 	if schema >= 7:
 		if typeof(d.get("world")) != TYPE_DICTIONARY:
 			return "world 가 객체가 아니다"
-		var wkeys: Array = WORLD_KEYS if schema >= 9 else WORLD_KEYS_V7
+		var wkeys: Array = WORLD_KEYS if schema >= 10 else (WORLD_KEYS_V9 if schema >= 9 else WORLD_KEYS_V7)
 		for k in wkeys:
 			if not w.has(k):
 				return "world.%s 가 없다" % k
@@ -869,7 +954,65 @@ static func _read_world(d: Dictionary, s: FloorState, schema: int = SCHEMA) -> S
 			return "world.chests_opened: %s 가 두 번 있다" % id
 		s.world.chests_opened[id] = true
 	if schema >= 9:
-		return _read_gather_used(w["gather_used"], s)
+		err = _read_gather_used(w["gather_used"], s)
+	if err.is_empty() and schema >= 10:
+		err = _read_foes(w["foes"], s)
+	return err
+
+
+## 10판 world.foes(M3 A6 설계 §3.3): 이 층 FOE id(엄격) → 정확히 FOE_KEYS 일곱. 없는 id 는 처음 상태로 둔다(자료에 FOE 가 늘어도 읽힌다).
+## at 은 그 층 FOE 칸, facing N·E·S·W, state 는 종류가 받는 값, path_i 는 경로 안(경로가 없으면 0), dir ±1, stun 0~2(쓰러지면 0),
+## day 는 쓰러졌으면 1~DAY_MAX(지금 날 이하인지는 _check_foes 가 본다), 아니면 0.
+static func _read_foes(v: Variant, s: FloorState) -> String:
+	if typeof(v) != TYPE_DICTIONARY:
+		return "world.foes: 객체가 아니다"
+	for id in v:
+		if typeof(id) != TYPE_STRING or not s.floor_def.foes.has(id):
+			return "world.foes: %s 는 이 층의 FOE 가 아니다" % str(id)
+		var sp: FloorModel.FoeSpawn = s.floor_def.foes[id]
+		var path := "world.foes.%s" % id
+		var rv: Variant = v[id]
+		if typeof(rv) != TYPE_DICTIONARY:
+			return "%s: 객체가 아니다" % path
+		for k in FOE_KEYS:
+			if not rv.has(k):
+				return "%s.%s 가 없다" % [path, k]
+		for k in rv:
+			if not FOE_KEYS.has(k):
+				return "%s.%s 는 모르는 필드다" % [path, str(k)]
+		var fs := WorldState.FoeState.new()
+		fs.at = _cell_pair(rv["at"], s.floor_def)
+		if fs.at == GridKey.BAD_CELL or not s.floor_def.is_foe_cell(fs.at):
+			return "%s.at: 이 층에서 FOE 가 설 수 있는 칸이 아니다" % path
+		fs.facing = Dir.from_name(rv["facing"])
+		if fs.facing < 0:
+			return "%s.facing: N·E·S·W 가운데 하나여야 한다" % path
+		if typeof(rv["state"]) != TYPE_STRING or not FOE_STATES[sp.kind].has(rv["state"]) \
+				or (rv["state"] == "patrol" and sp.path.is_empty()):
+			return "%s.state: %s FOE 가 가질 수 없는 상태다" % [path, sp.kind]
+		fs.state = rv["state"]
+		var pi: Variant = to_int(rv["path_i"]) if typeof(rv["path_i"]) != TYPE_BOOL else null
+		if pi == null or pi < 0 or pi > maxi(0, sp.path.size() - 1):
+			return "%s.path_i: 정수 0~%d 이어야 한다" % [path, maxi(0, sp.path.size() - 1)]
+		fs.path_i = pi
+		var dv: Variant = to_int(rv["dir"]) if typeof(rv["dir"]) != TYPE_BOOL else null
+		if dv != 1 and dv != -1:
+			return "%s.dir: 1 또는 -1 이어야 한다" % path
+		fs.dir = dv
+		if fs.state == "patrol" and fs.at != sp.path[fs.path_i]:
+			return "%s.at: 순회 중인 FOE 는 경로 자리 path[%d] %d:%d 에 서야 한다" % [path, fs.path_i, sp.path[fs.path_i].x, sp.path[fs.path_i].y]
+		var st: Variant = to_int(rv["stun"]) if typeof(rv["stun"]) != TYPE_BOOL else null
+		if not BattleLimits.in_range("foe_stun", st) or (fs.state == "defeated" and st != 0):
+			return "%s.stun: 정수 %s 이어야 한다(쓰러졌으면 0)" % [path, BattleLimits.range_text("foe_stun")]
+		fs.stun = st
+		var dy: Variant = to_int(rv["day"]) if typeof(rv["day"]) != TYPE_BOOL else null
+		if fs.state == "defeated":
+			if dy == null or dy < 1 or dy > ExplorationState.DAY_MAX:
+				return "%s.day: 쓰러진 FOE 는 정수 1~%d 이어야 한다" % [path, ExplorationState.DAY_MAX]
+		elif dy != 0:
+			return "%s.day: 쓰러지지 않은 FOE 는 0 이어야 한다" % path
+		fs.day = dy
+		s.world.foes[id] = fs
 	return ""
 
 
@@ -1039,12 +1182,16 @@ static func _read_misc(d: Dictionary, s: ExplorationState) -> String:
 
 
 ## 층 기록의 경로는 문서 꼴을 따른다: 5판은 floor_states.<층 ID>. 를 붙이고(기록이 하나여도), 4판 이하(평평한 꼴)는 붙이지 않는다.
-static func _check_consistency(s: ExplorationState, schema: int) -> String:
+## contact(M3 A6): 10판 접촉 전투면 위험도는 한계값 아래여야 한다(접촉은 위험도를 더하지 않는다). 그 밖에는 pending == (위험도 >= 한계값).
+static func _check_consistency(s: ExplorationState, schema: int, contact: bool = false) -> String:
 	if s.party.all_down() != s.wiped:
 		return "모든 대원 HP 0 과 wiped 가 맞지 않다"
 	if s.wiped and s.encounter.pending:
 		return "전멸 상태에서 전투 대기일 수 없다(전멸이면 battle 도 없다)"
-	if s.encounter.pending != (s.encounter.danger >= s.encounter.threshold):
+	if contact:
+		if s.encounter.danger >= s.encounter.threshold:
+			return "FOE 접촉 전투인데 위험도가 한계값 이상이다"
+	elif s.encounter.pending != (s.encounter.danger >= s.encounter.threshold):
 		return "전투 대기(pending)와 위험도 >= 한계값이 맞지 않다"
 	for id in s.floor_states:
 		var r: FloorState = s.floor_states[id]

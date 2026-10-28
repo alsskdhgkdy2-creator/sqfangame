@@ -9,7 +9,7 @@ const FLOOR_ID_PATTERN := "^[a-z][a-z0-9_]*$"
 const SET_KEYS := ["id", "floors", "entrance", "retired"]
 ## 층 파일 맨 위 키(M3 A3부터 모르는 키는 오류: 오타로 상자·잠긴 문이 소리 없이 빠지지 않게).
 const FLOOR_KEYS := ["id", "name_key", "theme", "size", "grid", "start", "stairs", "shortcuts", "encounter", "zones", "damage_floor",
-	"locks", "chests", "reserved", "gathering"]
+	"locks", "chests", "reserved", "gathering", "foes"]
 ## 상자 ID(층 안에서 하나, 저장 키가 된다)·내용 범위(M3 A3, 기능 값).
 const CHEST_ID_PATTERN := "^[a-z0-9_]+$"
 const CHEST_COUNT_MAX := 99
@@ -18,6 +18,13 @@ const CHEST_ITEM_PREFIXES := ["item.", "equip.", "key."]
 const STAIR_WAYS := ["up", "down"]
 ## 채집 지점(M3 A5): 키·ID 꼴(상자와 같다, 저장 키가 된다). 종류·횟수 범위는 BattleLimits(GATHER_KINDS·gather_uses).
 const GATHER_KEYS := ["id", "at", "kind", "uses", "table"]
+## FOE(M3 A6, 설계 §2.3): 모든 종류의 필수 키와 종류마다 받는 키(필수·선택). 다른 키는 오류다.
+const FOE_KEYS := ["id", "foe", "kind", "at", "facing", "respawn"]
+const FOE_KIND_KEYS := {
+	"patrol": {"required": ["path", "join"], "optional": []},
+	"chase": {"required": ["sight", "chase", "join"], "optional": ["path"]},
+	"guard": {"required": [], "optional": []},
+}
 
 const MAX_SIZE := 64
 const CELL_CHARS := {".": FloorModel.Cell.FLOOR, "#": FloorModel.Cell.VOID, "~": FloorModel.Cell.DAMAGE, "=": FloorModel.Cell.ICE}
@@ -223,6 +230,46 @@ static func analyze(f: FloorModel, source: String = "", budget: int = MAX_ANALYS
 	return out
 
 
+## 문지기(M3 A6, 설계 §2.3)가 진행을 막지 않는지. 들어오는 곳(시작 칸·계단)마다 따로(리뷰 R2: 모두 함께 걸으면 계단이 출발점이라 늘 닿은 것으로 센다)
+## 문지기 칸과 열린 경계로 맞닿은 칸을 막지 않고·막은 채 걸어, 막지 않을 때 닿던 계단·열쇠 상자·잠긴 문(봉인 포함) 양쪽 칸 가운데 닿지 못하게 된 칸을
+## 오류로 낸다. 문지기 뒤의 다른 칸은 선택 구역이라 보지 않는다. 문지기가 없거나 분석 한도를 넘으면(analyze 가 따로 알린다) 빈 목록.
+static func guard_progress(f: FloorModel, source: String = "") -> Array[String]:
+	var out: Array[String] = []
+	var blocked := {}
+	for s in f.foe_list():
+		if s.kind != "guard":
+			continue
+		blocked[s.at] = true
+		for d in 4:
+			if f.edge_kind(FloorModel.edge_of(s.at, d)) == FloorModel.Edge.OPEN:
+				blocked[s.at + Dir.vec(d)] = true
+	if blocked.is_empty():
+		return out
+	var bits := _world_bits(f)
+	if bits.size() > MAX_WORLD_BITS:
+		return out
+	var goals: Array[Vector2i] = []
+	for st in f.stair_list():
+		goals.append(st.at)
+	for c in f.chest_list():
+		if c.item.begins_with("key."):
+			goals.append(c.at)
+	for e in f.edges_of_kind(FloorModel.Edge.LOCK):
+		for c in FloorModel.cells_of_edge(e):
+			if f.is_cell(c) and not goals.has(c):
+				goals.append(c)
+	for e in entries(f):
+		var one: Array[Vector2i] = [e]
+		var free := _explore(f, one, 0, bits, MAX_ANALYSIS_NODES, {})
+		var held := _explore(f, one, 0, bits, MAX_ANALYSIS_NODES, {}, blocked)
+		if not free["complete"] or not held["complete"]:
+			continue
+		for c in goals:
+			if c != e and free["touched"].has(c) and not held["touched"].has(c):
+				out.append("%s: foes: 문지기가 막으면 %d:%d 에서 칸 %d:%d(계단·열쇠 상자·잠긴 문)에 닿을 수 없다" % [source, e.x, e.y, c.x, c.y])
+	return out
+
+
 ## 들어오는 곳: 시작 칸(있으면), 계단 칸.
 static func entries(f: FloorModel) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
@@ -286,7 +333,9 @@ static func _world_bits(f: FloorModel) -> Array:
 
 ## (칸들, 상태)에서 닿는 노드와 전이. next: 노드 → 다음 노드 목록, touched: 지나간 칸 포함.
 ## 노드가 budget 개를 넘으면(budget < 1 이면 탐색 없이) complete=false 로 멈춘다. goals 칸에 멈추는 노드가 나오면 found=true 로 바로 멈춘다.
-static func _explore(f: FloorModel, starts: Array[Vector2i], start_mask: int, bits: Array, budget: int, goals: Dictionary) -> Dictionary:
+## blocked(칸 → true, M3 A6)가 있으면 이동 경로를 그 칸 앞에서 자른다(문지기 둘레를 지나지 못한다).
+static func _explore(f: FloorModel, starts: Array[Vector2i], start_mask: int, bits: Array, budget: int, goals: Dictionary,
+		blocked: Dictionary = {}) -> Dictionary:
 	if budget < 1:
 		return {"next": {}, "touched": {}, "complete": false, "found": false}
 	var worlds := {}
@@ -309,6 +358,13 @@ static func _explore(f: FloorModel, starts: Array[Vector2i], start_mask: int, bi
 		var targets: Array[int] = []
 		for d in 4:
 			var path := ExplorationRules.move_path(f, world, c, d)
+			if not blocked.is_empty():
+				var cut: Array[Vector2i] = []
+				for p in path:
+					if blocked.has(p):
+						break
+					cut.append(p)
+				path = cut
 			for p in path:
 				touched[p] = true
 			if not path.is_empty():
@@ -445,6 +501,7 @@ static func _build(ctx: _Ctx, d: Dictionary) -> FloorModel:
 	_read_chests(ctx, d, f)
 	_read_gathering(ctx, d, f)
 	_read_reserved(ctx, d, f)
+	_read_foes(ctx, d, f)
 	_read_encounter(ctx, d, f)
 	_read_zones(ctx, d, f)
 	_read_damage(ctx, d, f)
@@ -811,6 +868,153 @@ static func _read_reserved(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 			ctx.fail_key("reserved", "reserved[%d] 에 %s 가 있다" % [i, "·".join(inside)])
 			continue
 		f.reserved.append(r)
+
+
+## FOE(M3 A6, 설계 §2.3): [{id, foe, kind, at, facing, respawn, …종류마다의 키}]. id 는 층 안에서 하나(상자 ID 꼴, 저장 키),
+## foe 는 foe. 로 시작하는 정의 ID(있는지는 GameDefs 가 본다). 시작 칸은 FOE 칸(FloorModel.is_foe_cell: 바닥·피해 바닥, 시작 칸·계단·
+## 예약 구역 아님)이고 상자·채집 지점·다른 FOE 의 시작 칸이 아니다. 경로는 시작 칸에서 시작해 열린 경계로 이어진 FOE 칸들(상자·지점 칸은
+## 지나가도 된다)이고 같은 칸을 두 번 지나지 않는다. 문지기는 계단·시작 칸과 열린 경계로 맞닿지 않는다(도착하자마자 전투가 나지 않게).
+## 예약 구역이 FOE 시작 칸을 담는지는 is_foe_cell 이 본다(예약 구역을 먼저 읽는다).
+static func _read_foes(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
+	if not d.has("foes"):
+		return
+	if typeof(d["foes"]) != TYPE_ARRAY:
+		ctx.fail_key("foes", "foes는 배열이어야 한다")
+		return
+	var fid_re := RegEx.create_from_string(CHEST_ID_PATTERN)
+	var id_re := RegEx.create_from_string(BattleDb.ID_PATTERN)
+	var list: Array = d["foes"]
+	for i in list.size():
+		var item: Variant = list[i]
+		var label := "foes[%d]" % i
+		if typeof(item) != TYPE_DICTIONARY:
+			ctx.fail_key("foes", "%s 는 객체여야 한다" % label)
+			continue
+		var bad := false
+		var kind := ""
+		if typeof(item.get("kind")) != TYPE_STRING or not BattleLimits.FOE_KINDS.has(item["kind"]):
+			ctx.fail_key("foes", "%s.kind 는 %s 가운데 하나여야 한다" % [label, "·".join(BattleLimits.FOE_KINDS)])
+			continue
+		kind = item["kind"]
+		var required: Array = FOE_KEYS + FOE_KIND_KEYS[kind]["required"]
+		var allowed: Array = required + FOE_KIND_KEYS[kind]["optional"] + ["respawn_days"]
+		for k in item:
+			if not allowed.has(k):
+				ctx.fail_key("foes", "%s.%s 는 %s FOE 에 쓰지 않는 필드다" % [label, str(k), kind])
+				bad = true
+		for k in required:
+			if not item.has(k):
+				ctx.fail_key("foes", "%s.%s 가 없다" % [label, k])
+				bad = true
+		if bad:
+			continue
+		var s := FloorModel.FoeSpawn.new()
+		s.kind = kind
+		var idv: Variant = item["id"]
+		if typeof(idv) != TYPE_STRING or fid_re.search(idv) == null:
+			ctx.fail_key("foes", "%s.id 는 %s 꼴 문자열이어야 한다" % [label, CHEST_ID_PATTERN])
+			bad = true
+		else:
+			s.id = idv
+		var fv: Variant = item["foe"]
+		if typeof(fv) != TYPE_STRING or id_re.search(fv) == null or not str(fv).begins_with("foe.") or str(fv).length() == 4:
+			ctx.fail_key("foes", "%s.foe 는 foe. 로 시작하는 ID 문자열이어야 한다" % label)
+			bad = true
+		else:
+			s.foe = fv
+		s.at = ctx.cell_value(item["at"], "foes", label + ".at")
+		s.facing = Dir.from_name(item["facing"])
+		if s.facing < 0:
+			ctx.fail_key("foes", "%s.facing 은 N·E·S·W 중 하나여야 한다" % label)
+			bad = true
+		for k in ["sight", "chase", "join"]:
+			if not item.has(k):
+				continue
+			var n: Variant = SaveCodec.to_int(item[k]) if typeof(item[k]) != TYPE_BOOL else null
+			if n == null or not BattleLimits.in_range("foe_" + k, n):
+				ctx.fail_key("foes", "%s.%s 는 정수 %s 이어야 한다" % [label, k, BattleLimits.range_text("foe_" + k)])
+				bad = true
+			else:
+				s.set(k, n)
+		var rv: Variant = item["respawn"]
+		if typeof(rv) != TYPE_STRING or not BattleLimits.FOE_RESPAWN.has(rv):
+			ctx.fail_key("foes", "%s.respawn 은 %s 가운데 하나여야 한다" % [label, "·".join(BattleLimits.FOE_RESPAWN)])
+			bad = true
+		else:
+			s.respawn = rv
+			if (rv == "after_days") != item.has("respawn_days"):
+				ctx.fail_key("foes", "%s.respawn_days 는 respawn 이 after_days 일 때만, 그때는 반드시 있어야 한다" % label)
+				bad = true
+			elif rv == "after_days":
+				var n: Variant = SaveCodec.to_int(item["respawn_days"]) if typeof(item["respawn_days"]) != TYPE_BOOL else null
+				if n == null or not BattleLimits.in_range("respawn_days", n):
+					ctx.fail_key("foes", "%s.respawn_days 는 정수 %s 이어야 한다" % [label, BattleLimits.range_text("respawn_days")])
+					bad = true
+				else:
+					s.respawn_days = n
+		if bad or s.at == GridKey.BAD_CELL:
+			continue
+		var where := "%s %d:%d" % [label, s.at.x, s.at.y]
+		if not f.is_foe_cell(s.at):
+			ctx.fail_key("foes", "%s 이 FOE 가 설 수 있는 칸이 아니다(바닥·피해 바닥이고 시작 칸·계단·예약 구역이 아니어야 한다)" % where)
+			continue
+		if f.chest_at(s.at) != null:
+			ctx.fail_key("foes", "%s 에 상자가 있다" % where)
+			continue
+		if f.point_at(s.at) != null:
+			ctx.fail_key("foes", "%s 에 채집 지점이 있다" % where)
+			continue
+		if f.foe_list().any(func(o: FloorModel.FoeSpawn) -> bool: return o.at == s.at):
+			ctx.fail_key("foes", "%s 에 다른 FOE 가 이미 있다" % where)
+			continue
+		if f.foes.has(s.id):
+			ctx.fail_key("foes", "%s 의 id %s 가 중복이다" % [label, s.id])
+			continue
+		if item.has("path") and not _read_foe_path(ctx, item["path"], label, f, s):
+			continue
+		if kind == "guard":
+			var near := false
+			for dd in 4:
+				var n := s.at + Dir.vec(dd)
+				if f.edge_kind(FloorModel.edge_of(s.at, dd)) == FloorModel.Edge.OPEN and (f.stairs.has(n) or (f.has_start() and n == f.start_at)):
+					near = true
+			if near:
+				ctx.fail_key("foes", "%s 문지기가 계단·시작 칸과 맞닿아 있다" % where)
+				continue
+		f.foes[s.id] = s
+
+
+## FOE 경로(M3 A6): FOE_PATH 범위 길이, 첫 칸 = 시작 칸, 이웃 칸끼리 열린 경계, 모든 칸이 FOE 칸, 같은 칸 없음. 맞으면 s.path 를 채우고 true.
+static func _read_foe_path(ctx: _Ctx, v: Variant, label: String, f: FloorModel, s: FloorModel.FoeSpawn) -> bool:
+	if typeof(v) != TYPE_ARRAY or not BattleLimits.in_range("foe_path", v.size()):
+		ctx.fail_key("foes", "%s.path 는 칸 %s 개의 배열이어야 한다" % [label, BattleLimits.range_text("foe_path")])
+		return false
+	var cells: Array[Vector2i] = []
+	for j in v.size():
+		var c := ctx.cell_value(v[j], "foes", "%s.path[%d]" % [label, j])
+		if c == GridKey.BAD_CELL:
+			return false
+		if not f.is_foe_cell(c):
+			ctx.fail_key("foes", "%s.path[%d] %d:%d 이 FOE 가 설 수 있는 칸이 아니다" % [label, j, c.x, c.y])
+			return false
+		if cells.has(c):
+			ctx.fail_key("foes", "%s.path[%d] %d:%d 를 두 번 지난다" % [label, j, c.x, c.y])
+			return false
+		if not cells.is_empty():
+			var prev := cells[-1]
+			var step := -1
+			for dd in 4:
+				if prev + Dir.vec(dd) == c:
+					step = dd
+			if step < 0 or not f.foe_step(prev, step):
+				ctx.fail_key("foes", "%s.path[%d] 가 앞 칸과 열린 경계로 이어지지 않는다(문·일방통행·지름길·벽은 지나지 못한다)" % [label, j])
+				return false
+		cells.append(c)
+	if cells[0] != s.at:
+		ctx.fail_key("foes", "%s.path 의 첫 칸이 at 이 아니다" % label)
+		return false
+	s.path = cells
+	return true
 
 
 ## start: 계단이 있는 층은 없어도 된다(GridKey.BAD_CELL). 층 묶음의 첫 층에 있는지는 check_set 이 본다.

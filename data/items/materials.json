@@ -89,6 +89,24 @@
       "name_key": "item.data_core",
       "desc_key": "item.data_core.desc",
       "sell": 60
+    },
+    {
+      "id": "item.ether_horn",
+      "name_key": "item.ether_horn",
+      "desc_key": "item.ether_horn.desc",
+      "sell": 150
+    },
+    {
+      "id": "item.delver_badge",
+      "name_key": "item.delver_badge",
+      "desc_key": "item.delver_badge.desc",
+      "sell": 200
+    },
+    {
+      "id": "item.warden_core",
+      "name_key": "item.warden_core",
+      "desc_key": "item.warden_core.desc",
+      "sell": 300
     }
   ]
 }

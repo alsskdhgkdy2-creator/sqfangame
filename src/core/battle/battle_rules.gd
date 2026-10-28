@@ -25,6 +25,7 @@ const EVENT_TYPES := [
 	"ailment", "ailment_resisted", "ailment_blocked", "bound", "bind_resisted", "buffed", "healed", "cured", "revived",
 	"front_guard", "cover_set", "charging", "charge_lost", "row_shift", "escaped", "escape_failed",
 	"turn_end", "poison_tick", "expired", "drop", "exp", "level_up", "battle_end", "item_used", "tp_healed",
+	"foe_defeated",
 ]
 
 
@@ -42,7 +43,8 @@ static func pick_formation(state: ExplorationState) -> String:
 
 
 ## 전투를 연다: battle 을 만들고 pending 을 참으로 둔다. 실패하면 rejected 하나(상태 그대로).
-static func start(state: ExplorationState, formation_id: String) -> Array[Dictionary]:
+## foe(M3 A6)가 있으면 그 FOE 와의 접촉 전투다: battle.foe 에 적고 그 FOE 를 battle 상태로 둔다.
+static func start(state: ExplorationState, formation_id: String, foe: String = "") -> Array[Dictionary]:
 	if state.defs == null or state.battle != null or state.wiped:
 		return [{"type": "rejected", "reason": "cannot_start"}]
 	var b := BattleState.create(state.defs, state.party.members, formation_id)
@@ -50,6 +52,9 @@ static func start(state: ExplorationState, formation_id: String) -> Array[Dictio
 		return [{"type": "rejected", "reason": "unknown_formation"}]
 	state.battle = b
 	state.encounter.pending = true
+	if not foe.is_empty():
+		b.foe = foe
+		state.world.foes[foe].state = "battle"
 	var ids: Array[String] = []
 	for u in b.enemies:
 		ids.append(u.def_id)
@@ -697,6 +702,13 @@ static func finish(state: ExplorationState, outcome: String, events: Array[Dicti
 	var enemy_hp: Array[int] = []
 	for u in b.enemies:
 		enemy_hp.append(u.hp)
+	# FOE(M3 A6): 전투의 FOE 는 승리면 쓰러지고 도주면 쉰다(FoeRules.battle_over). battle 을 지우기 전에 부른다.
+	var foe_from := events.size()
+	FoeRules.battle_over(state, outcome, events)
+	var foes_defeated: Array[String] = []
+	for i in range(foe_from, events.size()):
+		if events[i]["type"] == "foe_defeated":
+			foes_defeated.append(str(events[i]["foe"]))
 	state.encounter.danger = 0
 	state.encounter.pending = false
 	if outcome == "wiped":
@@ -707,6 +719,8 @@ static func finish(state: ExplorationState, outcome: String, events: Array[Dicti
 	end.merge(growth)
 	if not reason.is_empty():
 		end["reason"] = reason
+	if not foes_defeated.is_empty():
+		end["foes_defeated"] = foes_defeated  # 쓰러뜨린 FOE(M3 A6 설계 §4.5, 의뢰 갈고리). 인카운트 전투의 battle_end 는 그대로다.
 	events.append(end)
 	state.battle = null
 	return true

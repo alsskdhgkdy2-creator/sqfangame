@@ -29,7 +29,8 @@ const GATHER_TABLE := [
 	["ether_lens", 260, {"ether_crystal": 3, "data_core": 1}], ["lichen_charm", 280, {"frost_lichen": 3}],
 ]
 const SELL := {"neon_rat_tail": 8, "cable_scale": 12, "glow_scale": 20, "spore_pouch": 10, "coated_scale": 14, "drill_claw": 16, "beetle_plate": 18, "intact_pincer": 30,
-	"neon_moss": 5, "lumen_sap": 35, "frost_lichen": 18, "scrap_wire": 6, "copper_coil": 40, "ether_crystal": 24, "data_core": 60}
+	"neon_moss": 5, "lumen_sap": 35, "frost_lichen": 18, "scrap_wire": 6, "copper_coil": 40, "ether_crystal": 24, "data_core": 60,
+	"ether_horn": 150, "delver_badge": 200, "warden_core": 300}
 
 
 func _errors_after(mutate: Callable) -> Array[String]:
@@ -99,7 +100,7 @@ func test_real_shop_data() -> void:
 		check_eq(db.equip("equip." + row[0]).price, row[1], "%s 값" % row[0])
 	for m in SELL:
 		check_eq(db.material_sell["item." + m], SELL[m], "%s 판매값" % m)
-	check_eq(db.material_ids.size(), SELL.size(), "소재 열다섯(M3 A5: 여덟 + 채집 일곱)")
+	check_eq(db.material_ids.size(), 18, "소재 열여덟(M3 A5: 여덟 + 채집 일곱, M3 A6: FOE 셋)")
 	var texts := TextDb.load_path("res://data/text/ko.json")
 	check_eq(texts.t(JUNK), "정크 공방", "상점 이름 문구")
 	check(db.name_keys().has(JUNK), "상점 name_key 도 문구 검사에 들어간다")

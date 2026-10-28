@@ -48,7 +48,7 @@ func test_real_data_loads_without_errors_or_warnings() -> void:
 	check(r.ok(), "defs 있음")
 	var db := r.defs.battle
 	check_eq(db.class_ids.size(), 4, "직업 넷")
-	check_eq(db.enemy_ids.size(), 6, "적 여섯")
+	check_eq(db.enemy_ids.size(), 9, "적 아홉(일반 여섯 + FOE 셋, M3 A6)")
 	check_eq(db.table_formations("encounter.f1_test").size(), 6, "편성 여섯")
 	check_eq(r.defs.first_floor().encounter_table, "encounter.f1_test", "층 출현 표")
 	check_eq(r.defs.party.ids, ["holo_knight", "blade_duelist", "blade_duelist_2", "nano_medic", "glyph_wizard"] as Array[String], "D12 파티")

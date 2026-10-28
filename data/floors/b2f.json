@@ -64,6 +64,9 @@
     {"id": "g2", "at": [3, 6], "kind": "chop", "uses": 2, "table": "gather.b2f.chop"},
     {"id": "g3", "at": [14, 16], "kind": "mine", "uses": 2, "table": "gather.b2f.mine"}
   ],
+  "foes": [
+    {"id": "f2", "foe": "foe.lost_delver", "kind": "chase", "at": [5, 10], "facing": "W", "sight": 3, "chase": 4, "join": 3, "respawn": "floor_reload"}
+  ],
   "encounter": {"danger_per_step": 10, "threshold_min": 110, "threshold_max": 220, "table": "encounter.b2f"},
   "zones": [{"id": "current", "rect": [8, 3, 8, 11], "danger_per_step": 15}]
 }

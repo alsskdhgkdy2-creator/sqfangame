@@ -168,10 +168,23 @@ static func clean_saves() -> void:
 	DirAccess.remove_absolute(SAVE_DIR)
 
 
+## 실제 자료 층의 처음 FOE 기록(M3 A6, 저장 10판 world.foes). 자료(data/floors)를 옮겨 적은 고정 값이고, 시험 층은 FOE 가 없어 빈 사전이다.
+const FRESH_FOES := {
+	"b1f": {"f1": {"at": [12, 9], "facing": "E", "state": "patrol", "path_i": 0, "dir": 1, "stun": 0, "day": 0}},
+	"b2f": {"f2": {"at": [5, 10], "facing": "W", "state": "idle", "path_i": 0, "dir": 1, "stun": 0, "day": 0}},
+	"b3f": {"f3": {"at": [16, 3], "facing": "N", "state": "idle", "path_i": 0, "dir": 1, "stun": 0, "day": 0}},
+}
+
+
+## 층 하나의 처음 world.foes(깊은 사본). 옛 판을 옮긴 결과와 견줄 때 원본 world 에 더한다.
+static func fresh_foes(floor_id: String) -> Dictionary:
+	return FRESH_FOES.get(floor_id, {}).duplicate(true)
+
+
 # ---- 전투 시험 도우미 (06 §10.1) ----
 
 const DATA_DIR := "res://data"
-const BATTLE_KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items", "shop", "gathering"]
+const BATTLE_KINDS := ["rules", "classes", "skills", "enemies", "encounters", "items", "shop", "gathering", "foes"]
 ## 난수가 끼지 않는 규칙 상수: 피해·순서 난수 1000 고정, 크리티컬 0, 명중 하한 1000.
 const EXACT := {"damage_roll": [1000, 1000], "speed_roll": [1000, 1000], "crit_base": 0, "crit_luck": 0, "hit_min": 1000}
 

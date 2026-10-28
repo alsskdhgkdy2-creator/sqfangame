@@ -63,6 +63,9 @@
     {"id": "g3", "at": [14, 1], "kind": "mine", "uses": 2, "table": "gather.b3f.mine"}
   ],
   "reserved": [[3, 1, 8, 3]],
+  "foes": [
+    {"id": "f3", "foe": "foe.warden", "kind": "guard", "at": [16, 3], "facing": "N", "respawn": "never"}
+  ],
   "encounter": {"danger_per_step": 12, "threshold_min": 100, "threshold_max": 200, "table": "encounter.b3f"},
   "zones": [{"id": "ice", "rect": [5, 6, 14, 13], "danger_per_step": 8}],
   "damage_floor": {"damage": 3}

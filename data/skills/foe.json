@@ -1,0 +1,168 @@
+{
+  "skills": [
+    {
+      "id": "skill.enemy.ram_charge",
+      "name_key": "skill.enemy.ram_charge",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "bash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 150,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.horn_sweep",
+      "name_key": "skill.enemy.horn_sweep",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_row",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "slash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 90,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.rusted_slash",
+      "name_key": "skill.enemy.rusted_slash",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "slash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 130,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.root_grasp",
+      "name_key": "skill.enemy.root_grasp",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "bash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 70,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 500,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.warden_baton",
+      "name_key": "skill.enemy.warden_baton",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "bash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 140,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.lock_on",
+      "name_key": "skill.enemy.lock_on",
+      "user": "enemy",
+      "effect": "charge",
+      "range": "ranged",
+      "target": "self",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "charges": "skill.enemy.suppress_beam",
+      "levels": [
+        {
+          "tp": 0
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.suppress_beam",
+      "name_key": "skill.enemy.suppress_beam",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_all",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "INT",
+      "element": "volt",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 110,
+          "accuracy": 950
+        }
+      ]
+    }
+  ]
+}

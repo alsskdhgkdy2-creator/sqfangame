@@ -1,5 +1,5 @@
 ## 원정 뒤에도 남는 세계 변화(한 층): 열린 지름길, 찾은 숨은 통로, 연 잠긴 문·연 보물상자(M3 A3), 오늘 쓴 채집 횟수(M3 A5,
-## 숙소에서 날이 바뀌면 TownRules.new_day 가 비운다). 규칙 함수만 바꾼다.
+## 숙소에서 날이 바뀌면 TownRules.new_day 가 비운다), FOE 마다의 상태(M3 A6, FoeRules). 규칙 함수만 바꾼다.
 class_name WorldState
 extends RefCounted
 
@@ -8,6 +8,42 @@ var passages_found := {}  # Vector3i → true
 var locks_open := {}  # Vector3i → true (열쇠 문만, 봉인 문은 열리지 않는다)
 var chests_opened := {}  # 상자 id String → true
 var gather_used := {}  # 채집 지점 id String → 오늘 쓴 횟수(1~9, 0 이면 키가 없다)
+var foes := {}  # FOE id String → FoeState(M3 A6). 층 기록을 만들 때(FloorState) 층의 모든 FOE 가 처음 상태로 들어간다.
+
+
+## FOE 하나의 상태(M3 A6, 설계 §3.1). state: idle·patrol·alert·chase·return·join(전투로 가는 중)·battle(지금 전투에 있다)·defeated(day = 쓰러진 날).
+## path_i·dir 은 경로의 자리와 방향(+1·−1), stun 은 남은 기절 걸음(도주 뒤 0~2).
+class FoeState:
+	extends RefCounted
+	var at := Vector2i.ZERO
+	var facing := 0
+	var state := "idle"
+	var path_i := 0
+	var dir := 1
+	var stun := 0
+	var day := 0
+
+	func alive() -> bool:
+		return state != "defeated"
+
+	func copy() -> FoeState:
+		var c := FoeState.new()
+		c.at = at
+		c.facing = facing
+		c.state = state
+		c.path_i = path_i
+		c.dir = dir
+		c.stun = stun
+		c.day = day
+		return c
+
+	## 배치의 처음 상태: 시작 칸·방향, 경로가 있으면 patrol 아니면 idle.
+	static func fresh(s: FloorModel.FoeSpawn) -> FoeState:
+		var c := FoeState.new()
+		c.at = s.at
+		c.facing = s.facing
+		c.state = "patrol" if not s.path.is_empty() else "idle"
+		return c
 
 
 func is_shortcut_open(e: Vector3i) -> bool:
@@ -58,4 +94,6 @@ func copy() -> WorldState:
 	w.locks_open = locks_open.duplicate()
 	w.chests_opened = chests_opened.duplicate()
 	w.gather_used = gather_used.duplicate()
+	for id in foes:
+		w.foes[id] = foes[id].copy()
 	return w

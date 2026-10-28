@@ -8,6 +8,7 @@ extends RefCounted
 ## 7 은 비어 있다: 시작 칸 휴식(REST, 06 §8.8 자리표시)은 숙소 숙박(M3 A2b, TownRules.stay)으로 바뀌어 없앴고 STAIRS 는 8 그대로다.
 ## OPEN(M3 A3): 서 있는 칸의 닫힌 보물상자를 연다(화면이 상자 물음 「예」 뒤에 부른다).
 ## GATHER(M3 A5): 서 있는 채집 지점에서 한 번 채집한다(GatherRules.gather, 화면이 채집 물음 「예」 뒤에 부른다).
+## FOE(M3 A6, FoeRules): 걸음 수가 오르는 행동(실제로 한 칸 이상 움직인 이동)마다 FOE 가 한 번씩 움직인다. 회전·조사·열기·채집·계단은 시간이 없다.
 enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, STAIRS = 8, ENTER, OPEN, GATHER }
 
 ## 행동 이름(공략 행동열 파일·디버그용) → Action.
@@ -248,7 +249,17 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 	if forward and _try_open_lock(s, FloorModel.edge_of(s.party.at, d), events, automap):
 		return
 	var path := move_path(f, s.world, s.party.at, d)
+	# FOE(M3 A6 설계 §4.4 2단계): 살아 있는 FOE 가 선 칸 앞에서 멈춘다(부딪힘). 처음 칸부터면 움직이지 않고 걸음·FOE 차례 없이 접촉 전투.
+	var bump := ""
+	for i in path.size():
+		bump = FoeRules.foe_at(s, path[i])
+		if not bump.is_empty():
+			path = path.slice(0, i)
+			break
 	if path.is_empty():
+		if not bump.is_empty():
+			FoeRules.contact(s, bump, "party", events)
+			return
 		events.append({"type": "blocked", "reason": block_reason(f, s.world, s.party.at, d, s.key_items)})
 		return
 	for i in path.size():
@@ -262,6 +273,15 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 	s.steps += 1
 	if s.wiped:
 		events.append({"type": "wiped"})
+		return
+	# FOE(M3 A6 설계 §4.4 6~8단계): 움직인 뒤 FOE 앞에서 멈췄으면(미끄러짐 끝) 그 FOE 와, 아니면 FOE 차례(tick)에서 난 접촉으로 전투를 연다.
+	# 접촉이 나면 위험도를 더하지 않고 인카운트도 보지 않는다(01 §3.1).
+	if not bump.is_empty():
+		FoeRules.contact(s, bump, "party", events)
+		return
+	var hit := FoeRules.tick(s, events)
+	if not hit.is_empty():
+		FoeRules.contact(s, hit["foe"], hit["by"], events)
 		return
 	if s.encounter.add(f.danger_at(s.party.at)):
 		# 같은 행동 안에서 편성을 뽑고 전투를 연다(06 §8.3).
@@ -363,6 +383,7 @@ static func _take_stairs(s: ExplorationState, events: Array[Dictionary], automap
 	var target := s.defs.floor_by_id(st.to_floor)
 	var t := target.stair_at(st.to_at)
 	s.enter_floor(target)
+	FoeRules.enter_floor(s)
 	s.party.at = t.at
 	s.party.facing = t.exit
 	record_cell(s, t.at, automap)
@@ -375,6 +396,7 @@ static func _enter(s: ExplorationState, events: Array[Dictionary], automap: Stri
 	var f := s.defs.first_floor()
 	s.location = ExplorationState.LABYRINTH
 	s.enter_floor(f)
+	FoeRules.enter_floor(s)
 	s.party.at = f.start_at
 	s.party.facing = f.start_facing
 	s.encounter.danger = 0

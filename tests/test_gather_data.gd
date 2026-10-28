@@ -181,7 +181,7 @@ func test_real_materials_and_unlocks() -> void:
 		return
 	var db := defs.battle
 	var texts := TextDb.load_path("res://data/text/ko.json")
-	check_eq(db.material_ids.size(), 15, "소재 열다섯(D29 ②)")
+	check_eq(db.material_ids.size(), 18, "소재 열여덟(D29 ②, M3 A6 FOE 소재 셋)")
 	for id in db.material_ids:
 		check_eq(db.material_desc.get(id), id + ".desc", "%s 설명 키" % id)
 		check(texts.has(id + ".desc") and texts.has(db.materials[id]), "%s 이름·설명 문구" % id)
@@ -213,7 +213,13 @@ func test_real_materials_and_unlocks() -> void:
 	check(el != null and el.kind == "head" and el.stats.get("INT") == 2, "에테르 렌즈")
 	var mw := db.equip("equip.moss_weave")
 	check(mw != null and mw.kind == "body" and [mw.gear["def"], mw.gear["mdef"]] == [6, 4], "이끼 짜임 외투")
-	# 적 드롭은 그대로다(시뮬레이션 결과 해시를 지킨다): 드롭 소재는 앞 여덟뿐.
+	# 적 드롭은 그대로다(시뮬레이션 결과 해시를 지킨다): 드롭 소재는 앞 여덟뿐. FOE 셋(M3 A6, enemy.foe_*)은 시뮬레이션이 만나지 않고
+	# 조건 드롭으로 채집 소재를 주므로 뺀다. 본 적은 일반 적 여섯이다.
+	var normal := 0
 	for eid in db.enemy_ids:
+		if eid.begins_with("enemy.foe_"):
+			continue
+		normal += 1
 		for d in db.enemies[eid].drops:
 			check(not NEW_MATERIALS.has(d["item"]), "%s 드롭에 새 소재가 없다" % eid)
+	check_eq(normal, 6, "드롭을 본 일반 적 여섯")

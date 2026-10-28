@@ -5,7 +5,7 @@
 ## 이벤트:
 ##   {"type": "rejected", "reason": "not_town"}
 ##   {"type": "blocked", "reason": "no_money" | "day_max"}
-##   {"type": "stayed", "price", "day"}
+##   {"type": "foe_respawned", "floor", "foe"}…(M3 A6, 그날 되살아난 FOE) 다음 {"type": "stayed", "price", "day"}
 class_name TownRules
 extends RefCounted
 
@@ -43,18 +43,21 @@ static func stay(s: ExplorationState) -> Array[Dictionary]:
 		m.hp = m.max_hp
 		m.tp = m.max_tp
 	s.day += 1
-	new_day(s)
+	events.append_array(new_day(s))
 	events.append({"type": "stayed", "price": price, "day": s.day})
 	return events
 
 
 ## 날이 바뀔 때 한 번(지금은 숙박만 부른다). 들어가 본 모든 층의 오늘 쓴 채집 횟수를 비운다(M3 A5, 01 §3.6: 지금 층만이 아니다).
-## 다음 단계가 여기에 더한다: A6 FOE 되살리기(AfterDays). 밖에서 고칠 상태 이상은 없다(전투가 끝나면 지운다, 06 §3.17).
-static func new_day(s: ExplorationState) -> void:
+## 모든 층에서 날이 찬 after_days FOE 를 되살린다(M3 A6, FoeRules.new_day: 되살아난 FOE 의 foe_respawned 이벤트를 돌려준다).
+## 밖에서 고칠 상태 이상은 없다(전투가 끝나면 지운다, 06 §3.17).
+static func new_day(s: ExplorationState) -> Array[Dictionary]:
 	for id in s.floor_states:
 		s.floor_states[id].world.gather_used.clear()
+	var out := FoeRules.new_day(s)
 	if new_day_hook.is_valid():
 		new_day_hook.call()
+	return out
 
 
 ## 전멸 뒤 「지도를 남긴다」(01 §4.10, research 01: 그린 지도와 방문 기록은 따로다). wiped 의 층마다 지도 그림(annotation: 색·경계 표시·

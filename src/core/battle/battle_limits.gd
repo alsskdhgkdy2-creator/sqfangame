@@ -64,6 +64,9 @@ const RANGES := {
 	"consumable": [1, 99], "item_amount": [1, 999],
 	# 채집(M3 A5): 지점의 하루 횟수, 표 한 줄의 무게·개수, 희귀 확률(천분율). 저장의 하루 쓴 횟수도 gather_uses 범위다.
 	"gather_uses": [1, 9], "gather_weight": [1, 1000], "gather_count": [1, 5], "gather_permille": [1, 1000],
+	# FOE(M3 A6): 위협 레벨, 추적의 시야·추적 거리, 합류 거리, 경로 칸 수, 되살아나는 날 수, 저장의 기절 걸음.
+	"foe_level": [1, 99], "foe_sight": [1, 9], "foe_chase": [1, 20], "foe_join": [0, 9], "foe_path": [2, 32], "respawn_days": [1, 99],
+	"foe_stun": [0, 2],
 	"battle_turn": [0, TURN_MAX], "battle_seq": [1, SEQ_MAX],
 }
 const MATERIAL_MAX := 9999
@@ -83,6 +86,9 @@ const GATHER_KINDS := ["take", "chop", "mine"]
 const GATHER_USES_MAX := 9
 const GATHER_COUNT_MAX := 5
 const GATHER_ITEMS_MAX := 8
+## FOE(M3 A6, 01 §3.5): 종류(순회 patrol·추적 chase·문지기 guard)와 되살아남(Never·AfterDays(n)·OnFloorReload).
+const FOE_KINDS := ["patrol", "chase", "guard"]
+const FOE_RESPAWN := ["never", "after_days", "floor_reload"]
 ## 상점(08 §2): 소지금 상한, 누적 판 수(sold·pool) 상한.
 const MONEY_MAX := 9999999
 const SOLD_MAX := 9999999

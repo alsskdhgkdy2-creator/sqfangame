@@ -1,0 +1,249 @@
+{
+  "enemies": [
+    {
+      "id": "enemy.foe_ether_ram",
+      "name_key": "enemy.foe_ether_ram",
+      "max_hp": 600,
+      "stats": {
+        "STR": 44,
+        "INT": 10,
+        "VIT": 22,
+        "WIS": 12,
+        "AGI": 16,
+        "LUC": 10
+      },
+      "resist": {
+        "slash": 1000,
+        "pierce": 1000,
+        "bash": 1000,
+        "fire": 1500,
+        "ice": 1000,
+        "volt": 1000
+      },
+      "ailment_vuln": {
+        "poison": 1000,
+        "paralysis": 1000,
+        "sleep": 1000
+      },
+      "bind_vuln": {
+        "head": 1000,
+        "arm": 1000,
+        "leg": 1000
+      },
+      "on_bound": "fail",
+      "exp": 180,
+      "ai": [
+        {
+          "if": {
+            "turn_mod": [
+              3,
+              2
+            ]
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.horn_sweep",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.ram_charge",
+              "weight": 3,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.horn_sweep",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.ether_horn",
+          "chance": 1000
+        },
+        {
+          "item": "item.lumen_sap",
+          "chance": 1000,
+          "if": {
+            "killed_while_bound": "head"
+          }
+        }
+      ]
+    },
+    {
+      "id": "enemy.foe_lost_delver",
+      "name_key": "enemy.foe_lost_delver",
+      "max_hp": 760,
+      "stats": {
+        "STR": 46,
+        "INT": 22,
+        "VIT": 24,
+        "WIS": 18,
+        "AGI": 22,
+        "LUC": 12
+      },
+      "resist": {
+        "slash": 1000,
+        "pierce": 1000,
+        "bash": 1000,
+        "fire": 1500,
+        "ice": 1000,
+        "volt": 500
+      },
+      "ailment_vuln": {
+        "poison": 1000,
+        "paralysis": 1000,
+        "sleep": 1000
+      },
+      "bind_vuln": {
+        "head": 1000,
+        "arm": 1000,
+        "leg": 1000
+      },
+      "on_bound": "fail",
+      "exp": 260,
+      "ai": [
+        {
+          "if": {
+            "hp_below": 500
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.root_grasp",
+              "weight": 2,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.rusted_slash",
+              "weight": 2,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.rusted_slash",
+              "weight": 3,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.root_grasp",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.delver_badge",
+          "chance": 1000
+        },
+        {
+          "item": "item.data_core",
+          "chance": 1000,
+          "if": {
+            "killed_by_element": [
+              "fire"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "enemy.foe_warden",
+      "name_key": "enemy.foe_warden",
+      "max_hp": 1100,
+      "stats": {
+        "STR": 50,
+        "INT": 30,
+        "VIT": 32,
+        "WIS": 20,
+        "AGI": 10,
+        "LUC": 10
+      },
+      "resist": {
+        "slash": 500,
+        "pierce": 500,
+        "bash": 1000,
+        "fire": 1000,
+        "ice": 1000,
+        "volt": 1500
+      },
+      "ailment_vuln": {
+        "poison": 1000,
+        "paralysis": 1000,
+        "sleep": 1000
+      },
+      "bind_vuln": {
+        "head": 1000,
+        "arm": 1000,
+        "leg": 1000
+      },
+      "on_bound": "fail",
+      "exp": 360,
+      "ai": [
+        {
+          "if": {
+            "charging": true
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.suppress_beam",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {
+            "turn_mod": [
+              4,
+              3
+            ]
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.lock_on",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.warden_baton",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.warden_core",
+          "chance": 1000
+        },
+        {
+          "item": "item.copper_coil",
+          "chance": 1000,
+          "if": {
+            "killed_while_bound": "arm"
+          }
+        }
+      ]
+    }
+  ]
+}

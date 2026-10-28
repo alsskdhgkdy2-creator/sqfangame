@@ -96,6 +96,7 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 	if db.ok():
 		r.errors.append_array(check_chests_and_locks(floor_list, db))
 		r.errors.append_array(check_gathering(floor_list, db))
+		r.errors.append_array(check_foes(floor_list, db))
 	if text_db != null and db.ok():
 		var keys := db.name_keys()
 		keys.append_array(party.name_keys)
@@ -114,6 +115,17 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 		d.battle = db
 		r.defs = d
 	return r
+
+
+## FOE 참조(M3 A6, 설계 §2.3): 층 FOE 의 정의가 있는지, 문지기가 진행(계단·열쇠 상자·잠긴 문)을 막지 않는지.
+static func check_foes(floor_list: Array[FloorModel], db: BattleDb) -> Array[String]:
+	var out: Array[String] = []
+	for f in floor_list:
+		for s in f.foe_list():
+			if db.foe(s.foe) == null:
+				out.append("%s: foes: FOE %s 의 정의 %s 가 없다" % [f.id, s.id, s.foe])
+		out.append_array(FloorLoader.guard_progress(f, f.id))
+	return out
 
 
 ## 채집 지점 참조(M3 A5): 지점의 표가 정의에 있고, 표의 종류가 지점 종류와 같은지.

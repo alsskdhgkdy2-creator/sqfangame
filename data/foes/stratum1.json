@@ -1,0 +1,46 @@
+{
+  "foes": [
+    {
+      "id": "foe.ether_ram",
+      "level": 6,
+      "formation": {
+        "id": "formation.foe.ether_ram",
+        "no_escape": false,
+        "enemies": [
+          {
+            "enemy": "enemy.foe_ether_ram",
+            "row": "front"
+          }
+        ]
+      }
+    },
+    {
+      "id": "foe.lost_delver",
+      "level": 10,
+      "formation": {
+        "id": "formation.foe.lost_delver",
+        "no_escape": false,
+        "enemies": [
+          {
+            "enemy": "enemy.foe_lost_delver",
+            "row": "front"
+          }
+        ]
+      }
+    },
+    {
+      "id": "foe.warden",
+      "level": 14,
+      "formation": {
+        "id": "formation.foe.warden",
+        "no_escape": false,
+        "enemies": [
+          {
+            "enemy": "enemy.foe_warden",
+            "row": "front"
+          }
+        ]
+      }
+    }
+  ]
+}
