@@ -54,7 +54,7 @@ func test_v9_roundtrip() -> void:
 	var s := _gathered()
 	check_eq(s.floor_states["b1f"].world.gather_used, {"g1": 2}, "B1F g1 두 번")
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	check_eq([doc["schema"], doc["rules"]], [10.0, "m3o"], "10판 머리")
+	check_eq([doc["schema"], doc["rules"]], [11.0, "m3r"], "11판 머리")
 	for id in doc["state"]["floor_states"]:
 		var keys: Array = doc["state"]["floor_states"][id]["world"].keys()
 		keys.sort()
@@ -64,7 +64,7 @@ func test_v9_roundtrip() -> void:
 	var r := SaveCodec.decode(JSON.stringify(doc), s.defs)
 	check(r.ok(), "읽기 %s" % r.error)
 	if r.ok():
-		check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.relocated], [SaveCodec.state_hash(s), 10, false], "같은 해시, 10판, 옮김 없음")
+		check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.relocated], [SaveCodec.state_hash(s), 11, false], "같은 해시, 11판, 옮김 없음")
 		check_eq([r.state.floor_states["b1f"].world.gather_used, r.state.floor_states["b2f"].world.gather_used], [{"g1": 2}, {"g3": 1}], "읽은 쓴 횟수")
 		var p: FloorModel.GatherPoint = r.state.floor_def.points["g1"]
 		check_eq(r.state.world.gather_left(p), 0, "읽은 뒤에도 다 쓴 채")
@@ -84,12 +84,13 @@ func test_v9_rejects() -> void:
 	# 8판 머리에 gather_used 가 있으면 8판 규칙(world 넷)으로 거부된다. 10판(M3 A6)의 foes 는 걷어 내고 gather_used 만 남긴다.
 	var v8_head := func(d: Dictionary) -> void:
 		d.merge({"schema": 8, "rules": "m3i"}, true)
+		Fx.strip_guild(d)  # M3 A7: 11판 길드 값도 걷어 낸다
 		for id in d["state"]["floor_states"]:
 			d["state"]["floor_states"][id]["world"].erase("foes")
 	_reject(s, v8_head, "8판 검사 실패: floor_states.b1f.world.gather_used 는 모르는 필드다", "8판 world 에 gather_used")
 	_reject(s, func(d): d.merge({"schema": 8, "rules": "m3g"}, true), "규칙 판(rules)이 schema 8 와 맞지 않다", "8판 머리에 m3g")
-	_reject(s, func(d): d["rules"] = "m3i", "규칙 판(rules)이 schema 10 와 맞지 않다", "10판 머리에 m3i")
-	_reject(s, func(d): d["schema"] = 11, "지원하지 않는 schema 다", "11판")
+	_reject(s, func(d): d["rules"] = "m3i", "규칙 판(rules)이 schema 11 와 맞지 않다", "11판 머리에 m3i")
+	_reject(s, func(d): d["schema"] = 12, "지원하지 않는 schema 다", "12판")
 
 
 ## 8판 문서가 담은 필드는 9판으로 옮긴 뒤에도 같고, 더해진 것은 층 기록 world 의 빈 gather_used 뿐인지.
@@ -100,7 +101,9 @@ func _check_kept(label: String, text: String, defs: GameDefs) -> SaveCodec.LoadR
 	if not r.ok():
 		return r
 	check_eq([r.from_schema, r.relocated, r.saved_at, r.generation], [8, false, orig["saved_at"], int(orig["generation"])], "%s: 8판·옮김 없음·saved_at·generation" % label)
-	var now := SaveCodec.state_to_dict(r.state)
+	var sv := Fx.strip_v11(SaveCodec.state_to_dict(r.state), r.state.defs)  # M3 A7: 11판이 더한 길드 값은 기본값이어야 하고, 견주기에서는 뺀다
+	check_eq(sv["bad"], "", "%s: 11판 길드 값은 기본값" % label)
+	var now: Dictionary = sv["state"]
 	var o: Dictionary = orig["state"]
 	for id in o["floor_states"]:
 		check(not o["floor_states"][id]["world"].has("gather_used"), "%s: 원본 %s 에는 채집 기록이 없다" % [label, id])
@@ -110,9 +113,9 @@ func _check_kept(label: String, text: String, defs: GameDefs) -> SaveCodec.LoadR
 		check_eq(V7._norm(now[k]), V7._norm(o[k]), "%s: %s 보존" % [label, k])
 	check_eq(now.keys().filter(func(k: String) -> bool: return not o.has(k)), [], "%s: 맨 위에 더해진 필드 없음" % label)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
-	check_eq([doc["schema"], doc["rules"]], [10.0, "m3o"], "%s: 10판으로 쓴다" % label)
+	check_eq([doc["schema"], doc["rules"]], [11.0, "m3r"], "%s: 11판으로 쓴다" % label)
 	var again := SaveCodec.decode(JSON.stringify(doc), defs)
-	check(again.ok() and again.from_schema == 10 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 10판 다시 읽기 같은 해시 %s" % [label, again.error])
+	check(again.ok() and again.from_schema == 11 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 11판 다시 읽기 같은 해시 %s" % [label, again.error])
 	return r
 
 
@@ -158,9 +161,9 @@ func test_every_old_schema_migrates_to_v9() -> void:
 			for id in r.state.floor_states:
 				check_eq(r.state.floor_states[id].world.gather_used, {}, "%s: %s 빈 채집 기록" % [x[0], id])
 			var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
-			check_eq([doc["schema"], doc["rules"]], [10.0, "m3o"], "%s: 10판으로 쓴다" % x[0])
+			check_eq([doc["schema"], doc["rules"]], [11.0, "m3r"], "%s: 11판으로 쓴다" % x[0])
 			var again := SaveCodec.decode(JSON.stringify(doc), pair[1])
-			check(again.ok() and again.from_schema == 10 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 다시 읽기 같은 해시" % x[0])
+			check(again.ok() and again.from_schema == 11 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 다시 읽기 같은 해시" % x[0])
 
 
 ## S5 (M-S5 옮길 때 소모품을 버림): 8판 시험 층 저장을 게임 묶음으로 읽으면 새 미궁으로 옮기고, 채집 기록은 빈 B1F 하나로 시작한다.
@@ -175,7 +178,7 @@ func test_relocation_starts_empty() -> void:
 	check_eq([n.consumables, n.materials, n.gear_bag, BagRules.used(n), n.money], [{"use.medica": 18}, {"item.neon_rat_tail": 50}, {"equip.twin_edge": 2}, 70, 700],
 		"소모품·소재·가방(70, 넘친 채)·돈 그대로")
 	var again := SaveCodec.decode(SaveCodec.encode(n), defs)
-	check(again.ok() and not again.relocated and again.from_schema == 10 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(n), "10판으로 다시 쓰고 읽음 %s" % again.error)
+	check(again.ok() and not again.relocated and again.from_schema == 11 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(n), "11판으로 다시 쓰고 읽음 %s" % again.error)
 
 
 ## S6: 8판 본 파일을 읽어 자동 저장하면 .bak 은 8판 원본 그대로, 본 파일은 9판. 본 파일이 깨지면 8판 .bak 을 옮겨 읽는다.
@@ -196,7 +199,7 @@ func test_v8_bak() -> void:
 	check_eq(store.save("auto", l.result.state), "", "자동 저장")
 	check_eq(FileAccess.get_file_as_string(bak), V8_TOWN, ".bak 은 8판 원본")
 	var doc: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(main))
-	check_eq([doc["schema"], doc["rules"], doc["generation"]], [10.0, "m3o", 92.0], "본 파일은 10판(세대 + 1)")
+	check_eq([doc["schema"], doc["rules"], doc["generation"]], [11.0, "m3r", 92.0], "본 파일은 11판(세대 + 1)")
 	f = FileAccess.open(main, FileAccess.WRITE)
 	f.store_string("{broken")
 	f.close()

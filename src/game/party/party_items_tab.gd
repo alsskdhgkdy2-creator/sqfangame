@@ -712,7 +712,7 @@ func member_lines(i: int) -> Array[String]:
 func _fits_text(e: BattleDb.EquipDef) -> String:
 	var names: Array[String] = []
 	var seen := {}
-	for cid in menu.state.defs.party.class_ids:
+	for cid in PartyNames.class_ids(menu.state):
 		if seen.has(cid):
 			continue
 		seen[cid] = true

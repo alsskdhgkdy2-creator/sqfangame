@@ -7,8 +7,22 @@ extends RefCounted
 const SLOT_KEYS := ["party.slot.weapon", "party.slot.armor", "party.slot.armor", "party.slot.armor"]
 
 
+## 파티 칸 i 대원의 화면 이름(M3 A7: 등록한 이름, 없으면 기본 다섯의 이름 키 글).
 static func member_name(state: ExplorationState, texts: TextDb, i: int) -> String:
-	return texts.t(state.defs.party.name_keys[i])
+	return display_name(texts, state.party.members[i])
+
+
+## 대원 하나의 화면 이름(파티·길드 공통).
+static func display_name(texts: TextDb, m: PartyState.Member) -> String:
+	return m.name if not m.name.is_empty() else texts.t(m.name_key)
+
+
+## 파티 칸 차례의 직업 ID(카드 색·문패가 쓴다).
+static func class_ids(state: ExplorationState) -> Array[String]:
+	var out: Array[String] = []
+	for m in state.party.members:
+		out.append(m.class_id)
+	return out
 
 
 static func slot_name(texts: TextDb, slot: int) -> String:

@@ -31,7 +31,7 @@ static func choose(state: ExplorationState, policy: String) -> Array:
 
 static func choose_one(state: ExplorationState, i: int, policy: String) -> Dictionary:
 	var c: Variant = null
-	match state.defs.party.class_ids[i]:
+	match state.party.members[i].class_id:
 		"class.nano_medic":
 			c = _medic(state, i, policy)
 		"class.holo_knight":

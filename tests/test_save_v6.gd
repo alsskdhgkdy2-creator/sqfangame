@@ -40,12 +40,12 @@ func _town(day: int = 1) -> ExplorationState:
 func test_v6_roundtrip_town_and_labyrinth() -> void:
 	var t := _town(7)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(t))
-	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [10.0, "m3o", "town", 7.0], "10판 머리·마을·7일째")
+	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [11.0, "m3r", "town", 7.0], "11판 머리·마을·7일째")
 	var r := SaveCodec.decode(JSON.stringify(doc), _defs())
 	check(r.ok(), "마을 읽기 %s" % r.error)
 	if r.ok():
 		check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.state.location, r.state.day, r.state.party.at],
-			[SaveCodec.state_hash(t), 10, "town", 7, t.party.at], "마을: 같은 해시·장소·날·위치")
+			[SaveCodec.state_hash(t), 11, "town", 7, t.party.at], "마을: 같은 해시·장소·날·위치")
 	var t8 := _town(8)
 	check(SaveCodec.state_hash(t8) != SaveCodec.state_hash(t), "날이 다르면 해시가 다르다")
 	var l := _two()
@@ -118,9 +118,9 @@ func _migrates(text: String, from: int, label: String) -> SaveCodec.LoadResult:
 	check_eq([r.from_schema, r.saved_at, r.generation, r.state.location, r.state.day], [from, orig["saved_at"], int(orig["generation"]), "labyrinth", 1],
 		"%s: from_schema·saved_at·generation·미궁·1일째" % label)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
-	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [10.0, "m3o", "labyrinth", 1.0], "%s: 10판으로 쓴다" % label)
+	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [11.0, "m3r", "labyrinth", 1.0], "%s: 11판으로 쓴다" % label)
 	var again := SaveCodec.decode(JSON.stringify(doc), _defs())
-	check(again.ok() and again.from_schema == 10 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 10판 다시 읽기 같은 해시" % label)
+	check(again.ok() and again.from_schema == 11 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 11판 다시 읽기 같은 해시" % label)
 	return r
 
 
@@ -143,7 +143,9 @@ func test_v5_fixed_values_survive() -> void:
 		check(r.ok(), "읽기 %s" % r.error)
 		if not r.ok():
 			continue
-		var now := SaveCodec.state_to_dict(r.state)
+		var sv := Fx.strip_v11(SaveCodec.state_to_dict(r.state), r.state.defs)  # M3 A7: 11판이 더한 길드 값은 기본값이어야 하고, 견주기에서는 뺀다
+		check_eq(sv["bad"], "", "%s: 11판 길드 값은 기본값" % str(o["party"]["at"]))
+		var now: Dictionary = sv["state"]
 		# 7판(M3 A3)이 층 기록 world 에 더한 빈 목록 둘, 9판(M3 A5)의 빈 채집 기록, 10판(M3 A6)의 처음 FOE 기록은 원본에 넣어 두고 비교한다(나머지는 그대로).
 		for id in o["floor_states"]:
 			o["floor_states"][id]["world"].merge({"locks_open": [], "chests_opened": [], "gather_used": {}, "foes": Fx.fresh_foes(id)})

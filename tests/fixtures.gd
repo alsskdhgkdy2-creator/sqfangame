@@ -95,9 +95,49 @@ static func cur(doc: Dictionary) -> Dictionary:
 	return doc["state"]["floor_states"][doc["state"]["floor"]]
 
 
-## 5판 문서에서 4판 문서를 만든다(머리 4·"m3s", 지금 층 기록을 state 바로 아래로, floor_states 없음). 층 하나만 들어가 본 상태여야 한다.
-static func as_v4(doc: Dictionary) -> Dictionary:
+## 11판 문서에서 10판 문서를 만든다(M3 A7: 머리 10·"m3o", guild 없음, 대원은 3~10판 키만). 파티가 기본 다섯(정의 칸 순서)이고 길드가 비어야 한다.
+static func as_v10(doc: Dictionary) -> Dictionary:
 	var d := doc.duplicate(true)
+	d.merge({"schema": 10, "rules": "m3o"}, true)
+	strip_guild(d)
+	return d
+
+
+## 문서에서 11판 길드 값을 그 자리에서 걷어 낸다(맨 위 guild, 대원의 3~10판 밖 키). 머리는 그대로(부르는 쪽이 정한다).
+static func strip_guild(d: Dictionary) -> void:
+	var st: Dictionary = d["state"]
+	assert(st["guild"]["members"].is_empty(), "10판에는 길드가 없다")
+	st.erase("guild")
+	for m in st["party"]["members"]:
+		for k in m.keys():
+			if not SaveCodec.MEMBER_KEYS.has(k):
+				m.erase(k)
+
+
+## 옛 판 저장을 11판으로 옮긴 state 사전(state_to_dict)에서 M3 A7 이 더한 것(맨 위 guild, 대원의 name·class·look·row)을 빼고 돌려준다.
+## 더한 것이 기본값인지 함께 본다: 길드는 비고 serial 0, 대원 칸 i 는 기본 다섯 칸 i 의 직업·열, 이름 null, 외형 0. 맞지 않으면 문자열 하나에 까닭을 담는다.
+## 돌려주는 사전: {"state": 뺀 사전, "bad": "" 또는 까닭}.
+static func strip_v11(now: Dictionary, defs: GameDefs) -> Dictionary:
+	var d := now.duplicate(true)
+	var bad := ""
+	if d.get("guild") != {"members": [], "serial": 0}:
+		bad = "guild 가 빈 길드가 아니다: %s" % str(d.get("guild"))
+	d.erase("guild")
+	var ms: Array = d["party"]["members"]
+	for i in ms.size():
+		var m: Dictionary = ms[i]
+		var want := {"name": null, "class": defs.party.class_ids[i] if i < defs.party.ids.size() else "?", "look": 0,
+			"row": defs.party.rows[i] if i < defs.party.ids.size() else "?"}
+		for k in want:
+			if bad.is_empty() and str(m.get(k)) != str(want[k]):
+				bad = "party.members[%d].%s = %s, 기본값 %s 이 아니다" % [i, k, str(m.get(k)), str(want[k])]
+			m.erase(k)
+	return {"state": d, "bad": bad}
+
+
+## 11판 문서에서 4판 문서를 만든다(머리 4·"m3s", 지금 층 기록을 state 바로 아래로, floor_states 없음, as_v10 의 대원). 층 하나만 들어가 본 상태여야 한다.
+static func as_v4(doc: Dictionary) -> Dictionary:
+	var d := as_v10(doc) if int(doc["schema"]) >= 11 else doc.duplicate(true)
 	d.merge({"schema": 4, "rules": "m3s"}, true)
 	var st: Dictionary = d["state"]
 	assert(st["floor_states"].size() == 1, "4판은 층 하나")

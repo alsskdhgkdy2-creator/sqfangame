@@ -330,7 +330,7 @@ func open(s: ExplorationState) -> void:
 	state = s
 	display = BattleDisplay.from_state(s, texts)
 	enemy_area.setup(display)
-	party_cards.setup(display, s.defs.party.class_ids)
+	party_cards.setup(display, PartyNames.class_ids(s))
 	minimap.set_state(s)
 	minimap.refresh()
 	join_pill.show_state(s)
@@ -1195,7 +1195,7 @@ static func result_bbcode(lines: Array[String], kinds: Array[String]) -> String:
 
 
 func _member_name(i: int) -> String:
-	return texts.t(state.defs.party.name_keys[i]) if state != null and i < state.defs.party.name_keys.size() else str(i)
+	return PartyNames.member_name(state, texts, i) if state != null and i < state.party.members.size() else str(i)
 
 
 func _log(ev: Dictionary) -> void:

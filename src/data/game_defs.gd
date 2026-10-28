@@ -225,5 +225,11 @@ func members() -> Array[PartyState.Member]:
 	return out
 
 
+## 기본 다섯(파티 정의) 칸 i 의 직업. 새 대원을 만들 때(GrowthRules.start_member)와 옛 저장 이전만 쓴다(M3 A7: 상태의 직업은 대원이 가진다).
 func class_of(member_index: int) -> BattleDb.ClassDef:
 	return battle.classes[party.class_ids[member_index]]
+
+
+## 대원의 직업 정의(M3 A7). 없는 직업이면 null(저장 검사가 먼저 거부한다).
+func class_def(m: PartyState.Member) -> BattleDb.ClassDef:
+	return battle.classes.get(m.class_id)

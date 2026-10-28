@@ -245,7 +245,7 @@ func cancel_pointers() -> void:
 
 
 func _setup_cards() -> void:
-	cards.setup(BattleDisplay.from_party(state, texts), state.defs.party.class_ids)
+	cards.setup(BattleDisplay.from_party(state, texts), PartyNames.class_ids(state))
 	for c in cards.cards:
 		c.mouse_filter = MOUSE_FILTER_IGNORE  # 입구의 카드는 읽기만
 		c.snap()

@@ -62,7 +62,7 @@ static func for_slot(state: ExplorationState, i: int, slot: int) -> Dictionary:
 	var dim_why: Array[String] = []
 	for line in bag(state, ["gear"]):
 		var id: String = line["item"]
-		if GrowthRules.slot_block(defs.battle, defs.class_of(i), m.equip, slot, id) == "slot_kind":
+		if GrowthRules.slot_block(defs.battle, defs.class_def(m), m.equip, slot, id) == "slot_kind":
 			continue
 		var why := GrowthRules.equip_block(defs, i, m, bag_now, slot, id, bag_free)
 		if why.is_empty():

@@ -114,7 +114,7 @@ func _expect_reject(mutate: Callable, needle: String, label: String) -> void:
 
 func test_rejects_bad_header() -> void:
 	_expect_reject(func(d): d["format"] = "other", "format", "형식")
-	_expect_reject(func(d): d["schema"] = 11, "schema", "새 schema")
+	_expect_reject(func(d): d["schema"] = 12, "schema", "새 schema")
 	_expect_reject(func(d): d["schema"] = 1, "rules", "schema 1 + rules m3k 쌍")
 	_expect_reject(func(d): d["schema"] = 3, "rules", "schema 3 + rules m3k 쌍")
 	_expect_reject(func(d): d["schema"] = 4, "rules", "schema 4 + rules m3k 쌍")
@@ -149,8 +149,11 @@ func test_rejects_bad_types() -> void:
 func test_rejects_bad_ranges_and_refs() -> void:
 	_expect_reject(func(d): d["state"]["party"]["at"] = [0, 5], "party.at", "층 밖 위치")
 	_expect_reject(func(d): d["state"]["party"]["facing"] = "Q", "facing", "방향")
-	_expect_reject(func(d): d["state"]["party"]["members"].pop_back(), "members", "대원 수")
-	_expect_reject(func(d): d["state"]["party"]["members"].reverse(), "id", "대원 순서")
+	# M3 A7(11판): 파티는 1~5명(넷은 받는다), 전열이 후열보다 앞, ID 는 명부에서 하나.
+	_expect_reject(func(d): d["state"]["party"]["members"].clear(), "members", "대원 수 0")
+	_expect_reject(func(d): d["state"]["party"]["members"].append(d["state"]["party"]["members"][0].duplicate(true)), "members", "대원 수 6")
+	_expect_reject(func(d): d["state"]["party"]["members"].reverse(), "후열", "대원 순서(후열이 전열 앞)")
+	_expect_reject(func(d): d["state"]["party"]["members"][1]["id"] = "holo_knight", "둘", "대원 ID 겹침")
 	_expect_reject(func(d): d["state"]["party"]["members"][0]["hp"] = 61, "hp", "HP 초과")
 	_expect_reject(func(d): d["state"]["party"]["members"][0]["hp"] = -1, "hp", "HP 음수")
 	_expect_reject(func(d): Fx.cur(d)["world"]["shortcuts_open"].append("v:1:0"), "shortcuts_open", "지름길 아닌 경계")

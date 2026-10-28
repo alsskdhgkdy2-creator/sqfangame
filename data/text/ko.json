@@ -533,6 +533,7 @@
   "battle.result.level_up_sp": "{member}  Lv {from} → {to}  SP +{sp}",
   "msg.not_stairs": "여기에는 계단이 없다",
   "msg.not_town": "여기는 마을이 아니다",
+  "msg.party_down": "움직일 수 있는 대원이 없다",
   "msg.start_error": "정의 데이터를 읽지 못해 시작할 수 없다",
   "party.level": "Lv {level}",
   "party.hp": "{hp}/{max}",

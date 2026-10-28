@@ -8,7 +8,7 @@ var formation := ""
 var turn := 0
 ## 다음 강화·약화 효과가 받을 번호(1부터, 06 §3.14).
 var seq := 1
-## 대원 순서(5).
+## 파티 칸 순서(1~5, M3 A7).
 var party: Array[BattleUnit] = []
 ## 편성 칸 순서.
 var enemies: Array[BattleUnit] = []
@@ -34,7 +34,7 @@ var promoted := {BattleUnit.PARTY: false, BattleUnit.ENEMY: false}
 ## 정의와 탐색 파티로 새 전투 상태를 만든다(적은 HP 가득). formation 이 없으면 null.
 static func create(defs: GameDefs, members: Array[PartyState.Member], formation_id: String) -> BattleState:
 	var f: BattleDb.FormationDef = defs.battle.formations.get(formation_id)
-	if f == null or members.size() != defs.party.ids.size():
+	if f == null or members.is_empty() or members.size() > BattleLimits.PARTY_SIZE:
 		return null
 	var b := BattleState.new()
 	b.formation = formation_id
@@ -47,8 +47,9 @@ static func create(defs: GameDefs, members: Array[PartyState.Member], formation_
 		u.slot = i
 		u.member = members[i]
 		u.def_id = members[i].id
-		u.name_key = defs.party.name_keys[i]
-		u.row = defs.party.rows[i]
+		u.name_key = members[i].name_key
+		u.name = members[i].name
+		u.row = members[i].row
 		u.stats = p["stats"]
 		u.gear = p["gear"]
 		u.resist = p["resist"]

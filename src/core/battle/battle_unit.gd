@@ -14,6 +14,8 @@ var slot := 0
 ## 대원 ID 또는 적 ID(enemy.…).
 var def_id := ""
 var name_key := ""
+## 대원만: 등록한 이름(M3 A7). 비면 name_key 의 글이다.
+var name := ""
 ## 정의된 열 "front" / "back". 실효 열은 BattleState.effective_row.
 var row := "front"
 

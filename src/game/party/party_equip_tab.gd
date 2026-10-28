@@ -327,7 +327,7 @@ func refresh() -> void:
 	var preview := list_open and list_cursor != equipped_row and row_block[list_cursor].is_empty()
 	var after := profile_if(row_items[list_cursor]) if preview else p
 	var g := defs.battle.growth
-	var c := defs.class_of(i)
+	var c := defs.class_def(m)
 	var cap_row: Dictionary = c.levels.get(g.level_cap, c.levels.get(m.level, {}))
 	var stats := {}
 	for k in PartyStatusTab.STAT_ROWS:
@@ -343,8 +343,8 @@ func refresh() -> void:
 		var id: String = m.equip[slot]
 		equip.append([SheetParts.kind_icon(defs, id), menu.item_name(id) if not id.is_empty() else t.t("party.slot.empty"), id.is_empty()])
 	drawn = {
-		"name": menu.member_name(i), "class": t.t(defs.party.class_ids[i]),
-		"class_color": BattleCard.CLASS_COLORS.get(defs.party.class_ids[i], Color(0.7, 0.7, 0.7)),
+		"name": menu.member_name(i), "class": t.t(m.class_id),
+		"class_color": BattleCard.CLASS_COLORS.get(m.class_id, Color(0.7, 0.7, 0.7)),
 		"level": top.level_text, "hp": top.hp_text, "tp": top.tp_text,
 		"stats": stats, "gear": gear, "equip": equip, "mark": cursor, "preview": preview,
 	}
@@ -415,7 +415,7 @@ func class_table(id: String) -> Array:
 	var e := menu.state.defs.battle.equip(id)
 	var out := []
 	var seen := {}
-	for cid in menu.state.defs.party.class_ids:
+	for cid in PartyNames.class_ids(menu.state):
 		if seen.has(cid):
 			continue
 		seen[cid] = true
@@ -434,6 +434,7 @@ func notice_changed() -> void:
 func profile_if(item_id: String) -> Dictionary:
 	var m := menu.current_member()
 	var copy := PartyState.Member.new(m.id, m.max_hp, m.hp, m.max_tp, m.tp)
+	copy.class_id = m.class_id
 	copy.level = m.level
 	copy.exp = m.exp
 	copy.skills = m.skills.duplicate()

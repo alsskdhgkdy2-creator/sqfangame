@@ -333,6 +333,12 @@
     "feet",
     "accessory"
   ],
+  "start_equip": [
+    "equip.twin_edge",
+    "equip.padded_coat",
+    "equip.grip_gloves",
+    null
+  ],
   "tree": [
     {
       "skill": "skill.blade_duelist.high_slash",

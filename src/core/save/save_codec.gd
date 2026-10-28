@@ -1,14 +1,14 @@
-## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3, 8판 M3 A4, 9판 M3 A5, 10판 M3 A6). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
+## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3, 8판 M3 A4, 9판 M3 A5, 10판 M3 A6, 11판 M3 A7). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
 class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 10
-const RULES := "m3o"
-## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~9판은 읽을 때 10판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1~A6).
+const SCHEMA := 11
+const RULES := "m3r"
+## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~10판은 읽을 때 11판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1~A7).
 ## 가방 합계(공용 60칸, D31)는 어느 판에서도 검사하지 않는다: 옛 저장이 60을 넘어도 그대로 읽고(지우지 않는다), 새로 얻는 길만
 ## BagRules 가 막는다(M3 A4 설계 §3.3). 종류마다의 범위(소모품·장비 1~99, 소재 1~9999)만 본다.
-const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i", 9: "m3g", 10: "m3o"}
+const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i", 9: "m3g", 10: "m3o", 11: "m3r"}
 ## 7·8판 층 기록의 world 키(M3 A3: 연 잠긴 문·연 보물상자가 더해졌다). 6판까지는 앞의 둘만 보고 다른 키는 보지 않는다.
 const WORLD_KEYS_V7 := ["shortcuts_open", "passages_found", "locks_open", "chests_opened"]
 ## 9판 층 기록의 world 키(M3 A5: 오늘 쓴 채집 횟수 gather_used 가 더해졌다). 정확히 이 다섯이다.
@@ -28,8 +28,12 @@ const FLOOR_STATE_KEYS := ["world", "knowledge", "annotation"]
 const V1_MEMBERS := [["holo_knight", 60], ["blade_duelist", 52], ["rail_ranger", 46], ["nano_medic", 42], ["glyph_wizard", 40]]
 ## 2판 검사에 쓰는 고정 대원 표(07 §8.4 2단계): [id, 최대 HP, 최대 TP], 칸 순서(06 §6.1). 정의에서 읽지 않는다.
 const V2_MEMBERS := [["holo_knight", 60, 30], ["blade_duelist", 52, 32], ["blade_duelist_2", 52, 32], ["nano_medic", 42, 54], ["glyph_wizard", 40, 60]]
-## 3판 대원 객체의 키(07 §8.3).
+## 3~10판 대원 객체의 키(07 §8.3).
 const MEMBER_KEYS := ["id", "hp", "tp", "level", "exp", "skills", "equip"]
+## 11판 대원 객체의 키(M3 A7 설계 §3.2): 길드 값(이름·직업·외형·열)이 더해졌다. 파티와 길드가 같은 모양이다.
+const MEMBER_KEYS_V11 := ["id", "name", "class", "look", "row", "hp", "tp", "level", "exp", "skills", "equip"]
+## 11판 guild 객체의 키.
+const GUILD_KEYS := ["members", "serial"]
 ## 4판 shop 객체의 키(08 §4).
 const SHOP_KEYS := ["sold", "pool", "bought"]
 const MAX_SAFE_INT := 9007199254740992  # 2^53
@@ -131,10 +135,10 @@ static func now_utc() -> String:
 static func state_to_dict(s: ExplorationState) -> Dictionary:
 	var members: Array = []
 	for m in s.party.members:
-		var equip := []
-		for id in m.equip:
-			equip.append(id if not id.is_empty() else null)
-		members.append({"id": m.id, "hp": m.hp, "tp": m.tp, "level": m.level, "exp": m.exp, "skills": m.skills.duplicate(), "equip": equip})
+		members.append(member_to_dict(m))
+	var guild: Array = []
+	for m in s.guild.members:
+		guild.append(member_to_dict(m))
 	var floor_states := {}
 	for id in s.floor_states:
 		floor_states[id] = floor_state_to_dict(s.floor_states[id])
@@ -143,6 +147,7 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 		"day": s.day,
 		"floor": s.floor_def.id,
 		"party": {"at": [s.party.at.x, s.party.at.y], "facing": Dir.name_of(s.party.facing), "members": members},
+		"guild": {"members": guild, "serial": s.guild.serial},
 		"floor_states": floor_states,
 		"encounter": {"danger": s.encounter.danger, "threshold": s.encounter.threshold, "pending": s.encounter.pending},
 		"materials": s.materials.duplicate(),
@@ -156,6 +161,15 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 		"steps": s.steps,
 		"wiped": s.wiped,
 	}
+
+
+## 11판 대원 하나(M3 A7). 이름은 등록한 이름, 없으면 null(기본 다섯의 이름 키는 정의에서 온다).
+static func member_to_dict(m: PartyState.Member) -> Dictionary:
+	var equip := []
+	for id in m.equip:
+		equip.append(id if not id.is_empty() else null)
+	return {"id": m.id, "name": m.name if not m.name.is_empty() else null, "class": m.class_id, "look": m.look, "row": m.row,
+		"hp": m.hp, "tp": m.tp, "level": m.level, "exp": m.exp, "skills": m.skills.duplicate(), "equip": equip}
 
 
 ## 한 층 기록 → {world, knowledge, annotation}(4판까지의 같은 이름 객체와 모양이 같다). 7판 world 는 연 잠긴 문·연 상자 id 도,
@@ -265,6 +279,8 @@ static func _decode_doc(doc: Dictionary, defs: GameDefs) -> LoadResult:
 			return migrate_v8(doc, defs)
 		9:
 			return migrate_v9(doc, defs)
+		10:
+			return migrate_v10(doc, defs)
 	var s := ExplorationState.new()
 	r.error = _read_state(doc["state"], defs, [], SCHEMA, s)
 	if not r.error.is_empty():
@@ -463,6 +479,23 @@ static func migrate_v9(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
+## 10판 → 11판(M3 A7 설계 §3.3): 10판 규칙으로 다 검사(대원은 정의 칸 순서, 길드 값은 기본 다섯의 칸 i 값으로 채운다, 길드는 빔) →
+## 원본 saved_at·generation 으로 11판 encode → 11판 읽기를 그대로 거친 결과만 돌려준다.
+static func migrate_v10(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, [], 10, old)
+	if not err.is_empty():
+		r.error = "10판 검사 실패: " + err
+		return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "10판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 10
+	return again
+
+
 ## 문서의 지금 층이 지금 묶음에는 없고 은퇴한 묶음(defs.retired)에 있는지(M3 A3). 두 묶음의 층 ID 는 겹치지 않는다(GameDefs 가 본다).
 static func _names_retired(doc: Dictionary, defs: GameDefs) -> bool:
 	if defs.retired == null:
@@ -473,7 +506,7 @@ static func _names_retired(doc: Dictionary, defs: GameDefs) -> bool:
 
 ## 은퇴한 층(시험 층)의 저장을 새 미궁으로 옮긴다(M3 A3, 설계 §4.3).
 ## ① 은퇴한 묶음의 정의로 그 판의 길(1~6판 이전 포함)을 그대로 다 검사한다 — 실패하면 「옛 시험 층 저장 검사 실패」, 아무것도 바꾸지 않는다.
-## ② 새 상태: 대원(레벨·경험치·스킬·장비·HP·TP)·소지금·소재·가방·상점·귀중품·날·난수·걸음·한계값은 그대로, 위험도 0, 전투 대기는 버린다.
+## ② 새 상태: 대원(레벨·경험치·스킬·장비·HP·TP)·길드(대기 대원·번호, M3 A7)·소지금·소재·가방·상점·귀중품·날·난수·걸음·한계값은 그대로, 위험도 0, 전투 대기는 버린다.
 ##    소모품(M3 A4)도 그대로 옮긴다(60칸을 넘은 가방도 지우지 않는다). 마을(첫 층 시작 칸)에 둔다. 전멸한 저장은 첫 층 시작 칸에서 전멸 그대로(전멸 창이 뜬다). 층 기록은 첫 층의 빈 것 하나 —
 ##    시험 층의 세계·방문 기록·지도 그림은 남지 않는다(화면이 알린다).
 ## ③ 원본 saved_at·generation 으로 지금 판 encode → 지금 정의로 다시 읽은 결과만 돌려준다(from_schema 는 원본 판, relocated 참).
@@ -491,6 +524,7 @@ static func _relocate(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	n.party.at = first.start_at
 	n.party.facing = first.start_facing
 	n.party.members = o.party.members
+	n.guild = o.guild
 	n.materials = o.materials.duplicate()
 	n.gear_bag = o.gear_bag.duplicate()
 	n.money = o.money
@@ -830,6 +864,8 @@ static func _read_party(d: Dictionary, s: ExplorationState, table: Array, schema
 	s.party.facing = Dir.from_name(p.get("facing"))
 	if s.party.facing < 0:
 		return "party.facing 이 N·E·S·W 가 아니다"
+	if schema >= 11:
+		return _read_members_v11(p, d, s)
 	if schema >= 3:
 		return _read_members_v3(p, s)
 	if typeof(p.get("members")) != TYPE_ARRAY or p["members"].size() != table.size():
@@ -847,16 +883,16 @@ static func _read_party(d: Dictionary, s: ExplorationState, table: Array, schema
 			tp = to_int(m.get("tp"))
 			if tp == null or tp < 0 or tp > def["max_tp"]:
 				return "party.members[%d].tp 가 0~%d 정수가 아니다" % [i, def["max_tp"]]
-		s.party.members.append(PartyState.Member.new(def["id"], def["max_hp"], hp, def["max_tp"], tp))
+		var mem := PartyState.Member.new(def["id"], def["max_hp"], hp, def["max_tp"], tp)
+		if i < s.defs.party.ids.size():
+			GrowthRules.fill_default(s.defs, i, mem)  # M3 A7: 1·2판 임시 대원도 칸 i 의 직업·열(이전이 새 대원으로 바꾼다)
+		s.party.members.append(mem)
 	return ""
 
 
-## 3판 대원(07 §8.3): 키가 정확히 MEMBER_KEYS, 성장 필드를 먼저 읽고 검사한 뒤(최대 HP·TP 가 여기서 정해진다) hp·tp.
-## 배운 스킬·장비 판정은 배분·장착 규칙과 같은 함수(GrowthRules.skills_problem·equip_problem)다.
+## 3~10판 대원(07 §8.3): 키가 정확히 MEMBER_KEYS, 정의 칸 순서의 ID. 길드 값은 기본 다섯의 칸 i 값(M3 A7). 성장 필드는 _read_growth.
 static func _read_members_v3(p: Dictionary, s: ExplorationState) -> String:
 	var defs := s.defs
-	var db := defs.battle
-	var g := db.growth
 	var n := defs.party.ids.size()
 	if typeof(p.get("members")) != TYPE_ARRAY or p["members"].size() != n:
 		return "party.members 가 정의 데이터의 %d명과 다르다" % n
@@ -865,63 +901,169 @@ static func _read_members_v3(p: Dictionary, s: ExplorationState) -> String:
 		var path := "party.members[%d]" % i
 		if typeof(m) != TYPE_DICTIONARY or not _is_str(m.get("id"), defs.party.ids[i]):
 			return "%s 의 id 가 정의 데이터(%s)와 다르다" % [path, defs.party.ids[i]]
-		for k in MEMBER_KEYS:
-			if not m.has(k):
-				return "%s.%s 가 없다" % [path, k]
-		for k in m:
-			if not MEMBER_KEYS.has(k):
-				return "%s.%s 는 모르는 필드다" % [path, str(k)]
-		var c := defs.class_of(i)
-		var level: Variant = to_int(m["level"])
-		if level == null or level < 1 or level > g.level_cap:
-			return "%s.level 이 정수 1~%d 가 아니다" % [path, g.level_cap]
-		var xp: Variant = to_int(m["exp"])
-		if not BattleLimits.in_range("exp_total", xp):
-			return "%s.exp 가 정수 %s 가 아니다" % [path, BattleLimits.range_text("exp_total")]
-		if level < g.level_cap and (xp < g.cum(level) or xp >= g.cum(level + 1)):
-			return "%s.exp 가 레벨 %d 의 범위(%d 이상 %d 미만)가 아니다" % [path, level, g.cum(level), g.cum(level + 1)]
-		if level == g.level_cap and xp != g.cum(level):
-			return "%s.exp 가 레벨 상한의 누적 경험치 %d 이 아니다" % [path, g.cum(level)]
-		if typeof(m["skills"]) != TYPE_DICTIONARY:
-			return "%s.skills 가 객체가 아니다" % path
-		var skills := {}
-		for sid in m["skills"]:
-			var lv: Variant = to_int(m["skills"][sid])
-			if lv == null:
-				return "%s.skills.%s 가 정수가 아니다" % [path, str(sid)]
-			skills[sid] = lv
-		var bad := GrowthRules.skills_problem(db, c, level, skills)
-		if not bad.is_empty():
-			return "%s.skills%s: %s" % [path, "" if bad[0].is_empty() else "." + bad[0], bad[1]]
-		var ev: Variant = m["equip"]
-		if typeof(ev) != TYPE_ARRAY or ev.size() != BattleLimits.EQUIP_SLOTS:
-			return "%s.equip 이 길이 %d 의 배열이 아니다" % [path, BattleLimits.EQUIP_SLOTS]
-		var equip: Array[String] = []
-		for j in ev.size():
-			if ev[j] == null:
-				equip.append("")
-			elif typeof(ev[j]) != TYPE_STRING or db.equip(ev[j]) == null:
-				return "%s.equip[%d] 가 null 또는 장비 ID 가 아니다" % [path, j]
-			else:
-				equip.append(ev[j])
-		bad = GrowthRules.equip_problem(db, c, equip)
-		if not bad.is_empty():
-			return "%s.equip[%d]: %s" % [path, bad[0], bad[1]]
+		var err := _exact_keys(m, MEMBER_KEYS, path)
+		if not err.is_empty():
+			return err
 		var mem := PartyState.Member.new(defs.party.ids[i])
-		mem.level = level
-		mem.exp = xp
-		mem.skills = skills
-		mem.equip = equip
-		GrowthRules.refresh_max(defs, i, mem)
-		var hp: Variant = to_int(m["hp"])
-		if hp == null or hp < 0 or hp > mem.max_hp:
-			return "%s.hp 가 0~%d 정수가 아니다" % [path, mem.max_hp]
-		var tp: Variant = to_int(m["tp"])
-		if tp == null or tp < 0 or tp > mem.max_tp:
-			return "%s.tp 가 0~%d 정수가 아니다" % [path, mem.max_tp]
-		mem.hp = hp
-		mem.tp = tp
+		GrowthRules.fill_default(defs, i, mem)
+		err = _read_growth(m, path, defs, mem)
+		if not err.is_empty():
+			return err
 		s.party.members.append(mem)
+	return ""
+
+
+## 11판 파티·길드(M3 A7 설계 §3.2). 파티 1~5명(전열 먼저, 열마다 ROW_MAX 까지), 길드 대원은 같은 모양, ID 는 명부 전체에서 하나,
+## 기본 다섯의 ID 이거나 r<번호>(번호 ≤ serial), 명부 GuildRules.GUILD_MAX 까지, 등록한 이름은 이름 규칙을 지키고 서로 다르다.
+static func _read_members_v11(p: Dictionary, d: Dictionary, s: ExplorationState) -> String:
+	var g: Variant = d.get("guild")
+	if typeof(g) != TYPE_DICTIONARY:
+		return "guild 가 객체가 아니다"
+	var err := _exact_keys(g, GUILD_KEYS, "guild")
+	if not err.is_empty():
+		return err
+	var serial: Variant = to_int(g["serial"])
+	if serial == null or typeof(g["serial"]) == TYPE_BOOL or serial < 0 or serial > GuildRules.SERIAL_MAX:
+		return "guild.serial 이 정수 0~%d 가 아니다" % GuildRules.SERIAL_MAX
+	s.guild.serial = serial
+	var pm: Variant = p.get("members")
+	if typeof(pm) != TYPE_ARRAY or pm.is_empty() or pm.size() > BattleLimits.PARTY_SIZE:
+		return "party.members 가 1~%d명의 배열이 아니다" % BattleLimits.PARTY_SIZE
+	if typeof(g["members"]) != TYPE_ARRAY:
+		return "guild.members 가 배열이 아니다"
+	if pm.size() + g["members"].size() > GuildRules.GUILD_MAX:
+		return "등록한 대원이 %d명을 넘는다" % GuildRules.GUILD_MAX
+	var ids := {}
+	var names := {}
+	for part in [["party.members", pm, s.party.members], ["guild.members", g["members"], s.guild.members]]:
+		var list: Array = part[1]
+		for i in list.size():
+			var path := "%s[%d]" % [part[0], i]
+			var mem := PartyState.Member.new()
+			err = _read_member_v11(list[i], path, s, mem)
+			if not err.is_empty():
+				return err
+			if ids.has(mem.id):
+				return "%s.id %s 가 명부에 둘 있다" % [path, mem.id]
+			ids[mem.id] = true
+			if not mem.name.is_empty():
+				if names.has(mem.name):
+					return "%s.name 「%s」 이 명부에 둘 있다" % [path, mem.name]
+				names[mem.name] = true
+			part[2].append(mem)
+	var per_row := {"front": 0, "back": 0}
+	for i in s.party.members.size():
+		var row := s.party.members[i].row
+		per_row[row] += 1
+		if row == "front" and per_row["back"] > 0:
+			return "party.members[%d] 전열 대원이 후열 대원 뒤에 있다" % i
+		if per_row[row] > BattleLimits.ROW_MAX:
+			return "party.members: %s 열이 %d명을 넘는다" % [row, BattleLimits.ROW_MAX]
+	return ""
+
+
+## 11판 대원 하나: 키가 정확히 MEMBER_KEYS_V11. 길드 값을 먼저 읽고(직업이 성장 검사의 기준) 성장 필드는 _read_growth.
+static func _read_member_v11(m: Variant, path: String, s: ExplorationState, mem: PartyState.Member) -> String:
+	var defs := s.defs
+	if typeof(m) != TYPE_DICTIONARY:
+		return "%s 가 객체가 아니다" % path
+	var err := _exact_keys(m, MEMBER_KEYS_V11, path)
+	if not err.is_empty():
+		return err
+	if typeof(m["id"]) != TYPE_STRING:
+		return "%s.id 가 문자열이 아니다" % path
+	var id: String = m["id"]
+	var di := defs.party.ids.find(id)
+	var n := GuildRules.recruit_number(id)
+	if di < 0 and (n < 1 or n > s.guild.serial):
+		return "%s.id %s 가 기본 대원도 r1~r%d 도 아니다" % [path, id, s.guild.serial]
+	mem.id = id
+	if di >= 0:
+		mem.name_key = defs.party.name_keys[di]
+	if m["name"] == null:
+		if di < 0:
+			return "%s.name 이 없다(등록한 대원은 이름이 있어야 한다)" % path
+	elif typeof(m["name"]) != TYPE_STRING or not GuildRules.name_problem(m["name"]).is_empty():
+		return "%s.name 이 이름 규칙(1~%d자, 한글·영문·숫자, 낱말 사이 공백 하나)에 맞지 않다" % [path, GuildRules.NAME_MAX]
+	else:
+		mem.name = m["name"]
+	if typeof(m["class"]) != TYPE_STRING or not defs.battle.classes.has(m["class"]):
+		return "%s.class 가 없는 직업이다: %s" % [path, str(m["class"])]
+	mem.class_id = m["class"]
+	var look: Variant = to_int(m["look"])
+	if look == null or typeof(m["look"]) == TYPE_BOOL or look < 0 or look >= GuildRules.LOOKS:
+		return "%s.look 이 정수 0~%d 가 아니다" % [path, GuildRules.LOOKS - 1]
+	mem.look = look
+	if not BattleDb.ROWS.has(m["row"]):
+		return "%s.row 가 front·back 이 아니다" % path
+	mem.row = m["row"]
+	return _read_growth(m, path, defs, mem)
+
+
+static func _exact_keys(m: Dictionary, keys: Array, path: String) -> String:
+	for k in keys:
+		if not m.has(k):
+			return "%s.%s 가 없다" % [path, k]
+	for k in m:
+		if not keys.has(k):
+			return "%s.%s 는 모르는 필드다" % [path, str(k)]
+	return ""
+
+
+## 대원 성장 필드(3판부터, 07 §8.3): 레벨·누적 경험치·배운 스킬·장비를 대원 직업(mem.class_id)으로 검사해 넣고, 최대 HP·TP 를 정한 뒤 hp·tp.
+## 배운 스킬·장비 판정은 배분·장착 규칙과 같은 함수(GrowthRules.skills_problem·equip_problem)다.
+static func _read_growth(m: Dictionary, path: String, defs: GameDefs, mem: PartyState.Member) -> String:
+	var db := defs.battle
+	var g := db.growth
+	var c := defs.class_def(mem)
+	var level: Variant = to_int(m["level"])
+	if level == null or level < 1 or level > g.level_cap:
+		return "%s.level 이 정수 1~%d 가 아니다" % [path, g.level_cap]
+	var xp: Variant = to_int(m["exp"])
+	if not BattleLimits.in_range("exp_total", xp):
+		return "%s.exp 가 정수 %s 가 아니다" % [path, BattleLimits.range_text("exp_total")]
+	if level < g.level_cap and (xp < g.cum(level) or xp >= g.cum(level + 1)):
+		return "%s.exp 가 레벨 %d 의 범위(%d 이상 %d 미만)가 아니다" % [path, level, g.cum(level), g.cum(level + 1)]
+	if level == g.level_cap and xp != g.cum(level):
+		return "%s.exp 가 레벨 상한의 누적 경험치 %d 이 아니다" % [path, g.cum(level)]
+	if typeof(m["skills"]) != TYPE_DICTIONARY:
+		return "%s.skills 가 객체가 아니다" % path
+	var skills := {}
+	for sid in m["skills"]:
+		var lv: Variant = to_int(m["skills"][sid])
+		if lv == null:
+			return "%s.skills.%s 가 정수가 아니다" % [path, str(sid)]
+		skills[sid] = lv
+	var bad := GrowthRules.skills_problem(db, c, level, skills)
+	if not bad.is_empty():
+		return "%s.skills%s: %s" % [path, "" if bad[0].is_empty() else "." + bad[0], bad[1]]
+	var ev: Variant = m["equip"]
+	if typeof(ev) != TYPE_ARRAY or ev.size() != BattleLimits.EQUIP_SLOTS:
+		return "%s.equip 이 길이 %d 의 배열이 아니다" % [path, BattleLimits.EQUIP_SLOTS]
+	var equip: Array[String] = []
+	for j in ev.size():
+		if ev[j] == null:
+			equip.append("")
+		elif typeof(ev[j]) != TYPE_STRING or db.equip(ev[j]) == null:
+			return "%s.equip[%d] 가 null 또는 장비 ID 가 아니다" % [path, j]
+		else:
+			equip.append(ev[j])
+	bad = GrowthRules.equip_problem(db, c, equip)
+	if not bad.is_empty():
+		return "%s.equip[%d]: %s" % [path, bad[0], bad[1]]
+	mem.level = level
+	mem.exp = xp
+	mem.skills = skills
+	mem.equip = equip
+	GrowthRules.refresh_max(defs, -1, mem)
+	var hp: Variant = to_int(m["hp"])
+	if hp == null or hp < 0 or hp > mem.max_hp:
+		return "%s.hp 가 0~%d 정수가 아니다" % [path, mem.max_hp]
+	var tp: Variant = to_int(m["tp"])
+	if tp == null or tp < 0 or tp > mem.max_tp:
+		return "%s.tp 가 0~%d 정수가 아니다" % [path, mem.max_tp]
+	mem.hp = hp
+	mem.tp = tp
 	return ""
 
 

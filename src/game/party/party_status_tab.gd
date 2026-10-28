@@ -255,7 +255,7 @@ func refresh() -> void:
 	var m := menu.current_member()
 	var p := GrowthRules.profile(defs, i, m)
 	var g := defs.battle.growth
-	var c := defs.class_of(i)
+	var c := defs.class_def(m)
 	var t := menu.texts
 	var at_cap := m.level >= g.level_cap
 	var next_n := 0 if at_cap else g.cum(m.level + 1) - m.exp
@@ -278,8 +278,8 @@ func refresh() -> void:
 	for line in received:
 		received_fs.append(side_font_size(side, line))
 	drawn = {
-		"name": menu.member_name(i), "class": t.t(defs.party.class_ids[i]),
-		"class_color": BattleCard.CLASS_COLORS.get(defs.party.class_ids[i], Color(0.7, 0.7, 0.7)),
+		"name": menu.member_name(i), "class": t.t(m.class_id),
+		"class_color": BattleCard.CLASS_COLORS.get(m.class_id, Color(0.7, 0.7, 0.7)),
 		"level": t.t("party.level", {"level": m.level}),
 		"hp": t.t("party.hp", {"hp": m.hp, "max": m.max_hp}), "tp": t.t("party.tp", {"tp": m.tp, "max": m.max_tp}),
 		"next": t.t("party.exp_max") if at_cap else t.t("party.exp_next", {"n": next_n}),

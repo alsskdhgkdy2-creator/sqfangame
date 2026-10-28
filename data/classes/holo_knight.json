@@ -334,6 +334,12 @@
     "feet",
     "accessory"
   ],
+  "start_equip": [
+    "equip.training_sword",
+    "equip.training_shield",
+    "equip.padded_coat",
+    null
+  ],
   "tree": [
     {
       "skill": "skill.holo_knight.front_guard",

@@ -366,7 +366,8 @@ func test_generation_after_recovery() -> void:
 ## 5판(M3 A1): 층 기록은 state.floor_states.<층 ID> 아래(그 층 기록 객체와 그 키 셋도 필수).
 const FS := ["state", "floor_states", "fx_review"]
 const RECORDS := [
-	[], ["state"], ["state", "party"], ["state", "party", "members", 0], ["state", "floor_states"], FS, FS + ["world"], FS + ["knowledge"],
+	[], ["state"], ["state", "party"], ["state", "party", "members", 0], ["state", "guild"], ["state", "guild", "members", 0],
+	["state", "floor_states"], FS, FS + ["world"], FS + ["knowledge"],
 	FS + ["annotation"], FS + ["annotation", "icons", "1:0"], ["state", "encounter"], ["state", "rng"],
 ]
 
@@ -379,6 +380,11 @@ func _rich_state() -> ExplorationState:
 		ExplorationRules.apply(s, A.FORWARD, "full")  # (4,0) → 지름길 v:5:0 열기 → (5,0)
 	s.annotation.set_icon(Vector2i(1, 0), "arrow", Dir.E)
 	s.annotation.set_memo(Vector2i(2, 0), "메모")
+	# M3 A7: 길드 대원 하나(11판 guild.members 의 모든 경로가 생기게). 등록은 마을에서만이라 잠시 마을로 둔다.
+	s.location = ExplorationState.TOWN
+	var ev := GuildRules.register(s, "class.nano_medic", 1, "길드원")
+	s.location = ExplorationState.LABYRINTH
+	assert(ev[0]["type"] == "registered", str(ev))
 	return s
 
 
@@ -439,19 +445,26 @@ func test_every_node_rejects_wrong_container_type() -> void:
 				continue
 			var doc: Dictionary = JSON.parse_string(original)
 			_at(doc, path.slice(0, -1))[path[-1]] = wrong
+			if typeof(wrong) == TYPE_STRING and path.size() == 5 and str(path[4]) == "name" and str(path[2]) == "members":
+				# M3 A7: 대원 이름은 null(기본 다섯) 또는 등록한 이름이다. 「x」는 맞는 이름이라 거부가 아니라 그 이름으로 받는다.
+				var rn := SaveCodec.decode(JSON.stringify(doc), Fx.defs(_f()))
+				var list: Array = rn.state.party.members if rn.ok() and path[1] == "party" else (rn.state.guild.members if rn.ok() else [])
+				check(rn.ok() and list[path[3]].name == "x", "%s → \"x\": 그 이름으로 받는다 %s" % [str(path), rn.error])
+				continue
 			if wrong == null and _is_equip_slot(path):
 				# 장비 칸의 null 은 정의된 빈 칸이다(07 §8.2): 거부가 아니라 「그 칸을 비운 상태」로 받는다.
 				var r := SaveCodec.decode(JSON.stringify(doc), Fx.defs(_f()))
-				check(r.ok() and r.state.party.members[path[3]].equip[path[5]] == "", "%s → null: 빈 칸으로 받는다 %s" % [str(path), r.error])
+				var ms: Array = (r.state.party.members if path[1] == "party" else r.state.guild.members) if r.ok() else []
+				check(r.ok() and ms[path[3]].equip[path[5]] == "", "%s → null: 빈 칸으로 받는다 %s" % [str(path), r.error])
 				continue
 			_check_rejected(original, doc, "%s → %s" % [str(path), str(wrong)])
 			n += 1
 	check(n >= 150, "자료형 바꾸기 %d가지 확인" % n)
 
 
-## state.party.members[i].equip[j] 경로인지.
+## state.party.members[i].equip[j] 또는 state.guild.members[i].equip[j](M3 A7) 경로인지.
 func _is_equip_slot(path: Array) -> bool:
-	return path.size() == 6 and path[0] == "state" and path[1] == "party" and path[2] == "members" and str(path[4]) == "equip"
+	return path.size() == 6 and path[0] == "state" and (path[1] == "party" or path[1] == "guild") and path[2] == "members" and str(path[4]) == "equip"
 
 
 ## JSON 숫자는 실수로 읽히므로 정수·실수를 같은 종류로 본다.

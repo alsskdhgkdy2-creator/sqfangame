@@ -415,7 +415,7 @@ func cancel_pointers() -> void:
 ## 파티 카드를 지금 상태로 새로 만든다(열 때: 새 게임·불러오기로 파티가 바뀌었을 수 있다).
 func _setup_cards() -> void:
 	display = BattleDisplay.from_party(state, texts)
-	cards.setup(display, state.defs.party.class_ids)
+	cards.setup(display, PartyNames.class_ids(state))
 	for c in cards.cards:
 		var slot := cards.cards.find(c)
 		c.activated.connect(func() -> void: handle("member", slot))
@@ -1175,7 +1175,7 @@ func debug_info(css: Callable) -> Dictionary:
 		return {"open": false}
 	var buttons := {}
 	var nodes := {}
-	var tree := state.defs.class_of(member).tree
+	var tree := state.class_of(member).tree
 	for b in visible_buttons():
 		var r := clipped_rect(b)
 		var local := r.get_center() - (b.get_global_position() - get_global_position())

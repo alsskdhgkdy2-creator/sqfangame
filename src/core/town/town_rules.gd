@@ -16,7 +16,7 @@ const INN_PER_LEVEL := 10
 static var new_day_hook := Callable()
 
 
-## 숙박비: INN_PER_LEVEL × 대원 최고 레벨(쓰러진 대원도 센다).
+## 숙박비: INN_PER_LEVEL × 파티 대원 최고 레벨(쓰러진 대원도 센다, M3 A7: 길드에만 있는 대원은 세지 않는다).
 static func inn_price(s: ExplorationState) -> int:
 	var top := 1
 	for m in s.party.members:
@@ -25,7 +25,7 @@ static func inn_price(s: ExplorationState) -> int:
 
 
 ## 하룻밤 묵는다: 마을에서만. 돈이 모자라거나 날이 끝이면 막힘(아무것도 바꾸지 않는다).
-## 받아들이면 소지금 − 값, 모든 대원 HP·TP 가득(쓰러진 대원도 일어난다), 날 +1, new_day.
+## 받아들이면 소지금 − 값, 파티 대원 모두 HP·TP 가득(쓰러진 대원도 일어난다, M3 A7: 길드에만 있는 대원은 그대로), 날 +1, new_day.
 static func stay(s: ExplorationState) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	if not s.in_town():

@@ -68,7 +68,9 @@ static func apply(s: ExplorationState, action: int, automap: String) -> Array[Di
 		events.append({"type": "rejected", "reason": "wiped" if s.wiped else "pending"})
 		return events
 	if s.in_town():
-		if action == Action.ENTER:
+		if action == Action.ENTER and s.party.all_down():
+			events.append({"type": "blocked", "reason": "party_down"})  # M3 A7: 쓰러진 대원만으로 짠 파티는 들어가지 못한다
+		elif action == Action.ENTER:
 			_enter(s, events, automap)
 		else:
 			events.append({"type": "rejected", "reason": "town"})

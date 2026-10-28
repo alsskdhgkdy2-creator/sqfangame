@@ -68,9 +68,8 @@ static func from_party(state: ExplorationState, text_db: TextDb) -> BattleDispla
 	return d
 
 
-## 탐색 상태의 파티 값으로 대원 칸을 다시 맞춘다(편성 열은 파티 정의의 열).
+## 탐색 상태의 파티 값으로 대원 칸을 다시 맞춘다(편성 열은 대원의 열, M3 A7).
 func sync_party(state: ExplorationState) -> void:
-	var defs := state.defs.party
 	var fresh := party.size() != state.party.members.size()
 	if fresh:
 		party.clear()
@@ -80,8 +79,8 @@ func sync_party(state: ExplorationState) -> void:
 		u.side = BattleUnit.PARTY
 		u.slot = i
 		u.def_id = m.id
-		u.name = texts.t(defs.name_keys[i])
-		u.row = defs.rows[i] if i < defs.rows.size() else "front"
+		u.name = PartyNames.display_name(texts, m)
+		u.row = m.row
 		u.hp = m.hp
 		u.max_hp = m.max_hp
 		u.tp = m.tp
@@ -105,7 +104,7 @@ func sync(state: ExplorationState) -> void:
 		counts[u.def_id] = int(counts.get(u.def_id, 0)) + 1
 	var seen := {}
 	for u in b.party:
-		party.append(_unit_of(u, texts.t(u.name_key)))
+		party.append(_unit_of(u, u.name if not u.name.is_empty() else texts.t(u.name_key)))
 	for u in b.enemies:
 		var n := texts.t(u.name_key)
 		if counts[u.def_id] > 1:

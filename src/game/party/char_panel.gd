@@ -66,8 +66,8 @@ func show_member(state: ExplorationState, texts: TextDb, i: int, after: Variant,
 		var id: String = m.equip[slot]
 		equip.append([PartyNames.slot_name(texts, slot), texts.t("party.slot.empty") if id.is_empty() else PartyNames.item_name(state, texts, id),
 			id.is_empty()])
-	drawn = {"name": top.name_text, "class": texts.t(defs.party.class_ids[i]),
-		"class_color": BattleCard.CLASS_COLORS.get(defs.party.class_ids[i], Color(0.7, 0.7, 0.7)), "equip": equip, "mark": mark,
+	drawn = {"name": top.name_text, "class": texts.t(m.class_id),
+		"class_color": BattleCard.CLASS_COLORS.get(m.class_id, Color(0.7, 0.7, 0.7)), "equip": equip, "mark": mark,
 		"dim_equip": dim_equip}
 	queue_redraw()
 

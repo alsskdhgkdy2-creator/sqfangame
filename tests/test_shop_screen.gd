@@ -482,6 +482,7 @@ func test_best_slot_follows_the_candidate_order_and_never_mutates_state() -> voi
 static func _profile_with(s: ExplorationState, i: int, slot: int, item: String) -> Dictionary:
 	var m := s.party.members[i]
 	var copy := PartyState.Member.new(m.id, m.max_hp, m.hp, m.max_tp, m.tp)
+	copy.class_id = m.class_id  # M3 A7: 직업은 대원이 가진다
 	copy.level = m.level
 	copy.exp = m.exp
 	copy.skills = m.skills.duplicate()

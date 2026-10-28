@@ -332,6 +332,12 @@
     "feet",
     "accessory"
   ],
+  "start_equip": [
+    "equip.glyph_stylus",
+    "equip.glyph_robe",
+    "equip.signal_charm",
+    null
+  ],
   "tree": [
     {
       "skill": "skill.glyph_wizard.heat_glyph",

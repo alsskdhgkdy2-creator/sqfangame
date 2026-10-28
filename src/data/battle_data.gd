@@ -22,7 +22,7 @@ const ROWS := ["front", "back"]
 const SKILL_COMMON := ["id", "name_key", "user", "effect", "range", "target", "parts", "priority", "speed", "levels"]
 ## 패시브(07 §4.3·§7.4)는 이 다섯 필드만 갖는다. 대상이 없어 EFFECT_TARGETS 에 넣지 않는다.
 const PASSIVE_KEYS := ["id", "name_key", "user", "effect", "levels"]
-const CLASS_KEYS := ["id", "name_key", "levels", "attack", "resist", "ailment_vuln", "bind_vuln", "equip_kinds", "tree"]
+const CLASS_KEYS := ["id", "name_key", "levels", "attack", "resist", "ailment_vuln", "bind_vuln", "equip_kinds", "start_equip", "tree"]
 const TREE_KEYS := ["skill", "pos", "requires", "min_level"]
 const EQUIP_KEYS := ["id", "name_key", "kind", "price", "atk", "matk", "def", "mdef", "stats", "resist", "ailment_vuln", "bind_vuln"]
 ## 소재: 설명 글(desc_key)은 M3 A5부터 필수다(소지품 설명 상자).
@@ -187,6 +187,8 @@ class ClassDef:
 	var attack: SkillDef
 	## 끼는 장비 종류(07 §5.2).
 	var equip_kinds: Array[String] = []
+	## 길드에 새로 등록한 대원의 장비 칸 넷(M3 A7, 빈 칸 ""). 장착 규칙은 _check_refs 가 본다.
+	var start_equip: Array[String] = ["", "", "", ""]
 	## 트리 항목 [{skill, pos: [열, 행], requires: [{skill, level}], min_level}] 트리 순서.
 	var tree: Array[Dictionary] = []
 	## 스킬 ID → tree 의 칸 번호.
@@ -1042,11 +1044,30 @@ func _read_class(ck: _Ck, d: Dictionary) -> void:
 	c.equip_kinds = ck.enum_set(d, "equip_kinds", "", BattleLimits.WEAPON_KINDS + BattleLimits.ARMOR_KINDS, false)
 	if not c.equip_kinds.is_empty() and not c.equip_kinds.any(func(k: String) -> bool: return BattleLimits.WEAPON_KINDS.has(k)):
 		ck.err("equip_kinds", "무기 종류(%s)가 하나 이상 있어야 한다" % ", ".join(BattleLimits.WEAPON_KINDS))
+	_read_start_equip(ck, d, c)
 	_read_tree(ck, d, c)
 	if c.id.is_empty() or not _claim(ck, c.id, ""):
 		return
 	classes[c.id] = c
 	class_ids.append(c.id)
+
+
+## 등록 장비(M3 A7): 길이 EQUIP_SLOTS, 칸마다 null 또는 equip. 장비 ID. 있는 장비인지·장착 규칙은 _check_refs.
+func _read_start_equip(ck: _Ck, d: Dictionary, c: ClassDef) -> void:
+	var v: Variant = d["start_equip"]
+	if typeof(v) != TYPE_ARRAY or v.size() != BattleLimits.EQUIP_SLOTS:
+		ck.err("start_equip", "길이 %d 의 배열이어야 한다(칸마다 장비 ID 또는 null)" % BattleLimits.EQUIP_SLOTS)
+		return
+	var out: Array[String] = []
+	for i in v.size():
+		if v[i] == null:
+			out.append("")
+		elif typeof(v[i]) != TYPE_STRING or not str(v[i]).begins_with("equip."):
+			ck.err("start_equip[%d]" % i, "null 또는 equip. 로 시작하는 장비 ID 여야 한다")
+			return
+		else:
+			out.append(v[i])
+	c.start_equip = out
 
 
 ## 트리(07 §4.2·§7.3): 항목마다 skill·pos·requires·min_level. 참조·순서·레벨 관계는 _check_tree 가 본다.
@@ -1359,6 +1380,15 @@ func _check_refs() -> void:
 		_check_tree(ck, c, tree_owner)
 		for sid in c.skills:
 			used_skills[sid] = true
+		var unknown := false
+		for i in c.start_equip.size():
+			if not c.start_equip[i].is_empty() and not equipment.has(c.start_equip[i]):
+				ck.err("start_equip[%d]" % i, "없는 장비 %s" % c.start_equip[i])
+				unknown = true
+		if not unknown:
+			var bad := GrowthRules.equip_problem(self, c, c.start_equip)
+			if not bad.is_empty():
+				ck.err("start_equip[%d]" % bad[0], bad[1])
 	for id in equipment_ids:
 		var e: EquipDef = equipment[id]
 		var ck := _Ck.new(self, _ids[id])

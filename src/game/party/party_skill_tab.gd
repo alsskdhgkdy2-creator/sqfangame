@@ -355,7 +355,7 @@ func commit_now() -> void:
 func _tree() -> Array[Dictionary]:
 	if menu.state == null:
 		return []
-	return menu.state.defs.class_of(menu.member).tree
+	return menu.state.class_of(menu.member).tree
 
 
 func _pos(i: int) -> Vector2i:
@@ -396,7 +396,7 @@ func refresh() -> void:
 	var defs := menu.state.defs
 	var i := menu.member
 	var m := menu.current_member()
-	var c := defs.class_of(i)
+	var c := defs.class_def(m)
 	var tree := c.tree
 	cursor = clampi(cursor, 0, maxi(0, tree.size() - 1))
 	while nodes.size() < tree.size():
@@ -449,7 +449,7 @@ func refresh() -> void:
 		_seen_area = tree_area.size
 		_show_cursor()
 	tree_window.queue_redraw()
-	_class_name = menu.texts.t(defs.party.class_ids[i])
+	_class_name = menu.texts.t(m.class_id)
 	class_tab.queue_redraw()
 	top.name_text = menu.member_name(i)
 	top.level_text = menu.texts.t("party.level", {"level": m.level})
@@ -474,7 +474,7 @@ func _refresh_desc() -> void:
 	var defs := menu.state.defs
 	var m := menu.current_member()
 	var s := defs.battle.skill(sid)
-	var e := defs.class_of(menu.member).tree_entry(sid)
+	var e := menu.state.class_of(menu.member).tree_entry(sid)
 	var now := int(m.skills.get(sid, 0)) + int(draft.get(sid, 0))
 	var lines: Array[String] = []
 	var head := menu.texts.t("party.skill.passive" if s.passive() else "party.skill.active")
@@ -575,7 +575,7 @@ func _draw_lines() -> void:
 	var levels := m.skills.duplicate()
 	for k in draft:
 		levels[k] = int(levels.get(k, 0)) + int(draft[k])
-	var c := menu.state.defs.class_of(menu.member)
+	var c := menu.state.class_of(menu.member)
 	var canvas := tree_area.content
 	SheetParts.begin(canvas)
 	var unmet: Array[PackedVector2Array] = []

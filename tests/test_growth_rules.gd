@@ -283,6 +283,7 @@ func test_battle_end_members_and_four_capped_cases() -> void:
 
 func _lv30(s: ExplorationState, i: int) -> PartyState.Member:
 	var m := PartyState.Member.new(s.party.members[i].id)
+	m.class_id = s.party.members[i].class_id  # M3 A7: 직업은 대원이 가진다
 	m.level = 30
 	m.skills = s.party.members[i].skills
 	m.equip = s.party.members[i].equip

@@ -56,6 +56,8 @@ var annotation: MapAnnotation:
 	set(v):
 		_here.annotation = v
 var party := PartyState.new()
+## 모험가 길드(M3 A7): 등록했지만 파티에 없는 대원과 등록 번호. 길드 규칙(GuildRules)만 바꾼다.
+var guild := GuildState.new()
 var encounter := EncounterState.new()
 var rng := GameRng.new()
 var steps := 0
@@ -65,6 +67,11 @@ var generation := 0
 
 ## 층이 정해지기 전의 빈 기록(새 상태 객체).
 var _here := FloorState.new()
+
+
+## 파티 칸 i 대원의 직업 정의(M3 A7: 직업은 대원이 가진다).
+func class_of(i: int) -> BattleDb.ClassDef:
+	return defs.class_def(party.members[i])
 
 
 func in_town() -> bool:

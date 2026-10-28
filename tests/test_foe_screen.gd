@@ -44,7 +44,7 @@ func test_interim_foe_moves_are_silent() -> void:
 	check_eq([snap["at"], snap["modal"], snap["toast"], snap["pending"], s.battle_layer.is_open()], [[PLAIN.x, PLAIN.y], "", "", false, false], "한 걸음: 창·알림 없음")
 	check_eq([s.state.world.foes["f1"].at, s.autosave_count], [Vector2i(13, 9), saves + 1], "숫양은 한 칸 움직였고 자동 저장 하나")
 	var doc := _auto_doc(s)
-	check_eq([doc["schema"], doc["state"]["floor_states"]["b1f"]["world"]["foes"]["f1"]["at"]], [10.0, [13.0, 9.0]], "자동 저장 10판에 숫양 자리")
+	check_eq([doc["schema"], doc["state"]["floor_states"]["b1f"]["world"]["foes"]["f1"]["at"]], [11.0, [13.0, 9.0]], "자동 저장 11판에 숫양 자리")
 	for i in 5:
 		await kit.press_key(KEY_E if i % 2 == 0 else KEY_Q)  # (9,17) ↔ (10,17) 옆걸음
 		await kit.frames(2)
@@ -79,7 +79,7 @@ func test_interim_contact_opens_battle() -> void:
 		check(false, "자동 저장에 battle 이 있다")
 		return
 	check_eq([doc["schema"], bat["foe"], bat["formation"], doc["state"]["floor_states"]["b1f"]["world"]["foes"]["f1"]["state"]],
-		[10.0, "f1", "formation.foe.ether_ram", "battle"], "자동 저장: 접촉 전투")
+		[11.0, "f1", "formation.foe.ether_ram", "battle"], "자동 저장: 접촉 전투")
 
 
 ## I3 (M-I3 숙박 자동 저장이 이벤트 하나(stayed)일 때만): 숙박에 FOE 되살아남(foe_respawned)이 붙어도 자동 저장하고, 숙소 화면은 그 이벤트를 넘긴다.

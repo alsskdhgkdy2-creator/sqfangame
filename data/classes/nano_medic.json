@@ -333,6 +333,12 @@
     "feet",
     "accessory"
   ],
+  "start_equip": [
+    "equip.nano_rod",
+    "equip.medic_coat",
+    "equip.sensor_cap",
+    null
+  ],
   "tree": [
     {
       "skill": "skill.nano_medic.nano_repair",

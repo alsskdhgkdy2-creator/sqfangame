@@ -21,9 +21,10 @@ const EVENT_TYPES := ["rejected", "exp", "level_up", "skills_learned", "max_chan
 ## 대원 하나의 능력치 묶음(새 사전. 부를 때마다 새 사전·새 일반 공격 사본).
 ## {stats, max_hp, max_tp, gear, resist, ailment_vuln, bind_vuln, attack: SkillDef, skills: {액티브 스킬 → 레벨}(트리 순),
 ##  weapon: 무기 장비 ID 또는 "", breakdown: {STR…LUC·max_hp·max_tp → {base, passive, equip, total}}}
-static func profile(defs: GameDefs, i: int, member: PartyState.Member) -> Dictionary:
+## i 는 칸 번호(옛 호출 모양 그대로, 쓰지 않는다): 직업은 대원이 가진다(M3 A7).
+static func profile(defs: GameDefs, _i: int, member: PartyState.Member) -> Dictionary:
 	var db := defs.battle
-	var c := defs.class_of(i)
+	var c := defs.class_def(member)
 	var row: Dictionary = c.levels[member.level]
 	var passive := {}
 	var skills := {}
@@ -100,6 +101,7 @@ static func refresh_max(defs: GameDefs, i: int, member: PartyState.Member) -> vo
 ## 새 게임(GameDefs.members)과 저장 이전이 같은 시작 값을 쓴다. 부를 때마다 새 객체·새 사전·새 배열.
 static func start_member(defs: GameDefs, i: int) -> PartyState.Member:
 	var m := PartyState.Member.new(defs.party.ids[i])
+	fill_default(defs, i, m)
 	m.level = defs.party.levels[i]
 	m.exp = defs.battle.growth.cum(m.level)
 	m.skills = defs.party.skills[i].duplicate()
@@ -108,6 +110,15 @@ static func start_member(defs: GameDefs, i: int) -> PartyState.Member:
 	m.hp = m.max_hp
 	m.tp = m.max_tp
 	return m
+
+
+## 기본 다섯 칸 i 의 길드 값(M3 A7): 직업·이름 키·열, 외형 0, 등록한 이름 없음. 새 게임과 10판 이하 저장 이전이 같이 쓴다.
+static func fill_default(defs: GameDefs, i: int, m: PartyState.Member) -> void:
+	m.class_id = defs.party.class_ids[i]
+	m.name_key = defs.party.name_keys[i]
+	m.name = ""
+	m.look = 0
+	m.row = defs.party.rows[i]
 
 
 # ---- SP (07 §4.1) ----
@@ -269,8 +280,8 @@ static func allocate(state: ExplorationState, i: int, levels: Dictionary) -> Arr
 	if i < 0 or i >= state.party.members.size():
 		return [_reject("unknown_skill")]
 	var defs := state.defs
-	var c := defs.class_of(i)
 	var m := state.party.members[i]
+	var c := defs.class_def(m)
 	var target := m.skills.duplicate()
 	for sid in levels:
 		if typeof(sid) != TYPE_STRING or not c.tree_index.has(sid):
@@ -307,8 +318,8 @@ static func allocate(state: ExplorationState, i: int, levels: Dictionary) -> Arr
 
 ## 화면 「+」 판정(07 §4.6): 초안(draft = 스킬 → 초안으로 더한 레벨)에 그 스킬 1 레벨을 더할 수 있는지.
 ## "" | unknown_skill | max_level | requires | min_level | no_sp. 확정 때 allocate 가 다시 본다.
-static func learn_block(defs: GameDefs, i: int, member: PartyState.Member, draft: Dictionary, skill: String) -> String:
-	var c := defs.class_of(i)
+static func learn_block(defs: GameDefs, _i: int, member: PartyState.Member, draft: Dictionary, skill: String) -> String:
+	var c := defs.class_def(member)
 	if not c.tree_index.has(skill):
 		return "unknown_skill"
 	var now: int = member.skills.get(skill, 0) + draft.get(skill, 0)
@@ -325,10 +336,10 @@ static func learn_block(defs: GameDefs, i: int, member: PartyState.Member, draft
 
 ## 화면 「−」 판정(07 §4.6): 초안으로 올린 레벨만 내린다. 그 스킬을 선행으로 삼는 다른 초안 스킬이 첫 레벨을 초안으로 배우는 중이고
 ## 내린 뒤 선행이 깨지면 막는다. "" | no_draft | requires.
-static func unlearn_block(defs: GameDefs, i: int, member: PartyState.Member, draft: Dictionary, skill: String) -> String:
+static func unlearn_block(defs: GameDefs, _i: int, member: PartyState.Member, draft: Dictionary, skill: String) -> String:
 	if draft.get(skill, 0) <= 0:
 		return "no_draft"
-	var c := defs.class_of(i)
+	var c := defs.class_def(member)
 	var less := draft.duplicate()
 	less[skill] -= 1
 	var levels := _with_draft(member, less)
@@ -409,7 +420,7 @@ static func equip_problem(db: BattleDb, c: BattleDb.ClassDef, equip: Array) -> A
 ## bag_free = 공용 가방의 빈 칸(D31, BagRules.free_slots). 빼기는 빈 칸이 하나 있어야 하고, 바꾸기(낀 것 ↔ 가방 것)는 칸 수가 그대로라 보지 않는다.
 ## 종류 상한(가방에 그 장비 99)은 옛 저장(60칸을 넘은 가방)에서만 닿는다.
 ## "" | bad_slot | unchanged | unknown_item | not_in_bag | slot_kind | class | kind_limit | bag_full
-static func equip_block(defs: GameDefs, i: int, member: PartyState.Member, bag: Dictionary, slot: int, item_id: String, bag_free: int) -> String:
+static func equip_block(defs: GameDefs, _i: int, member: PartyState.Member, bag: Dictionary, slot: int, item_id: String, bag_free: int) -> String:
 	if slot < 0 or slot >= BattleLimits.EQUIP_SLOTS:
 		return "bad_slot"
 	var cur: String = member.equip[slot]
@@ -423,7 +434,7 @@ static func equip_block(defs: GameDefs, i: int, member: PartyState.Member, bag: 
 		return "unchanged"
 	if bag.get(item_id, 0) < 1:
 		return "not_in_bag"
-	var why := slot_block(defs.battle, defs.class_of(i), member.equip, slot, item_id)
+	var why := slot_block(defs.battle, defs.class_def(member), member.equip, slot, item_id)
 	if not why.is_empty():
 		return why
 	if not cur.is_empty() and bag.get(cur, 0) >= BattleLimits.BAG_MAX:

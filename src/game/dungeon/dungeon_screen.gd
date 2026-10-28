@@ -816,6 +816,18 @@ func _inn_stay() -> Array[Dictionary]:
 	return events
 
 
+## 대열 바꾸기 입구(M3 A7 설계 §4.1b): 캠프 「대열」 판(A7c)과 시험이 부른다. 창(물음 포함)이 열렸거나 연출 중이면 busy 로 거부하고,
+## 규칙(GuildRules.arrange)이 받아들이면 자동 저장한다. 시간은 가지 않는다(걸음·위험도·FOE 그대로).
+func arrange_party(front: Array, back: Array) -> Array[Dictionary]:
+	if state == null or modal.is_open() or _is_busy():
+		return [{"type": "rejected", "reason": "busy"}]
+	var events := GuildRules.arrange(state, front, back)
+	if events[0]["type"] == "arranged":
+		_autosave()
+		_debug_dirty = true
+	return events
+
+
 ## 저장 반영 기다림을 켠다: 진짜 웹이고 user:// 가 IndexedDB 에 이어져 있을 때만(시험은 save_reader·userfs_persistent).
 func _setup_save_pending() -> void:
 	var persistent := OS.is_userfs_persistent() if userfs_persistent < 0 else userfs_persistent == 1
@@ -1317,7 +1329,7 @@ func record_slots() -> Array:
 			out.append({"slot": slot, "ok": false})
 			continue
 		var st := l.result.state
-		out.append({"slot": slot, "ok": true, "leader": texts.t(st.defs.party.name_keys[0]),
+		out.append({"slot": slot, "ok": true, "leader": PartyNames.member_name(st, texts, 0),
 			"level": texts.t("party.level", {"level": st.party.members[0].level}),
 			"where": texts.t("menu.slot_where", {"floor": _place_of(st), "steps": st.steps}),
 			"time": _local_time(l.result.saved_at)})
@@ -2225,7 +2237,7 @@ func debug_snapshot() -> Dictionary:
 		"plan_count": view.last_anim_plan_count, "plan_ms_total": view.last_anim_plan_ms,
 		"plan_ms_total_max": view.max_anim_plan_ms, "plan_count_max": view.max_anim_plan_count,
 		# 성장(07 §8.6): 대원마다 레벨·경험치·남은 SP·스킬·장비와 §6 묶음의 능력치·공격·방어, 가방, 파티 메뉴.
-		"members": _debug_members(), "gear_bag": state.gear_bag.duplicate(), "party_menu": party,
+		"members": _debug_members(), "guild": _debug_guild(), "gear_bag": state.gear_bag.duplicate(), "party_menu": party,
 		# 상점(08 §8.11): 소지금·상점 상태(판 소재·한정 재고·산 물건)와 상점 화면.
 		"money": state.money, "shop_state": {"sold": state.shop.sold.duplicate(), "pool": state.shop.pool.duplicate(),
 			"bought": state.shop.bought_list()}, "shop": shop,
@@ -2331,10 +2343,20 @@ func _debug_members() -> Array:
 	for i in state.party.members.size():
 		var m := state.party.members[i]
 		var p := GrowthRules.profile(state.defs, i, m)
-		out.append({"level": m.level, "exp": m.exp, "sp_left": GrowthRules.sp_left(state.defs, m), "skills": m.skills.duplicate(),
+		out.append({"id": m.id, "name": PartyNames.display_name(texts, m), "class": m.class_id, "row": m.row, "look": m.look,
+			"level": m.level, "exp": m.exp, "sp_left": GrowthRules.sp_left(state.defs, m), "skills": m.skills.duplicate(),
 			"equip": Array(m.equip), "stats": p["stats"], "gear": p["gear"], "max_hp": m.max_hp, "max_tp": m.max_tp,
 			"weapon": p["weapon"], "attack_element": (p["attack"] as BattleDb.SkillDef).element})
 	return out
+
+
+## 길드(M3 A7): 등록 번호와 파티 밖 대원(등록 차례).
+func _debug_guild() -> Dictionary:
+	var list := []
+	for m in state.guild.members:
+		list.append({"id": m.id, "name": PartyNames.display_name(texts, m), "class": m.class_id, "row": m.row, "look": m.look,
+			"level": m.level, "hp": m.hp, "tp": m.tp})
+	return {"serial": state.guild.serial, "members": list}
 
 
 ## 연출 중(시야 이동·미리 받은 행동·전투 연출).

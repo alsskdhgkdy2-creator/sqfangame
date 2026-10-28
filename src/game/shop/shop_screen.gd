@@ -274,7 +274,7 @@ func cancel_pointers() -> void:
 
 
 func _setup_cards() -> void:
-	cards.setup(BattleDisplay.from_party(state, texts), state.defs.party.class_ids)
+	cards.setup(BattleDisplay.from_party(state, texts), PartyNames.class_ids(state))
 	for c in cards.cards:
 		c.mouse_filter = MOUSE_FILTER_IGNORE  # 상점의 카드는 읽기만
 		c.snap()
@@ -775,13 +775,14 @@ func preview_bag(item: String) -> Dictionary:
 ## 대원 i 의 직업이 item 을 낄 수 있는지(직업·전용 직업만, 칸·가방과 상관없이). 못 끼면 확인 글이 buy_unfit 이다.
 func can_wear(item: String, i: int) -> bool:
 	var e := state.defs.battle.equip(item)
-	return e != null and e.fits(state.defs.class_of(i))
+	return e != null and e.fits(state.class_of(i))
 
 
 ## 대원 i 의 slot 을 item 으로 바꾼 사본의 GrowthRules.profile(대원·가방은 그대로).
 func profile_if(i: int, slot: int, item: String) -> Dictionary:
 	var m := state.party.members[i]
 	var copy := PartyState.Member.new(m.id, m.max_hp, m.hp, m.max_tp, m.tp)
+	copy.class_id = m.class_id
 	copy.level = m.level
 	copy.exp = m.exp
 	copy.skills = m.skills.duplicate()
