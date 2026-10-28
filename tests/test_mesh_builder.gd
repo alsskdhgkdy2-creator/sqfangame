@@ -413,3 +413,55 @@ func test_sweep_around_b1f_points() -> void:
 	check_eq(f.point_list().size(), 2, "B1F 지점 둘")
 	check(cells.size() >= 2 * f.point_list().size(), "훑은 칸 %d(지점마다 이웃 하나 이상)" % cells.size())
 	print("  B1F 지점 둘레 보정 통계: ", _stats)
+
+
+## M3 A6c(설계 §5.1·§7.5): FOE 표지 메시(foe_mesh)는 칸 가운데 ±0.7m 안, 높이 0~1.62m. 공은 가시 60장(정이십면체 면 20 × 3)이고 정점 색이
+## 준 위협 색, 차양은 흰 plate, 그림자는 바닥 색조의 어두운 frame 십이각형(seq=7: 바닥의 구멍처럼 읽히지 않게). 표면은 glow·plate·frame 셋(층 재질을 다시 쓴다, 새 셰이더 없음).
+func test_foe_mesh_geometry() -> void:
+	var red := Color(1.0, 0.16, 0.12)
+	var b := DungeonMeshBuilder.foe_mesh(red)
+	check_eq(b.surface_names, ["frame", "plate", "glow"] as Array[String], "표면: 그림자·차양·공")
+	var top := 0.0
+	var bottom := INF
+	for v in b.verts:
+		check(absf(v.x) <= 0.7 + 1e-4 and absf(v.z) <= 0.7 + 1e-4, "정점 %s 이 ±0.7m 안" % v)
+		top = maxf(top, v.y)
+		bottom = minf(bottom, v.y)
+	# 가장 높은 가시는 곧게 위가 아니라 1.0 + 0.62·cos(37.4°) ≈ 1.579m(정이십면체 면 가운데 방향). 0.02 는 그림자.
+	check(top <= 1.62 + 1e-4 and top > 1.55 and absf(bottom - 0.02) < 1e-4, "높이 %.3f ~ %.3f 는 0 ~ 1.62 안" % [bottom, top])
+	check_eq(_tri_count(b, "glow"), 60, "가시 삼각형 60")
+	# 정점 색은 8비트로 저장된다(1/255 안).
+	check(_same8(_colors(b, "glow").list, [red]), "공 정점 색 = 준 위협 색(1.0, 0.16, 0.12) %s" % str(_colors(b, "glow").list))
+	check(_same8(_colors(b, "plate").list, [Color(1, 1, 1)]), "차양 흰색")
+	check(_same8(_colors(b, "frame").list, [Color(0.23, 0.25, 0.18)]), "그림자 어두운 바닥 색조 %s" % str(_colors(b, "frame").list))
+	var visor := b.mesh.surface_get_arrays(b.surface_names.find("plate"))[Mesh.ARRAY_VERTEX] as PackedVector3Array
+	var front := 0.0
+	for v in visor:
+		front = minf(front, v.z)
+	check(absf(front + 0.7) < 1e-4, "차양 앞 끝 z −0.7(앞 = −z) %.3f" % front)
+
+
+## 색 목록이 8비트 저장 오차(1/255) 안에서 같다.
+static func _same8(got: Array, want: Array) -> bool:
+	if got.size() != want.size():
+		return false
+	for i in got.size():
+		var a: Color = got[i]
+		var b: Color = want[i]
+		if absf(a.r - b.r) > 1.0 / 255.0 + 1e-6 or absf(a.g - b.g) > 1.0 / 255.0 + 1e-6 or absf(a.b - b.b) > 1.0 / 255.0 + 1e-6 or absf(a.a - b.a) > 1.0 / 255.0 + 1e-6:
+			return false
+	return true
+
+
+## M3 A6c(교훈 6): 층 메시(build)의 정점 수는 FOE 표지 뒤에도 그대로다(표지는 따로 그린다). 수는 HEAD 067525d 사본과 이 트리에서 같게 쟀다.
+func test_build_vertex_counts_unchanged() -> void:
+	var want := {"b1f": [584, 2120], "b2f": [644, 2272], "b3f": [690, 2600]}
+	var defs := Fx.arbor()
+	for id in want:
+		var b := DungeonMeshBuilder.build(defs.floor_by_id(id), WorldState.new())
+		var n := 0
+		for i in b.mesh.get_surface_count():
+			n += b.mesh.surface_get_array_len(i)
+		check_eq([b.verts.size(), n], want[id], "%s: 보정 정점·메시 정점 수" % id)
+	check_eq([DungeonMeshBuilder.build(Fx.f1(), WorldState.new()).verts.size(), DungeonMeshBuilder.build(Fx.f2(), WorldState.new()).verts.size()], [676, 84],
+		"시험 층 보정 정점 수")

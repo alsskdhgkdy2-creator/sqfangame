@@ -439,16 +439,34 @@ func _place_icon(c: Vector2i) -> void:
 
 # ---- 그리기 ----
 
-## 그리는 차례(M2.6 U7): 바탕 → 모눈 → 지도 표시(바닥 색·벽·문·아이콘·메모) → 파티 표시.
+## 그리는 차례(M2.6 U7): 바탕 → 모눈 → 지도 표시(바닥 색·벽·문·아이콘·메모) → FOE(M3 A6c) → 파티 표시.
 ## 그리기 격자에는 좌표 자가 없다(원작 HD: 자는 층 전체 보기에만 있다, MapOverview).
-const LAYERS := ["blueprint", "grid", "floors", "edges", "icons", "memos", "party"]
+const LAYERS := ["blueprint", "grid", "floors", "edges", "icons", "memos", "foes", "party"]
+## FOE 원(M3 A6c, 설계 §5.2, 원작 jp_guide5_img3): 칸 한 변 × 0.36 반지름의 위협 색 원, 흰 테 1.5px, 바라보는 쪽 흰 삼각형(파티 모양 × 0.8).
+const FOE_RADIUS := 0.36
+const FOE_RIM := Color(1, 1, 1)
+const FOE_RIM_W := 1.5
+const FOE_TRI_SCALE := 0.8
+
+## 마지막 그리기의 층 차례와 그린 FOE(시험·디버그, 교훈 2): [{id, cell, color, facing}].
+var drawn_layers: Array[String] = []
+var drawn_foes: Array[Dictionary] = []
+
+
+## drawn_foes 를 JSON 으로 옮길 수 있게(디버그 스냅숏): [{id, cell: [x, y], color: "rrggbb", facing}].
+func foes_info() -> Array:
+	return drawn_foes.map(func(d: Dictionary) -> Dictionary: return {"id": d["id"], "cell": [d["cell"].x, d["cell"].y],
+		"color": (d["color"] as Color).to_html(false), "facing": d["facing"]})
 
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), bg)
+	drawn_layers.clear()
+	drawn_foes.clear()
 	if state == null:
 		return
 	for layer in LAYERS:
+		drawn_layers.append(layer)
 		call("_draw_" + layer)
 
 
@@ -526,14 +544,31 @@ func _draw_memos() -> void:
 
 
 func _draw_party() -> void:
+	draw_colored_polygon(_arrow(state.party.at, state.party.facing, 1.0), PARTY_COLOR)
+
+
+## 칸 c 가운데의 facing 쪽 삼각형(파티 표시 모양, mult 배).
+func _arrow(c: Vector2i, facing: int, mult: float) -> PackedVector2Array:
 	var px := geo.cell_px
-	var pr := geo.cell_rect(state.party.at)
-	var center := pr.get_center()
-	var rot := state.party.facing * PI / 2.0
+	var center := geo.cell_rect(c).get_center()
+	var rot := facing * PI / 2.0
 	var tri := PackedVector2Array()
 	for v in [Vector2(0, -0.34), Vector2(-0.26, 0.26), Vector2(0.26, 0.26)]:
-		tri.append(center + (v * px).rotated(rot))
-	draw_colored_polygon(tri, PARTY_COLOR)
+		tri.append(center + (v * px * mult).rotated(rot))
+	return tri
+
+
+## 지금 층의 살아 있는 FOE 모두(설계 §8 Q8: 가 본 곳이 아니어도, 쓰러진 것은 빼고). 네 지도(그리기 격자·층 전체·미니맵·전투 미니맵)가 같은 층.
+func _draw_foes() -> void:
+	for id in FoeLook.living(state):
+		var fs: WorldState.FoeState = state.world.foes[id]
+		var col := FoeLook.color(state, id)
+		var center := geo.cell_rect(fs.at).get_center()
+		var r := geo.cell_px * FOE_RADIUS
+		draw_circle(center, r, col)
+		draw_arc(center, r, 0.0, TAU, 24, FOE_RIM, FOE_RIM_W, true)
+		draw_colored_polygon(_arrow(fs.at, fs.facing, FOE_TRI_SCALE), FOE_RIM)
+		drawn_foes.append({"id": id, "cell": fs.at, "color": col, "facing": fs.facing})
 
 
 # ---- 디버그·시험용 위치(이 컨트롤 안 좌표) ----

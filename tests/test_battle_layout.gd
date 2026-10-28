@@ -189,6 +189,52 @@ func test_three_and_three_cards_fit() -> void:
 			tag + ": 전열 160·후열 150, 후열 위 0·전열 위 188(후열 150 + HP 표 38)")
 
 
+## M3 A6c(설계 §5.5·§7.5 U5, M-U5b 다른 채움): 3 + 3 이 차 있고 넷째 숫양이 맞닿아 기다리면 알약은 「FOE 합류 대기」.
+## 알약은 미니맵 바로 아래 (W−247, H−49, 227×40), 채움은 고정 값 #071E26 α 0.8(교훈 7: ListParts.PANEL_COUNT 와 견주지 않는다).
+## 1280×720·1728×720·1280×960 에서 보이는 형제(파티 카드는 카드 하나하나, 로그 창은 연 채로)와 겹치지 않는다.
+func test_join_pill_box_and_wait() -> void:
+	for px in [Vector2(1280, 720), Vector2(1728, 720), Vector2(1280, 960)]:
+		var rams := []
+		for p in [["a", [4, 1], [5, 1]], ["b", [3, 0], [4, 0]], ["c", [3, 2], [4, 2]], ["d", [2, 1], [1, 1]]]:
+			rams.append({"id": p[0], "foe": "foe.ether_ram", "kind": "patrol", "at": p[1], "facing": "N", "path": [p[1], p[2]], "join": 2, "respawn": "never"})
+		var grid := ["+-+-+-+-+-+-+-+", "|. . . . . . .|", "+ + + + + + + +", "|. . . . . . .|", "+ + + + + + + +", "|. . . . . . .|", "+-+-+-+-+-+-+-+"]
+		var f := Fx.floor_of(grid, {"foes": rams})
+		f.encounter_table = "encounter.f1_test"
+		var q := Fx.quiet_defs()
+		var st := ExplorationRules.new_game(GameDefs.assemble([f] as Array[FloorModel], q.party, q.battle), 5, "floor")
+		st.party.at = Vector2i(3, 1)
+		st.encounter.danger = st.encounter.threshold
+		BattleRules.start(st, "formation.f1.rats")
+		BattleRules.submit(st, Fx.cmds(st))
+		check_eq([st.battle.enemies.size(), FoeRules.join_eta(st)], [6, [{"foe": "d", "n": 1, "wait": true}]], "준비: 3 + 3, d 는 기다린다")
+		await _layer(px, st)
+		var tag := str(px)
+		var s := layer.size
+		var pill := layer.join_pill
+		var pr := _rect(pill)
+		check_eq([pill.visible, pill.text, pr], [true, "FOE 합류 대기", Rect2(s.x - 247, s.y - 49, 227, 40)], tag + ": 대기 알약 자리")
+		check_eq(pill.mouse_filter, Control.MOUSE_FILTER_IGNORE, tag + ": 누르기 없음")
+		var fills := SheetParts.record(pill).filter(func(e: Dictionary) -> bool: return e["kind"] == "fill")
+		check_eq(fills.map(func(e: Dictionary) -> Array: return [e["rect"], e["color"]]),
+			[[Rect2(0, 0, 227, 40), Color(7.0 / 255.0, 30.0 / 255.0, 38.0 / 255.0, 0.8)]], tag + ": 채움 #071E26 α 0.8 알약 하나")
+		check(_rect(layer.minimap).end.y <= pr.position.y and pr.end.y <= s.y, tag + ": 미니맵 아래, 화면 안")
+		layer.handle("log")
+		await kit.frames(2)
+		var others := {}
+		for c in layer.get_children():
+			if c == pill or not (c as CanvasItem).is_visible_in_tree() or c == layer.skip_catcher:
+				continue
+			if c == layer.party_cards:
+				for i in layer.party_cards.cards.size():
+					others["대원 카드 %d" % i] = _rect(layer.party_cards.cards[i])
+			elif c is Control:
+				others[c.name] = _rect(c)
+		for k in others:
+			check(not pr.intersects(others[k]), "%s: 알약 %s 와 %s %s 가 겹치지 않는다" % [tag, str(pr), k, str(others[k])])
+		check(others.has("BattleLog") and others.has("MiniMap") and others.has("KeyPad"), tag + ": 견준 형제에 로그 창·미니맵·키패드 %s" % str(others.keys()))
+		layer.handle("log_close")
+
+
 # ---- 메시지 띠 ----
 
 func test_banner_text_per_phase() -> void:

@@ -48,6 +48,8 @@ const LIST_H := 426.0  # 다섯 줄(M3 A4c: 아이템) + 「뒤로」
 const MINIMAP := Vector2(227, 160)
 const MINIMAP_RIGHT := 20.0
 const MINIMAP_BOTTOM := 53.0
+## 합류 알약 아래 여백(M3 A6c): 미니맵 아래 4px 틈, 화면 아래 9px(1280×720 에서 y 671~711).
+const PILL_BOTTOM := 9.0
 ## 스킬 판(원작 III HD gs2_653224): 명령 목록 원호 오른쪽, 위는 「스킬」 줄 위, 아래는 파티 카드 위 − 8. x·폭.
 const SKILL_X := 470.0
 const SKILL_W := 410.0
@@ -145,6 +147,8 @@ var panel: CommandPanel
 var portrait: MemberPortrait
 ## 오른쪽 아래 미니맵(탐색 화면과 같은 부품·같은 지도, 누르기 없음).
 var minimap: MapOverview
+## 합류 알약(M3 A6c, 설계 §5.5): 미니맵 바로 아래.
+var join_pill: JoinPill
 ## 스킬 설명(메시지 띠에 보인다): 머리(이름·Lv·TP)와 설명 한 줄(SkillSummary). 비어 있으면 설명 없음.
 var skill_info_title := ""
 var skill_info_text := ""
@@ -170,6 +174,10 @@ var _built := false
 var _input_frame := -1
 var _notice := ""
 var _notice_left := 0.0
+## 접촉 전투 첫 알림 동안의 띠 첫 줄(「FOE {name}!」). 알림이 사라지거나 바뀌면 "".
+var _foe_start := ""
+## 마지막 명령 제출을 규칙이 거부했으면 그 이벤트({type: rejected, reason, slot?}), 받아들였으면 {}(디버그 battle_commands 의 답, seq=9 R1).
+var last_rejected := {}
 var _announce := ""
 ## 연출 중 지금 행동하는 대원 칸(-1 = 없음·적 차례). 그 카드에 지금 대원과 같은 시안 틀(원작 1810820_1f51fd75).
 var _actor := -1
@@ -206,6 +214,11 @@ func build(text_db: TextDb) -> void:
 	minimap.name = "MiniMap"
 	add_child(minimap)
 	_place(minimap, Vector2(1, 1), Vector2(1, 1), Vector4(-MINIMAP_RIGHT - MINIMAP.x, -MINIMAP_BOTTOM - MINIMAP.y, -MINIMAP_RIGHT, -MINIMAP_BOTTOM))
+	join_pill = JoinPill.new()
+	join_pill.name = "JoinPill"
+	join_pill.texts = texts
+	add_child(join_pill)
+	_place(join_pill, Vector2(1, 1), Vector2(1, 1), Vector4(-MINIMAP_RIGHT - JoinPill.SIZE.x, -PILL_BOTTOM - JoinPill.SIZE.y, -MINIMAP_RIGHT, -PILL_BOTTOM))
 	portrait = MemberPortrait.new()
 	portrait.name = "Portrait"
 	add_child(portrait)
@@ -320,6 +333,7 @@ func open(s: ExplorationState) -> void:
 	party_cards.setup(display, s.defs.party.class_ids)
 	minimap.set_state(s)
 	minimap.refresh()
+	join_pill.show_state(s)
 	for c in _all_cards():
 		c.activated.connect(_on_card.bind(c.unit_ref))
 		c.snap()
@@ -339,8 +353,14 @@ func open(s: ExplorationState) -> void:
 	phase = "command"
 	_cancel_pointers()
 	_begin_turn()
+	_foe_start = ""
 	if s.battle.turn == 0:
-		_show_notice(texts.t("msg.encounter"))
+		if s.battle.foe.is_empty():
+			_show_notice(texts.t("msg.encounter"))
+		else:
+			# FOE 접촉 전투(M3 A6c 설계 §5.3·§5.5): 「적이 나타났다!」 자리에 「FOE와 마주쳤다!」, 그 알림 동안 띠 첫 줄은 「FOE {name}!」.
+			_show_notice(texts.t("msg.foe_contact"))
+			_foe_start = texts.t("battle.foe_start", {"name": FoeLook.name_of(s, texts, s.battle.foe)})
 	_layout()
 	opened.emit()
 
@@ -847,6 +867,7 @@ func _reason_text(code: String) -> String:
 
 
 func _show_notice(t: String) -> void:
+	_foe_start = ""
 	_notice = t
 	_notice_left = NOTICE_SEC
 	_redraw_hud()
@@ -856,7 +877,9 @@ func _show_notice(t: String) -> void:
 
 func _submit() -> void:
 	var events := BattleRules.submit(state, commands.duplicate(true))
+	last_rejected = {}
 	if events.size() == 1 and events[0]["type"] == "rejected":
+		last_rejected = events[0].duplicate()
 		_begin_turn()
 		_show_notice(texts.t("battle.ui.rejected", {"reason": str(events[0].get("reason", ""))}))
 		return
@@ -921,6 +944,7 @@ func _process(delta: float) -> void:
 		_notice_left -= delta
 		if _notice_left <= 0.0:
 			_notice = ""
+			_foe_start = ""
 			_redraw_hud()
 	if phase != "anim":
 		return
@@ -1006,6 +1030,13 @@ func _rebuild_enemies() -> void:
 	for c in enemy_area.cards:
 		c.activated.connect(_on_card.bind(c.unit_ref))
 		c.snap()
+	_refresh_foes()
+
+
+## 합류 알약과 전투 미니맵(FOE 원)을 규칙 상태로 맞춘다(M3 A6c). 연출이 끝날 때와 합류 단계에서.
+func _refresh_foes() -> void:
+	join_pill.show_state(state)
+	minimap.refresh()
 
 
 ## 남은 연출을 끝 상태로 바로 맞춘다.
@@ -1032,6 +1063,7 @@ func _end_anim() -> void:
 			end_event = ev
 	for c in _all_cards():
 		c.snap()
+	_refresh_foes()
 	if end_event.is_empty():
 		display.sync(state)
 		phase = "command"
@@ -1440,6 +1472,8 @@ func banner_lines() -> Array:
 						body = skill_info_text
 					"confirm":
 						head = texts.t("battle.ui.ready")
+	if phase == "command" and sub == "menu" and not _foe_start.is_empty() and not _notice.is_empty() and not log_view.visible:
+		head = _foe_start
 	if phase != "anim" and not _notice.is_empty():
 		return [head, _notice, true]
 	return [head, body, false]
@@ -1567,7 +1601,13 @@ func debug_info(css: Callable) -> Dictionary:
 		"skill_info": [skill_info_title, skill_info_text] if skill_info_shown() else [], "banner": banner_lines().slice(0, 2), "buttons": buttons,
 		# 아이템(M3 A4c): 지금 대원에게 보이는 아이템 줄(정의 차례) [{id, count(보이는 남은 수), reason}], 커서, 이 턴 명령.
 		"items": _debug_items(), "cursor": cursor, "commands": commands.duplicate(true) if phase == "command" else [],
-		"item_used": last_events.filter(func(e: Dictionary) -> bool: return e["type"] == "item_used").size()}
+		"item_used": last_events.filter(func(e: Dictionary) -> bool: return e["type"] == "item_used").size(),
+		# FOE(M3 A6c 설계 §5.7): 접촉 FOE·합류한 FOE·합류 예정(join_eta)·적 수, 합류 알약 글, 전투 미니맵이 그린 FOE 원.
+		"foe": state.battle.foe if state.battle != null else "", "joined": state.battle.joined.duplicate(true) if state.battle != null else [],
+		"joins": FoeRules.join_eta(state), "enemy_count": state.battle.enemies.size() if state.battle != null else 0,
+		"join_pill": join_pill.text if join_pill.visible else "", "minimap_foes": minimap.foes_info(),
+		# 대원마다 명령을 받는지(웹 확인이 battle_commands 의 방어 명령을 만든다).
+		"can_command": range(state.battle.party.size()).map(func(i: int) -> bool: return BattleRules.can_command(state, i)) if state.battle != null else []}
 
 
 func _debug_items() -> Array:

@@ -64,6 +64,19 @@ const POINT_BAND := 0.5
 const POINT_COLORS := {"take": Color(0.35, 0.9, 0.45), "chop": Color(1.0, 0.5, 0.0), "mine": Color(0.35, 0.85, 1.0)}
 const POINT_GLOW := {"take": Color(0.7, 1.0, 0.75), "chop": Color(1.0, 0.78, 0.45), "mine": Color(0.7, 0.95, 1.0)}
 const POINT_SPENT := Color(0.25, 0.27, 0.3)
+## FOE 표지(M3 A6c 자리표시, 설계 §5.1, 원작 jp_guide5_img3 의 떠 있는 가시 공): 칸 가운데 기준 지역 좌표(앞 = −z, 시야 yaw 와 같다).
+## 공은 정이십면체(반지름 0.45m) 면마다 가시(끝 0.62m)를 세운 것, 가운데 높이 1.0m, 위협 색 glow. 바라보는 쪽에 흰 꺾쇠 차양(plate, 0.7m 까지).
+## 바닥 그림자는 반지름 0.5m 십이각형(높이 0.02m, frame, 바닥 색조의 어두운 색: frame 재질은 불투명이라 알파 대신 색으로, 화면에서 바닥의 약 60% 밝기). 층 메시와 따로 그려 카메라 보정 정점에 넣지 않는다(설계 §5.1).
+const FOE_CENTER_H := 1.0
+const FOE_RADIUS := 0.45
+const FOE_SPIKE := 0.62
+const FOE_VISOR_TIP := 0.7
+const FOE_VISOR_ARM := Vector2(0.34, 0.42)
+const FOE_VISOR_H := [0.95, 1.15]
+const FOE_VISOR := Color(1, 1, 1)
+const FOE_SHADOW_R := 0.5
+const FOE_SHADOW_H := 0.02
+const FOE_SHADOW := Color(0.23, 0.25, 0.18)
 
 
 class Built:
@@ -141,6 +154,62 @@ static func build(f: FloorModel, world: WorldState) -> Built:
 	for p in f.point_list():
 		b.point(p.at, p.kind, world.gather_left(p) <= 0)
 	return b.finish()
+
+
+## FOE 표지 메시(지역 좌표, 칸 가운데 바닥이 원점). color = 위협 색(공의 glow 정점 색).
+static func foe_mesh(color: Color) -> Built:
+	var b := _Builder.new()
+	var c := Vector3(0, FOE_CENTER_H, 0)
+	for f in _ico_faces():
+		var apex: Vector3 = ((f[0] + f[1] + f[2]) / 3.0).normalized() * FOE_SPIKE
+		for i in 3:
+			var p0: Vector3 = f[i] * FOE_RADIUS
+			var p1: Vector3 = f[(i + 1) % 3] * FOE_RADIUS
+			var n := (p1 - p0).cross(apex - p0).normalized()
+			if n.dot((p0 + p1 + apex) / 3.0) < 0.0:
+				n = -n
+			b.triangle("glow", [c + p0, c + p1, c + apex], n, color)
+	# 차양: 앞 끝(0, −0.7)에서 양옆 팔(±0.34, −0.42)로 꺾인 세로 띠 둘, 앞·뒤 두 면.
+	var full: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+	var tip := Vector3(0, 0, -FOE_VISOR_TIP)
+	for side in [-1.0, 1.0]:
+		var arm := Vector3(side * FOE_VISOR_ARM.x, 0, -FOE_VISOR_ARM.y)
+		var out := (arm - tip).cross(Vector3.UP).normalized()
+		if out.dot((tip + arm) / 2.0) < 0.0:
+			out = -out
+		var y0: float = FOE_VISOR_H[0]
+		var y1: float = FOE_VISOR_H[1]
+		var quad_p: Array[Vector3] = [tip + Vector3(0, y0, 0), arm + Vector3(0, y0, 0), arm + Vector3(0, y1, 0), tip + Vector3(0, y1, 0)]
+		b.quad("plate", quad_p, full, out, FOE_VISOR)
+		b.quad("plate", quad_p, full, -out, FOE_VISOR)
+	# 그림자.
+	var o := Vector3(0, FOE_SHADOW_H, 0)
+	for i in 12:
+		var a0 := TAU * i / 12.0
+		var a1 := TAU * (i + 1) / 12.0
+		b.triangle("frame", [o, o + Vector3(cos(a0), 0, sin(a0)) * FOE_SHADOW_R, o + Vector3(cos(a1), 0, sin(a1)) * FOE_SHADOW_R], Vector3.UP, FOE_SHADOW)
+	return b.finish()
+
+
+## 단위 정이십면체의 면 20개(꼭짓점 셋, 반지름 1).
+static func _ico_faces() -> Array:
+	var t := (1.0 + sqrt(5.0)) / 2.0
+	var v: Array[Vector3] = []
+	for a in [-1.0, 1.0]:
+		for bb in [-t, t]:
+			v.append(Vector3(0, a, bb).normalized())
+			v.append(Vector3(a, bb, 0).normalized())
+			v.append(Vector3(bb, 0, a).normalized())
+	var edge := INF  # 가장 짧은 꼭짓점 사이 = 모서리
+	for i in range(1, v.size()):
+		edge = minf(edge, v[0].distance_to(v[i]))
+	var faces := []
+	for i in v.size():
+		for j in range(i + 1, v.size()):
+			for k in range(j + 1, v.size()):
+				if absf(v[i].distance_to(v[j]) - edge) < 1e-4 and absf(v[j].distance_to(v[k]) - edge) < 1e-4 and absf(v[i].distance_to(v[k]) - edge) < 1e-4:
+					faces.append([v[i], v[j], v[k]])
+	return faces
 
 
 class _Builder:

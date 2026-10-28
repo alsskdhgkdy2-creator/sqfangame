@@ -363,6 +363,7 @@ func _sync_view() -> void:
 		view.rebuild(state.world)
 	_view_floor_stale = false
 	view.set_pose(state.party.at, state.party.facing)
+	view.sync_foes(state)
 
 
 ## 장소에 맞게 화면을 바꾼다(M3 A2): 마을이면 타이틀을 닫고 광장을 연다(지도 판은 닫는다). 미궁이면 마을 화면을 닫는다.
@@ -409,6 +410,7 @@ func _show_floor() -> void:
 		floor_def = state.floor_def
 		view.setup(floor_def, state.world)
 		view.set_pose(state.party.at, state.party.facing)
+		view.sync_foes(state)
 	map_window.set_state(state)
 	minimap.set_state(state)
 	_refresh_floor_text()
@@ -567,6 +569,9 @@ func _do_action(action: int) -> void:
 			"damaged":
 				_show_toast(texts.t("msg.damaged"))
 				_flash_damage()
+			"foe_alert":
+				# M3 A6c(설계 §5.3): 추적 FOE 가 파티를 알아챘다. 알림 줄 한 줄(뒤 안내가 바꾼다, 쌓지 않는다).
+				_show_toast(texts.t("msg.foe_alert", {"name": FoeLook.name_of(state, texts, str(ev["foe"]))}))
 			"moved":
 				if ev["via"] == "slide":
 					slid = true
@@ -1025,6 +1030,8 @@ func _open_battle() -> void:
 func _on_battle_closed(_outcome: String) -> void:
 	_set_battle_view(false)
 	_clear_input()
+	if _view_on and not state.in_town():
+		view.sync_foes(state)  # 쓰러진 FOE 표지를 지우고 위협 색(레벨)을 다시 본다(M3 A6c)
 	map.refresh()
 	_refresh_hud()
 	_debug_dirty = true
@@ -1036,6 +1043,8 @@ func _set_battle_view(on: bool) -> void:
 	if on and not _battle_view:
 		_hide_toast()  # 전투가 열리면 보이던 일반 안내(전투를 연 행동의 결과)는 지운다: 화면 이동이다(A3b 재확인 3, R5)
 	_battle_view = on
+	# FOE 3D 표지는 전투 동안 감춘다(M3 A6c seq=7): 카드 뒤에 멈춘 공이 합류를 잘못 읽게 한다. 닫힐 때 _on_battle_closed 가 다시 맞춘다.
+	view.foes_root.visible = not on
 	_layout()
 
 
@@ -2202,6 +2211,10 @@ func debug_snapshot() -> Dictionary:
 		"key_items": _sorted_keys(state.key_items), "chest_here": _chest_here(),
 		# 채집(M3 A5): 발밑 지점(남은 횟수가 있든 없든)과 지금 층의 오늘 쓴 횟수.
 		"gather_here": _gather_here(), "gather_used": state.world.gather_used.duplicate(),
+		# FOE(M3 A6c 설계 §5.7): 지금 층의 FOE [{id, kind, at, facing, state, stun, threat}](쓰러진 것도, 층 자료 차례)와
+		# 미니맵이 마지막으로 그린 FOE 원 [{id, cell, color, facing}](쓰러진 것은 그리지 않는다), 3D 표지 수, 표지가 보이는지(전투 중 감춤).
+		"foes": _debug_foes(), "minimap_foes": minimap.foes_info(), "foe_marks": view.foe_marks().size() if _view_on else 0,
+		"foe_marks_shown": view.foes_root.visible,
 		# 소모품·공용 가방(M3 A4b): 소모품 ID → 개수, 가방 칸 수(BagRules.used).
 		"consumables": state.consumables, "bag_used": BagRules.used(state), "toast": _toast.text if _toast.modulate.a > 0.0 else "", "warning": warning_shown(),
 		"set": _set_name(), "save_dir": save_dir,
@@ -2220,6 +2233,39 @@ func debug_snapshot() -> Dictionary:
 		"save_pending": save_pending.is_pending(), "save_pending_gens": save_pending.generations(),
 		"save_watch": save_pending.enabled, "save_reads": save_pending.reads, "save_chip": save_chip.is_visible_in_tree(),
 	}
+
+
+## 디버그 battle_commands 의 JSON 명령 배열: 칸마다 사전이면, 값이 유한한 정수 값 float(JSON 수)인 칸을 int 로 바꾼다.
+## 소수(0.5)·참거짓·너무 큰 수·사전이 아닌 칸은 그대로 둔다(규칙 BattleRules.check_commands 가 거부한다). 배열이 아니면 그대로.
+static func _json_commands(v: Variant) -> Variant:
+	if typeof(v) != TYPE_ARRAY:
+		return v
+	var out := []
+	for c in v:
+		if typeof(c) != TYPE_DICTIONARY:
+			out.append(c)
+			continue
+		var d := {}
+		for k in c:
+			var x: Variant = c[k]
+			if typeof(x) == TYPE_FLOAT and is_finite(x) and absf(x) < 1e9 and x == floorf(x):
+				x = int(x)
+			d[k] = x
+		out.append(d)
+	return out
+
+
+func _debug_foes() -> Array:
+	var out := []
+	if state.in_town():
+		return out
+	for sp in state.floor_def.foe_list():
+		var fs: WorldState.FoeState = state.world.foes.get(sp.id)
+		if fs == null:
+			continue
+		out.append({"id": sp.id, "kind": sp.kind, "at": [fs.at.x, fs.at.y], "facing": fs.facing, "state": fs.state, "stun": fs.stun,
+			"threat": FoeRules.threat(state, sp.id)})
+	return out
 
 
 ## 화면이 띄운 층 묶음: "game"(실제 미궁) · "test"(시험 층, &set=test·장면 시험) · 그 밖의 경로면 "other".
@@ -2304,7 +2350,11 @@ func _is_busy() -> bool:
 ## battle_auto: 지금 턴의 명령을 기본 정책으로 만들어 전투 층의 명령 입구로 제출한다(같은 막힘 조건·저장·연출).
 ## battle_finish: 전투 층의 디버그 끝내기로 규칙의 finish(승리) → 저장 → 연출 → 결과 창(「확인」은 따로 누른다).
 ## supply·grant_exp(07 §8.6): 파티 메뉴의 임시 보급 단추와 같은 규칙 함수(GrowthRules.supply·grant_exp) → 받아들여지면 자동 저장.
-## 상태를 바꾸는 요청(battle_auto·battle_finish·supply·grant_exp)은 디버그 주소(?debug=1)에서만 받는다.
+## battle_start(M3 A6c, 설계 §5.7): 지금 층의 인카운트를 바로 연다(위험도를 한계값으로 → 출현 표에서 무리 고르기 → 전투 시작, 시뮬레이션과 같다) →
+##   자동 저장 → 전투 층. 탐색 중이고 창·전투·연출이 없을 때만. {"op": "battle_start"}
+## battle_commands(M3 A6c): {"op": "battle_commands", "commands": [대원 칸마다 명령 또는 null]} 을 전투 층의 명령 입구로 제출한다(같은 검사·저장·연출).
+##   JSON 수의 정수 값(표적 등)은 int 로 바꾼다. 명령 입력 단계에서만 받고, 규칙이 거부하면 {"ok": false, "reason", "slot"}(턴·저장은 그대로).
+## 상태를 바꾸는 요청(battle_auto·battle_finish·battle_start·battle_commands·supply·grant_exp)은 디버그 주소(?debug=1)에서만 받는다.
 ## 타이틀(상태 없음)에서는 snapshot·hash_save 만 받는다. 상점은 마을 광장으로 연다(M3 A2: open_shop 요청은 없앴다).
 func _on_debug_request(json_text: String) -> String:
 	var req: Variant = JSON.parse_string(json_text)
@@ -2347,6 +2397,36 @@ func _on_debug_request(json_text: String) -> String:
 			else:
 				ok = battle_layer.handle("finish", "victory")
 			_debug_dirty = true
+			return JSON.stringify({"ok": ok, "phase": battle_layer.phase})
+		"battle_start":
+			if not _debug:
+				return JSON.stringify({"error": "debug only"})
+			if state.in_town() or state.wiped or state.encounter.pending or state.battle != null or modal.is_open() or party_menu.is_open() \
+					or shop_screen.is_open() or _is_busy():
+				return JSON.stringify({"error": "cannot start"})
+			state.encounter.danger = state.encounter.threshold
+			var formation := BattleRules.pick_formation(state)
+			var st := BattleRules.start(state, formation)
+			if st[0]["type"] != "battle_start":
+				return JSON.stringify({"error": str(st[0].get("reason", "rejected"))})
+			_autosave()
+			_check_windows()
+			_debug_dirty = true
+			return JSON.stringify({"ok": true, "formation": formation, "open": battle_layer.is_open()})
+		"battle_commands":
+			if not _debug:
+				return JSON.stringify({"error": "debug only"})
+			if not battle_layer.is_open() or state.battle == null:
+				return JSON.stringify({"error": "no battle"})
+			if battle_layer.phase != "command":
+				return JSON.stringify({"error": "not command phase", "phase": battle_layer.phase})
+			# JSON 의 수는 float 다: 정수 값인 칸(target 등)은 int 로 바꿔 규칙에 넘긴다(검토 R1). 소수·참거짓·범위 밖은 그대로 두어 규칙이 거부한다.
+			var ok := battle_layer.handle("commands", _json_commands(req.get("commands")))
+			_debug_dirty = true
+			if ok and not battle_layer.last_rejected.is_empty():
+				# 규칙이 거부한 제출은 턴·저장이 나아가지 않았다: ok 가 아니다(층은 「명령을 받지 못했다」를 보인다).
+				var rej: Dictionary = battle_layer.last_rejected
+				return JSON.stringify({"ok": false, "reason": str(rej.get("reason", "")), "slot": rej.get("slot", -1), "phase": battle_layer.phase})
 			return JSON.stringify({"ok": ok, "phase": battle_layer.phase})
 		"supply", "grant_exp":
 			if not _debug:

@@ -13,6 +13,10 @@ const MOVE_TIME := 0.2
 const SLIDE_TIME := 0.12
 const TURN_TIME := 0.15
 const BUMP_TIME := 0.18
+## FOE 걸음 연출(M3 A6c seq=9): 칸을 옮기는 FOE 는 같은 MOVE_TIME 안에서 앞 0.4 동안 (돌 것이 있으면) 돌고, 나머지 동안 걷는다.
+## 파티가 먼저 떠난 뒤 들어오므로 표지(가시·차양)가 카메라에 가장 가까운 때는 연출 중이 아니라 끝 자세다(설계 §5.1 「카메라 가까이」).
+## 함께 돌며 걸으면(옛 연출) 비운 칸으로 옆에서 들어오는 FOE 의 차양이 0.68m 까지 다가왔다(검토 R2).
+const FOE_STEP_DELAY := 0.4
 ## 막힘 연출에서 앞으로 밀리는 최대 거리(m).
 const BUMP_DISTANCE := 0.25
 ## 연출 보정 계획의 표본 간격 기본값(연출 시간, 초): 휴대폰의 보통 화면 갱신(60Hz) 한 프레임.
@@ -120,9 +124,22 @@ var _near_radius := -1.0
 var _near_verts := PackedVector3Array()
 var _plan_time := 0.0
 
+## FOE 표지(M3 A6c, 설계 §5.1): 층 메시와 따로 「Foes」 노드 아래 살아 있는 FOE 마다 MeshInstance3D 「Foe_<id>」.
+## 카메라 보정 정점(_verts·_index)에는 넣지 않는다(보정은 정적인 층만 본다). 표지는 칸 가운데, 바라보는 쪽 yaw.
+var foes_root := Node3D.new()
+## id → {"node", "from_pos", "to_pos", "from_yaw", "to_yaw", "color"}
+var _foe_marks := {}
+## FOE 걸음 연출 시계·길이(0 이면 연출 없음). 파티 걸음과 같은 길이(MOVE_TIME), 모양은 foe_pose.
+var _foe_t := 0.0
+var _foe_time := 0.0
+## 위협 색(html) → 재질을 붙인 표지 메시.
+var _foe_meshes := {}
+
 
 func _ready() -> void:
 	add_child(_mesh_instance)
+	foes_root.name = "Foes"
+	add_child(foes_root)
 	_camera.fov = FOV
 	_camera.projection = Camera3D.PROJECTION_FRUSTUM
 	_camera.current = true
@@ -178,7 +195,144 @@ func _on_viewport_resized() -> void:
 func setup(f: FloorModel, world: WorldState) -> void:
 	_floor = f
 	_make_materials(f.theme)
+	_foe_meshes.clear()
 	rebuild(world)
+
+
+# ---- FOE 표지 (M3 A6c) ----
+
+## 표지를 상태에 바로 맞춘다(연출 없이): 살아 있는 FOE 마다 표지를 두고(위협 색), 쓰러졌거나 없는 것은 지운다. 마을·다른 층이면 모두 지운다.
+## 새 게임·불러오기·층 바꿈·전투 끝(쓰러짐·레벨)·되살아남 뒤에 화면이 부른다.
+func sync_foes(s: ExplorationState) -> void:
+	_foe_time = 0.0
+	_foe_t = 0.0
+	var keep := {}
+	if s != null and not s.in_town() and _floor != null and s.floor_def == _floor:
+		for id in FoeLook.living(s):
+			var fs: WorldState.FoeState = s.world.foes[id]
+			var col := FoeLook.color(s, id)
+			keep[id] = true
+			var m: Dictionary = _foe_marks.get(id, {})
+			if m.is_empty():
+				var node := MeshInstance3D.new()
+				node.name = "Foe_" + id
+				foes_root.add_child(node)
+				m = {"node": node, "color": Color(0, 0, 0, 0)}
+				_foe_marks[id] = m
+			if m["color"] != col:
+				m["color"] = col
+				(m["node"] as MeshInstance3D).mesh = _foe_mesh(col)
+			var pos := DungeonMeshBuilder.cell_center(fs.at)
+			var yaw := yaw_of(fs.facing)
+			m["from_pos"] = pos
+			m["to_pos"] = pos
+			m["from_yaw"] = yaw
+			m["to_yaw"] = yaw
+			_place_foe(m, pos, yaw)
+	for id in _foe_marks.keys():
+		if not keep.has(id):
+			var node: Node = _foe_marks[id]["node"]
+			foes_root.remove_child(node)
+			node.queue_free()
+			_foe_marks.erase(id)
+
+
+func _foe_mesh(col: Color) -> ArrayMesh:
+	var key := col.to_html()
+	if not _foe_meshes.has(key):
+		var built := DungeonMeshBuilder.foe_mesh(col)
+		for i in built.surface_names.size():
+			built.mesh.surface_set_material(i, _materials[built.surface_names[i]])
+		_foe_meshes[key] = built.mesh
+	return _foe_meshes[key]
+
+
+static func _place_foe(m: Dictionary, pos: Vector3, yaw: float) -> void:
+	var node: MeshInstance3D = m["node"]
+	node.transform = Transform3D(Basis(Vector3.UP, yaw), pos)
+
+
+## 표지 id → {"pos": 칸 가운데 세계 좌표, "yaw", "color"}(시험·디버그: 지금 그려진 자리).
+func foe_marks() -> Dictionary:
+	var out := {}
+	for id in _foe_marks:
+		var node: MeshInstance3D = _foe_marks[id]["node"]
+		out[id] = {"pos": node.transform.origin, "yaw": node.transform.basis.get_euler().y, "color": _foe_marks[id]["color"]}
+	return out
+
+
+func foe_busy() -> bool:
+	return _foe_time > 0.0
+
+
+## FOE 걸음·돌기 이벤트로 표지 연출을 연다(지금 그려진 자리에서). 없는 표지는 건너뛴다.
+func _play_foes(events: Array[Dictionary]) -> void:
+	var any := false
+	for ev in events:
+		var m: Dictionary = _foe_marks.get(str(ev.get("foe", "")), {})
+		if m.is_empty():
+			continue
+		match ev["type"]:
+			"foe_moved":
+				m["to_pos"] = DungeonMeshBuilder.cell_center(ev["to"])
+				m["to_yaw"] = _near_yaw(m["to_yaw"], yaw_of(ev["facing"]))
+				any = true
+			"foe_turned":
+				m["to_yaw"] = _near_yaw(m["to_yaw"], yaw_of(ev["facing"]))
+				any = true
+	if not any:
+		return
+	for id in _foe_marks:
+		var m: Dictionary = _foe_marks[id]
+		var node: MeshInstance3D = m["node"]
+		m["from_pos"] = node.transform.origin
+		m["from_yaw"] = _near_yaw(m["to_yaw"], node.transform.basis.get_euler().y)
+	_foe_t = 0.0
+	_foe_time = MOVE_TIME
+	if speed <= 0.0:
+		_finish_foes()
+
+
+## target 과 같은 방향이면서 ref 에 가장 가까운 yaw(돌기를 짧은 쪽으로).
+static func _near_yaw(ref: float, target: float) -> float:
+	return ref + wrapf(target - ref, -PI, PI)
+
+
+## FOE 표지의 연출 자세 [위치, yaw]: 연출 시작 time 초 뒤(길이 total). 칸을 옮기면 앞 FOE_STEP_DELAY 동안 돌기, 나머지 동안 걷기.
+## 제자리 돌기는 전체 동안. 둘 다 smoothstep. 시야(_step_foes)와 시험이 같은 함수를 쓴다.
+static func foe_pose(from_pos: Vector3, to_pos: Vector3, from_yaw: float, to_yaw: float, time: float, total: float) -> Array:
+	if total <= 0.0:
+		return [to_pos, to_yaw]
+	var u := clampf(time / total, 0.0, 1.0)
+	var k_yaw := u
+	var k_pos := u
+	if not from_pos.is_equal_approx(to_pos):
+		k_yaw = clampf(u / FOE_STEP_DELAY, 0.0, 1.0)
+		k_pos = clampf((u - FOE_STEP_DELAY) / (1.0 - FOE_STEP_DELAY), 0.0, 1.0)
+	return [from_pos.lerp(to_pos, smoothstep(0.0, 1.0, k_pos)), lerpf(from_yaw, to_yaw, smoothstep(0.0, 1.0, k_yaw))]
+
+
+func _step_foes(dt: float) -> void:
+	if _foe_time <= 0.0:
+		return
+	_foe_t = minf(_foe_t + dt, _foe_time)
+	for id in _foe_marks:
+		var m: Dictionary = _foe_marks[id]
+		var pose := foe_pose(m["from_pos"], m["to_pos"], m["from_yaw"], m["to_yaw"], _foe_t, _foe_time)
+		_place_foe(m, pose[0], pose[1])
+	if _foe_t >= _foe_time:
+		_finish_foes()
+
+
+func _finish_foes() -> void:
+	_foe_time = 0.0
+	_foe_t = 0.0
+	for id in _foe_marks:
+		var m: Dictionary = _foe_marks[id]
+		m["to_yaw"] = wrapf(m["to_yaw"], -PI, PI)
+		m["from_pos"] = m["to_pos"]
+		m["from_yaw"] = m["to_yaw"]
+		_place_foe(m, m["to_pos"], m["to_yaw"])
 
 
 ## 세계 상태(열린 지름길·찾은 통로)가 바뀌면 메시와 정점 목록을 다시 만든다.
@@ -257,6 +411,7 @@ func _update_radius() -> void:
 ## 정지 해는 직전 자세와 같아 보여도 늘 다시 계산한다(연출 중 해가 남지 않게).
 func set_pose(cell: Vector2i, facing: int) -> void:
 	_play_id += 1
+	_finish_foes()
 	_segments.clear()
 	_seg_time = 0.0
 	_clock = 0.0
@@ -296,6 +451,7 @@ func play(events: Array[Dictionary], move_dir: int = -1) -> void:
 		plan_ms_total = 0.0
 	var plan_pos: Vector3 = _pos if _segments.is_empty() else _segments[-1]["to_pos"]
 	var plan_yaw: float = _yaw if _segments.is_empty() else _segments[-1]["to_yaw"]
+	_play_foes(events)
 	for ev in events:
 		match ev["type"]:
 			"moved":
@@ -356,6 +512,7 @@ func _process(delta: float) -> void:
 	var dt := delta * speed
 	if speed > 0.0:
 		_note_frame_time(dt)
+		_step_foes(dt)
 	if _segments.is_empty():
 		return
 	if speed <= 0.0:
