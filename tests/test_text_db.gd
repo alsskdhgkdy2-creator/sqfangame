@@ -61,7 +61,9 @@ func test_several_holders_and_plain_format() -> void:
 
 ## 실제 문구: 조사 묶음은 전투 문구(자리표시 바로 뒤)에만 있고, 다른 문구는 고르기 전과 같은 글이다.
 ## 전투·상점 밖에서 조사 고르기를 쓰는 안내(M3 A3: 전투 드롭 「{item}을(를) 얻었다」와 같은 말씨). 정확한 키만 더한다(M3 A4: 소생 결과, 소지품 버리기 물음).
-const PARTICLE_MSG_KEYS := ["msg.chest_one", "msg.chest_full", "msg.lock_opened", "item.event.used_revive", "party.items.drop_ask"]
+## M3 A7c: 길드 등록 확인·등록·이름 바꾸기 안내도 이름 뒤 조사를 고른다.
+const PARTICLE_MSG_KEYS := ["msg.chest_one", "msg.chest_full", "msg.lock_opened", "item.event.used_revive", "party.items.drop_ask",
+	"guild.ask_register", "guild.registered", "guild.renamed"]
 
 
 func test_real_texts_only_battle_lines_change() -> void:

@@ -105,6 +105,41 @@ func test_inn_page_and_stay() -> void:
 	check_eq([t.page, t.plaza_cursor], ["plaza", 0], "「나간다」 → 광장")
 
 
+## M-H9(답 커서가 바뀌어도 누르기를 버리지 않음, 검토 seq=9, 공용 창): 숙박 확인 창에서 키패드 「선택」·「예」·「아니오」를 손가락 3 으로 누른 채
+## 답을 옮기면(손가락 4 방향 패드·방향키) 누르기가 풀리고, 떼도 묵지 않고 저장하지 않는다. 옮기지 않은 「예」는 묵고 자동 저장한다.
+func test_answer_change_drops_held_presses() -> void:
+	var s := await _town()
+	var t := await _inn(s)
+	await kit.press_key(KEY_1)
+	check_eq([t.dialog.mode, t.dialog.pick], ["confirm", ShopDialog.YES], "준비: 숙박 확인(「예」 먼저)")
+	var h := kit.hash_now()
+	var saves := s.autosave_count
+	var ok := t.active_key_pad().button("ok")
+	for c in [["「선택」", ok], ["「예」", t.dialog.yes_button], ["「아니오」", t.dialog.no_button]]:
+		for v in ["pad", "key"]:
+			var tag := "%s(%s)" % [c[0], v]
+			var b: TouchButton = c[1]
+			var p := kit.center_of(b)
+			var pick0 := t.dialog.pick
+			var right := pick0 == ShopDialog.YES
+			kit.touch(3, p, true)
+			await kit.frames(1)
+			check(b.held, tag + ": 준비: 누르는 중")
+			if v == "pad":
+				await kit.tap(kit.center_of(t.dir_pad.button("right" if right else "left")), 4)
+			else:
+				await kit.press_key(KEY_RIGHT if right else KEY_LEFT)
+			check_eq(t.dialog.pick, 1 - pick0, tag + ": 답이 옮겨졌다")
+			check(not b.held, tag + ": 답이 바뀌면 누르기 취소")
+			kit.touch(3, p, false)
+			await kit.frames(2)
+			check_eq([t.dialog.mode, t.dialog.pick, kit.hash_now(), s.autosave_count, s.state.day], ["confirm", 1 - pick0, h, saves, 1],
+				tag + ": 뗄 때 아무 일 없음(묵지 않고 저장 없음)")
+	await kit.tap(kit.center_of(t.dialog.yes_button))
+	await kit.frames(2)
+	check_eq([t.dialog.mode, s.state.day, s.autosave_count], ["", 2, saves + 1], "보통 「예」 → 묵고 자동 저장")
+
+
 ## I5 (Mh2 캠프 「저장」이 어디서나 일함): 숙소 「기록한다」 = 기록 판(inn_save: 「저장」만) → 슬롯 1 기록(세대 +1, 슬롯 줄) → 취소 = 숙소.
 ## 캠프 「기록」: 숙소에서 열면 「저장」이 살아 있고, 광장·미궁에서 열면 흐리고 도움말은 이유, 누르거나 입력해도 쓰지 않는다. 불러오기는 그대로.
 func test_inn_save_page_and_camp_save_rule() -> void:
@@ -133,7 +168,7 @@ func test_inn_save_page_and_camp_save_rule() -> void:
 	check_eq([t.page, t.inn_cursor], ["inn", 1], "취소 → 숙소(커서 「기록한다」)")
 	# 숙소에서 연 캠프: 「저장」이 산다.
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	var pm := s.party_menu
 	var crt := pm.records_tab
 	check_eq([pm.is_open(), pm.tab, pm.ribbon.text], [true, 4, "캡슐 숙소"], "숙소에서 연 캠프 「기록」(장소 띠 숙소)")
@@ -160,7 +195,7 @@ func _camp_save_is_closed(s: DungeonScreen, tag: String) -> void:
 	var pm := s.party_menu
 	var crt := pm.records_tab
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	check_eq([pm.is_open(), pm.tab, crt.cur_row, crt.cur_col], [true, 4, 0, 0], "%s: 캠프 「기록」(커서 슬롯 1 「저장」)" % tag)
 	check(crt.save_buttons.all(func(b: ListButton) -> bool: return b.disabled and b.visible), "%s: 「저장」 셋 흐림" % tag)
 	check_eq(crt.help_text(), s.texts.t("camp.records.help.save_inn"), "%s: 도움말 = 숙소에서 기록한다" % tag)

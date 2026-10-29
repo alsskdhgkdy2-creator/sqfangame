@@ -49,8 +49,8 @@ func test_plaza() -> void:
 	check_eq(t.plaza_list.rows.map(func(r: ListRow) -> String: return str(r.name)), PLAZA, "줄 차례(원작 차례)")
 	check_eq(t.plaza_list.rows.map(func(r: ListRow) -> String: return r.text),
 		["1  캡슐 숙소", "2  정크 공방", "3  정보상 바", "4  모험가 길드", "5  관리국", "6  아보르 입구"], "줄 글")
-	check_eq(t.plaza_list.rows.map(func(r: ListRow) -> bool: return r.dimmed), [false, false, true, true, true, false],
-		"흐린 줄: 정보상 바·길드·관리국(숙소는 A2b 에서 연다)")
+	check_eq(t.plaza_list.rows.map(func(r: ListRow) -> bool: return r.dimmed), [false, false, true, false, true, false],
+		"흐린 줄: 정보상 바·관리국(숙소는 A2b, 길드는 A7c 에서 연다)")
 	check(not s.hud_root.visible and _view_off(s) and s.town_backdrop.visible and s.town_backdrop.place == "plaza", "HUD·시야 감춤, 광장 바탕")
 	check_eq(t.banner.lines(), [s.texts.t("town.desc.inn"), "", false], "띠 첫 줄 = 커서 시설 설명")
 	check_eq(t.place_plate.first, s.texts.t("town.plaza"), "장소 문패")
@@ -198,7 +198,7 @@ func test_load_and_import_switch_location() -> void:
 	await kit.frames(2)
 	check(s.state.in_town(), "준비: 마을")
 	await kit.tap(kit.center_of(s.town_screen.camp_plate))
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	await kit.frames(2)
 	var rt := s.party_menu.records_tab
 	check_eq(rt.row_set, "camp", "캠프 기록 줄 묶음")

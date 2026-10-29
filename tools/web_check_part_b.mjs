@@ -70,13 +70,13 @@ async function growthChecks(s) {
   s = await waitFor((x) => x.party_menu?.open && x.party_menu.page === 'root', '캠프');
   check(!s.buttons.Pad_forward && !s.buttons.CampButton && s.buttons.Camp_status && s.buttons.Camp_records,
     '성장 1: 「캠프」 단추 → 캠프 뿌리(명령 줄), 덮인 탐색 단추는 요약에 없다', { page: s.party_menu.page });
-  // 07 §9.8: 명령 차례 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록(줄 가운데 y 가 차례대로), 열 때 커서 0, 맨 위 띠는 장소 띠·소지금.
-  const order = ['Camp_items', 'Camp_status', 'Camp_equip', 'Camp_skills', 'Camp_records'];
+  // 07 §9.8·A7c: 명령 차례 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 대열 · 6 기록(줄 가운데 y 가 차례대로), 열 때 커서 0, 맨 위 띠는 장소 띠·소지금.
+  const order = ['Camp_items', 'Camp_status', 'Camp_equip', 'Camp_skills', 'Camp_arrange', 'Camp_records'];
   const ys = order.map((n) => s.buttons[n]?.[1]);
   check(ys.every((y, i) => typeof y === 'number' && (i === 0 || y > ys[i - 1])) && s.party_menu.camp_cursor === 0
     && !('banner' in s.party_menu) && s.party_menu.ribbon !== '' && /엔$/.test(s.party_menu.money) && s.party_menu.notice === ''
     && s.party_menu.backdrop === 'board',
-    '성장 1: 캠프 뿌리 명령 차례(소지품·상태·장비·스킬·기록)와 장소 띠·소지금(설명 띠 없음), 바탕 = 무늬 판',
+    '성장 1: 캠프 뿌리 명령 차례(소지품·상태·장비·스킬·대열·기록)와 장소 띠·소지금(설명 띠 없음), 바탕 = 무늬 판',
     { ys, camp_cursor: s.party_menu.camp_cursor, ribbon: s.party_menu.ribbon, money: s.party_menu.money, banner: s.party_menu.banner,
       backdrop: s.party_menu.backdrop });
   await clickButton('Camp_status');

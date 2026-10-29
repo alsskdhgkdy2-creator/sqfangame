@@ -107,6 +107,7 @@ func setup(m: PartyMenu) -> void:
 	add_child(qty)
 	qty.setup(m.texts)
 	qty.route = func(kind: String, arg: Variant) -> void: menu.handle("qty", [kind, arg])
+	qty.pointer_root = m  # 키패드는 캠프 화면에 있다: 답 커서가 바뀌면 캠프 전체의 누르기를 버린다(M3 A7c seq=9)
 	qty.answered.connect(_on_qty_answered)
 
 

@@ -9,7 +9,8 @@
 ## 단추는 PartyButton skin "cmd"(고른 쪽 노랑 알약, 다른 쪽 청록), 64 높이. 노랑은 고른 단추 하나뿐이다(수량 단추는 커서가 없다).
 ## 입력은 handle(kind, arg) 하나: step(±1·±10) · pick(±1, 단추 사이 커서) · slot_move(±1, 칸 커서) · confirm(arg 가 있으면 그 단추·칸) · cancel.
 ## 단추 누르기도 같은 길로 온다. 떠 있는 동안 새 누르기는 화면 전체를 막는 판(MOUSE_FILTER_STOP)이 막고, 이미 눌려 있던
-## 누르기는 창이 뜨거나 닫힐 때 부모(상점 화면) 아래의 모든 TouchButton·PartyScroll 을 cancel 해 버린다(07 §9.4 문맥 바뀜).
+## 누르기는 창이 뜨거나 닫힐 때와 답(pick·칸 커서·수량)이 바뀔 때 부모(상점 화면, pointer_root 가 있으면 그것) 아래의 모든
+## TouchButton·PartyScroll 을 cancel 해 버린다(07 §9.4 문맥 바뀜: 누르고 있던 키패드 「선택」·「예」·「아니오」가 뗄 때 바뀐 답을 내지 않는다).
 ## 부모가 없으면 자기 단추만. 노랑 하나(07 §9.2)를 위해 목록 커서 모양은 화면이 ShopList.cursor_mode 로 바꾼다.
 class_name ShopDialog
 extends Control
@@ -72,6 +73,8 @@ var step_buttons: Array[PartyButton] = []
 ## 입력 갈고리(08 §8.11 F3): 있으면 단추 누르기를 먼저 이것(kind, arg)에 요청한다. 화면이 열림·층 3 막힘·한 프레임 한 입력을
 ## 통과시킨 뒤 이 창의 handle 을 부른다. 없으면(부품 혼자) 바로 handle.
 var route: Callable
+## 누르기를 버릴 범위(키패드를 가진 화면). 없으면 부모. 창이 화면의 손자일 때(캠프 소지품 탭의 수량 창) 화면을 넣는다.
+var pointer_root: Node
 var _qty_key := "shop.qty.buy"
 ## 값 없는 수량 창(open_count, M3 A4b 캠프 버리기): 둘째 줄은 key 문구({n} = 고른 수).
 var _count_only := false
@@ -213,7 +216,11 @@ func close() -> void:
 
 ## 문맥이 바뀐다(창이 뜨거나 닫힘): 부모(상점 화면) 아래에서 눌려 있던 단추·줄·탭·끌어 내리는 영역을 모두 버린다.
 func _cancel_pointers() -> void:
-	var root_node: Node = get_parent() if get_parent() != null else self
+	var root_node: Node = self
+	if pointer_root != null and is_instance_valid(pointer_root):
+		root_node = pointer_root
+	elif get_parent() != null:
+		root_node = get_parent()
 	for n in root_node.find_children("*", "TouchButton", true, false):
 		(n as TouchButton).cancel()
 	for n in root_node.find_children("*", "PartyScroll", true, false):
@@ -232,6 +239,7 @@ func handle(kind: String, arg: Variant = null) -> bool:
 			if to == qty:
 				return false
 			qty = to
+			_cancel_pointers()  # 수량도 답이다(M3 A7c seq=10): 누르고 있던 「선택」·「예」가 뗄 때 바뀐 수량으로 사고팔거나 버리지 않는다
 			_refresh()
 			return true
 		"slot_move":
@@ -242,6 +250,7 @@ func handle(kind: String, arg: Variant = null) -> bool:
 				return false
 			slot_cursor = to_slot
 			slot_reason = ""
+			_cancel_pointers()  # 칸 커서도 답이다: 누르고 있던 「선택」·칸 줄이 뗄 때 바뀐 칸을 고르지 않는다
 			_refresh()
 			return true
 		"pick":
@@ -251,6 +260,7 @@ func handle(kind: String, arg: Variant = null) -> bool:
 			if to == pick:
 				return false
 			pick = to
+			_cancel_pointers()  # 답 커서가 바뀌었다(M3 A7c seq=9): 누르고 있던 「선택」·「예」·「아니오」는 뗄 때 아무것도 하지 않는다
 			_refresh()
 			return true
 		"confirm":

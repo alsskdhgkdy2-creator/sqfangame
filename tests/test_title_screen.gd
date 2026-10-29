@@ -391,6 +391,43 @@ func test_confirm_takes_pad_touches() -> void:
 	check_eq(s.autosave_count, 1, "새 게임은 저장한다")
 
 
+## M-H12(공용 확인 띠 ConfirmBand 의 고름이 바뀌어도 누르기를 버리지 않음, 검토 seq=9): 새 게임 확인 창에서 키패드 「선택」·「돌아가기」·
+## 「새 게임」을 손가락 3 으로 누른 채 고름을 옮기면(손가락 4 방향 패드·방향키) 누르기가 풀리고, 떼도 새 게임을 시작하거나 창을 닫지 않는다.
+## 옮기지 않고 누른 「새 게임」은 그대로 시작한다.
+func test_answer_change_drops_held_presses() -> void:
+	await _make_labyrinth_save()
+	var s := await _title()
+	var t := s.title_screen
+	await kit.press_key(KEY_3)
+	check(t.dialog.is_open() and t.dialog.pick == 0, "준비: 확인 창(「돌아가기」)")
+	var ok := t.active_key_pad().button("ok")
+	for c in [["「선택」", ok], ["「돌아가기」", t.dialog.buttons[0]], ["「새 게임」", t.dialog.buttons[1]]]:
+		for v in ["pad", "key"]:
+			var tag := "%s(%s)" % [c[0], v]
+			var b: TouchButton = c[1]
+			var p := kit.center_of(b)
+			var pick0 := t.dialog.pick
+			kit.touch(FINGER, p, true)
+			await kit.frames(1)
+			check(b.held, tag + ": 준비: 누르는 중")
+			if v == "pad":
+				await kit.tap(kit.center_of(t.dir_pad.button("right" if pick0 == 0 else "left")), FINGER + 1)
+			else:
+				await kit.press_key(KEY_RIGHT if pick0 == 0 else KEY_LEFT)
+			check_eq(t.dialog.pick, 1 - pick0, tag + ": 고름이 옮겨졌다")
+			check(not b.held, tag + ": 고름이 바뀌면 누르기 취소")
+			var n := t.accepted_inputs
+			kit.touch(FINGER, p, false)
+			await kit.frames(3)
+			check_eq([t.is_open(), t.dialog.is_open(), t.dialog.pick, s.state, s.autosave_count, t.accepted_inputs], [true, true, 1 - pick0, null, 0, n],
+				tag + ": 뗄 때 아무 일 없음(새 게임·닫기 없음)")
+	if t.dialog.pick != 1:
+		await kit.press_key(KEY_RIGHT)
+	await kit.tap(kit.center_of(t.dialog.buttons[1]), FINGER)
+	check(not t.is_open() and s.state != null and s.state.in_town(), "보통 「새 게임」 → 마을")
+	check_eq(s.autosave_count, 1, "새 게임은 저장한다")
+
+
 ## R3 (Mhi 가져오기 감춤 검사 빠짐 = 검토자 변이 hidden_import_accepted, Mha 자동 지도 감춤 검사 빠짐, Mhl 불러오기 감춤 검사 빠짐):
 ## 줄 묶음마다 보이지 않는 알약의 입력 종류는 거부되고 주인 갈고리를 부르지 않는다. 보이는 알약은 받는다(빈 슬롯 불러오기만 거부).
 ## 캠프 묶음은 감춘 알약이 없다(전부 보인다). 갈고리는 기록하는 가짜로 바꿔 실제 저장·파일 창을 열지 않는다.

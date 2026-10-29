@@ -14,12 +14,14 @@ signal opened
 signal closed
 signal camp_requested
 signal shop_requested
+## 광장 「모험가 길드」(M3 A7c): 탐색 화면이 길드 화면을 연다(상점과 같은 길).
+signal guild_requested
 signal enter_requested
 
 ## 광장 시설(원작 차례, 숫자 키 1~6).
 const PLAZA_KEYS := ["inn", "shop", "pub", "guild", "council", "entrance"]
-## 아직 문을 열지 않은 시설(누르면 이유만).
-const PLAZA_DIM := ["pub", "guild", "council"]
+## 아직 문을 열지 않은 시설(누르면 이유만). 길드는 M3 A7c 에 열었다.
+const PLAZA_DIM := ["pub", "council"]
 const ENTRANCE_KEYS := ["start", "back"]
 ## 숙소 줄(원작 차례에서 夜まで休憩する·預かり所는 뺀다: 시계·맡김이 없다). 대화는 주인이 없어 흐림.
 const INN_KEYS := ["stay", "save", "talk", "leave"]
@@ -349,7 +351,7 @@ func _set_cursor(i: int) -> void:
 			inn_cursor = i
 
 
-## 줄 i 의 일. 광장: 흐린 시설 → 이유만, 캡슐 숙소 → 숙소 쪽, 정크 공방 → 상점(탐색 화면이 연다), 아보르 입구 → 입구 쪽.
+## 줄 i 의 일. 광장: 흐린 시설 → 이유만, 캡슐 숙소 → 숙소 쪽, 정크 공방 → 상점·모험가 길드 → 길드(탐색 화면이 연다), 아보르 입구 → 입구 쪽.
 ## 입구: 탐사 시작 → 탐색 화면, 돌아가기 → 광장. 숙소: 숙박 → 확인 창(돈이 모자라면 이유만), 기록 → 기록 쪽, 대화 → 이유만, 나간다 → 광장.
 func _run(i: int) -> bool:
 	match page:
@@ -365,6 +367,8 @@ func _run(i: int) -> bool:
 					_clear_notice()
 				"shop":
 					shop_requested.emit()
+				"guild":
+					guild_requested.emit()
 				"entrance":
 					page = "entrance"
 					entrance_cursor = 0

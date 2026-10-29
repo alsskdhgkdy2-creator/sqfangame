@@ -1,5 +1,5 @@
 ## 마을 그림 자리표시(M3 A2, 그림은 B5): 장소·시설마다 세로 그라데이션 하나와 벡터 실루엣 하나를 그린다. 글자·그림 파일은 없다.
-## 그리는 함수 하나(paint)를 바탕(TownBackdrop, 화면 전체)·광장 목록의 그림 띠·여관 NPC 자리가 같이 쓴다(D28).
+## 그리는 함수 하나(paint)를 바탕(TownBackdrop, 화면 전체)·광장 목록의 그림 띠·여관·길드(M3 A7c) NPC 자리가 같이 쓴다(D28).
 ## 그린 것은 캔버스마다 drawn 기록에 남는다(시험이 읽는다, CampBackdrop 와 같은 방식).
 class_name TownArt
 extends RefCounted
@@ -15,6 +15,7 @@ const LOOKS := {
 	"guild": [Color("13233d"), Color("4a6fa5"), Color(0.03, 0.05, 0.1, 0.5), "roofs"],
 	"council": [Color("1f2a2e"), Color("7d8f94"), Color(0.04, 0.06, 0.07, 0.5), "roofs"],
 	"npc_inn": [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0.08, 0.04, 0.02, 0.62), "figure"],
+	"npc_guild": [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0.02, 0.04, 0.1, 0.62), "figure"],
 }
 
 ## 캔버스 → 마지막으로 그린 것 [{key, rect, top, bottom, shape}](시험용).

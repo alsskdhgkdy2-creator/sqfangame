@@ -21,10 +21,10 @@ export async function partC() {
   await clickButton('TitleNewGame');
   let s = await waitFor((x) => x.location === 'town' && x.town?.open && !x.busy, '새 게임 → 광장');
   check(s.town.page === 'plaza' && JSON.stringify(s.town.rows) === JSON.stringify(PLAZA)
-    && JSON.stringify(s.town.dim) === JSON.stringify([false, false, true, true, true, false]) && s.town.band[0] === '묵어서 쉬고, 진행을 기록한다'
+    && JSON.stringify(s.town.dim) === JSON.stringify([false, false, true, false, true, false]) && s.town.band[0] === '묵어서 쉬고, 진행을 기록한다'
     && s.day === 1 && s.town.day === '1일째' && s.autosaves === 1 && s.town.art === 'plaza' && !s.buttons.MapButton && !s.buttons.Pad_forward
     && s.buttons.CampButton && PLAZA.every((n) => s.buttons[n]),
-  '마을 1: 광장 — 원작 차례 여섯 줄·흐림(정보상 바·길드·관리국)·띠·1일째, 새 게임 자동 저장, 탐색 HUD 없음',
+  '마을 1: 광장 — 원작 차례 여섯 줄·흐림(정보상 바·관리국, 길드는 A7c 에서 연다)·띠·1일째, 새 게임 자동 저장, 탐색 HUD 없음',
   { town: s.town, day: s.day, autosaves: s.autosaves, buttons: Object.keys(s.buttons) });
   let idb = await waitIdb(s);
   check(!idb.timeout, '마을 1: 새 게임 자동 저장이 IndexedDB 에 반영', idb);

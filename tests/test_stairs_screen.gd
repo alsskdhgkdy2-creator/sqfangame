@@ -332,7 +332,7 @@ func test_place_text_fits_everywhere() -> void:
 	var font := s._floor_label.get_theme_font("font")
 	s._save_slot("slot1")
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	await kit.frames(2)
 	var pm := s.party_menu
 	var rt := pm.records_tab

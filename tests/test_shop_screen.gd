@@ -888,6 +888,90 @@ func test_layer_three_window_over_a_held_yes_buys_nothing() -> void:
 			await kit.frames(2)
 
 
+const ARROW_KEYS := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT}
+
+
+## 손가락 FINGER 로 b 를 누른 채 답(커서·칸 커서·수량)을 dir 로 옮긴다(pad: 다른 손가락으로 방향 패드, key: 방향키). 옮긴 뒤 눌림이 풀렸고,
+## 떼도 화면이 가진 것(칸 고르기 이유 포함)이 그대로인지 본다.
+func _held_across(sc: ShopScreen, b: TouchButton, dir: String, variant: String, tag: String) -> void:
+	var p := kit.center_of(b)
+	var pre := [sc.dialog.pick, sc.dialog.slot_cursor, sc.dialog.qty]
+	kit.touch(FINGER, p, true)
+	await kit.frames(1)
+	check(b.held, tag + ": 준비: 누르는 중")
+	if variant == "pad":
+		await kit.tap(kit.center_of(sc.dir_pad.button(dir)), FINGER + 1)
+	else:
+		await kit.press_key(ARROW_KEYS[dir])
+	check([sc.dialog.pick, sc.dialog.slot_cursor, sc.dialog.qty] != pre, tag + ": 답이 옮겨졌다")
+	check(not b.held, tag + ": 답이 바뀌면 누르기 취소")
+	var moved := _sig(sc) + [sc.dialog.slot_reason]
+	kit.touch(FINGER, p, false)
+	await kit.frames(2)
+	check_eq(_sig(sc) + [sc.dialog.slot_reason], moved, tag + ": 뗄 때 아무 일 없음(사기·끼기·저장 없음)")
+
+
+## M-H9(답 커서)·M-H10(칸 커서)가 바뀌어도 누르기를 버리지 않음(검토 seq=9, 공용 창): 구매 확인 창에서 키패드 「선택」·「예」·「아니오」를,
+## 칸 고르기에서 「선택」·칸 줄을 누른 채 답을 옮기면(다른 손가락 방향 패드·방향키) 누르기가 풀리고 떼도 사거나 끼거나 저장하지 않는다.
+## 옮기지 않고 누른 「예」·칸 줄은 그대로 사고 낀다.
+func test_answer_change_drops_held_presses() -> void:
+	_kit()
+	var sc := await _fresh(_state(1000))
+	var s := sc.state
+	await _to_list(sc, 2, 0, WIZARD)
+	await _step(sc, "row", _row_of(sc, "equip.signal_charm"))
+	check_eq([sc.dialog.mode, sc.ask, sc.dialog.pick, saves], ["confirm", "buy", ShopDialog.YES, 0], "준비: 구매 확인(「예」 먼저)")
+	var ok := sc.active_key_pad().button("ok")
+	for t in [["「선택」", ok], ["「예」", sc.dialog.yes_button], ["「아니오」", sc.dialog.no_button]]:
+		for v in ["pad", "key"]:
+			await _held_across(sc, t[1], "right" if sc.dialog.pick == ShopDialog.YES else "left", v, "구매 %s(%s)" % [t[0], v])
+	check_eq([sc.dialog.mode, saves, int(s.gear_bag.get("equip.signal_charm", 0))], ["confirm", 0, 0], "구매 창 그대로, 사지 않았다")
+	if sc.dialog.pick != ShopDialog.YES:
+		await _step(sc, "dialog", ["pick", -1])
+	await kit.tap(kit.center_of(sc.dialog.yes_button))
+	check_eq([saves, sc.ask, sc.dialog.mode], [1, "equip", "confirm"], "보통 「예」 → 사고 저장, 장착 물음")
+	await _step(sc, "dialog", ["confirm", null])
+	check_eq([sc.dialog.mode, sc.dialog.slot_cursor], ["slots", 3], "준비: 칸 고르기(커서 칸 3)")
+	for v in ["pad", "key"]:
+		await _held_across(sc, sc.dialog.slot_buttons[2], "up", v, "칸 3 줄(%s)" % v)
+		check_eq(sc.dialog.slot_cursor, 2, "준비: 커서 칸 2(막힌 칸)")
+		await _held_across(sc, ok, "down", v, "칸 「선택」(%s)" % v)
+	check_eq([sc.dialog.mode, saves, s.party.members[WIZARD].equip[3]], ["slots", 1, ""], "칸 고르기 그대로, 끼지 않았다")
+	await kit.tap(kit.center_of(sc.dialog.slot_buttons[2]))
+	check_eq([s.party.members[WIZARD].equip[3], saves, sc.dialog.mode], ["equip.signal_charm", 2, ""], "보통 칸 3 줄 → 끼고 저장")
+
+
+## M-H14(수량이 바뀌어도 누르기를 버리지 않음, 검토 seq=10): 구매(메디카)·판매(네온 쥐 꼬리 3개) 수량 창에서 키패드 「선택」·「예」를 누른 채
+## 수량을 바꾸면(다른 손가락 방향 패드 ↑↓·방향키) 누르기가 풀리고, 떼도 사고팔지 않고 저장하지 않는다. 바뀐 수량에서 누른 보통 「예」는
+## 그 수량을 한 번 사고판다(저장 1).
+func test_quantity_change_drops_held_presses() -> void:
+	_kit()
+	for sell in [false, true]:
+		var s := _sell_state()
+		var sc := await _fresh(s)
+		var have := func() -> int: return int(s.materials.get(TAIL, 0)) if sell else int(s.consumables.get("use.medica", 0))
+		if sell:
+			await kit.press_key(KEY_2)
+			await _step(sc, "row", 0)
+		else:
+			await _to_list(sc, 3)
+			await _step(sc, "row", _row_of(sc, "use.medica"))
+		var tag0 := "판매" if sell else "구매"
+		check_eq([sc.dialog.mode, sc.dialog.qty, sc.dialog.pick, saves], ["qty", 1, ShopDialog.YES, 0], tag0 + ": 준비: 수량 창 1, 「예」 먼저")
+		var n0: int = have.call()
+		var money0 := s.money
+		var ok := sc.active_key_pad().button("ok")
+		for t in [["「선택」", ok], ["「예」", sc.dialog.yes_button]]:
+			for v in ["pad", "key"]:
+				await _held_across(sc, t[1], "up" if sc.dialog.qty < sc.dialog.max_qty else "down", v, "%s %s(%s)" % [tag0, t[0], v])
+		check_eq([sc.dialog.mode, have.call(), s.money, saves], ["qty", n0, money0, 0], tag0 + ": 창 그대로, 사고팔지 않고 저장 없음")
+		if sc.dialog.qty == 1:
+			await _step(sc, "dialog", ["step", 1])
+		var q := sc.dialog.qty
+		await kit.tap(kit.center_of(sc.dialog.yes_button))
+		check_eq([have.call(), saves], [n0 - q if sell else n0 + q, 1], "%s: 보통 「예」 → 수량 %d 을 한 번, 저장 1" % [tag0, q])
+
+
 # ---- 저장 실패(F6) ----
 
 func test_save_failure_keeps_the_accepted_change_and_the_prompt_chain() -> void:
@@ -1058,7 +1142,7 @@ func test_new_part_arguments_keep_the_camp_defaults() -> void:
 	var et := pm.equip_tab
 	var shop_parts := et.find_children("*", "Control", true, false).filter(func(n: Node) -> bool: return n is ShopFrame or n is CharPanel)
 	check_eq([shop_parts.size(), et.drawn["mark"]], [0, 0], "캠프 장비: 상점 틀 없음·칸 0 표시")
-	check_eq(pm.camp_list.rows[1].position.y - pm.camp_list.rows[0].position.y, 64.0 + 6.0, "캠프 명령 줄 사이 6")
+	check_eq(pm.camp_list.rows[1].position.y - pm.camp_list.rows[0].position.y, 64.0 + 2.0, "캠프 명령 줄 사이 2(A7c: 줄 여섯이 방향 패드 위에 든다)")
 
 
 # ---- 판매(S3b, §8.8) ----

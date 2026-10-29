@@ -399,7 +399,7 @@ func test_no_control_relies_on_z_index() -> void:
 	var s := await kit.open("native", 7)
 	await kit.press_key(KEY_P)
 	_check_z(tree.root, "캠프")
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	_check_z(tree.root, "캠프 기록")
 	await kit.press_key(KEY_ESCAPE)
 	await kit.press_key(KEY_ESCAPE)
@@ -501,6 +501,8 @@ func test_touch_targets_stay_at_least_64() -> void:
 			pm.handle("tab", i)
 			await kit.frames(2)
 			_check_targets(pm.visible_buttons(), "%s 캠프 하위 화면 %s" % [tag, PartyMenu.TAB_KEYS[i]])
+		pm.handle("tab", PartyMenu.TAB_KEYS.find("records"))  # A7c: 마지막 하위 화면이 「대열」이 되어 기록으로 돌아간다
+		await kit.frames(2)
 		pm.handle("record_new_game")
 		await kit.frames(2)
 		_check_targets(pm.visible_buttons(), "%s 기록 새 게임 확인 창" % tag)

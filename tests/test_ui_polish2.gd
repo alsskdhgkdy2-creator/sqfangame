@@ -65,7 +65,9 @@ func _max_party(s: DungeonScreen) -> void:
 func _status_panel(s: DungeonScreen) -> StatusPanel:
 	var st := StatusPanel.new()
 	st.name = "TestStatusPanel"
-	st.set_state(s.state, s.texts, s._member_names.duplicate())
+	var names: Array[String] = []
+	names.assign(s.state.party.members.map(func(m: PartyState.Member) -> String: return PartyNames.display_name(s.texts, m)))  # M3 A7c: 탐색 화면의 이름 저장(_member_names)을 없앴다: 대원의 화면 이름
+	st.set_state(s.state, s.texts, names)
 	s.add_child(st)
 	return st
 
@@ -117,7 +119,8 @@ func test_status_rows_show_hp_and_thinner_tp_without_overlap() -> void:
 	for i in hp.size():
 		s.state.party.members[i].hp = hp[i]
 		s.state.party.members[i].tp = tp[i]
-	var party_names := s._member_names.duplicate()
+	var party_names: Array[String] = []
+	party_names.assign(s.state.party.members.map(func(m: PartyState.Member) -> String: return PartyNames.display_name(s.texts, m)))  # M3 A7c: 대원의 화면 이름
 	var class_names: Array[String] = []
 	for i in s.state.party.members.size():
 		class_names.append(texts.t(s.state.defs.class_of(i).name_key))

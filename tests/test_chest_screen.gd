@@ -622,7 +622,7 @@ func test_toasts_over_windows_go_to_the_window_notice() -> void:
 	await kit.press_key(KEY_P)
 	await kit.frames(2)
 	check_eq([pm.is_open(), s._toast.modulate.a, pm.notice], [true, 0.0, ""], "캠프가 열리면 보이던 상자 안내는 지운다")
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	await kit.frames(2)
 	s._save_slot("slot1")
 	await kit.frames(2)

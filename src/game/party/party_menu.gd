@@ -20,13 +20,18 @@ extends Control
 
 signal opened
 signal closed
-## 캠프 명령(목록 순서, 07 §9.8 ②: 원작 ITEM · STATUS · EQUIP · CUSTOM 차례 + 원작에 없는 기록). 숫자 키 1~6. 목록 줄은 앞 다섯
-## (CAMP_ROWS)이고 「6 닫기」(고르기 중 「뒤로」)는 줄 없이 키 `6`과 키패드 「취소」(= Esc·P)만 한다(P3, 사용자 결정 2026-10-25:
+## 캠프 명령(목록 순서, 07 §9.8 ②: 원작 ITEM · STATUS · EQUIP · CUSTOM 차례 + 원작에 없는 기록). 숫자 키 1~7. 목록 줄은 앞 여섯
+## (CAMP_ROWS)이고 「7 닫기」(고르기 중 「뒤로」)는 줄 없이 키 `7`과 키패드 「취소」(= Esc·P)만 한다(P3, 사용자 결정 2026-10-25:
 ## 방향 십자를 왼쪽 아래 전투 자리에 두려고 줄을 뺐다). 하위 화면 번호(tab, TAB_KEYS)는 이 차례와 따로다: camp_tab·camp_index 로 잇는다(숫자 키는 어디서나 이 차례).
-const CAMP_KEYS := ["items", "status", "equip", "skills", "records", "close"]
-const CAMP_ROWS := 5
-## 명령 목록 위(알림 줄 아래 8). 원작 III 은 y 164 지만 64 줄 다섯이 카드 위에 들게 지금 자리를 둔다(07 §9.8 층 표).
-const CAMP_TOP := 116.0
+## M3 A7c: 「대열」(원작 PARTY 「전열·후열 바꾸기」)을 원작 차례대로 스킬(CUSTOM) 뒤에 넣었다(1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 대열 · 6 기록,
+## 키 `7` = 닫기). 대열 화면 번호는 TAB_KEYS 끝(5)이라 다른 하위 화면 번호는 그대로다.
+const CAMP_KEYS := ["items", "status", "equip", "skills", "arrange", "records", "close"]
+const CAMP_ROWS := 6
+## 명령 목록 위(알림 줄 바로 아래). 원작 III 은 y 164 지만 64 줄 여섯이 방향 십자(y 511) 위에 들게 줄 사이·안쪽 여백을 2 로 좁혔다
+## (M3 A7c, 이름 붙은 차이: 다섯 줄일 때는 y 116, 줄 사이 6).
+const CAMP_TOP := 110.0
+const CAMP_GAP := 2.0
+const CAMP_PAD := 2.0
 ## 맨 위 띠(07 §9.8 ③, 1280×720 기준. 오른쪽 것은 오른쪽 끝 기준): 걸음 문패(원작 시계 다이얼 자리), 장소 띠(x 176 → 소지금 왼쪽 끝),
 ## 소지금(W − 328, 16, 328×50, 상점 소지금 문패와 같은 그림), 알림 줄(x 176 → W − 16, y 70~108, 알림이 있을 때만).
 const STEP_PLATE := Rect2(0, 0, 176, 66)
@@ -60,7 +65,7 @@ const DIALOG_BUTTON_GAP := 16.0
 ## 확인 창 바로 뒤에서 화면 전체를 어둡게 하는 판 색(dialog_dim).
 const DIALOG_DIM := Color(0, 0, 0, 0.6)
 const NOTICE_SEC := 2.5
-const TAB_KEYS := ["status", "skills", "equip", "items", "records"]
+const TAB_KEYS := ["status", "skills", "equip", "items", "records", "arrange"]
 ## 가상 키패드 단추 → 같은 일을 하는 물리 키(키 표 key_action 을 같이 써서 키패드 = 키).
 const PAD_KEYS := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "ok": KEY_ENTER, "back": KEY_ESCAPE}
 ## 방향 십자 자리(왼쪽 아래 앵커: 왼쪽에서 x, 아래에서 y) — 전투와 같은 엄지 자리(06 §9.10). 상태·장비 화면은 왼쪽 열(장비 줄)을
@@ -90,6 +95,8 @@ var blocked_hook: Callable
 var debug := false
 ## 규칙 함수가 상태를 바꾼 직후 부른다(자동 저장).
 var save_hook: Callable
+## 캠프 「대열」의 「결정」(M3 A7c): 탐색 화면 입구 DungeonScreen.arrange_party(front, back) -> 이벤트 열(자동 저장 포함).
+var arrange_hook: Callable
 
 # ---- 상태 ----
 var state: ExplorationState
@@ -131,6 +138,7 @@ var skill_tab: PartySkillTab
 var equip_tab: PartyEquipTab
 var items_tab: PartyItemsTab
 var records_tab: PartyRecordsTab
+var arrange_tab: PartyArrangeTab
 var tabs: Array[Control] = []
 ## 확인 창 층(떠 있을 때만 보인다): 어둡게 하는 판(dialog_dim, 화면 전체) → 창(dialog_panel) → 글 → 단추 둘.
 var dialog_layer: Control
@@ -172,7 +180,8 @@ func build(text_db: TextDb) -> void:
 	equip_tab = PartyEquipTab.new()
 	items_tab = PartyItemsTab.new()
 	records_tab = PartyRecordsTab.new()
-	tabs = [status_tab, skill_tab, equip_tab, items_tab, records_tab]
+	arrange_tab = PartyArrangeTab.new()
+	tabs = [status_tab, skill_tab, equip_tab, items_tab, records_tab, arrange_tab]
 	for i in tabs.size():
 		var t: Control = tabs[i]
 		t.name = "Tab" + TAB_KEYS[i].capitalize()
@@ -213,9 +222,11 @@ func _build_camp() -> void:
 	notice_line.draw.connect(_draw_notice_line)
 	camp_list = FacilityList.new()
 	camp_list.name = "CampList"
+	camp_list.row_gap = CAMP_GAP
+	camp_list.inner_pad = CAMP_PAD
 	add_child(camp_list)
 	place(camp_list, Vector2.ZERO, Vector2.ZERO,
-		Vector4(0, CAMP_TOP, FacilityList.WIDTH, CAMP_TOP + FacilityList.content_height(CAMP_ROWS)))
+		Vector4(0, CAMP_TOP, FacilityList.WIDTH, CAMP_TOP + FacilityList.content_height(CAMP_ROWS, CAMP_GAP, CAMP_PAD)))
 	var items := []
 	for i in CAMP_ROWS:
 		items.append({"name": "Camp_" + CAMP_KEYS[i], "text": camp_label(i)})
@@ -426,7 +437,7 @@ func _setup_cards() -> void:
 
 ## 모든 입력이 여기로 온다. 받아들였으면 true. 한 프레임에 하나만. 캠프 위에 바깥 창이 떠 있으면(blocked_hook) 아무것도 받지 않는다.
 ## 캠프 뿌리: camp(명령 줄 0~5, CAMP_KEYS 차례)·camp_cursor(±1)·confirm·back·close. 대원 고르기: member(칸)·pick_move(Vector2i)·
-##       confirm·camp(상태·장비·스킬 줄 = 고르기 바꾸기, 소지품·기록 줄 = 바로 열기, 5 = 뒤로)·back·close.
+##       confirm·camp(상태·장비·스킬 줄 = 고르기 바꾸기, 소지품·대열·기록 줄 = 바로 열기, 7 = 뒤로)·back·close.
 ## 하위 화면: tab(0~3)·member(칸)·member_step(±1)·back(한 단계 뒤로)·to_root(캠프 뿌리로)·close(캠프 닫기)·
 ##       dialog_move(±1)·dialog_pick(0·1)·dialog_ok·dialog_back·
 ##       스킬 탭 node(트리 칸)·node_dir(Vector2i)·plus·minus·revert·commit·
@@ -453,7 +464,11 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 	if not dialog_kind.is_empty():
 		match kind:
 			"dialog_move":
-				dialog_pick = clampi(dialog_pick + int(arg), 0, 1)
+				# 고름은 공용 창 부품이 옮긴다: 바뀌면 누르고 있던 키패드 「선택」·창 단추를 버린다(M3 A7c seq=9).
+				var band := dialog_layer as ConfirmBand
+				band.pick = dialog_pick
+				band.move(int(arg))
+				dialog_pick = band.pick
 				return true
 			"dialog_pick":
 				return _dialog_choose(int(arg))
@@ -479,13 +494,13 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 			return true
 		"member":
 			var i := int(arg) if arg != null else -1
-			if i < 0 or i >= state.party.members.size() or i == member or tab == 3 or tab == 4:
+			if i < 0 or i >= state.party.members.size() or i == member or tab >= 3:
 				return false
 			_guard(func() -> void: _set_member(i))
 			return true
 		"member_step":
-			if tab == 3 or tab == 4:
-				return false  # 소지품·기록은 대원과 상관없다(E2-b: 소지품에는 대원 판이 없다)
+			if tab >= 3:
+				return false  # 소지품·기록·대열은 대원과 상관없다(E2-b: 소지품에는 대원 판이 없다)
 			if tab == 2 and equip_tab.list_open:
 				return false  # 장비 목록이 열려 있으면 대원을 넘기지 않는다(띠 단추·←→·Q/E, 07 §9.9 E2-c)
 			var n := state.party.members.size()
@@ -493,6 +508,8 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 			_guard(func() -> void: _set_member(to))
 			return true
 		"back":
+			if tab == 5 and arrange_tab.board.held >= 0:
+				return arrange_tab.dispatch("unhold", null)  # 대열: 고른 칸을 먼저 놓는다
 			if tab == 2 and equip_tab.list_open:
 				return equip_tab.dispatch("list_close", null)
 			if tab == 3 and items_tab.mode != "list":
@@ -563,7 +580,7 @@ func _dispatch_pick(kind: String, arg: Variant) -> bool:
 			pick_cursor = to
 			return true
 		"camp":
-			# 고르기 중에도 명령 줄은 모두 일한다: `6`(줄 없음, = 「취소」)은 고르기 취소, 상태·스킬·장비는 그 명령으로 고르기를
+			# 고르기 중에도 명령 줄은 모두 일한다: `7`(줄 없음, = 「취소」)은 고르기 취소, 상태·스킬·장비는 그 명령으로 고르기를
 			# 바꾸고(커서 대원 그대로, 지금 명령이면 아무 일 없음), 소지품·기록은 바로 연다.
 			var i := int(arg) if arg != null else -1
 			if i < 0 or i >= CAMP_KEYS.size() or i == camp_index(pick_cmd):
@@ -744,17 +761,17 @@ func key_action(code: int) -> Array:
 	var num := _number(code)
 	if page != "sub":
 		if num >= 0 and num < CAMP_KEYS.size():
-			return ["camp", num]  # 뿌리: 그 명령. 고르기: 2~4 고르기 바꾸기, 1·5 바로 열기, 6 「뒤로」
+			return ["camp", num]  # 뿌리: 그 명령. 고르기: 2~4 고르기 바꾸기, 1·5·6 바로 열기, 7 「뒤로」
 		if enter:
 			return ["confirm", null]
 		if page == "pick":
 			return ["pick_move", dir] if dir != Vector2i.ZERO else []
 		return ["camp_cursor", dir.y] if dir.y != 0 else []
 	if num >= 0 and num < CAMP_ROWS:
-		return ["tab", camp_tab(num)]  # 하위 화면도 명령 줄 차례(07 §9.8: 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록)
+		return ["tab", camp_tab(num)]  # 하위 화면도 명령 줄 차례(07 §9.8: 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 대열 · 6 기록)
 	if tab == 3 and items_tab.mode == "pick" and dir != Vector2i.ZERO:
 		return ["pick_move", dir]  # 소지품 고르기: 방향 = 카드 사이(캠프 고르기와 같다)
-	if (tab == 3 or (tab == 2 and equip_tab.list_open)) and (code == KEY_Q or code == KEY_E):
+	if (tab >= 3 or (tab == 2 and equip_tab.list_open)) and (code == KEY_Q or code == KEY_E):
 		return []  # 소지품에는 대원이 없다(E2-b). 장비 목록이 열려 있으면 대원을 넘기지 않는다(E2-c)
 	match code:
 		KEY_Q:
@@ -780,6 +797,10 @@ func key_action(code: int) -> Array:
 		4:  # 기록: ←→ 줄 안
 			if dir.x != 0:
 				return ["cursor_x", dir.x]
+		5:  # 대열: ↑↓ 칸·「결정」 차례, 선택 = 칸 고르기·「결정」. ←→ 는 없다
+			if dir.y != 0:
+				return ["cursor", dir.y]
+			return ["confirm", null] if enter else []
 	if dir.y != 0:
 		return ["cursor", dir.y]
 	if dir.x != 0:
@@ -956,7 +977,8 @@ func _refresh() -> void:
 		return
 	# 문맥이 바뀌면(탭·대원·확인 창·장비 목록) 앞 문맥에서 시작한 누르기를 버린다: 그 손가락은 뗄 때까지 아무것도 누르지 못한다.
 	var sub := page == "sub"
-	var ctx := "%s|%d|%d|%d|%s|%s" % [page, pick_cmd, tab, member, dialog_kind, tabs[tab].call("context") if sub else ""]
+	# 뿌리 명령 커서도 문맥이다(M3 A7c seq=8): 커서가 바뀌면 누르고 있던 키패드 「선택」이 뗄 때 바뀐 줄을 실행하지 않는다.
+	var ctx := "%s|%d|%d|%d|%d|%s|%s" % [page, camp_cursor, pick_cmd, tab, member, dialog_kind, tabs[tab].call("context") if sub else ""]
 	if ctx != _context:
 		_context = ctx
 		cancel_pointers()
@@ -986,7 +1008,7 @@ func _refresh() -> void:
 
 ## 하위 화면이 뿌리의 맨 위 띠와 띠(알림 줄 자리)를 두는지: 기록(07 §9.9 E1 ⑥)·소지품(E2-b).
 func root_band() -> bool:
-	return page == "sub" and (tab == 4 or tab == 3)
+	return page == "sub" and tab >= 3
 
 
 ## 맨 위 띠: 걸음 문패·장소 띠·소지금(뿌리·고르기·기록).
@@ -1049,7 +1071,7 @@ func _refresh_notice() -> void:
 ## 알림 줄에 쓰는 글(여러 줄 안내는 한 줄로 잇는다). 안내가 없으면 기록은 「기록」, 소지품은 「소지품   장비 n · 소재 n」.
 func notice_line_text() -> String:
 	if notice.is_empty() and root_band():
-		return items_tab.caption() if tab == 3 else texts.t("camp.cmd.records")
+		return items_tab.caption() if tab == 3 else texts.t("camp.arrange.title") if tab == 5 else texts.t("camp.cmd.records")
 	return "   ".join(notice.split("\n", false))
 
 
@@ -1205,10 +1227,18 @@ func debug_info(css: Callable) -> Dictionary:
 			"qty_pick": items_tab.qty.pick if items_tab.qty_open() else -1, "pick": pick_cursor if items_pick() else -1},
 		"records": {"cursor": [records_tab.cur_row, records_tab.cur_col], "cards": [0, 1, 2].map(records_tab.card_lines),
 			"save_ok": records_tab.save_ok(), "help": records_tab.help_text()} if tab == 4 else {},
+		# 대열(M3 A7c): 초안(ID)·커서(6 = 결정)·고른 칸.
+		"arrange": arrange_tab.debug_info() if page == "sub" and tab == 5 else {},
 		"buttons": buttons, "nodes": nodes, "pad": pad_state(),
 		# 채집 알약(M3 A5): 그린 차례의 [{kind, left, max}], 보이지 않으면 빈 목록.
 		"gather_pills": gather_pills.counts.duplicate(true) if gather_pills.visible else [],
 	}
+
+
+## 캠프 「대열」이 받아들여졌다(자동 저장 뒤): 카드·표시를 새 순서로 만들고 changed 를 낸다.
+func party_rearranged() -> void:
+	_setup_cards()
+	changed.emit([{"type": "arranged"}])
 
 
 ## 바깥(디버그 요청)이 상태를 바꿨을 때 열린 메뉴를 다시 그린다.

@@ -2,7 +2,7 @@
 ## 바탕(뿌리·고르기 = 무늬 판과 그림 창, 하위 화면 = CAMP_DIM), 대원 고르기(파티 카드, 커서 카드만 노란 테두리), 상태 화면(원작 상태 화면 배치), 기록, 보이는 위아래 = 누르는 위아래, 64px, 글자 대비.
 ## 층 표(1280×720 기준, 1728×720 도 같은 규칙, 오른쪽 것은 오른쪽 끝 기준): 걸음 문패 0,0 176×66(원작 시계 다이얼 자리),
 ## 장소 띠 x 176 → W − 328·y 0~66, 소지금 (W − 328, 16) 328×50, 알림 줄 x 176 → W − 16·y 70~108(알림이 있을 때만),
-## 명령 목록 x 0~430·y 116~472(줄 64, 간격 6, 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록), 파티 카드 아래 두 줄(윗줄 = 전열).
+## 명령 목록 x 0~430·y 110~(줄 64, 간격 2, 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 대열 · 6 기록), 파티 카드 아래 두 줄(윗줄 = 전열).
 ## 저장은 장면 시험 임시 폴더에만.
 extends TestCase
 
@@ -15,7 +15,8 @@ const ITEMS := 0
 const STATUS := 1
 const EQUIP := 2
 const SKILLS := 3
-const RECORDS := 4
+const ARRANGE := 4
+const RECORDS := 5
 
 var kit: Kit
 var _root_size := Vector2i.ZERO
@@ -173,12 +174,12 @@ func test_camp_root_follows_the_layer_table_at_both_sizes() -> void:
 		check(not pm.notice_line.visible, tag + ": 알림이 없으면 알림 줄은 감춘다")
 		check_eq(_rect(pm.notice_line), Rect2(176, 70, w - 192, 38), tag + ": 알림 줄 x 176 → W − 16, y 70~108")
 		var lr := _rect(pm.camp_list)
-		check_eq(lr, Rect2(0, 116, 430, FacilityList.content_height(5)), tag + ": 명령 목록 x 0~430, y 116~472(P3: 「6 닫기」 줄 없음)")
-		check(lr.end.y <= 472.0 + 0.5, tag + ": 목록 아래 끝 472 %s" % str(lr))
+		check_eq(lr, Rect2(0, 110, 430, FacilityList.content_height(6, 2, 2)), tag + ": 명령 목록 x 0~430, y 110~(줄 여섯, 간격 2 — A7c 「대열」, P3: 「7 닫기」 줄 없음)")
+		check(lr.end.y <= 511.0 + 0.5, tag + ": 목록 아래 끝 ≤ 511(왼쪽 방향 패드 위) %s" % str(lr))
 		check(lr.position.y >= _rect(pm.notice_line).end.y and not lr.intersects(plate), tag + ": 목록은 맨 위 띠·알림 줄 아래")
 		var rows := pm.camp_list.rows
-		check_eq(rows.size(), 5, tag + ": 명령 다섯(닫기는 「취소」·Esc·P·6)")
-		check_eq(PartyMenu.CAMP_KEYS.slice(0, 5), ["items", "status", "equip", "skills", "records"], tag + ": 차례 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 기록")
+		check_eq(rows.size(), 6, tag + ": 명령 여섯(닫기는 「취소」·Esc·P·7)")
+		check_eq(PartyMenu.CAMP_KEYS.slice(0, 6), ["items", "status", "equip", "skills", "arrange", "records"], tag + ": 차례 1 소지품 · 2 상태 · 3 장비 · 4 스킬 · 5 대열 · 6 기록")
 		for i in rows.size():
 			var r := _rect(rows[i])
 			check(r.size.y >= 64.0 and r.size.x >= 64.0, "%s: 줄 %d %s ≥ 64" % [tag, i, str(r.size)])
@@ -333,7 +334,7 @@ func test_backdrop_is_the_board_on_every_camp_screen_and_dialogs_dim_behind() ->
 	check_eq(board.mouse_filter, Control.MOUSE_FILTER_IGNORE, "판은 장식(IGNORE)")
 	var steps := [["뿌리", []], ["대원 고르기", [KEY_2]], ["상태 화면", [KEY_ENTER]], ["뿌리로", [KEY_ESCAPE]],
 		["소지품", [KEY_1]], ["뿌리로", [KEY_ESCAPE]], ["장비 고르기", [KEY_3]], ["장비 칸", [KEY_ENTER]], ["장비 목록", [KEY_ENTER]],
-		["장비 칸으로", [KEY_ESCAPE]], ["뿌리로", [KEY_ESCAPE]], ["스킬", [KEY_4, KEY_ENTER]], ["뿌리로", [KEY_ESCAPE]], ["기록", [KEY_5]]]
+		["장비 칸으로", [KEY_ESCAPE]], ["뿌리로", [KEY_ESCAPE]], ["스킬", [KEY_4, KEY_ENTER]], ["뿌리로", [KEY_ESCAPE]], ["기록", [KEY_6]]]
 	for st in steps:
 		for k in st[1]:
 			await kit.press_key(k)
@@ -551,8 +552,8 @@ func test_member_pick_and_every_camp_command() -> void:
 	await kit.press_key(KEY_2)
 	check_eq([pm.page, pm.pick_cmd, pm.pick_cursor, pm.camp_cursor], ["pick", 0, 0, STATUS], "2 → 상태 대원 고르기(커서 칸 0)")
 	check_eq(pm.camp_list.rows[STATUS].theme_state(), "fac:chosen", "고른 명령 = 밝은 시안")
-	check_eq(pm.camp_list.rows.size(), 5, "「뒤로」 줄은 없다(키패드 「취소」·Esc·P·6)")
-	for i in 5:
+	check_eq(pm.camp_list.rows.size(), 6, "「뒤로」 줄은 없다(키패드 「취소」·Esc·P·7)")
+	for i in 6:
 		check_eq(pm.camp_list.rows[i].mouse_filter, Control.MOUSE_FILTER_STOP, "고르기 중에도 명령 줄 %d 를 누를 수 있다" % i)
 	_check_pick_marks(pm, "고르기 처음")
 	check_eq(pm.camp_list.rows[ITEMS].theme_state(), "fac:normal", "다른 명령 줄 = 시설 청록 글자")
@@ -601,16 +602,16 @@ func test_member_pick_and_every_camp_command() -> void:
 	await kit.press_key(KEY_1)
 	check_eq([pm.page, pm.tab], ["sub", 3], "1 → 소지품")
 	await kit.press_key(KEY_ESCAPE)
-	await kit.press_key(KEY_5)
-	check_eq([pm.page, pm.tab, s.modal.kind], ["sub", 4, ""], "5 → 고르기 없이 기록 화면(따로 된 메뉴 창 없음)")
+	await kit.press_key(KEY_6)
+	check_eq([pm.page, pm.tab, s.modal.kind], ["sub", 4, ""], "6 → 고르기 없이 기록 화면(따로 된 메뉴 창 없음)")
 	await kit.press_key(KEY_ESCAPE)
 	check_eq([pm.page, pm.camp_cursor], ["root", RECORDS], "Esc → 캠프 뿌리(커서 기록)")
 	await kit.tap(kit.center_of(pm.camp_list.rows[RECORDS]))
 	check_eq([pm.page, pm.tab], ["sub", 4], "「기록」 줄 누르기도 기록 화면")
 	await kit.tap(kit.center_of(pm.key_pad_stacked.buttons["back"]))
 	check_eq([pm.page, pm.camp_cursor], ["root", RECORDS], "기록 「뒤로」 → 캠프 뿌리")
-	await kit.press_key(KEY_6)
-	check(not pm.is_open(), "6 닫기 → 탐색(줄은 없어도 키는 그대로)")
+	await kit.press_key(KEY_7)
+	check(not pm.is_open(), "7 닫기 → 탐색(줄은 없어도 키는 그대로)")
 	check(s.camp_button.is_visible_in_tree(), "탐색 HUD 가 돌아온다")
 	await kit.press_key(KEY_P)
 	check_eq(pm.camp_cursor, ITEMS, "다시 열면 커서 0(소지품)")
@@ -619,8 +620,8 @@ func test_member_pick_and_every_camp_command() -> void:
 
 
 ## 휴대폰 확인(2026-10-25): 고르기 중에도 명령 줄이 모두 일한다. 상태·장비·스킬은 고르기를 그 명령으로 바꾸고(고른 모양이 따라감,
-## 커서 대원 그대로, 지금 명령은 아무 일 없음), 소지품·기록은 바로 열고, 키 6·키패드 「취소」는 고르기 취소(P3 에서 「뒤로」 줄을 뺐다).
-## 숫자 키도 같은 줄(07 §9.8 ②: 2·3·4 고르기 바꾸기, 1·5 바로 열기).
+## 커서 대원 그대로, 지금 명령은 아무 일 없음), 소지품·기록은 바로 열고, 키 7·키패드 「취소」는 고르기 취소(P3 에서 「뒤로」 줄을 뺐다).
+## 숫자 키도 같은 줄(07 §9.8 ②: 2·3·4 고르기 바꾸기, 1·5·6 바로 열기, 7 뒤로).
 func test_member_pick_keeps_every_command_row_working() -> void:
 	var s := await _open()
 	var pm := s.party_menu
@@ -673,12 +674,12 @@ func test_member_pick_keeps_every_command_row_working() -> void:
 	check_eq([pm.page, pm.tab], ["sub", 3], "고르기 중 1 → 소지품")
 	await kit.press_key(KEY_ESCAPE)
 	await kit.press_key(KEY_2)
-	await kit.press_key(KEY_5)
-	check_eq([pm.page, pm.tab], ["sub", 4], "고르기 중 5 → 기록")
+	await kit.press_key(KEY_6)
+	check_eq([pm.page, pm.tab], ["sub", 4], "고르기 중 6 → 기록")
 	await kit.press_key(KEY_ESCAPE)
 	await kit.press_key(KEY_3)
-	await kit.press_key(KEY_6)
-	check_eq([pm.page, pm.camp_cursor, pm.is_open()], ["root", EQUIP, true], "고르기 중 6 → 뒤로(캠프는 열린 채)")
+	await kit.press_key(KEY_7)
+	check_eq([pm.page, pm.camp_cursor, pm.is_open()], ["root", EQUIP, true], "고르기 중 7 → 뒤로(캠프는 열린 채)")
 	# 명령이 바뀌면 문맥이 바뀐다: 눌려 있던 카드는 취소되어 뗄 때 아무 일도 하지 않는다.
 	await kit.press_key(KEY_2)
 	var p := kit.center_of(pm.cards.cards[2])
@@ -1484,7 +1485,7 @@ func test_camp_dialog_is_the_banner_for_skills_and_records() -> void:
 	await kit.press_key(KEY_ESCAPE)
 	await kit.press_key(KEY_R)
 	# 기록의 새 게임 창도 같은 띠. 기록의 커서 단추는 뒤에서 고른 그대로이고 어둡게 하는 판과 겹쳐 노랑이 아니다.
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	for px in WINDOWS + [Vector2(1280, 960)]:
 		var size: Vector2 = await _window(px)
 		var tag := "%s(논리 %s) 기록" % [str(px), str(size)]
@@ -2961,7 +2962,7 @@ func test_records_screen_follows_the_option_table() -> void:
 	s._save_slot("slot1")
 	await kit.frames(2)
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	check_eq([pm.page, pm.tab, s.modal.kind], ["sub", 4, ""], "준비: 기록 화면")
 	var first := {}
 	for px in WINDOWS + [Vector2(1280, 960), WINDOWS[0]]:
@@ -3036,12 +3037,12 @@ func test_records_screen_follows_the_option_table() -> void:
 	var saved := SaveCodec.state_hash(s.store.load_slot("slot1").result.state)
 	GrowthRules.grant_exp(s.state, 0, 10)
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	await kit.tap(kit.center_of(rt.load_buttons[0]))
 	check(not pm.is_open() and kit.hash_now() == saved, "불러오기 → 캠프 닫힘, 저장 칸 1 상태")
 	# 빈 칸 불러오기는 못 누름.
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	await kit.tap(kit.center_of(rt.load_buttons[2]))
 	check(pm.is_open() and pm.tab == 4, "빈 칸 불러오기: 아무 일도 없다")
 
@@ -3090,7 +3091,7 @@ func test_records_pills_are_read_from_what_is_drawn() -> void:
 	s._save_slot("slot1")
 	await kit.frames(2)
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	await kit.frames(2)
 	check(rt.load_buttons[1].disabled and not rt.load_buttons[0].disabled, "준비: 슬롯 2 비어 있음(불러오기 못 누름)")
 	check(ListParts.OPT_OFF.s < 0.15 and ListParts.OPT_OFF_TEXT.s < 0.15, "못 누름은 회색(채도 낮음)")
@@ -3156,7 +3157,7 @@ func test_records_contrast_on_what_is_drawn() -> void:
 	s._save_slot("slot1")
 	await kit.frames(2)
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	for st in ["normal", "pressed", "selected", "selected_pressed", "checked", "checked_pressed", "disabled"]:
 		var cols := ListParts.pill_colors(st, "option")
 		check(contrast(cols[1], cols[0]) >= 4.5, "OPTION 알약 %s: %.2f" % [st, contrast(cols[1], cols[0])])
@@ -3201,7 +3202,7 @@ func test_records_automap_pills_follow_the_setting() -> void:
 	var pm := s.party_menu
 	var rt := pm.records_tab
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	var modes: Array = ExplorationRules.AUTOMAP_MODES
 	for mode in modes + [modes[0]]:
 		pm.handle("record_automap", mode)
@@ -3233,7 +3234,7 @@ func test_records_help_line_follows_the_cursor() -> void:
 	s._save_slot("slot1")
 	await kit.frames(2)
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	var t := s.texts
 	var want := [
 		[t.t("camp.records.help.save", {"n": 1}), t.t("camp.records.help.load", {"n": 1})],
@@ -3377,7 +3378,7 @@ func test_held_records_button_does_nothing_after_an_external_alert() -> void:
 	var sig := _slot_sig(s, "slot1")
 	check(not sig.is_empty() and sig[0] != kit.hash_now(), "준비: 있던 수동 저장(지금과 다르다)")
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	check_eq([pm.page, pm.tab], ["sub", 4], "준비: 기록")
 	for c in [["save", true], ["save", false], ["load", true], ["load", false]]:
 		var b: PartyButton = (rt.save_buttons if c[0] == "save" else rt.load_buttons)[0]
@@ -3730,19 +3731,19 @@ func test_records_strip_follows_direct_tab_changes() -> void:
 	await kit.press_key(KEY_2)
 	await kit.press_key(KEY_ENTER)
 	check_eq([pm.page, pm.tab], ["sub", 0], "준비: 상태")
-	# 기록으로 들어가기(1 소지품 · 2 상태 · 3 장비 · 4 스킬 → 5) 와 나가기(5 → 각 화면).
+	# 기록으로 들어가기(1 소지품 · 2 상태 · 3 장비 · 4 스킬 → 6) 와 나가기(6 → 각 화면). 5 는 「대열」(A7c).
 	for k in [[KEY_2, 0, "상태"], [KEY_4, 1, "스킬"], [KEY_3, 2, "장비"], [KEY_1, 3, "소지품"]]:
 		await kit.press_key(k[0])
 		check_eq([pm.page, pm.tab], ["sub", k[1]], "%s 화면" % k[2])
 		await _check_strip(s, _strip_of(s, k[1]), "기록 → %s" % k[2])
-		await kit.press_key(KEY_5)
-		check_eq(pm.tab, 4, "%s → 5 → 기록" % k[2])
+		await kit.press_key(KEY_6)
+		check_eq(pm.tab, 4, "%s → 6 → 기록" % k[2])
 		await _check_strip(s, caption, "%s → 기록" % k[2])
 	# 뿌리에서 연 기록(띠가 보이는 채) → 숫자 키로 각 화면: 띠·맨 위 띠를 감춘다.
 	for k in [[KEY_2, 0, "상태"], [KEY_4, 1, "스킬"], [KEY_3, 2, "장비"], [KEY_1, 3, "소지품"]]:
 		await kit.press_key(KEY_ESCAPE)
-		await kit.press_key(KEY_5)
-		check_eq([pm.page, pm.tab], ["sub", 4], "뿌리 → 5 → 기록")
+		await kit.press_key(KEY_6)
+		check_eq([pm.page, pm.tab], ["sub", 4], "뿌리 → 6 → 기록")
 		await _check_strip(s, caption, "뿌리 → 기록")
 		await kit.press_key(k[0])
 		check_eq(pm.tab, k[1], "기록 → %s" % k[2])
@@ -3750,21 +3751,21 @@ func test_records_strip_follows_direct_tab_changes() -> void:
 	# 살아 있는 알림은 화면을 바꿔도 지우지 않는다(알림 규칙 그대로): 상태에서 뜬 알림이 기록 띠에, 기록에서 뜬 알림은 상태에서 감춰졌다가 돌아오면 다시.
 	await kit.press_key(KEY_2)
 	pm.show_notice("시험 안내 A")
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	await _check_strip(s, "시험 안내 A", "상태에서 뜬 알림 → 기록 띠")
 	await kit.press_key(KEY_4)
 	await _check_strip(s, "", "기록 → 스킬(알림 중)")
 	check(pm.notice == "시험 안내 A" and pm.skill_tab._note_label.text == "시험 안내 A", "알림은 남아 스킬 띠에 보인다")
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	await _check_strip(s, "시험 안내 A", "스킬 → 기록(알림 중)")
 	pm._clear_notice()
 	await _check_strip(s, caption, "알림이 지나면 「기록」")
-	# 초안 → 5 → 버리기 창 → 「버리기」 → 기록(띠 「기록」).
+	# 초안 → 6(기록) → 버리기 창 → 「버리기」 → 기록(띠 「기록」).
 	await kit.press_key(KEY_4)
 	await kit.tap(kit.center_of(pm.skill_tab.plus_button))
 	check(pm.skill_tab.has_draft(), "준비: 초안")
-	await kit.press_key(KEY_5)
-	check_eq([pm.dialog_kind, pm.tab], ["discard", 1], "5 → 버리기 창(아직 스킬)")
+	await kit.press_key(KEY_6)
+	check_eq([pm.dialog_kind, pm.tab], ["discard", 1], "6 → 버리기 창(아직 스킬)")
 	await _check_strip(s, "", "버리기 창(스킬 위)")
 	await kit.press_key(KEY_RIGHT)
 	await kit.press_key(KEY_ENTER)
@@ -3868,7 +3869,7 @@ func test_records_enter_on_file_and_new_game_pills() -> void:
 	var pm := s.party_menu
 	var rt := pm.records_tab
 	await kit.press_key(KEY_P)
-	await kit.press_key(KEY_5)
+	await kit.press_key(KEY_6)
 	check_eq([pm.page, pm.tab], ["sub", 4], "준비: 기록 화면")
 	for c in 2:
 		for i in 6:

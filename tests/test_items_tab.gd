@@ -293,6 +293,93 @@ func test_discard_one_and_many_of_each_bag_kind() -> void:
 			_check_saved(s, tag)
 
 
+## M-H9·M-H11·M-H12·M-H13(검토 seq=9): 캠프 「버리기」 확인 창(1개: 공용 확인 띠 ConfirmBand, 고름은 캠프 dialog_pick)과 수량 창(3개: 공용 창
+## ShopDialog, 키패드는 캠프 화면에 있다)에서 키패드 「선택」·창 단추 둘을 손가락 3 으로 누른 채 답을 옮기면(손가락 4 방향 패드·방향키)
+## 누르기가 풀리고, 떼도 버리지 않고 저장하지 않는다. 옮기지 않고 누른 「버리기」·「예」는 버리고 자동 저장한다.
+func test_answer_change_drops_held_presses() -> void:
+	for n in [1, 3]:
+		var s := await _items({"consumables": {MEDICA: n}})
+		var pm := s.party_menu
+		var it := pm.items_tab
+		await kit.tap(kit.center_of(it.drop_button))
+		var band: bool = n == 1
+		var pick := func() -> int: return pm.dialog_pick if band else it.qty.pick
+		# 창 단추는 왼쪽부터 [0, 1](띠: 「돌아가기」·「버리기」, 수량 창: 「예」·「아니오」). 고름 번호도 같다.
+		var buttons: Array = pm.dialog_buttons if band else [it.qty.yes_button, it.qty.no_button]
+		check_eq([pm.dialog_kind if band else it.qty.mode, pick.call()], ["drop", 0] if band else ["qty", ShopDialog.NO], "%d개: 준비: 창" % n)
+		var used := BagRules.used(s.state)
+		var saves := s.autosave_count
+		var h := kit.hash_now()
+		var ok := pm.active_key_pad().button("ok")
+		for c in [["「선택」", ok], ["왼쪽 단추", buttons[0]], ["오른쪽 단추", buttons[1]]]:
+			for v in ["pad", "key"]:
+				var tag := "%d개 %s(%s)" % [n, c[0], v]
+				var b: TouchButton = c[1]
+				var p := kit.center_of(b)
+				var pick0: int = pick.call()
+				kit.touch(3, p, true)
+				await kit.frames(1)
+				check(b.held, tag + ": 준비: 누르는 중")
+				if v == "pad":
+					await kit.tap(kit.center_of(pm.dir_pad.button("right" if pick0 == 0 else "left")), 4)
+				else:
+					await kit.press_key(KEY_RIGHT if pick0 == 0 else KEY_LEFT)
+				check_eq(pick.call(), 1 - pick0, tag + ": 답이 옮겨졌다")
+				check(not b.held, tag + ": 답이 바뀌면 누르기 취소")
+				kit.touch(3, p, false)
+				await kit.frames(2)
+				check_eq([pm.dialog_kind if band else it.qty.mode, pick.call(), BagRules.used(s.state), s.autosave_count, kit.hash_now()],
+					["drop" if band else "qty", 1 - pick0, used, saves, h], tag + ": 뗄 때 아무 일 없음(버리기·저장 없음)")
+		# 보통 흐름: 답을 옮기지 않고 일하는 단추(띠 「버리기」, 수량 창 「예」)를 누른다.
+		await kit.tap(kit.center_of(buttons[1] if band else buttons[0]))
+		await kit.frames(2)
+		check_eq([BagRules.used(s.state), s.autosave_count], [used - 1, saves + 1], "%d개: 보통 누르기 → 하나 버리고 자동 저장" % n)
+		_check_saved(s, "%d개 버리기" % n)
+
+
+## M-H14(수량이 바뀌어도 누르기를 버리지 않음, 검토 seq=10): 캠프 「버리기」 수량 창(메디카 3개)에서 답을 「예」로 옮긴 뒤 키패드 「선택」·「예」를
+## 손가락 3 으로 누른 채 수량을 바꾸면(손가락 4 방향 패드 ↑↓·방향키) 누르기가 풀리고, 떼도 버리지 않고 저장하지 않는다.
+## 바뀐 수량에서 누른 보통 「예」는 그 수량을 한 번 버리고 자동 저장한다.
+func test_quantity_change_drops_held_presses() -> void:
+	var s := await _items({"consumables": {MEDICA: 3}})
+	var pm := s.party_menu
+	var it := pm.items_tab
+	await kit.tap(kit.center_of(it.drop_button))
+	await kit.press_key(KEY_LEFT)
+	check_eq([it.qty.mode, it.qty.pick, it.qty.qty, it.qty.max_qty], ["qty", ShopDialog.YES, 1, 3], "준비: 수량 창 1~3, 「예」")
+	var saves := s.autosave_count
+	var h := kit.hash_now()
+	var ok := pm.active_key_pad().button("ok")
+	for c in [["「선택」", ok], ["「예」", it.qty.yes_button]]:
+		for v in ["pad", "key"]:
+			var tag := "%s(%s)" % [c[0], v]
+			var b: TouchButton = c[1]
+			var p := kit.center_of(b)
+			var q0 := it.qty.qty
+			var up := q0 < it.qty.max_qty
+			var q1 := q0 + (1 if up else -1)
+			kit.touch(3, p, true)
+			await kit.frames(1)
+			check(b.held, tag + ": 준비: 누르는 중")
+			if v == "pad":
+				await kit.tap(kit.center_of(pm.dir_pad.button("up" if up else "down")), 4)
+			else:
+				await kit.press_key(KEY_UP if up else KEY_DOWN)
+			check_eq(it.qty.qty, q1, tag + ": 수량이 바뀌었다")
+			check(not b.held, tag + ": 수량이 바뀌면 누르기 취소")
+			kit.touch(3, p, false)
+			await kit.frames(2)
+			check_eq([it.qty.mode, it.qty.qty, BagRules.used(s.state), s.autosave_count, kit.hash_now()], ["qty", q1, 3, saves, h],
+				tag + ": 뗄 때 아무 일 없음(버리기·저장 없음)")
+	if it.qty.qty == 1:
+		await kit.press_key(KEY_UP)
+	var q := it.qty.qty
+	await kit.tap(kit.center_of(it.qty.yes_button))
+	await kit.frames(2)
+	check_eq([BagRules.used(s.state), s.autosave_count], [3 - q, saves + 1], "보통 「예」 → 수량 %d 을 한 번 버리고 자동 저장" % q)
+	_check_saved(s, "수량 %d 버리기" % q)
+
+
 # ---- 귀환 비콘 ----
 
 ## 마을에서는 흐림(누르면 「마을에서는 쓸 수 없다」).

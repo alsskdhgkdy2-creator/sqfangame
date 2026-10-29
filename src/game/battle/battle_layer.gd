@@ -1596,7 +1596,8 @@ func debug_info(css: Callable) -> Dictionary:
 	return {"open": true, "phase": phase, "sub": sub, "member": member, "turn": display.turn,
 		"targets": target_slots if sub == "target" else [], "target_side": target_side if sub == "target" else "",
 		"target_fixed": target_fixed if sub == "target" else false,
-		"enemy_hp": enemy_hp, "charging": charging, "log": log_view.visible, "log_lines": log_view.lines.size(), "outcome": outcome,
+		"enemy_hp": enemy_hp, "charging": charging, "log": log_view.visible, "log_lines": log_view.lines.size(),
+		"log_tail": log_view.lines.slice(maxi(0, log_view.lines.size() - 16)), "outcome": outcome,  # 마지막 기록 줄(웹 H 가 상태이상 줄을 읽는다, M3 A7c)
 		"result_lines": result_lines if phase == "result" else [], "panel": panel.visible,
 		"skill_info": [skill_info_title, skill_info_text] if skill_info_shown() else [], "banner": banner_lines().slice(0, 2), "buttons": buttons,
 		# 아이템(M3 A4c): 지금 대원에게 보이는 아이템 줄(정의 차례) [{id, count(보이는 남은 수), reason}], 커서, 이 턴 명령.
