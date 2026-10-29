@@ -37,8 +37,9 @@ func member_changed() -> void:
 
 
 ## 캠프 문맥에 더하는 값: 고른 칸과 판 커서(커서가 바뀌면 누르고 있던 키패드 「선택」을 버린다).
-func context() -> String:
-	return "%d|%d" % [board.held, board.cursor]
+## 이 탭의 고름 값(PressGuard, M3 A7d): 캠프 주인 값에 들어간다. 바뀌면 누르고 있던 단추는 뗄 때 일하지 않는다.
+func key_part() -> Array:
+	return [board.held, board.cursor]
 
 
 func place(_s: Vector2) -> void:

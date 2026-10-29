@@ -91,7 +91,8 @@ var _notice_left := 0.0
 var _built := false
 var _open := false
 var _input_frame := -1
-var _context := ""
+## 누르기 지킴이(PressGuard, M3 A7d): 고름 값(selection_key)이 바뀌면 눌림을 버리고, 누를 때와 뗄 때 값이 다르면 일하지 않는다.
+var press_guard := PressGuard.new(self)
 
 
 func _init() -> void:
@@ -208,7 +209,7 @@ func open(s: ExplorationState) -> void:
 	visible = true
 	_setup_cards()
 	cancel_pointers()
-	_context = ""
+	press_guard.reset()
 	_layout()
 	_refresh()
 	opened.emit()
@@ -237,6 +238,13 @@ func set_covered(on: bool) -> void:
 	if not on:
 		_setup_cards()  # 캠프·상점에서 파티가 바뀌었을 수 있다
 		_refresh()
+
+
+## 고름 값(PressGuard, M3 A7d): 쪽·그 쪽 커서·창의 답(숙박 확인), 기록 쪽(inn_save)이면 기록 판의 커서 줄·칸(저장할 슬롯).
+func selection_key() -> Array:
+	if not _built or not _open:
+		return []
+	return [page, cursor(), dialog.key_part(), records_tab.key_part() if page == "inn_save" else []]
 
 
 func cancel_pointers() -> void:
@@ -643,10 +651,6 @@ func refresh_view() -> void:
 func _refresh() -> void:
 	if not _built or not _open or state == null or covered:
 		return  # 덮인 동안(캠프·상점)은 그리지 않는다: 바탕은 덮은 화면의 것(상점 그림)이다
-	var ctx := "%s|%d|%s" % [page, cursor(), dialog.mode]
-	if ctx != _context:
-		_context = ctx
-		cancel_pointers()
 	var on_plaza := page == "plaza"
 	var on_inn := page == "inn"
 	var on_save := page == "inn_save"
@@ -697,6 +701,9 @@ func _refresh() -> void:
 	var on := pad_state()
 	for p in [dir_pad, key_pad, key_pad_stacked]:
 		(p as VirtualPad).set_enabled(on)
+	# 고름 값(selection_key)이 바뀌었으면 앞 값에서 시작한 누르기를 버린다. 맨 끝: 줄을 다시 만들고 커서를 맞춘 뒤의 값과 견준다
+	# (검토 seq=13: 앞에서 견주면 같은 칸의 물건이 바뀐 것을 놓치고 기억한 값이 낡는다).
+	press_guard.sync()
 
 
 func _refresh_banner() -> void:

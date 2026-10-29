@@ -121,7 +121,8 @@ var _notice_left := 0.0
 var _built := false
 var _open := false
 var _input_frame := -1
-var _context := ""
+## 누르기 지킴이(PressGuard, M3 A7d): 고름 값(selection_key)이 바뀌면 눌림을 버리고, 누를 때와 뗄 때 값이 다르면 일하지 않는다.
+var press_guard := PressGuard.new(self)
 
 
 func _init() -> void:
@@ -295,7 +296,7 @@ func open(s: ExplorationState) -> void:
 	visible = true
 	_setup_cards()
 	cancel_pointers()
-	_context = ""
+	press_guard.reset()
 	_layout()
 	_refresh()
 	opened.emit()
@@ -326,6 +327,15 @@ func set_covered(on: bool) -> void:
 	if not on:
 		_setup_cards()
 		_refresh()
+
+
+## 고름 값(PressGuard, M3 A7d) = 쪽·모든 커서(목록 커서는 InventoryList 의 지금 값: class_cursor 는 _refresh_class 에서야 따라온다)·
+## 초점·고른 칸·창의 답(등록·지우기 확인).
+func selection_key() -> Array:
+	if not _built or not _open:
+		return []
+	return [page, root_cursor, class_inv.cursor, look_cursor, roster_inv.cursor, manage_inv.cursor, board.cursor, form_focus, board.held,
+		dialog.key_part()]
 
 
 func cancel_pointers() -> void:
@@ -1036,13 +1046,6 @@ func refresh_view() -> void:
 func _refresh() -> void:
 	if not _built or not _open or state == null or covered:
 		return
-	# 문맥 = 쪽·모든 커서(목록 커서는 InventoryList 의 지금 값: class_cursor 는 아래 _refresh_class 에서야 따라온다)·초점·창·고른 칸.
-	# 커서가 바뀌면 누르고 있던 줄·키패드를 버린다(뗄 때 바뀐 커서로 일하지 않게, 마을·캠프와 같다).
-	var ctx := "%s|%d|%d|%d|%d|%d|%d|%s|%s|%d" % [page, root_cursor, class_inv.cursor, look_cursor, roster_inv.cursor, manage_inv.cursor,
-		board.cursor, form_focus, dialog.mode, board.held]
-	if ctx != _context:
-		_context = ctx
-		cancel_pointers()
 	var on_root := page == "root"
 	var on_class := page == "class"
 	var on_look := page == "look"
@@ -1103,6 +1106,9 @@ func _refresh() -> void:
 	var on := pad_state()
 	for p in [dir_pad, key_pad, key_pad_stacked]:
 		(p as VirtualPad).set_enabled(on)
+	# 고름 값(selection_key)이 바뀌었으면 앞 값에서 시작한 누르기를 버린다. 맨 끝: 줄을 다시 만들고 커서를 맞춘 뒤의 값과 견준다
+	# (검토 seq=13: 앞에서 견주면 같은 칸의 물건이 바뀐 것을 놓치고 기억한 값이 낡는다).
+	press_guard.sync()
 
 
 func _refresh_class() -> void:

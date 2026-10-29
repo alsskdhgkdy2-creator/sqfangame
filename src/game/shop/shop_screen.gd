@@ -110,7 +110,8 @@ var _tabs_set := ""
 var _built := false
 var _open := false
 var _input_frame := -1
-var _context := ""
+## 누르기 지킴이(PressGuard, M3 A7d): 고름 값(selection_key)이 바뀌면 눌림을 버리고, 누를 때와 뗄 때 값이 다르면 일하지 않는다.
+var press_guard := PressGuard.new(self)
 
 
 func _init() -> void:
@@ -242,7 +243,7 @@ func open(s: ExplorationState) -> void:
 	visible = true
 	_setup_cards()
 	cancel_pointers()
-	_context = ""
+	press_guard.reset()
 	_layout()
 	_refresh()
 	opened.emit()
@@ -264,6 +265,20 @@ func close_shop(notify: bool = true) -> void:
 
 
 ## 눌려 있던 포인터·끌기를 모두 버린다(문맥이 바뀔 때, 바깥 층 3 창이 열리고 닫힐 때 탐색 화면이 부른다).
+## 고름 값(PressGuard, M3 A7d): 쪽·갈래·탭·대원, 뿌리·갈래 커서, 목록 커서와 그 물건 ID, 여러 개·고름(검토 R2: 고르거나 끄면
+## 바깥에서 누르고 있던 「여러 개」·키패드·「뒤로」가 새 고름에 일하지 않는다), 창의 목적·대상과 창의 답(모양·답·칸·수량).
+func selection_key() -> Array:
+	if not _built or not _open:
+		return []
+	var picks: Array = marked.keys()
+	picks.sort()
+	var on_list := page == "buy" or page == "sell"
+	var c := buy_list.cursor if on_list else -1
+	var item := str(lines[c]["item"]) if c >= 0 and c < lines.size() else ""
+	var target := [ask, ask_item, ask_member] if not ask.is_empty() else []
+	return [page, branch, tab, member, root_cursor, branch_cursor, c, item, multi, picks, target, dialog.key_part()]
+
+
 func cancel_pointers() -> void:
 	if not _built:
 		return
@@ -1104,15 +1119,6 @@ func _process(delta: float) -> void:
 func _refresh() -> void:
 	if not _built or not _open or state == null:
 		return
-	# 문맥(쪽·갈래·탭·대원·창 모양·창의 목적과 대상)이 바뀌면 앞 문맥에서 시작한 누르기를 버린다.
-	var target := "%s|%s|%d" % [ask, ask_item, ask_member] if not ask.is_empty() else ""
-	# 고름도 문맥이다(검토 R2): 고르거나 끄면 바깥에서 누르고 있던 「여러 개」·키패드·「뒤로」가 새 고름에 일하지 않는다.
-	var picks: Array = marked.keys()
-	picks.sort()
-	var ctx := "%s|%d|%d|%d|%s|%s|%s|%s" % [page, branch, tab, member, str(multi), ",".join(picks), dialog.mode, target]
-	if ctx != _context:
-		_context = ctx
-		cancel_pointers()
 	var rootish := page == "root" or page == "branch"
 	var on_branch := page == "branch"
 	var on_list := page == "buy" or page == "sell"
@@ -1139,6 +1145,9 @@ func _refresh() -> void:
 	buy_list.set_cursor_mode(mode)
 	_refresh_pad()
 	queue_redraw()
+	# 고름 값(selection_key)이 바뀌었으면 앞 값에서 시작한 누르기를 버린다. 맨 끝: 줄을 다시 만들고 커서를 맞춘 뒤의 값과 견준다
+	# (검토 seq=13: 앞에서 견주면 같은 칸의 물건이 바뀐 것을 놓치고 기억한 값이 낡는다).
+	press_guard.sync()
 
 
 func _refresh_root() -> void:

@@ -60,7 +60,8 @@ var _after: Callable
 var _built := false
 var _open := false
 var _input_frame := -1
-var _context := ""
+## 누르기 지킴이(PressGuard, M3 A7d): 고름 값(selection_key)이 바뀌면 눌림을 버리고, 누를 때와 뗄 때 값이 다르면 일하지 않는다.
+var press_guard := PressGuard.new(self)
 
 
 func _init() -> void:
@@ -135,7 +136,7 @@ func open(continue_ok: bool) -> void:
 	_open = true
 	visible = true
 	cancel_pointers()
-	_context = ""
+	press_guard.reset()
 	_layout()
 	_refresh()
 	opened.emit()
@@ -151,6 +152,14 @@ func close_title(notify: bool = true) -> void:
 	cancel_pointers()
 	if notify:
 		closed.emit()
+
+
+## 고름 값(PressGuard, M3 A7d): 쪽·메뉴 커서·확인 띠(떠 있는지·고름), 기록 쪽이면 기록 판의 커서 줄·칸(불러올 슬롯).
+func selection_key() -> Array:
+	if not _built or not _open:
+		return []
+	var menu := page == "menu"
+	return [page, cursor if menu else -1, dialog.key_part(), [] if menu else records_tab.key_part()]
 
 
 func cancel_pointers() -> void:
@@ -381,10 +390,6 @@ func refresh_view() -> void:
 func _refresh() -> void:
 	if not _built or not _open:
 		return
-	var ctx := "%s|%s|%d" % [page, str(dialog.is_open()), cursor if page == "menu" else -1]
-	if ctx != _context:
-		_context = ctx
-		cancel_pointers()
 	var on_menu := page == "menu"
 	for k in MENU_KEYS:
 		var b: ListButton = menu_buttons[k]
@@ -402,6 +407,9 @@ func _refresh() -> void:
 	for p in [dir_pad, key_pad, key_pad_stacked]:
 		(p as VirtualPad).set_enabled(on)
 	queue_redraw()
+	# 고름 값(selection_key)이 바뀌었으면 앞 값에서 시작한 누르기를 버린다. 맨 끝: 줄을 다시 만들고 커서를 맞춘 뒤의 값과 견준다
+	# (검토 seq=13: 앞에서 견주면 같은 칸의 물건이 바뀐 것을 놓치고 기억한 값이 낡는다).
+	press_guard.sync()
 
 
 func menu_rect(i: int) -> Rect2:

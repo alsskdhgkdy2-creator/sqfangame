@@ -7,6 +7,7 @@ extends TestCase
 
 const Kit := preload("res://tests/scene_kit.gd")
 const Fx := preload("res://tests/fixtures.gd")
+const HM := preload("res://tests/held_matrix.gd")
 const RATS_MOTH := "formation.f1.rats_moth"
 const MOTH := "enemy.cable_moth"
 const HIGH_SLASH := "skill.blade_duelist.high_slash"
@@ -1873,3 +1874,46 @@ func test_log_and_cards_show_exp_and_level_up() -> void:
 	check(lines.has("%s Lv 1 → 2" % _mname(1)), "로그: 레벨업 줄")
 	var u := layer.display.party[1]
 	check_eq([u.max_hp, u.max_tp, u.hp], [61, 35, hp_before + 3], "레벨업이 칸의 최대·현재 HP 에 반영")
+
+
+## M-D9(전투 고름 값에 커서·대상이 없음), M3 A7d: 명령 줄(공격 → 스킬)·스킬 줄(첫 줄 → 둘째)·대상(적 첫 칸 → 다음 칸)에서 키패드 「선택」과
+## 그 줄·카드를 손가락 3 으로 누른 채 커서를 옮기면(손가락 4 방향 패드·방향키) 누르기가 풀리고, 떼도 쪽·커서·명령이 그대로다. 이름 붙은 해
+## (검토 표): 대상 0 → 1 로 옮긴 뒤 뗀 「선택」이 대상 1 공격을 넣지 않는다. 옮기지 않은 보통 「선택」은 대상 0 공격을 한 번 넣는다.
+func test_command_skill_target_change_drops_held_presses() -> void:
+	var s := _calm_state()
+	await _open(s, 0.1)
+	var ok := func() -> TouchButton: return layer.key_pad.button("ok")
+	var pad := func(k: String) -> Callable: return func() -> TouchButton: return layer.dir_pad.button(k)
+	var obs := func() -> Array:
+		return [layer.phase, layer.sub, layer.member, layer.cursor, layer.target_skill, layer.commands.duplicate(true), layer.selection_key()]
+	var at := func() -> int: return layer.cursor
+	check_eq([layer.phase, layer.sub, layer.member, layer.cursor], ["command", "menu", 0, 0], "준비: 첫 대원 명령 줄")
+	for hold in [["「선택」", ok], ["명령 줄", func() -> TouchButton: return _btn("Cmd_attack")]]:
+		await HM.run(self, kit, {"name": "명령 " + hold[0], "hold": hold[1], "pad": pad.call("down"), "key": KEY_DOWN, "value": at,
+			"observe": obs, "reset": func() -> void: await HM.key_until(kit, at, 0, KEY_UP)})
+	await HM.key_until(kit, at, 0, KEY_UP)
+	await kit.press_key(KEY_2)
+	check_eq([layer.sub, layer.cursor], ["skills", 0], "준비: 스킬 줄")
+	var first_row := func() -> TouchButton:
+		for b in layer.panel.skill_rows:
+			if b.visible:
+				return b
+		return null
+	await HM.run(self, kit, {"name": "스킬 「선택」", "hold": ok, "pad": pad.call("down"), "key": KEY_DOWN, "value": at,
+		"observe": obs, "reset": func() -> void: await HM.key_until(kit, at, 0, KEY_UP)})
+	await HM.key_until(kit, at, 0, KEY_UP)
+	await HM.run(self, kit, {"name": "스킬 줄", "hold": first_row, "pad": pad.call("down"), "key": KEY_DOWN, "value": at,
+		"observe": obs, "reset": func() -> void: await HM.key_until(kit, at, 0, KEY_UP)})
+	check_eq([layer.sub, layer.target_skill], ["skills", ""], "스킬 줄 그대로(옮긴 스킬을 고르지 않는다)")
+	await kit.press_key(KEY_ESCAPE)
+	await kit.press_key(KEY_1)
+	check_eq([layer.sub, layer.cursor], ["target", 0], "준비: 대상(적 첫 칸)")
+	var slot0: int = layer.target_slots[0]
+	for hold in [["「선택」", ok], ["대상 카드", func() -> TouchButton: return _enemy(layer.target_slots[layer.cursor])]]:
+		await HM.run(self, kit, {"name": "대상 " + hold[0], "hold": hold[1], "pad": pad.call("right"), "key": KEY_RIGHT, "value": at,
+			"observe": obs, "reset": func() -> void: await HM.key_until(kit, at, 0, KEY_LEFT)})
+	check_eq([layer.sub, layer.commands[0]], ["target", null], "이름 붙은 해: 대상 1 공격을 넣지 않았다")
+	await HM.key_until(kit, at, 0, KEY_LEFT)
+	await kit.tap(kit.center_of(layer.key_pad.button("ok")), 3)
+	check_eq(layer.commands[0], {"kind": "attack", "target": slot0}, "보통 「선택」 → 대상 0 공격 한 번")
+	check_eq(layer.member, 1, "다음 대원으로")

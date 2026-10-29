@@ -183,6 +183,9 @@ var _announce := ""
 var _actor := -1
 ## 입력 문맥(단계·명령 단계·대원·대상 스킬·로그·결과 창). 바뀌면 눌려 있던 포인터를 모두 버린다.
 var _context := ""
+## 누르기 지킴이(PressGuard, M3 A7d): 고름 값(selection_key)이 바뀌면 눌림을 버리고, 누를 때와 뗄 때 값이 다르면 일하지 않는다.
+## 위 _context 는 안내 지우기(문맥이 바뀌면 앞 안내를 지운다)에만 쓴다: 커서를 옮겨도 안내는 남는다(예전 그대로).
+var press_guard := PressGuard.new(self)
 
 # ---- 연출 ----
 var _steps: Array[Dictionary] = []
@@ -381,6 +384,24 @@ func close_layer(notify: bool = true) -> void:
 
 ## 눌려 있던 포인터·끌기를 모두 버린다(취소된 누르기는 뗄 때 아무 일도 하지 않는다): 명령 줄·스킬 줄·카드·적·키패드·로그·결과·
 ## 넘기기 단추와 스킬 목록·결과 본문 끌기. 안의 문맥이 바뀔 때와, 바깥 창(층 3)이 열리고 닫힐 때 탐색 화면이 부른다.
+## 고름 값(PressGuard, M3 A7d): 단계·명령 쪽·대원·고른 스킬·로그·결과 창, 커서와 그 대상(명령 칸·스킬·아이템 ID·대상 칸).
+## 연출 중에 바뀌는 것(시간·로그 줄·띠 글)은 넣지 않는다.
+func selection_key() -> Array:
+	if not _built or phase == "closed":
+		return []
+	var at: Variant = cursor
+	match sub:
+		"skills":
+			var ids := _skill_ids()
+			at = ids[cursor] if cursor >= 0 and cursor < ids.size() else ""
+		"items":
+			var ids := _item_ids()
+			at = ids[cursor] if cursor >= 0 and cursor < ids.size() else ""
+		"target":
+			at = target_slots[cursor] if cursor >= 0 and cursor < target_slots.size() else -1
+	return [phase, sub, member, target_skill, log_view.visible, result_panel.visible, cursor, at, target_fixed]
+
+
 func cancel_pointers() -> void:
 	_cancel_pointers()
 
@@ -1245,6 +1266,9 @@ func _refresh() -> void:
 	_refresh_portrait()
 	_refresh_pad()
 	_redraw_hud()
+	# 고름 값(selection_key)이 바뀌었으면 앞 값에서 시작한 누르기를 버린다. 맨 끝: 줄을 다시 만들고 커서를 맞춘 뒤의 값과 견준다
+	# (검토 seq=13: 앞에서 견주면 같은 칸의 물건이 바뀐 것을 놓치고 기억한 값이 낡는다).
+	press_guard.sync()
 
 
 func _refresh_cards() -> void:

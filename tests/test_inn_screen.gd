@@ -4,6 +4,7 @@
 extends TestCase
 
 const Kit := preload("res://tests/scene_kit.gd")
+const HM := preload("res://tests/held_matrix.gd")
 const SIZES := [Vector2(1280, 720), Vector2(1728, 720), Vector2(1280, 960)]
 const INN := ["Inn_stay", "Inn_save", "Inn_talk", "Inn_leave"]
 
@@ -326,3 +327,30 @@ func test_inn_layer_table_and_text_fit() -> void:
 	if font.get_string_size(s.texts.t("wipe.map_ask"), HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x > 2.0 * 360.0:
 		fails.append("지도 물음 두 줄 안")
 	check_eq(fails, [], "숙소·전멸 글이 자리에 든다")
+
+
+## M-D8(기록 key_part), M3 A7d: 숙소 「기록한다」 저장 슬롯 1 에서 키패드 「선택」·슬롯 단추를 손가락 3 으로 누른 채 슬롯 2 로 옮기면(손가락 4
+## 방향 패드 ↓·방향키 ↓) 누르기가 풀리고, 떼도 아무 슬롯에도 쓰지 않는다. 이름 붙은 해(검토 표): 숙소가 슬롯 2 를 덮어쓰지 않는다(소지금 222
+## 그대로). 옮기지 않은 보통 「선택」은 슬롯 1 에 한 번 쓴다(소지금 333). 슬롯은 시험 임시 폴더에만 둔다.
+func test_record_slot_change_drops_held_presses() -> void:
+	var s := await _town()
+	HM.make_slots(s)
+	s.state.money = 333
+	s._autosave()
+	var t := await _inn(s)
+	await kit.press_key(KEY_2)
+	check_eq(t.page, "inn_save", "준비: 숙소 기록")
+	var rt := t.records_tab
+	var cur := func() -> String: return str(rt.cursor_button().name)
+	check_eq(cur.call(), "Save_slot1", "준비: 저장 슬롯 1")
+	var obs := func() -> Array: return [t.page, HM.slot_money(s, "slot1"), HM.slot_money(s, "slot2"), kit.hash_now(), t.selection_key()]
+	var ok := func() -> TouchButton: return t.active_key_pad().button("ok")
+	for hold in [["「선택」", ok], ["슬롯 단추", func() -> TouchButton: return rt.cursor_button()]]:
+		await HM.run(self, kit, {"name": "숙소 기록 " + hold[0], "hold": hold[1], "pad": func() -> TouchButton: return t.dir_pad.button("down"),
+			"key": KEY_DOWN, "value": cur, "observe": obs,
+			"reset": func() -> void: await HM.key_until(kit, cur, "Save_slot1", KEY_UP)})
+	check_eq([HM.slot_money(s, "slot1"), HM.slot_money(s, "slot2")], [111, 222], "이름 붙은 해: 슬롯 2 를 덮어쓰지 않았다(222 그대로)")
+	await HM.key_until(kit, cur, "Save_slot1", KEY_UP)
+	await kit.tap(kit.center_of(t.active_key_pad().button("ok")), 3)
+	await kit.frames(2)
+	check_eq([HM.slot_money(s, "slot1"), HM.slot_money(s, "slot2")], [333, 222], "보통 「선택」 → 슬롯 1 에만 한 번 쓴다")

@@ -7,6 +7,7 @@ extends TestCase
 
 const Kit := preload("res://tests/scene_kit.gd")
 const Camp := preload("res://tests/test_camp.gd")
+const HM := preload("res://tests/held_matrix.gd")
 ## 1280×720 · 1728×720(논리, 2400×1000 창) · 1280×960.
 const SIZES := [Vector2(1280, 720), Vector2(2400, 1000), Vector2(1280, 960)]
 
@@ -378,6 +379,92 @@ func test_quantity_change_drops_held_presses() -> void:
 	await kit.frames(2)
 	check_eq([BagRules.used(s.state), s.autosave_count], [3 - q, saves + 1], "보통 「예」 → 수량 %d 을 한 번 버리고 자동 저장" % q)
 	_check_saved(s, "수량 %d 버리기" % q)
+
+
+## 값 get 이 want 가 될 때까지 키 code 를 누른다(누르기 없음, 최대 8번).
+func _key_until(get: Callable, want: Variant, code: int) -> void:
+	for i in 8:
+		if get.call() == want:
+			return
+		await kit.press_key(code)
+
+
+## M-D4(소지품 key_part 에 커서 물건·알약이 없음)·M-D5(캠프 값에 pick_cursor 가 없음), M3 A7d: 가방 줄(메디카 → 넥타)·알약(쓰기 → 버리기)·
+## 받을 대원(대원 0 → 1)을 키패드 「선택」(줄·알약은 그 단추도)을 손가락 3 으로 누른 채 옮기면(손가락 4 방향 패드·방향키) 누르기가 풀리고,
+## 떼도 쪽·대상·HP·물건·저장이 그대로다. 이름 붙은 해(검토 표): 메디카가 새로 고른 대원 1 을 고치지 않는다(HP 10 그대로, 메디카 3개, 자동
+## 저장 없음). 옮기지 않은 보통 「선택」은 고른 대원 0 을 한 번 고치고 자동 저장한다.
+func test_selection_change_drops_held_presses() -> void:
+	var s := await _items({"consumables": {MEDICA: 3, NECTAR: 1}}, false)
+	var pm := s.party_menu
+	var it := pm.items_tab
+	s.state.party.members[0].hp = 20
+	s.state.party.members[1].hp = 10
+	var ok := func() -> TouchButton: return pm.active_key_pad().button("ok")
+	var pad := func(k: String) -> Callable: return func() -> TouchButton: return pm.dir_pad.button(k)
+	var hp := func() -> Array: return s.state.party.members.map(func(m: PartyState.Member) -> int: return m.hp)
+	var obs := func() -> Array:
+		return [it.mode, it.cursor_item(), it.pill, it.target_item, it.qty_open(), pm.page, pm.pick_cursor, hp.call(),
+			int(s.state.consumables.get(MEDICA, 0)), kit.hash_now(), s.autosave_count, pm.selection_key()]
+	var item := func() -> String: return it.cursor_item()
+	var saves0 := s.autosave_count
+	check_eq([it.mode, item.call()], ["list", MEDICA], "준비: 가방 줄 메디카")
+	for hold in [["「선택」", ok], ["커서 줄", func() -> TouchButton: return it.rows[0]]]:
+		await HM.run(self, kit, {"name": "가방 줄 " + hold[0], "hold": hold[1], "pad": pad.call("down"), "key": KEY_DOWN, "value": item,
+			"observe": obs, "reset": _key_until.bind(item, MEDICA, KEY_UP)})
+	await _key_until(item, MEDICA, KEY_UP)
+	await kit.press_key(KEY_ENTER)
+	var pill := func() -> int: return it.pill
+	check_eq([it.mode, pill.call(), it.target_item], ["pills", 0, MEDICA], "준비: 알약(쓰기)")
+	for hold in [["「선택」", ok], ["쓰기 알약", func() -> TouchButton: return it.use_button]]:
+		await HM.run(self, kit, {"name": "알약 " + hold[0], "hold": hold[1], "pad": pad.call("down"), "key": KEY_DOWN, "value": pill,
+			"observe": obs, "reset": _key_until.bind(pill, 0, KEY_UP)})
+	await _key_until(pill, 0, KEY_UP)
+	await kit.tap(kit.center_of(it.use_button))
+	var who := func() -> int: return pm.pick_cursor
+	check_eq([it.mode, who.call()], ["pick", 0], "준비: 받을 대원 고르기(대원 0)")
+	await HM.run(self, kit, {"name": "받을 대원 「선택」", "hold": ok, "pad": pad.call("right"), "key": KEY_RIGHT, "value": who,
+		"observe": obs, "reset": _key_until.bind(who, 0, KEY_LEFT)})
+	check_eq([hp.call().slice(0, 2), int(s.state.consumables.get(MEDICA, 0)), s.autosave_count, it.mode], [[20, 10], 3, saves0, "pick"],
+		"이름 붙은 해: 메디카가 새 대원 1 을 고치지 않았다(HP 10, 메디카 3개, 자동 저장 없음)")
+	await _key_until(who, 0, KEY_LEFT)
+	await kit.tap(kit.center_of(pm.active_key_pad().button("ok")), 3)
+	check(s.state.party.members[0].hp > 20 and s.state.party.members[1].hp == 10, "보통 「선택」 → 고른 대원 0 만 고친다")
+	check_eq([int(s.state.consumables.get(MEDICA, 0)), s.autosave_count], [2, saves0 + 1], "메디카 하나, 자동 저장 한 번")
+	_check_saved(s, "메디카 쓰기")
+
+
+## M-D13(캠프가 줄을 다시 만들기 전에 sync, 검토 seq=13): 키패드 「선택」을 누른 채 같은 커서 칸의 물건이 넥타 → 메디카로 바뀌면(디버그 보급,
+## 다시 만든 줄) 그 새로 고침에서 바로 누르기가 풀리고, 떼도 아무 일 없다. 그 뒤 새로 시작한 누르기는 바뀐 것이 없는 새로 고침에서
+## 풀리지 않고 떼면 한 번 일한다(메디카의 알약 쪽).
+func test_same_index_replacement_cancels_at_once_and_a_fresh_press_survives() -> void:
+	var s := await _items({"consumables": {NECTAR: 2}}, true)
+	var pm := s.party_menu
+	var it := pm.items_tab
+	var c0 := it.cursor
+	check_eq([it.mode, it.cursor_item()], ["list", NECTAR], "준비: 커서 칸 %d 넥타" % c0)
+	var ok := pm.active_key_pad().button("ok")
+	var p := kit.center_of(ok)
+	kit.touch(3, p, true)
+	await kit.frames(1)
+	check(ok.held, "준비: 「선택」 누르는 중")
+	var r: Dictionary = JSON.parse_string(s._on_debug_request(JSON.stringify({"op": "supply", "item": MEDICA, "n": 1})))
+	await kit.frames(1)
+	check(bool(r.get("ok", false)), "준비: 디버그 보급 메디카")
+	check_eq([it.cursor, it.cursor_item()], [c0, MEDICA], "같은 커서 칸의 물건이 메디카로 바뀌었다")
+	check(not ok.held, "그 새로 고침에서 바로 「선택」 누르기가 풀린다")
+	var saves := s.autosave_count
+	var n := pm.accepted_inputs
+	kit.touch(3, p, false)
+	await kit.frames(2)
+	check_eq([it.mode, pm.accepted_inputs, s.autosave_count], ["list", n, saves], "뗄 때 아무 일 없음")
+	kit.touch(3, p, true)
+	await kit.frames(1)
+	pm.refresh_view()
+	await kit.frames(1)
+	check(ok.held, "새 누르기는 바뀐 것이 없는 새로 고침에서 풀리지 않는다")
+	kit.touch(3, p, false)
+	await kit.frames(2)
+	check_eq([it.mode, it.target_item, pm.accepted_inputs], ["pills", MEDICA, n + 1], "떼면 한 번 일한다(메디카 알약 쪽)")
 
 
 # ---- 귀환 비콘 ----

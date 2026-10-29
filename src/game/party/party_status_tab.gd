@@ -116,8 +116,9 @@ func member_changed() -> void:
 	pass
 
 
-func context() -> String:
-	return ""
+## 이 탭의 고름 값(PressGuard, M3 A7d): 캠프 주인 값에 들어간다. 바뀌면 누르고 있던 단추는 뗄 때 일하지 않는다.
+func key_part() -> Array:
+	return [split_view]
 
 
 ## 초상 가로 자리(화면 폭 w): 가운데 W/2 + 20 ± 240, 왼쪽 끝은 왼쪽 열(LEFT_W) 오른쪽.

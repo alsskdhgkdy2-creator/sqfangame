@@ -157,7 +157,8 @@ var _after_discard: Callable
 var _built := false
 var _open := false
 var _input_frame := -1
-var _context := ""
+## 누르기 지킴이(PressGuard, M3 A7d): 고름 값(selection_key)이 바뀌면 눌림을 버리고, 누를 때와 뗄 때 값이 다르면 일하지 않는다.
+var press_guard := PressGuard.new(self)
 ## 마지막 _draw 가 CAMP_DIM 을 그렸는지(시험). 캠프는 그리지 않는다(07 §9.9 E1).
 var drawn_dim := false
 
@@ -390,7 +391,7 @@ func open(s: ExplorationState) -> void:
 	visible = true
 	_setup_cards()
 	cancel_pointers()
-	_context = ""
+	press_guard.reset()
 	_layout()
 	_refresh()
 	opened.emit()
@@ -414,6 +415,15 @@ func close_menu(notify: bool = true) -> void:
 
 ## 눌려 있던 포인터·끌기를 모두 버린다(취소된 누르기는 뗄 때 아무 일도 하지 않는다). 안의 문맥이 바뀔 때와,
 ## 바깥 창(층 3: 알림·파일 고르기·메모·전멸)이 열리고 닫힐 때 탐색 화면이 부른다.
+## 고름 값(PressGuard, M3 A7d): 쪽·뿌리 명령 커서(M3 A7c seq=8)·대원 고르기(명령과 커서: 받을 대원·연 대원)·탭·대원·확인 창(종류·고름)·
+## 지금 탭의 key_part(소지품 줄·알약·수량 창, 장비 칸·후보, 스킬 노드, 기록 슬롯, 대열 판).
+func selection_key() -> Array:
+	if not _built or not _open:
+		return []
+	var sub := page == "sub"
+	return [page, camp_cursor, pick_cmd, pick_cursor, tab, member, dialog_kind, dialog_pick, tabs[tab].call("key_part") if sub else []]
+
+
 func cancel_pointers() -> void:
 	if not _built:
 		return
@@ -464,11 +474,7 @@ func _dispatch(kind: String, arg: Variant) -> bool:
 	if not dialog_kind.is_empty():
 		match kind:
 			"dialog_move":
-				# 고름은 공용 창 부품이 옮긴다: 바뀌면 누르고 있던 키패드 「선택」·창 단추를 버린다(M3 A7c seq=9).
-				var band := dialog_layer as ConfirmBand
-				band.pick = dialog_pick
-				band.move(int(arg))
-				dialog_pick = band.pick
+				dialog_pick = clampi(dialog_pick + int(arg), 0, 1)  # 고름은 캠프 고름 값에 있다(PressGuard)
 				return true
 			"dialog_pick":
 				return _dialog_choose(int(arg))
@@ -975,13 +981,7 @@ func _process(delta: float) -> void:
 func _refresh() -> void:
 	if not _built or not _open or state == null:
 		return
-	# 문맥이 바뀌면(탭·대원·확인 창·장비 목록) 앞 문맥에서 시작한 누르기를 버린다: 그 손가락은 뗄 때까지 아무것도 누르지 못한다.
 	var sub := page == "sub"
-	# 뿌리 명령 커서도 문맥이다(M3 A7c seq=8): 커서가 바뀌면 누르고 있던 키패드 「선택」이 뗄 때 바뀐 줄을 실행하지 않는다.
-	var ctx := "%s|%d|%d|%d|%d|%s|%s" % [page, camp_cursor, pick_cmd, tab, member, dialog_kind, tabs[tab].call("context") if sub else ""]
-	if ctx != _context:
-		_context = ctx
-		cancel_pointers()
 	for i in tabs.size():
 		(tabs[i] as Control).visible = sub and i == tab
 	if sub:
@@ -1004,6 +1004,9 @@ func _refresh() -> void:
 	_refresh_dialog()
 	_refresh_pad()
 	queue_redraw()
+	# 고름 값(selection_key)이 바뀌었으면 앞 값에서 시작한 누르기를 버린다. 맨 끝: 줄을 다시 만들고 커서를 맞춘 뒤의 값과 견준다
+	# (검토 seq=13: 앞에서 견주면 같은 칸의 물건이 바뀐 것을 놓치고 기억한 값이 낡는다).
+	press_guard.sync()
 
 
 ## 하위 화면이 뿌리의 맨 위 띠와 띠(알림 줄 자리)를 두는지: 기록(07 §9.9 E1 ⑥)·소지품(E2-b).

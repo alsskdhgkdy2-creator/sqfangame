@@ -6,6 +6,7 @@
 extends TestCase
 
 const Kit := preload("res://tests/scene_kit.gd")
+const HM := preload("res://tests/held_matrix.gd")
 const WINDOWS := [Vector2(1280, 720), Vector2(2400, 1000)]
 const BASE := Vector2(1280, 720)
 const FINGER := 3
@@ -755,3 +756,71 @@ func test_root_cursor_change_drops_held_ok() -> void:
 		kit.touch(FINGER, p, false)
 		await kit.frames(3)
 		check_eq(_sig(pm), moved, v + ": 뗄 때 상태 고르기를 열지 않는다")
+
+
+## 값 get 이 want 가 될 때까지 키 code 를 누른다(누르기 없음, 최대 8번).
+func _key_until(get: Callable, want: Variant, code: int) -> void:
+	for i in 8:
+		if get.call() == want:
+			return
+		await kit.press_key(code)
+
+
+## M-D5(캠프 값에 pick_cursor 가 없음)·M-D6(스킬 key_part 에 노드가 없음)·M-D7(장비 key_part 에 후보가 없음), M3 A7d: 대원 고르기(대원 0 → 1)·
+## 스킬 노드(「+」의 대상)·장비 후보(「E」 → 이온 세이버)를 키패드 「선택」(노드·후보는 그 줄도)을 손가락 3 으로 누른 채 옮기면(손가락 4
+## 방향 패드·방향키) 누르기가 풀리고, 떼도 쪽·대원·초안·장비·저장이 그대로다. 이름 붙은 해(검토 표): 이온 세이버를 끼지 않는다.
+## 옮기지 않은 보통 「선택」은 그 대원을 열고, 그 노드에 「+」 하나, 그 후보를 한 번 끼고 저장한다.
+func test_member_skill_equip_change_drops_held_presses() -> void:
+	var pm := await _fresh()
+	var ok := func() -> TouchButton: return pm.active_key_pad().button("ok")
+	var pad := func(k: String) -> Callable: return func() -> TouchButton: return pm.dir_pad.button(k)
+	var obs := func() -> Array: return _sig(pm) + [pm.selection_key(), pm.state.party.members[DUELIST_A].equip.duplicate()]
+	# 대원 고르기(상태).
+	await _step(pm, "camp", STATUS)
+	var who := func() -> int: return pm.pick_cursor
+	check_eq([pm.page, who.call()], ["pick", 0], "준비: 대원 고르기, 대원 0")
+	await HM.run(self, kit, {"name": "대원 고르기 「선택」", "hold": ok, "pad": pad.call("right"), "key": KEY_RIGHT, "value": who,
+		"observe": obs, "reset": _key_until.bind(who, 0, KEY_LEFT)})
+	await _key_until(who, 0, KEY_LEFT)
+	await kit.tap(kit.center_of(pm.active_key_pad().button("ok")), FINGER)
+	check_eq([pm.page, pm.tab, pm.member], ["sub", 0, 0], "보통 「선택」 → 대원 0 의 상태")
+	# 스킬 노드.
+	pm = await _fresh()
+	ok = func() -> TouchButton: return pm.active_key_pad().button("ok")
+	pad = func(k: String) -> Callable: return func() -> TouchButton: return pm.dir_pad.button(k)
+	obs = func() -> Array: return _sig(pm) + [pm.selection_key(), pm.state.party.members[DUELIST_A].equip.duplicate()]
+	await _step(pm, "camp", SKILLS)
+	await _step(pm, "member", DUELIST_A)
+	var sk := pm.skill_tab
+	var node := func() -> String: return sk.cursor_skill()
+	var first: String = node.call()
+	check(not first.is_empty() and sk.draft.is_empty(), "준비: 스킬 노드 %s, 초안 없음" % first)
+	for hold in [["「선택」(+)", ok], ["노드", func() -> TouchButton: return sk.nodes[sk.cursor]]]:
+		await HM.run(self, kit, {"name": "스킬 노드 " + hold[0], "hold": hold[1], "pad": pad.call("right"), "key": KEY_RIGHT, "value": node,
+			"observe": obs, "reset": _key_until.bind(node, first, KEY_LEFT)})
+	check(sk.draft.is_empty(), "스킬 초안 그대로(옮긴 노드에 「+」 없음)")
+	await _key_until(node, first, KEY_LEFT)
+	await kit.tap(kit.center_of(pm.active_key_pad().button("ok")), FINGER)
+	check_eq(sk.draft, {first: 1}, "보통 「선택」 → 그 노드에 「+」 하나")
+	# 장비 후보(칸 0 목록: 「E」 → 이온 세이버).
+	pm = await _fresh()
+	ok = func() -> TouchButton: return pm.active_key_pad().button("ok")
+	pad = func(k: String) -> Callable: return func() -> TouchButton: return pm.dir_pad.button(k)
+	obs = func() -> Array: return _sig(pm) + [pm.selection_key(), pm.state.party.members[DUELIST_A].equip.duplicate()]
+	await _step(pm, "camp", EQUIP)
+	await _step(pm, "member", DUELIST_A)
+	await _step(pm, "confirm")
+	var eq := pm.equip_tab
+	var weapon0: String = pm.state.party.members[DUELIST_A].equip[0]
+	var cand := func() -> String: return eq.row_items[eq.list_cursor] if eq.list_open else "-"
+	var home: String = cand.call()
+	check(eq.list_open and eq.list_cursor == eq.equipped_row and eq.row_items.find(ION_SABER) == eq.list_cursor + 1,
+		"준비: 목록 「E」(%s), 다음 줄 이온 세이버 %s" % [home, str(eq.row_items)])
+	for hold in [["「선택」", ok], ["후보 줄", func() -> TouchButton: return eq.rows[eq.list_cursor]]]:
+		await HM.run(self, kit, {"name": "장비 후보 " + hold[0], "hold": hold[1], "pad": pad.call("down"), "key": KEY_DOWN, "value": cand,
+			"observe": obs, "reset": _key_until.bind(cand, home, KEY_UP)})
+	check_eq([pm.state.party.members[DUELIST_A].equip[0], host_saves, eq.list_open], [weapon0, 0, true],
+		"이름 붙은 해: 이온 세이버를 끼지 않았다(무기 그대로, 저장 없음)")
+	await _key_until(cand, ION_SABER, KEY_DOWN)
+	await kit.tap(kit.center_of(pm.active_key_pad().button("ok")), FINGER)
+	check_eq([pm.state.party.members[DUELIST_A].equip[0], host_saves], [ION_SABER, 1], "보통 「선택」 → 이온 세이버를 한 번 끼고 저장")

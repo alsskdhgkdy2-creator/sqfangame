@@ -143,8 +143,11 @@ func member_changed() -> void:
 	close_list()
 
 
-func context() -> String:
-	return "%s|%d" % [str(list_open), cursor if list_open else -1]
+## 이 탭의 고름 값(PressGuard, M3 A7d): 캠프 주인 값에 들어간다. 바뀌면 누르고 있던 단추는 뗄 때 일하지 않는다.
+## 칸 커서와 열린 목록의 후보(줄 번호와 그 장비 ID).
+func key_part() -> Array:
+	var cand := row_items[list_cursor] if list_open and list_cursor >= 0 and list_cursor < row_items.size() else ""
+	return [cursor, list_open, list_cursor if list_open else -1, cand]
 
 
 # ---- 자리(화면 크기 s, 시험도 같이 쓴다) ----

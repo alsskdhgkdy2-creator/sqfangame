@@ -41,6 +41,10 @@ var swatch := Color(0, 0, 0, 0)
 var held := false
 
 var _owner := NONE
+## 누르기를 시작한 주인(PressGuard.scope_of)과 그때의 고름 값(M3 A7d). 뗄 때 주인의 값이 다르면 누르기로 치지 않는다.
+## 누르기(_down)는 주인의 고름 값을 바꾸면 안 된다: 바꾸면 그 누르기는 뗄 때 늘 거부된다(누른 순간 고르는 단추를 만들지 않는다).
+var _scope: Node
+var _press_key: Array = []
 
 
 func _init() -> void:
@@ -93,6 +97,8 @@ func _down() -> void:
 		_owner = NONE
 		return
 	held = true
+	_scope = PressGuard.scope_of(self)
+	_press_key = PressGuard.key_of(_scope)
 	queue_redraw()
 	if fire_on_press:
 		activated.emit()
@@ -104,7 +110,10 @@ func _up(inside: bool) -> void:
 	_owner = NONE
 	queue_redraw()
 	if was_held and inside and not fire_on_press and not disabled:
-		activated.emit()
+		if _scope != null and is_instance_valid(_scope) and PressGuard.key_of(_scope) != _press_key:
+			PressGuard.cancel_under(_scope)  # 누른 뒤 고름이 바뀌었다(주인이 아직 맞추지 않았어도): 일하지 않고 다른 눌림도 버린다
+		else:
+			activated.emit()
 	if was_held:
 		released.emit()
 

@@ -7,6 +7,7 @@
 extends TestCase
 
 const Kit := preload("res://tests/scene_kit.gd")
+const HM := preload("res://tests/held_matrix.gd")
 const Fixtures := preload("res://tests/fixtures.gd")
 const WINDOWS := [Vector2(1280, 720), Vector2(2400, 1000)]
 const FINGER := 3
@@ -3899,3 +3900,31 @@ func test_records_enter_on_file_and_new_game_pills() -> void:
 	check_eq([pm.dialog_kind, pm.dialog_pick], ["new_game", 0], "Enter 새 게임 → 확인 창(「돌아가기」)")
 	await kit.press_key(KEY_ESCAPE)
 	check(pm.dialog_kind == "" and pm.is_open() and kit.hash_now() == h, "Esc = 「돌아가기」: 그대로")
+
+
+## M-D8(기록 key_part 에 커서 줄·칸이 없음), M3 A7d: 캠프 「기록」의 불러오기 슬롯 1 에서 키패드 「선택」·슬롯 단추를 손가락 3 으로 누른 채
+## 슬롯 2 로 옮기면(손가락 4 방향 패드 ↓·방향키 ↓) 누르기가 풀리고, 떼도 아무것도 불러오지 않는다. 이름 붙은 해(검토 표): 슬롯 2(소지금 222)를
+## 불러오지 않는다(소지금 333 그대로). 옮기지 않은 보통 「선택」은 슬롯 1(111)을 불러온다. 슬롯은 시험 임시 폴더에만 둔다.
+func test_record_slot_change_drops_held_presses() -> void:
+	var s := await _open_plain()
+	HM.make_slots(s)
+	s.state.money = 333
+	s._autosave()
+	await kit.press_key(KEY_P)
+	await kit.press_key(KEY_6)
+	await kit.press_key(KEY_RIGHT)
+	var pm := s.party_menu
+	var rt := pm.records_tab
+	var cur := func() -> String: return str(rt.cursor_button().name)
+	check_eq([pm.page, pm.tabs[pm.tab] == rt, cur.call()], ["sub", true, "Load_slot1"], "준비: 캠프 기록, 불러오기 슬롯 1")
+	var obs := func() -> Array: return [pm.is_open(), pm.page, pm.tab, s.state.money, kit.hash_now(), s.autosave_count, pm.selection_key()]
+	var ok := func() -> TouchButton: return pm.active_key_pad().button("ok")
+	for hold in [["「선택」", ok], ["슬롯 단추", func() -> TouchButton: return rt.cursor_button()]]:
+		await HM.run(self, kit, {"name": "캠프 기록 " + hold[0], "hold": hold[1], "pad": func() -> TouchButton: return pm.dir_pad.button("down"),
+			"key": KEY_DOWN, "value": cur, "observe": obs,
+			"reset": func() -> void: await HM.key_until(kit, cur, "Load_slot1", KEY_UP)})
+	check_eq(s.state.money, 333, "이름 붙은 해: 슬롯 2 를 불러오지 않았다(소지금 333)")
+	await HM.key_until(kit, cur, "Load_slot1", KEY_UP)
+	await kit.tap(kit.center_of(pm.active_key_pad().button("ok")), FINGER)
+	await kit.frames(2)
+	check_eq(s.state.money, 111, "보통 「선택」 → 슬롯 1 을 불러온다")

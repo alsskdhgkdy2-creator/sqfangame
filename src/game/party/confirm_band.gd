@@ -2,8 +2,8 @@
 ## 자리·크기·이름은 PartyMenu 의 상수를 그대로 쓴다. 캠프 확인 창(PartyMenu.dialog_layer, M3 A2b 에서 이 부품으로 합침)과 타이틀의 새 게임 확인이 쓴다.
 ## 캠프는 open·close 대신 보이기·고름(dialog_kind·dialog_pick)을 스스로 정하고, 자리만 fit 으로 맞춘다.
 ## 단추·키는 놓는 쪽의 handle 로 보낸다(route: 고른 단추 번호 0·1). 처음 커서는 0(「돌아가기」, D25 되돌릴 수 없는 물음).
-## 고름(pick)은 move 로만 옮긴다: 바뀌면 놓는 쪽(부모) 아래의 눌려 있던 단추·끌어 내리는 영역을 모두 버린다(M3 A7c seq=9,
-## 누르고 있던 키패드 「선택」·창 단추가 뗄 때 바뀐 답을 내지 않는다). 캠프도 고름을 옮길 때 이것을 부른다.
+## 고름(pick)은 key_part() 로 놓는 쪽의 고름 값에 들어간다(PressGuard, M3 A7d): 바뀌면 누르고 있던 키패드 「선택」·창 단추는
+## 뗄 때 일하지 않는다. 캠프는 고름을 스스로 가진다(dialog_pick, 캠프 고름 값에 들어간다).
 class_name ConfirmBand
 extends Control
 
@@ -75,20 +75,13 @@ func cancel() -> void:
 
 
 func move(d: int) -> void:
-	var to := clampi(pick + d, 0, 1)
-	if to != pick:
-		pick = to
-		_cancel_pointers()
+	pick = clampi(pick + d, 0, 1)
 	refresh()
 
 
-## 고름이 바뀌었다: 놓는 쪽(부모, 없으면 이 창) 아래에서 눌려 있던 단추(키패드 포함)·끌어 내리는 영역을 버린다.
-func _cancel_pointers() -> void:
-	var root_node: Node = get_parent() if get_parent() != null else self
-	for n in root_node.find_children("*", "TouchButton", true, false):
-		(n as TouchButton).cancel()
-	for n in root_node.find_children("*", "PartyScroll", true, false):
-		(n as PartyScroll).cancel()
+## 띠의 고름 값(PressGuard): 떠 있는지·고름.
+func key_part() -> Array:
+	return [visible, pick]
 
 
 func refresh() -> void:

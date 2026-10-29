@@ -197,8 +197,10 @@ func member_changed() -> void:
 	_dirty = true
 
 
-func context() -> String:
-	return ""
+## 이 탭의 고름 값(PressGuard, M3 A7d): 캠프 주인 값에 들어간다. 바뀌면 누르고 있던 단추는 뗄 때 일하지 않는다.
+## 커서 줄·칸(슬롯 고르기, 불러오기·저장할 슬롯). 캠프·타이틀·숙소가 같이 쓴다(주인 쪽 값은 읽지 않는다).
+func key_part() -> Array:
+	return [cur_row, cur_col]
 
 
 ## 좁은 화면(1280)에서는 판이 x LEFT_MIN 에서 시작하게 가운데 묶음(판·알약)을 오른쪽으로 민다. 넓으면 가운데.

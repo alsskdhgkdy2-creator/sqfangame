@@ -107,7 +107,6 @@ func setup(m: PartyMenu) -> void:
 	add_child(qty)
 	qty.setup(m.texts)
 	qty.route = func(kind: String, arg: Variant) -> void: menu.handle("qty", [kind, arg])
-	qty.pointer_root = m  # 키패드는 캠프 화면에 있다: 답 커서가 바뀌면 캠프 전체의 누르기를 버린다(M3 A7c seq=9)
 	qty.answered.connect(_on_qty_answered)
 
 
@@ -150,8 +149,10 @@ func member_changed() -> void:
 	pass
 
 
-func context() -> String:
-	return "%s|%s|%s|%s" % ["supply" if supply_open else "", mode, target_item, qty.mode if qty != null else ""]
+## 이 탭의 고름 값(PressGuard, M3 A7d): 캠프 주인 값에 들어간다. 바뀌면 누르고 있던 단추는 뗄 때 일하지 않는다.
+## 보급 줄·쪽(list·pills·pick)·대상 물건·커서 줄과 그 물건 ID·알약·수량 창의 답.
+func key_part() -> Array:
+	return [supply_open, mode, target_item, cursor, cursor_item(), pill, qty.key_part() if qty != null else []]
 
 
 ## 수량 창이 떠 있는지(떠 있으면 그 창 입력만 받는다).

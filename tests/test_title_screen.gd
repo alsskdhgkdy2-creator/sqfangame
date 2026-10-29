@@ -4,6 +4,7 @@
 extends TestCase
 
 const Kit := preload("res://tests/scene_kit.gd")
+const HM := preload("res://tests/held_matrix.gd")
 const FINGER := 3
 
 var kit: Kit
@@ -499,3 +500,31 @@ func test_enter_on_import_pill() -> void:
 	s._finish_file_request()
 	await kit.frames(2)
 	check(s.modal.kind == "" and t.is_open() and s.state == null, "파일 창 닫힘 → 타이틀 그대로")
+
+
+## M-D8(기록 key_part), M3 A7d: 타이틀 「불러오기」 슬롯 1 에서 키패드 「선택」·슬롯 단추를 손가락 3 으로 누른 채 슬롯 2 로 옮기면(손가락 4
+## 방향 패드 ↓·방향키 ↓) 누르기가 풀리고, 떼도 아무것도 불러오지 않는다(타이틀 그대로, 상태 없음). 이름 붙은 해(검토 표): 슬롯 2 를 불러오지
+## 않는다. 옮기지 않은 보통 「선택」은 슬롯 1(소지금 111)을 불러온다. 슬롯은 시험 임시 폴더에만 둔다.
+func test_record_slot_change_drops_held_presses() -> void:
+	_kit()
+	var s0 := await kit.open()
+	HM.make_slots(s0)
+	kit.close_screen()
+	await kit.frames(1)
+	var s := await _title()
+	var t := s.title_screen
+	await kit.press_key(KEY_2)
+	var rt := t.records_tab
+	var cur := func() -> String: return str(rt.cursor_button().name)
+	check_eq([t.page != "menu", cur.call()], [true, "Load_slot1"], "준비: 불러오기 슬롯 1")
+	var obs := func() -> Array: return [t.is_open(), t.page, s.state == null, s.autosave_count, t.selection_key()]
+	var ok := func() -> TouchButton: return t.active_key_pad().button("ok")
+	for hold in [["「선택」", ok], ["슬롯 단추", func() -> TouchButton: return rt.cursor_button()]]:
+		await HM.run(self, kit, {"name": "타이틀 기록 " + hold[0], "hold": hold[1], "pad": func() -> TouchButton: return t.dir_pad.button("down"),
+			"key": KEY_DOWN, "value": cur, "observe": obs,
+			"reset": func() -> void: await HM.key_until(kit, cur, "Load_slot1", KEY_UP)})
+	check(t.is_open() and s.state == null, "이름 붙은 해: 슬롯 2 를 불러오지 않았다(타이틀 그대로)")
+	await HM.key_until(kit, cur, "Load_slot1", KEY_UP)
+	await kit.tap(kit.center_of(t.active_key_pad().button("ok")), FINGER)
+	await kit.frames(2)
+	check(s.state != null and s.state.money == 111, "보통 「선택」 → 슬롯 1(111)을 불러온다")

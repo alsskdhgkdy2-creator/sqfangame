@@ -6,6 +6,7 @@ extends TestCase
 
 const Kit := preload("res://tests/scene_kit.gd")
 const Fx := preload("res://tests/fixtures.gd")
+const HM := preload("res://tests/held_matrix.gd")
 const JUNK := "shop.junk_workshop"
 const WINDOWS := [Vector2(1280, 720), Vector2(2400, 1000)]
 const FINGER := 3
@@ -797,7 +798,7 @@ func test_buy_confirm_to_equip_prompt_is_a_context_change() -> void:
 	var sc := await _fresh(s)
 	await _to_list(sc, 0, 0, KNIGHT)
 	await _step(sc, "row", _row_of(sc, "equip.twin_edge"))
-	var ctx0 := sc._context
+	var key0 := sc.selection_key()
 	# 「예」 자리를 한 손가락으로 누른 채, 다른 길(Enter)로 산다 → 같은 confirm 모양의 장착 물음 → 뗀 손가락은 아무 일 없음.
 	var yes := kit.center_of(sc.dialog.yes_button)
 	kit.touch(FINGER, yes, true)
@@ -805,7 +806,8 @@ func test_buy_confirm_to_equip_prompt_is_a_context_change() -> void:
 	check(sc.dialog.yes_button.held, "준비: 「예」 눌림")
 	await kit.press_key(KEY_ENTER)
 	check_eq([sc.dialog.mode, sc.ask], ["confirm", "equip"], "같은 모양의 장착 물음")
-	check(sc._context != ctx0 and sc._context.contains("equip"), "문맥 글에 물음의 목적이 들어간다: %s" % sc._context)
+	check(sc.selection_key() != key0 and sc.selection_key()[10] == ["equip", "equip.twin_edge", KNIGHT],
+		"고름 값에 물음의 목적·대상이 들어간다: %s" % str(sc.selection_key()))
 	check(not sc.dialog.yes_button.held, "눌림을 버렸다")
 	kit.touch(FINGER, yes, false)
 	await kit.frames(2)
@@ -970,6 +972,93 @@ func test_quantity_change_drops_held_presses() -> void:
 		var q := sc.dialog.qty
 		await kit.tap(kit.center_of(sc.dialog.yes_button))
 		check_eq([have.call(), saves], [n0 - q if sell else n0 + q, 1], "%s: 보통 「예」 → 수량 %d 을 한 번, 저장 1" % [tag0, q])
+
+
+## 커서를 처음(0)으로 되돌린다(↑, 누르기 없음).
+func _cursor_home(get: Callable) -> void:
+	for i in 12:
+		if int(get.call()) <= 0:
+			return
+		await kit.press_key(KEY_UP)
+
+
+## M-D3(상점 고름 값에 뿌리·갈래·목록 커서와 그 물건이 없음, M3 A7d): 뿌리·갈래·구매 목록·판매 목록에서 키패드 「선택」과 커서 줄을
+## 손가락 3 으로 누른 채 커서를 옮기면(손가락 4 방향 패드 ↓·방향키 ↓) 누르기가 풀리고, 떼도 쪽·창·고름·저장이 그대로다(옮긴 줄도, 누른 줄도
+## 열지 않는다). 옮기지 않은 보통 누르기는 그 줄을 연다.
+func test_selection_change_drops_held_presses() -> void:
+	_kit()
+	var sc := await _fresh(_sell_state())
+	var ok := func() -> TouchButton: return sc.active_key_pad().button("ok")
+	var down := func() -> TouchButton: return sc.dir_pad.button("down")
+	var obs := func() -> Array: return _sig(sc) + [sc.selection_key()]
+	var lists := [
+		["뿌리", func() -> TouchButton: return sc.root_list.rows[0], func() -> int: return sc.root_cursor, func() -> void: pass],
+		["갈래", func() -> TouchButton: return sc.branch_list.rows[0], func() -> int: return sc.branch_cursor,
+			func() -> void: await _step(sc, "root", 0)],
+		["구매 목록", func() -> TouchButton: return sc.buy_list.rows[0], func() -> int: return sc.buy_list.cursor,
+			func() -> void: await _step(sc, "branch", 0)],
+	]
+	for l in lists:
+		await (l[3] as Callable).call()
+		for hold in [["「선택」", ok], ["커서 줄", l[1]]]:
+			await HM.run(self, kit, {"name": "%s %s" % [l[0], hold[0]], "hold": hold[1], "pad": down, "key": KEY_DOWN, "value": l[2],
+				"observe": obs, "reset": _cursor_home.bind(l[2])})
+	check_eq([sc.page, sc.dialog.mode, saves], ["buy", "", 0], "구매 목록 그대로, 창 없음, 저장 없음")
+	await _cursor_home(func() -> int: return sc.buy_list.cursor)
+	await kit.tap(kit.center_of(sc.buy_list.rows[0]))
+	check_eq([sc.dialog.mode, sc.ask, sc.ask_item], ["confirm", "buy", str(sc.lines[0]["item"])], "보통 누르기 → 그 줄의 구매 확인")
+	await _step(sc, "dialog", ["cancel", null])
+	for i in 2:
+		await kit.press_key(KEY_ESCAPE)
+	await _step(sc, "root", 1)
+	check_eq(sc.page, "sell", "준비: 판매 목록")
+	var sell_cursor := func() -> int: return sc.buy_list.cursor
+	for hold in [["「선택」", ok], ["커서 줄", func() -> TouchButton: return sc.buy_list.rows[0]]]:
+		await HM.run(self, kit, {"name": "판매 목록 %s" % hold[0], "hold": hold[1], "pad": down, "key": KEY_DOWN, "value": sell_cursor,
+			"observe": obs, "reset": _cursor_home.bind(sell_cursor)})
+	check_eq([sc.dialog.mode, saves, int(sc.state.materials.get(TAIL, 0))], ["", 0, 3], "판매 목록: 창 없음, 팔지 않음")
+	await _cursor_home(sell_cursor)
+	await kit.tap(kit.center_of(sc.buy_list.rows[0]))
+	check_eq([sc.dialog.mode, sc.ask_item], ["qty", TAIL], "보통 누르기 → 그 줄(네온 쥐 꼬리 3개)의 수량 창")
+
+
+## M-D14(상점이 줄을 다시 만들기 전에 sync, 검토 seq=13): 판매 소모품 목록 줄 0 에서 키패드 「선택」을 누른 채 그 칸의 물건이 넥타 → 메디카로
+## 바뀌면(디버그 보급, 다시 만든 줄) 그 새로 고침에서 바로 누르기가 풀리고, 떼도 아무 창도 열지 않는다. 그 뒤 새로 시작한 누르기는 바뀐
+## 것이 없는 새로 고침에서 풀리지 않고 떼면 한 번 일한다(메디카 1개 판매 확인).
+func test_same_index_replacement_cancels_at_once_and_a_fresh_press_survives() -> void:
+	timeout_sec = 120.0
+	_kit()
+	var s := await kit.open_town("native", 7, "debug=1")
+	s.state.consumables = {"use.nectar": 2}
+	s._open_shop()
+	await kit.frames(2)
+	var sc := s.shop_screen
+	await _step(sc, "root", 1)
+	await _step(sc, "tab", 2)
+	var item := func() -> String: return str(sc.lines[sc.buy_list.cursor]["item"]) if sc.buy_list.cursor < sc.lines.size() else ""
+	check_eq([sc.page, sc.buy_list.cursor, item.call()], ["sell", 0, "use.nectar"], "준비: 판매 소모품 줄 0 넥타")
+	var ok := sc.active_key_pad().button("ok")
+	var p := kit.center_of(ok)
+	kit.touch(FINGER, p, true)
+	await kit.frames(1)
+	check(ok.held, "준비: 「선택」 누르는 중")
+	var r: Dictionary = JSON.parse_string(s._on_debug_request(JSON.stringify({"op": "supply", "item": "use.medica", "n": 1})))
+	await kit.frames(1)
+	check(bool(r.get("ok", false)), "준비: 디버그 보급 메디카")
+	check_eq([sc.buy_list.cursor, item.call()], [0, "use.medica"], "같은 칸(줄 0)의 물건이 메디카로 바뀌었다")
+	check(not ok.held, "그 새로 고침에서 바로 「선택」 누르기가 풀린다")
+	var n := sc.accepted_inputs
+	kit.touch(FINGER, p, false)
+	await kit.frames(2)
+	check_eq([sc.dialog.mode, sc.accepted_inputs], ["", n], "뗄 때 아무 창도 열지 않는다")
+	kit.touch(FINGER, p, true)
+	await kit.frames(1)
+	sc.refresh_view()
+	await kit.frames(1)
+	check(ok.held, "새 누르기는 바뀐 것이 없는 새로 고침에서 풀리지 않는다")
+	kit.touch(FINGER, p, false)
+	await kit.frames(2)
+	check_eq([sc.dialog.mode, sc.ask_item, sc.accepted_inputs], ["confirm", "use.medica", n + 1], "떼면 한 번 일한다(메디카 판매 확인)")
 
 
 # ---- 저장 실패(F6) ----

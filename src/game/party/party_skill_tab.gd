@@ -175,8 +175,10 @@ func member_changed() -> void:
 	tree_area.scroll_to(0.0)
 
 
-func context() -> String:
-	return ""
+## 이 탭의 고름 값(PressGuard, M3 A7d): 캠프 주인 값에 들어간다. 바뀌면 누르고 있던 단추는 뗄 때 일하지 않는다.
+## 노드 커서와 그 스킬 ID(「+」의 대상).
+func key_part() -> Array:
+	return [cursor, cursor_skill()]
 
 
 func has_draft() -> bool:
