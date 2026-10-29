@@ -120,7 +120,7 @@ func test_unlock_conditions() -> void:
 	e.day = 1
 	s.quests.entries[M1] = e
 	check_eq(QuestRules.status_of(s, _q(M2)), "available", "첫 임무 보고 + B3F 다녀옴: 봉인된 문이 열린다")
-	check_eq(QuestRules.status_of(s, _q(RAM)), "locked", "이끼 수프를 보고하지 않았으면 에테르 램은 잠김")
+	check_eq(QuestRules.status_of(s, _q(RAM)), "locked", "이끼 수프를 보고하지 않았으면 에테르 숫양은 잠김")
 	var t := _town()
 	t.enter_floor(t.defs.floors["b3f"])
 	_to_town(t)
@@ -218,7 +218,7 @@ func test_kill_counting() -> void:
 	check_eq([QuestRules.observe(s, two), s.quests.entry(MOTH).progress], [[{"type": "quest_done", "quest": MOTH}] as Array[Dictionary], 4], "3/4 에서 둘: 달성, 4 에서 멈춤")
 
 
-## Q4 (M-Q8 foe 가 FOE 자리 ID 를 정의 ID 와 견줌): 에테르 램 사냥(접촉 전투 승리 → foes_defeated f1 → foe.ether_ram).
+## Q4 (M-Q8 foe 가 FOE 자리 ID 를 정의 ID 와 견줌): 에테르 숫양 사냥(접촉 전투 승리 → foes_defeated f1 → foe.ether_ram).
 func test_foe_counting() -> void:
 	var s := _town()
 	var e := QuestState.Entry.new()
@@ -226,7 +226,7 @@ func test_foe_counting() -> void:
 	e.reports = 1
 	e.day = 1
 	s.quests.entries[SOUP] = e
-	check_eq(QuestRules.accept(s, RAM, "pub")[0]["type"], "quest_accepted", "이끼 수프 보고 뒤 에테르 램 받기")
+	check_eq(QuestRules.accept(s, RAM, "pub")[0]["type"], "quest_accepted", "이끼 수프 보고 뒤 에테르 숫양 받기")
 	_enter_at(s, Vector2i(11, 9), Dir.E)
 	var ev: Array[Dictionary] = []
 	_battle_kill(s, "formation.foe.ether_ram", [0], "f1")
@@ -421,7 +421,7 @@ func test_repeat_cycle() -> void:
 	QuestRules.report(s, SOUP, "pub")
 	check_eq([QuestRules.status_of(s, _q(SOUP)), QuestRules.opens_on(s, _q(SOUP)), s.day], ["cooling", 2, 1], "보고한 날: 식는 중, 2일째에 연다")
 	check_eq(QuestRules.accept(s, SOUP, "pub"), [{"type": "rejected", "reason": "cooling", "opens": 2}] as Array[Dictionary], "식는 중에는 cooling(여는 날)")
-	check_eq(QuestRules.status_of(s, _q(RAM)), "available", "이끼 수프 보고로 에테르 램이 열린다")
+	check_eq(QuestRules.status_of(s, _q(RAM)), "available", "이끼 수프 보고로 에테르 숫양이 열린다")
 	s.money = 1000
 	var stay := TownRules.stay(s)
 	check_eq([_types(stay).back(), s.day, QuestRules.status_of(s, _q(SOUP)), QuestRules.is_new(s, _q(SOUP))], ["stayed", 2, "available", false],

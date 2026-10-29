@@ -16,6 +16,8 @@ const LOOKS := {
 	"council": [Color("1f2a2e"), Color("7d8f94"), Color(0.04, 0.06, 0.07, 0.5), "roofs"],
 	"npc_inn": [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0.08, 0.04, 0.02, 0.62), "figure"],
 	"npc_guild": [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0.02, 0.04, 0.1, 0.62), "figure"],
+	"npc_pub": [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0.1, 0.02, 0.06, 0.62), "figure"],
+	"npc_council": [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0.02, 0.06, 0.06, 0.62), "figure"],
 }
 
 ## 캔버스 → 마지막으로 그린 것 [{key, rect, top, bottom, shape}](시험용).

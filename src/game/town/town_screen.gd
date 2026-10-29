@@ -16,11 +16,13 @@ signal camp_requested
 signal shop_requested
 ## 광장 「모험가 길드」(M3 A7c): 탐색 화면이 길드 화면을 연다(상점과 같은 길).
 signal guild_requested
+## 광장 「정보상 바」·「관리국」(M3 A8b): 탐색 화면이 의뢰 화면을 연다(길드와 같은 길). giver = pub · council.
+signal quest_requested(giver: String)
 signal enter_requested
 
 ## 광장 시설(원작 차례, 숫자 키 1~6).
 const PLAZA_KEYS := ["inn", "shop", "pub", "guild", "council", "entrance"]
-## 아직 문을 열지 않은 시설(누르면 이유만). 길드는 M3 A7c 에 열었다.
+## 내용이 있어야 여는 시설(M3 A8b 설계 §5.4): 묶음에 그 시설의 의뢰가 없으면 흐림(누르면 이유만). 길드는 M3 A7c 에 열었다.
 const PLAZA_DIM := ["pub", "council"]
 const ENTRANCE_KEYS := ["start", "back"]
 ## 숙소 줄(원작 차례에서 夜まで休憩する·預かり所는 뺀다: 시계·맡김이 없다). 대화는 주인이 없어 흐림.
@@ -359,13 +361,18 @@ func _set_cursor(i: int) -> void:
 			inn_cursor = i
 
 
+## 광장 시설 k 가 흐린지: 내용이 있어야 여는 시설(PLAZA_DIM)이고 묶음에 그 시설의 의뢰가 없다(M3 A8b: 시험 묶음은 흐림, 게임 묶음은 연다).
+func plaza_dim(k: String) -> bool:
+	return PLAZA_DIM.has(k) and (state == null or not state.defs.quests.has_giver(k))
+
+
 ## 줄 i 의 일. 광장: 흐린 시설 → 이유만, 캡슐 숙소 → 숙소 쪽, 정크 공방 → 상점·모험가 길드 → 길드(탐색 화면이 연다), 아보르 입구 → 입구 쪽.
 ## 입구: 탐사 시작 → 탐색 화면, 돌아가기 → 광장. 숙소: 숙박 → 확인 창(돈이 모자라면 이유만), 기록 → 기록 쪽, 대화 → 이유만, 나간다 → 광장.
 func _run(i: int) -> bool:
 	match page:
 		"plaza":
 			var k: String = PLAZA_KEYS[i]
-			if PLAZA_DIM.has(k):
+			if plaza_dim(k):
 				show_notice(texts.t("town.why.later"))
 				return true
 			match k:
@@ -377,6 +384,8 @@ func _run(i: int) -> bool:
 					shop_requested.emit()
 				"guild":
 					guild_requested.emit()
+				"pub", "council":
+					quest_requested.emit(k)
 				"entrance":
 					page = "entrance"
 					entrance_cursor = 0
@@ -671,7 +680,7 @@ func _refresh() -> void:
 	for i in PLAZA_KEYS.size():
 		plaza_list.set_row_text(i, row_label("plaza", i))
 		live.append(true)
-		dim.append(PLAZA_DIM.has(PLAZA_KEYS[i]))
+		dim.append(plaza_dim(PLAZA_KEYS[i]))
 	plaza_list.show_rows(plaza_cursor if on_plaza else -1, -1, live, dim)
 	plaza_list.show_strip(PLAZA_KEYS[plaza_cursor])
 	var elive := []
@@ -776,7 +785,7 @@ func debug_info(css: Callable) -> Dictionary:
 	var keys := keys_of(page)
 	var dim := []
 	for k in keys:
-		dim.append((page == "plaza" and PLAZA_DIM.has(k)) or (page == "inn" and INN_DIM.has(k)))
+		dim.append((page == "plaza" and plaza_dim(k)) or (page == "inn" and INN_DIM.has(k)))
 	var names := []
 	var l: FacilityList = {"plaza": plaza_list, "entrance": entrance_list, "inn": inn_list}.get(page)
 	for i in keys.size():

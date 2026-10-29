@@ -30,7 +30,8 @@
 // M3 A5b: F = 채집 지점(web_check_part_f.mjs, 실제 미궁): 채집 물음·안내·다 쓴 지점, 캠프 채집 알약, 숙박으로 되돌아오는 횟수, 새로 고침.
 // M3 A6c: G = FOE(web_check_part_g.mjs, 실제 미궁): 숫양 순회·접촉 전투·전투 중 새로 고침·쓰러짐·숙박 되살아남·합류 알약·합류.
 // M3 A7c: H = 모험가 길드(web_check_part_h.mjs, 실제 미궁): 등록(브라우저 입력 창)·편성·새 직업 스킬·상태이상 줄·새로 고침·캠프 「대열」.
-// 실행: flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/web_check.mjs [너비x높이] [a|b|c|d|e|f|g|h|all]  (기본 all = A, B, C, D, E, F, G, H 차례)
+// M3 A8b: I = 정보상 바·관리국 의뢰(web_check_part_i.mjs, 실제 미궁): 임무 받기·계단 칸 임무 안내·허가 안내·보고 결과·이끼 수프·새로 고침·숙박 뒤 다시 받기.
+// 실행: flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/web_check.mjs [너비x높이] [a|b|c|d|e|f|g|h|i|all]  (기본 all = A, B, C, D, E, F, G, H, I 차례)
 // 결과: build/check/ 에 캡처·내보낸 파일, 부분마다 report_a.json·report_b.json, 이번 실행 전체 report.json.
 import { runPart, finish } from './web_check_common.mjs';
 import { partA } from './web_check_part_a.mjs';
@@ -41,14 +42,15 @@ import { partE } from './web_check_part_e.mjs';
 import { partF } from './web_check_part_f.mjs';
 import { partG } from './web_check_part_g.mjs';
 import { partH } from './web_check_part_h.mjs';
+import { partI } from './web_check_part_i.mjs';
 
 const which = (process.argv[3] ?? 'all').toLowerCase();
 // 부분 이름은 이 목록에만 있다(Map: 「constructor」 같은 객체 기본 이름이 부분으로 통과하지 않는다). 브라우저를 띄우기 전에 거른다.
 // 값 = [본문, 층 묶음].
-const PARTS = new Map([['a', [partA, 'test']], ['b', [partB, 'test']], ['c', [partC, 'test']], ['d', [partD, 'game']], ['e', [partE, 'test']], ['f', [partF, 'game']], ['g', [partG, 'game']], ['h', [partH, 'game']]]);
+const PARTS = new Map([['a', [partA, 'test']], ['b', [partB, 'test']], ['c', [partC, 'test']], ['d', [partD, 'game']], ['e', [partE, 'test']], ['f', [partF, 'game']], ['g', [partG, 'game']], ['h', [partH, 'game']], ['i', [partI, 'game']]]);
 const names = which === 'all' ? [...PARTS.keys()] : [which];
 if (!names.every((n) => PARTS.has(n))) {
-  console.log(`모르는 부분: ${which}\n사용: node tools/web_check.mjs [너비x높이] [a|b|c|d|e|f|g|h|all]`);
+  console.log(`모르는 부분: ${which}\n사용: node tools/web_check.mjs [너비x높이] [a|b|c|d|e|f|g|h|i|all]`);
   process.exit(2);
 }
 for (const n of names) await runPart(n, ...PARTS.get(n));

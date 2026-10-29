@@ -792,7 +792,8 @@ static func finish(state: ExplorationState, outcome: String, events: Array[Dicti
 
 ## 드롭 조건(06 §3.17): 있는 조건이 모두 처치 기록과 맞는지.
 static func drop_condition_met(cond: Dictionary, kill: Dictionary) -> bool:
-	if cond.has("killed_by_element") and not cond["killed_by_element"].has(kill["element"]):
+	# 속성 없이 쓰러뜨린 처치(독 등, element null)는 속성 조건을 채우지 못한다. 형 있는 배열에 null 을 묻지 않는다(엔진 오류, M3 A8b).
+	if cond.has("killed_by_element") and (kill["element"] == null or not cond["killed_by_element"].has(kill["element"])):
 		return false
 	if cond.has("killed_while_bound") and not kill["binds"].has(cond["killed_while_bound"]):
 		return false

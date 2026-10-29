@@ -79,8 +79,10 @@ func test_gate_and_reach_through_saves() -> void:
 	await kit.press_key(KEY_W)
 	await kit.frames(3)
 	var snap := s.debug_snapshot()
-	check_eq([snap["at"], snap["modal"], snap["toast"], s.autosave_count], [[STAIR.x, STAIR.y], "", s.texts.t("msg.no_permit"), saves + 1],
-		"계단 칸: 물음 없음, 「관리국의 탐사 허가가 아직 없다」, 자동 저장 하나")
+	# M3 A8b(설계 §6.5): 같은 묶음의 안내는 의뢰 안내가 마지막이라 이긴다(첫 임무 달성 안내). 허가 안내는 아래 조사에서 본다.
+	check_eq([snap["at"], snap["modal"], snap["toast"], s.autosave_count],
+		[[STAIR.x, STAIR.y], "", s.texts.t("quest.note.done.council", {"quest": s.texts.t("quest.permit_b2f")}), saves + 1],
+		"계단 칸: 물음 없음, 임무 달성 안내(허가 안내보다 뒤), 자동 저장 하나")
 	check_eq([snap["quests"][M1]["status"], snap["quests"][M1]["progress"], snap["quest_events"]], ["done", 1, [{"type": "quest_done", "quest": M1}]], "첫 임무 도착을 셌다")
 	check_eq(_auto_doc(s)["state"]["quests"][M1]["progress"], 1.0, "자동 저장에 진행 1")
 	s = await kit.reopen(_arbor())

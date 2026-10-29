@@ -1064,6 +1064,33 @@ func test_debug_supply_and_grant_exp_requests_autosave() -> void:
 	check_eq(s.autosave_count, n + 2, "저장 없음")
 
 
+## M3 A8b(조정자 답, 웹 I 준비, M-W1 supply 요청이 소재를 받지 않음 · M-W2 가득 찬 가방에도 ok): 디버그 supply 요청은 소재도 받아 보통 가방 규칙으로
+## 넣고 자동 저장한다(남은 칸만큼, 넘치면 capped). 하나도 못 넣으면 ok:false bag_full(바뀌지 않고 저장 없음). 모르는 ID 는 ok:false,
+## 디버그 주소가 아니면 거부. 캠프 임시 보급 규칙(GrowthRules.supply)은 여전히 소재를 받지 않는다.
+func test_debug_supply_request_takes_materials_by_bag_rules() -> void:
+	var s := await _open("native", "debug=1")
+	const RAT := "item.neon_rat_tail"
+	var n := s.autosave_count
+	var r := _req(s, {"op": "supply", "item": RAT, "n": 3})
+	check(r.get("ok", false) and r["events"][0] == {"type": "supplied", "item": RAT, "amount": 3.0, "capped": false}, "소재 3: %s" % str(r))
+	check_eq([s.state.materials.get(RAT, 0), s.autosave_count], [3, n + 1], "소재 +3, 자동 저장 하나")
+	_check_auto_matches(s, "supply 소재")
+	s.state.materials[RAT] = int(s.state.materials[RAT]) + BagRules.SLOTS - BagRules.used(s.state) - 2
+	var have: int = s.state.materials[RAT]
+	r = _req(s, {"op": "supply", "item": RAT, "n": 3})
+	check(r.get("ok", false) and r["events"][0]["amount"] == 2.0 and r["events"][0]["capped"] == true, "남은 칸 2: 둘만 넣고 capped %s" % str(r))
+	check_eq([s.state.materials[RAT], BagRules.used(s.state), s.autosave_count], [have + 2, BagRules.SLOTS, n + 2], "가방이 찼다, 자동 저장")
+	var h := kit.hash_now()
+	r = _req(s, {"op": "supply", "item": RAT, "n": 1})
+	check_eq(r, {"ok": false, "reason": "bag_full"}, "가득 찬 가방: bag_full")
+	r = _req(s, {"op": "supply", "item": "item.nope", "n": 1})
+	check_eq(r, {"ok": false, "reason": "unknown_item"}, "모르는 소재 ID")
+	check_eq([kit.hash_now(), s.autosave_count], [h, n + 2], "거부는 바꾸지 않고 저장하지 않는다")
+	check_eq(GrowthRules.supply(s.state, RAT, 1), [{"type": "rejected", "reason": "unknown_item"}] as Array[Dictionary], "캠프 임시 보급 규칙은 그대로 소재를 받지 않는다")
+	s._debug = false
+	check_eq(_req(s, {"op": "supply", "item": RAT, "n": 1}).get("error"), "debug only", "디버그 주소에서만")
+
+
 func test_snapshot_lists_party_menu_buttons_and_growth_fields() -> void:
 	var s := await _open("native", "debug=1")
 	var snap := s.debug_snapshot()

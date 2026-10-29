@@ -398,6 +398,37 @@ func test_r2_kill_moment_drop_poison_kill_while_arm_bound() -> void:
 	check(_drops(ev).has("item.intact_pincer"), "온전한 집게 얻음")
 
 
+## 엔진 오류(ERROR_TYPE_ERROR)를 세는 기록기(시험 실행기는 실행 오류만 센다). 이 시험 동안만 붙인다.
+class EngineErrors:
+	extends Logger
+	var lines: Array[String] = []
+
+	func _log_error(_function: String, file: String, line: int, code: String, rationale: String, _editor_notify: bool, error_type: int, _backtraces: Array[ScriptBacktrace]) -> void:
+		if error_type == ERROR_TYPE_ERROR:
+			lines.append("%s:%d %s" % [file.get_file(), line, rationale if not rationale.is_empty() else code])
+
+
+## M3 A8b(M-P1 독 처치의 null 속성을 형 있는 배열에 물음): 독으로 쓰러진 나방(처치 기록 element null)은 속성 조건 드롭(발광 인분)을 얻지 못하고,
+## 그 길에서 엔진 오류가 하나도 나지 않는다. drop_condition_met 를 바로 불러도 같다.
+func test_r2_poison_kill_fails_an_element_drop_without_engine_errors() -> void:
+	var log := EngineErrors.new()
+	OS.add_logger(log)
+	var s := _game(BEETLE, "moth")
+	var moth := s.battle.enemies[0]
+	moth.hp = 3
+	moth.ailment = "poison"
+	moth.ailment_turns = 3
+	moth.ailment_damage = 6
+	var ev := BattleRules.submit(s, Fx.cmds(s))
+	var kill: Dictionary = Fx.of_type(ev, "defeated")[0]["kill"]
+	var direct := BattleRules.drop_condition_met({"killed_by_element": ["fire"]}, kill)
+	OS.remove_logger(log)
+	check_eq([kill["element"], kill["by"]], [null, "poison"], "독으로 처치한 기록(속성 없음)")
+	check(not _drops(ev).has("item.glow_scale"), "속성 조건 드롭은 얻지 못한다")
+	check_eq(direct, false, "drop_condition_met: 속성 없는 처치는 속성 조건을 채우지 못한다")
+	check_eq(log.lines, [] as Array[String], "엔진 오류 없음")
+
+
 func test_r2_kill_moment_drop_moth_needs_element_kill() -> void:
 	var s := _game(BEETLE, "moth")
 	s.battle.enemies[0].hp = 1

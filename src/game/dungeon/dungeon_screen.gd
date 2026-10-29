@@ -117,6 +117,8 @@ var autosave_count := 0
 var last_autosave_error := ""
 ## 마지막 의뢰 진행 세기(QuestRules.observe, M3 A8)가 낸 의뢰 이벤트(탐색 행동 또는 전투 제출). A8b 의 알림이 읽는다.
 var quest_events: Array[Dictionary] = []
+## 전투 제출이 센 의뢰의 안내(M3 A8b 설계 §6.5): 전투 동안 들고 있다가 전투 층이 닫힐 때(전멸이 아니면) 띄운다.
+var _battle_quest_note := ""
 ## 디버그 상태 요약을 낸 횟수(시험: 타이틀에서도 입력마다 다시 내는지).
 var debug_publishes := 0
 
@@ -146,6 +148,7 @@ var party_menu: PartyMenu
 var shop_screen: ShopScreen
 ## 모험가 길드(M3 A7c, 층 2 상점 뒤): 광장 「모험가 길드」에서 연다.
 var guild_screen: GuildScreen
+var quest_screen: QuestScreen
 ## 마을 화면·타이틀(층 2)과 마을 바탕(층 0, 3D 시야 위·HUD 아래).
 var town_screen: TownScreen
 var title_screen: TitleScreen
@@ -346,6 +349,8 @@ func _set_state(s: ExplorationState) -> void:
 		shop_screen.close_shop(false)  # 앞 상태의 상점 화면·물음은 버린다
 	if guild_screen.is_open():
 		guild_screen.close_guild(false)  # 앞 상태의 길드 화면·물음·편성 초안은 버린다
+	if quest_screen.is_open():
+		quest_screen.close_quest(false)  # 앞 상태의 의뢰 화면·물음은 버린다(M3 A8b)
 	_clear_input()
 	_stairs_ask = false
 	if _view_on and not state.in_town():
@@ -498,7 +503,7 @@ func _on_pad(action: int) -> void:
 ## 마을·타이틀에서도 받지 않는다(M3 A2: 마을의 입력은 마을 화면이 받고, 미궁에 들어가는 ENTER 는 _enter_labyrinth 가 따로 부른다).
 func _input_blocked() -> bool:
 	return state == null or state.in_town() or _title_open() or modal.is_open() or battle_layer.is_open() or party_menu.is_open() \
-		or shop_screen.is_open() or guild_screen.is_open() or not ExplorationRules.can_act(state) or map.is_interacting()
+		or shop_screen.is_open() or guild_screen.is_open() or quest_screen.is_open() or not ExplorationRules.can_act(state) or map.is_interacting()
 
 
 ## 마을 화면 「탐사 시작」(M3 A2): 마을에 있고 다른 창이 없을 때 규칙 행동 ENTER.
@@ -511,7 +516,7 @@ func _enter_labyrinth() -> void:
 ## 마을에서 창(알림·캠프·상점·타이틀)이 없는지.
 func _town_free() -> bool:
 	return _in_town() and not _title_open() and not modal.is_open() and not party_menu.is_open() and not shop_screen.is_open() \
-		and not guild_screen.is_open() \
+		and not guild_screen.is_open() and not quest_screen.is_open() \
 		and not battle_layer.is_open()
 
 
@@ -587,6 +592,10 @@ func _do_action(action: int) -> void:
 		_show_toast(FloorNames.place(texts, state.defs, state.floor_def))
 	if located:
 		_show_toast(texts.t("town.name") if state.in_town() else FloorNames.place(texts, state.defs, state.floor_def))
+	# 의뢰 안내(M3 A8b 설계 §6.5)는 이 묶음의 다른 안내 뒤: 안내는 바뀌어 들어가므로 마지막이 남는다(탐사 허가 계단에서도 임무 안내가 이긴다).
+	var note := quest_note(quest_events)
+	if not note.is_empty():
+		_show_toast(note)
 	# 저장 실패 안내가 위 행동 안내에 덮이지 않게 안내 뒤에 저장한다.
 	_autosave()
 	if located:
@@ -664,12 +673,14 @@ func _check_windows() -> bool:
 			shop_screen.close_shop(false)
 		if guild_screen.is_open():
 			guild_screen.close_guild(false)
+		if quest_screen.is_open():
+			quest_screen.close_quest(false)
 		if modal.kind != "wipe":
 			_open_wipe()
 		return true
 	if state.encounter.pending:
 		if not battle_layer.is_open() and not modal.is_open() and not party_menu.is_open() and not shop_screen.is_open() \
-				and not guild_screen.is_open():
+				and not guild_screen.is_open() and not quest_screen.is_open():
 			_open_battle()
 		return true
 	return false
@@ -693,8 +704,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		# 캠프가 키를 받는다(07 §9.4: 아래 Esc·Ctrl+Z·M·R·이동 키 갈래는 _input_blocked 를 보지 않는다).
 		# 캠프 위에 창(알림·파일 고르기)이 떠 있으면 캠프는 키를 받지 않는다(그 창이 받는다).
 		return
-	if shop_screen.is_open() or guild_screen.is_open():
-		return  # 상점·길드가 키를 받는다(08 §8: 열린 동안 캠프·지도·이동은 열리거나 움직이지 않는다)
+	if shop_screen.is_open() or guild_screen.is_open() or quest_screen.is_open():
+		return  # 상점·길드·의뢰 화면이 키를 받는다(08 §8: 열린 동안 캠프·지도·이동은 열리거나 움직이지 않는다)
 	if _title_open() or _in_town():
 		return  # 타이틀·마을 화면이 키를 받는다(마을에서는 이동·지도·Esc 캠프가 없다, P 는 마을 화면이 캠프로)
 	if modal.kind in ["stairs", "chest", "gather"]:
@@ -1062,6 +1073,7 @@ func _finish_file_request() -> void:
 # ---- 창 ----
 
 func _open_battle() -> void:
+	_battle_quest_note = ""  # 앞 전투의 의뢰 안내는 남기지 않는다
 	battle_layer.anim_speed = anim_speed
 	battle_layer.debug = _debug
 	_set_battle_view(true)
@@ -1072,6 +1084,10 @@ func _open_battle() -> void:
 func _on_battle_closed(_outcome: String) -> void:
 	_set_battle_view(false)
 	_clear_input()
+	var note := _battle_quest_note
+	_battle_quest_note = ""
+	if not note.is_empty() and not state.wiped:
+		_show_toast(note)  # 전투가 센 의뢰 안내(M3 A8b 설계 §6.5): 전투 층이 닫힌 뒤에, 전멸이면 띄우지 않는다
 	if _view_on and not state.in_town():
 		view.sync_foes(state)  # 쓰러진 FOE 표지를 지우고 위협 색(레벨)을 다시 본다(M3 A6c)
 	map.refresh()
@@ -1095,7 +1111,7 @@ func _set_battle_view(on: bool) -> void:
 ## 감춘 단추는 누르기를 받지 않는다. 파티 메뉴가 열리고 닫힐 때(어느 길로 닫혀도: 키·「닫기」·상태 바꾸기) visibility_changed 로 다시 맞춘다.
 func _hud_hidden() -> bool:
 	return _battle_view or (party_menu != null and party_menu.is_open()) or (shop_screen != null and shop_screen.is_open()) \
-		or (guild_screen != null and guild_screen.is_open()) \
+		or (guild_screen != null and guild_screen.is_open()) or (quest_screen != null and quest_screen.is_open()) \
 		or _in_town() or _title_open()
 
 
@@ -1107,6 +1123,26 @@ func _on_battle_save() -> void:
 ## 전투 층 제출 갈고리(M3 A8): 저장 갈고리보다 먼저, 전투 끝(kills·foes_defeated)으로 받은 의뢰를 센다(설계 §4.3).
 func _on_battle_commit(events: Array[Dictionary]) -> void:
 	quest_events = QuestRules.observe(state, events)
+	var note := quest_note(quest_events)
+	if not note.is_empty():
+		_battle_quest_note = note  # 전투 동안은 띄우지 않는다(전투 층이 안내를 지운다): 닫힐 때 _on_battle_closed 가 띄운다
+
+
+## 의뢰 이벤트 열의 안내 글(05 §16.9 표, M3 A8b): 달성이 진행보다 앞서고, 같은 종류는 마지막 것. 없으면 "".
+func quest_note(events: Array[Dictionary]) -> String:
+	var pick: Dictionary = {}
+	for ev in events:
+		if ev["type"] == "quest_done" or (ev["type"] == "quest_progress" and (pick.is_empty() or pick["type"] != "quest_done")):
+			pick = ev
+	if pick.is_empty():
+		return ""
+	var q := state.defs.quests.get_def(str(pick["quest"]))
+	if q == null:
+		return ""
+	var title := texts.t(q.name_key)
+	if pick["type"] == "quest_done":
+		return texts.t("quest.note.done." + q.giver, {"quest": title})
+	return texts.t("quest.note.progress", {"quest": title, "n": pick["progress"], "target": pick["target"]})
 
 
 ## 캠프를 연다(07 §9.1): 전투·전멸이 아니고, 다른 창(메뉴·메모·파일 고르기·전멸·전투)이 없고, 연출 중이 아닐 때만.
@@ -1121,12 +1157,15 @@ func _open_party() -> void:
 	if party_menu.is_open():
 		town_screen.set_covered(true)  # 캠프의 그림 창에는 마을 바탕만 보인다(research 07 §2.2)
 		guild_screen.set_covered(true)  # 길드 뿌리에서 연 캠프(M3 A7c): 길드도 덮는다(닫히면 길드로 돌아온다)
+		quest_screen.set_covered(true)  # 정보상 바·관리국 뿌리에서 연 캠프(M3 A8b)도 같다
 
 
 ## 파티 메뉴가 닫혔다: 눌림·미리 받은 입력을 버리고(닫은 뒤 누르고 있던 이동 키가 걸음이 되지 않는다) 탐색 화면을 다시 맞춘다.
 func _on_party_closed() -> void:
 	if guild_screen.is_open():
 		guild_screen.set_covered(false)  # 길드에서 연 캠프: 길드로(마을 화면은 길드가 덮은 채)
+	elif quest_screen.is_open():
+		quest_screen.set_covered(false)  # 의뢰 화면에서 연 캠프(M3 A8b): 그 화면으로
 	elif not shop_screen.is_open():
 		town_screen.set_covered(false)
 	_clear_input()
@@ -1166,8 +1205,8 @@ func debug_tools() -> bool:
 ## 상점을 연다(08 §8.1, M3 A2 S4): 마을 광장 「정크 공방」에서만, 캠프와 같은 조건(전투·전투 대기·전멸이 아니고, 다른 창이 없고,
 ## 연출 중이 아님). 열 때마다 뿌리·명령 커서 0·대원 0에서 시작한다. 열린 동안 마을 화면을 감추고 바탕은 상점 그림이다.
 func _open_shop() -> void:
-	if not _in_town() or shop_screen.is_open() or guild_screen.is_open() or party_menu.is_open() or battle_layer.is_open() or modal.is_open() \
-			or state.encounter.pending:
+	if not _in_town() or shop_screen.is_open() or guild_screen.is_open() or quest_screen.is_open() or party_menu.is_open() or battle_layer.is_open() \
+			or modal.is_open() or state.encounter.pending:
 		return
 	if not ExplorationRules.can_act(state) or _is_busy() or map.is_interacting():
 		return
@@ -1180,7 +1219,7 @@ func _open_shop() -> void:
 ## 모험가 길드를 연다(M3 A7c, 설계 §5): 광장 「모험가 길드」에서만, 상점과 같은 조건. 열린 동안 마을 화면을 덮고 바탕은 길드 그림이다.
 ## 닫히면 상점처럼 _on_party_closed 로 마을 화면을 걷는다(커서는 그대로 「모험가 길드」).
 func _open_guild() -> void:
-	if not _in_town() or guild_screen.is_open() or shop_screen.is_open() or party_menu.is_open() or battle_layer.is_open() \
+	if not _in_town() or guild_screen.is_open() or quest_screen.is_open() or shop_screen.is_open() or party_menu.is_open() or battle_layer.is_open() \
 			or modal.is_open() or state.encounter.pending:
 		return
 	if not ExplorationRules.can_act(state) or _is_busy() or map.is_interacting():
@@ -1189,6 +1228,20 @@ func _open_guild() -> void:
 	if guild_screen.is_open():
 		town_screen.set_covered(true)
 		town_backdrop.show_place("guild")
+
+
+## 정보상 바·관리국을 연다(M3 A8b, 설계 §6.1): 광장 줄에서만, 길드와 같은 조건. 열린 동안 마을 화면을 덮고 바탕은 그 시설 그림이다.
+## 닫히면 길드처럼 _on_party_closed 로 마을 화면을 걷는다(커서는 그대로 그 시설 줄).
+func _open_quest(giver: String) -> void:
+	if not _in_town() or quest_screen.is_open() or guild_screen.is_open() or shop_screen.is_open() or party_menu.is_open() or battle_layer.is_open() \
+			or modal.is_open() or state.encounter.pending:
+		return
+	if not ExplorationRules.can_act(state) or _is_busy() or map.is_interacting():
+		return
+	quest_screen.open(state, giver)
+	if quest_screen.is_open():
+		town_screen.set_covered(true)
+		town_backdrop.show_place(giver)
 
 
 ## 길드 이름 입력(설계 §4.2·§5.4): 웹은 브라우저 입력 창(메모와 같은 길, 너무 빨리 돌아오면 막힌 것으로 본다), PC 는 LineEdit 창
@@ -1243,7 +1296,7 @@ func _try_stairs() -> void:
 		_stairs_ask = false
 		return
 	if view.is_busy() or modal.is_open() or battle_layer.is_open() or party_menu.is_open() or shop_screen.is_open() or guild_screen.is_open() \
-			or not ExplorationRules.can_act(state):
+			or quest_screen.is_open() or not ExplorationRules.can_act(state):
 		return
 	_stairs_ask = false
 	_open_stairs()
@@ -1264,7 +1317,7 @@ func _retry_stairs() -> void:
 ## 지도에서 진행 중인 손짓은 막지 않는다: 창이 열리면(modal.opened → _clear_input) 다른 창처럼 지도 입력을 취소한다.
 func _open_stairs() -> bool:
 	if state == null or modal.is_open() or battle_layer.is_open() or party_menu.is_open() or shop_screen.is_open() or guild_screen.is_open() \
-			or not ExplorationRules.can_act(state):
+			or quest_screen.is_open() or not ExplorationRules.can_act(state):
 		return false
 	var q := ExplorationRules.question_here(state)
 	if q.get("kind") == "chest":
@@ -1649,6 +1702,7 @@ func _build_ui() -> void:
 	town_screen.camp_requested.connect(_open_party)
 	town_screen.shop_requested.connect(_open_shop)
 	town_screen.guild_requested.connect(_open_guild)
+	town_screen.quest_requested.connect(_open_quest)
 	town_screen.enter_requested.connect(_enter_labyrinth)
 	town_screen.stay_hook = _inn_stay
 	town_screen.opened.connect(func() -> void:
@@ -1675,6 +1729,8 @@ func _build_ui() -> void:
 	party_menu.place_hook = func() -> String:
 		if not _in_town():
 			return ""
+		if quest_screen.is_open():
+			return quest_screen.place_text()
 		return guild_screen.place_text() if guild_screen.is_open() else town_screen.place_text()
 	party_menu.plate_hook = func() -> String: return town_screen.day_text() if _in_town() else ""
 	party_menu.opened.connect(func() -> void:
@@ -1721,6 +1777,27 @@ func _build_ui() -> void:
 	guild_screen.changed.connect(func(_e: Array) -> void: _debug_dirty = true)
 	guild_screen.camp_requested.connect(_open_party)
 	guild_screen.name_requested.connect(_on_guild_name)
+	# 정보상 바·관리국(M3 A8b, 설계 §6.1): 길드 바로 뒤(트리 순서: 길드 위에 그리고 먼저 눌린다). 길드와 같은 길로 열고 닫는다.
+	# 상태는 quest_action(받아들이면 자동 저장 한 번)으로만 바꾼다.
+	quest_screen = QuestScreen.new()
+	quest_screen.name = "QuestScreen"
+	windows_root.add_child(quest_screen)
+	quest_screen.build(texts)
+	quest_screen.backdrop = town_backdrop
+	quest_screen.action_hook = quest_action
+	quest_screen.blocked_hook = func() -> bool: return modal.is_open()
+	quest_screen.opened.connect(func() -> void:
+		_settle_toast("window")
+		_clear_input()
+		_debug_dirty = true
+		_debug_settle = 2)
+	quest_screen.closed.connect(_on_party_closed)
+	quest_screen.visibility_changed.connect(func() -> void:
+		_layout()
+		_debug_dirty = true
+		_debug_settle = 2)
+	quest_screen.changed.connect(func(_e: Array) -> void: _debug_dirty = true)
+	quest_screen.camp_requested.connect(_open_party)
 	# 타이틀(M3 A2): 층 2 의 맨 끝(모든 창 위, 불투명 바탕). 기록 판은 캠프와 같은 부품(불러오기·가져오기·자동 지도만).
 	title_screen = TitleScreen.new()
 	title_screen.name = "TitleScreen"
@@ -1752,6 +1829,7 @@ func _build_ui() -> void:
 		battle_layer.cancel_pointers()  # 전투도 같다(명령 줄·카드·키패드 등)
 		shop_screen.cancel_pointers()  # 상점도 같다(08 §8.11: 눌린 「예」를 창이 덮으면 뗄 때 사지 않는다)
 		guild_screen.cancel_pointers()
+		quest_screen.cancel_pointers()
 		town_screen.cancel_pointers()
 		title_screen.cancel_pointers()
 		_debug_dirty = true
@@ -1764,6 +1842,7 @@ func _build_ui() -> void:
 		battle_layer.cancel_pointers()
 		shop_screen.cancel_pointers()
 		guild_screen.cancel_pointers()
+		quest_screen.cancel_pointers()
 		town_screen.cancel_pointers()
 		title_screen.cancel_pointers()
 		_debug_dirty = true
@@ -2145,7 +2224,7 @@ func warning_shown() -> String:
 func _toast_window() -> Control:
 	if _battle_view or party_menu == null:
 		return null
-	for w in [party_menu, shop_screen, guild_screen, town_screen]:
+	for w in [party_menu, shop_screen, guild_screen, quest_screen, town_screen]:
 		if w.is_open():
 			return w
 	return null
@@ -2228,7 +2307,8 @@ func _debug_publish() -> void:
 		str(battle_layer.log_view.visible), str(party_menu.is_open()), party_menu.accepted_inputs, str(shop_screen.is_open()),
 		shop_screen.accepted_inputs, str(town_screen.is_open()), town_screen.accepted_inputs, str(title_screen.is_open()),
 		title_screen.accepted_inputs, party_menu.notice + "|" + guild_screen.notice + "|%s|%d|%s" % [str(guild_screen.is_open()),
-		guild_screen.accepted_inputs, str(guild_screen.covered)]]
+		guild_screen.accepted_inputs, str(guild_screen.covered)] + "|%s|%d|%s|%s" % [str(quest_screen.is_open()), quest_screen.accepted_inputs,
+		str(quest_screen.covered), quest_screen.notice]]
 	if sig != _debug_battle_sig:
 		_debug_battle_sig = sig
 		_debug_dirty = true
@@ -2295,12 +2375,15 @@ func debug_snapshot() -> Dictionary:
 	var shop := shop_screen.debug_info(_css)
 	var town := town_screen.debug_info(_css)
 	var guild_info := guild_screen.debug_info(_css)
+	var quest_info := quest_screen.debug_info(_css)
 	if party_menu.is_open():
 		buttons.merge(party["buttons"])  # 메뉴가 덮은 탐색 단추는 내지 않는다(누를 수 없다)
 	elif shop_screen.is_open():
 		buttons.merge(shop["buttons"])
 	elif guild_screen.is_open():
 		buttons.merge(guild_info["buttons"])  # 길드(M3 A7c): 마을 화면은 덮였다
+	elif quest_screen.is_open():
+		buttons.merge(quest_info["buttons"])  # 정보상 바·관리국(M3 A8b): 마을 화면은 덮였다
 	elif town_screen.is_open():
 		buttons.merge(town["buttons"])  # 마을: 탐색 HUD 는 감췄다
 	else:
@@ -2329,7 +2412,7 @@ func debug_snapshot() -> Dictionary:
 		map_info = {"origin": o, "cell": [o2[0] - o[0], o2[1] - o[1]]}
 	return {
 		"hash": SaveCodec.state_hash(state), "generation": state.generation, "autosaves": autosave_count, "seed": seed_override,
-		"location": state.location, "day": state.day, "town": town, "title": title, "guild_screen": guild_info,
+		"location": state.location, "day": state.day, "town": town, "title": title, "guild_screen": guild_info, "quest_screen": quest_info,
 		"floor": state.floor_def.id, "at": [state.party.at.x, state.party.at.y], "facing": state.party.facing, "steps": state.steps,
 		"pending": state.encounter.pending, "wiped": state.wiped, "danger": state.encounter.danger,
 		"busy": _is_busy(), "modal": modal.kind, "modal_title": _modal_title(), "modal_text": _modal_text(), "automap": settings.automap, "battle": battle,
@@ -2512,7 +2595,7 @@ func _is_busy() -> bool:
 
 
 ## 요청 JSON: {"op": "snapshot"} | {"op": "simulate", "actions": ["forward", …]} | {"op": "hash_save", "text": 저장 글}
-##   | {"op": "battle_auto"} | {"op": "battle_finish"} | {"op": "supply", "item": 장비·소모품 ID(M3 A4), "n": 개수} | {"op": "grant_exp", "member": 칸, "n": 양}
+##   | {"op": "battle_auto"} | {"op": "battle_finish"} | {"op": "supply", "item": 장비·소모품 ID(M3 A4)·소재 ID(M3 A8b), "n": 개수} | {"op": "grant_exp", "member": 칸, "n": 양}
 ## hash_save: 저장 글을 읽어 그 상태 해시·세대를 돌려준다(웹 확인이 IndexedDB 의 자동 저장이 화면 상태와 같은지 본다).
 ## simulate: 지금 상태의 복사본(저장 형식으로 옮긴 것)에서 행동열을 돌려 행동마다의 해시를 돌려준다.
 ## 전투 중이면 다음 행동 전에 battle_finish 와 같이 규칙의 finish(승리)로 끝낸다(전투 승패와 상관없이 같은 해시). 진짜 상태는 바꾸지 않는다.
@@ -2574,7 +2657,7 @@ func _on_debug_request(json_text: String) -> String:
 			if not _debug:
 				return JSON.stringify({"error": "debug only"})
 			if state.in_town() or state.wiped or state.encounter.pending or state.battle != null or modal.is_open() or party_menu.is_open() \
-					or shop_screen.is_open() or guild_screen.is_open() or _is_busy():
+					or shop_screen.is_open() or guild_screen.is_open() or quest_screen.is_open() or _is_busy():
 				return JSON.stringify({"error": "cannot start"})
 			state.encounter.danger = state.encounter.threshold
 			var formation := BattleRules.pick_formation(state)
@@ -2616,7 +2699,11 @@ func _on_debug_request(json_text: String) -> String:
 				return JSON.stringify({"error": "debug only"})
 			var events: Array[Dictionary]
 			if req["op"] == "supply":
-				events = GrowthRules.supply(state, str(req.get("item", "")), req.get("n"))
+				var item := str(req.get("item", ""))
+				if state.defs.battle.materials.has(item):
+					events = _debug_supply_material(item, req.get("n"))  # 소재(M3 A8b 웹 I): 디버그 요청에서만, 캠프 임시 보급은 그대로
+				else:
+					events = GrowthRules.supply(state, item, req.get("n"))
 			else:
 				var who: Variant = SaveCodec.to_int(req.get("member")) if typeof(req.get("member")) != TYPE_BOOL else null
 				events = GrowthRules.grant_exp(state, who if who != null else -1, req.get("n"))
@@ -2626,9 +2713,24 @@ func _on_debug_request(json_text: String) -> String:
 			party_menu.refresh_view()
 			shop_screen.refresh_view()
 			guild_screen.refresh_view()
+			quest_screen.refresh_view()
 			_debug_dirty = true
 			return JSON.stringify({"ok": true, "events": events})
 	return JSON.stringify({"error": "unknown op"})
+
+
+## 디버그 supply 요청의 소재(M3 A8b, 조정자 답: 웹 I 의 이끼 수프 준비). GrowthRules.supply(캠프 임시 보급)는 소재를 받지 않으므로 이 요청에서만
+## 보통 가방 규칙(BagRules.add: 종류 상한·함께 쓰는 빈 칸)으로 넣는다. 전투·전멸 중 not_now, 개수 범위 밖 bad_amount, 하나도 못 넣으면 bag_full.
+func _debug_supply_material(item: String, n: Variant) -> Array[Dictionary]:
+	if GrowthRules._busy(state):
+		return [{"type": "rejected", "reason": "not_now"}]
+	var amount: Variant = SaveCodec.to_int(n) if typeof(n) != TYPE_BOOL else null
+	if not BattleLimits.in_range("bag", amount):
+		return [{"type": "rejected", "reason": "bad_amount"}]
+	var got := BagRules.add(state, item, amount)
+	if got == 0:
+		return [{"type": "rejected", "reason": "bag_full"}]
+	return [{"type": "supplied", "item": item, "amount": got, "capped": got < amount}]
 
 
 ## 전투 중이면 battle_finish 와 같이 규칙의 finish(승리)로 끝낸다(디버그 simulate). 끝내지 못하면 false.
