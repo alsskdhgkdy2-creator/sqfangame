@@ -276,7 +276,8 @@ func _load(name: String) -> GameDefs.Result:
 
 ## F7 (M-F7 은퇴한 층 ID 겹침 검사 없음): 은퇴한 묶음 키.
 func test_retired_set() -> void:
-	var game := {"id": "labyrinth.arbor", "floors": ["b1f", "b2f", "b3f"], "entrance": "b1f", "retired": "test.json"}
+	# M3 A8a: 실제 arbor.json 처럼 의뢰 파일을 가리킨다(B1F 내려가는 계단의 needs permit.b2f 를 주는 의뢰가 있어야 묶음이 읽힌다).
+	var game := {"id": "labyrinth.arbor", "floors": ["b1f", "b2f", "b3f"], "entrance": "b1f", "retired": "test.json", "quests": "res://data/quests/stratum1.json"}
 	var test_set := {"id": "labyrinth.test", "floors": ["f1_test", "f2_test"], "entrance": "f1_test"}
 	_set_dir_with({"arbor.json": game, "test.json": test_set})
 	var ok := _load("arbor.json")

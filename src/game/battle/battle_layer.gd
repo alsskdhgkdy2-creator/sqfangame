@@ -104,6 +104,8 @@ var anim_speed := 1.0
 var debug := false
 ## 제출 결과가 정해진 직후, 연출 전에 부른다(자동 저장).
 var save_hook: Callable
+## 제출 결과가 정해진 직후, save_hook 보다 먼저 이벤트 열로 부른다(M3 A8: 의뢰 진행 세기 QuestRules.observe, 저장에 함께 실린다).
+var commit_hook: Callable
 ## 전투 층 위에 다른 창(층 3: 알림·파일 고르기·메모·전멸)이 떠 있으면 true: 그동안 키·단추·카드·키패드 어느 입력도 받지 않는다
 ## (캠프 PartyMenu.blocked_hook 과 같은 규칙, 07 §9.7 「바깥 창과 누르기」).
 var blocked_hook: Callable
@@ -922,6 +924,8 @@ func _debug_finish(how: String) -> bool:
 ## 결과가 정해진 이벤트 열(제출·디버그 끝내기): 연출보다 먼저 저장한다(연출 중 새로고침해도 같은 결과).
 func _commit(events: Array[Dictionary]) -> void:
 	last_events = events
+	if commit_hook.is_valid():
+		commit_hook.call(events)
 	if save_hook.is_valid():
 		save_hook.call()
 	submitted.emit(events)

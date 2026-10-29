@@ -1,0 +1,55 @@
+{
+  "quests": [
+    {
+      "id": "mission.permit_b2f",
+      "giver": "council",
+      "name_key": "quest.permit_b2f",
+      "desc_key": "quest.permit_b2f.desc",
+      "client_key": "quest.client.council",
+      "unlock": [],
+      "objective": {"kind": "reach", "floor": "b1f", "at": [17, 1], "where_key": "quest.permit_b2f.where"},
+      "reward": {"money": 100, "exp": 30, "items": [], "flags": ["permit.b2f"]}
+    },
+    {
+      "id": "mission.boss_seal",
+      "giver": "council",
+      "name_key": "quest.boss_seal",
+      "desc_key": "quest.boss_seal.desc",
+      "client_key": "quest.client.council",
+      "unlock": [{"kind": "reported", "quest": "mission.permit_b2f"}, {"kind": "visited", "floor": "b3f"}],
+      "objective": {"kind": "reach", "floor": "b3f", "at": [9, 2], "where_key": "quest.boss_seal.where"},
+      "reward": {"money": 300, "exp": 100, "items": [], "flags": ["permit.boss"]}
+    },
+    {
+      "id": "quest.moss_soup",
+      "giver": "pub",
+      "name_key": "quest.moss_soup",
+      "desc_key": "quest.moss_soup.desc",
+      "client_key": "quest.client.cook",
+      "unlock": [],
+      "objective": {"kind": "deliver", "item": "item.neon_moss", "count": 3},
+      "reward": {"money": 60, "exp": 20, "items": [{"item": "use.medica", "count": 2}], "flags": []},
+      "repeat": {"days": 1}
+    },
+    {
+      "id": "quest.ether_ram",
+      "giver": "pub",
+      "name_key": "quest.ether_ram",
+      "desc_key": "quest.ether_ram.desc",
+      "client_key": "quest.client.hunter",
+      "unlock": [{"kind": "reported", "quest": "quest.moss_soup"}],
+      "objective": {"kind": "foe", "foe": "foe.ether_ram", "count": 1},
+      "reward": {"money": 200, "exp": 80, "items": [{"item": "use.amrita", "count": 1}], "flags": []}
+    },
+    {
+      "id": "quest.moth_sweep",
+      "giver": "pub",
+      "name_key": "quest.moth_sweep",
+      "desc_key": "quest.moth_sweep.desc",
+      "client_key": "quest.client.hunter",
+      "unlock": [{"kind": "visited", "floor": "b2f"}],
+      "objective": {"kind": "kill", "enemy": "enemy.cable_moth", "count": 4},
+      "reward": {"money": 150, "exp": 50, "items": [{"item": "use.theriaca_a", "count": 2}], "flags": []}
+    }
+  ]
+}

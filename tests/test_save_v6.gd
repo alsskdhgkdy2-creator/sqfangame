@@ -40,12 +40,12 @@ func _town(day: int = 1) -> ExplorationState:
 func test_v6_roundtrip_town_and_labyrinth() -> void:
 	var t := _town(7)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(t))
-	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [11.0, "m3r", "town", 7.0], "11판 머리·마을·7일째")
+	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [12.0, "m3q", "town", 7.0], "12판 머리·마을·7일째")
 	var r := SaveCodec.decode(JSON.stringify(doc), _defs())
 	check(r.ok(), "마을 읽기 %s" % r.error)
 	if r.ok():
 		check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.state.location, r.state.day, r.state.party.at],
-			[SaveCodec.state_hash(t), 11, "town", 7, t.party.at], "마을: 같은 해시·장소·날·위치")
+			[SaveCodec.state_hash(t), 12, "town", 7, t.party.at], "마을: 같은 해시·장소·날·위치")
 	var t8 := _town(8)
 	check(SaveCodec.state_hash(t8) != SaveCodec.state_hash(t), "날이 다르면 해시가 다르다")
 	var l := _two()
@@ -118,9 +118,9 @@ func _migrates(text: String, from: int, label: String) -> SaveCodec.LoadResult:
 	check_eq([r.from_schema, r.saved_at, r.generation, r.state.location, r.state.day], [from, orig["saved_at"], int(orig["generation"]), "labyrinth", 1],
 		"%s: from_schema·saved_at·generation·미궁·1일째" % label)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
-	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [11.0, "m3r", "labyrinth", 1.0], "%s: 11판으로 쓴다" % label)
+	check_eq([doc["schema"], doc["rules"], doc["state"]["location"], doc["state"]["day"]], [12.0, "m3q", "labyrinth", 1.0], "%s: 12판으로 쓴다" % label)
 	var again := SaveCodec.decode(JSON.stringify(doc), _defs())
-	check(again.ok() and again.from_schema == 11 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 11판 다시 읽기 같은 해시" % label)
+	check(again.ok() and again.from_schema == 12 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 12판 다시 읽기 같은 해시" % label)
 	return r
 
 

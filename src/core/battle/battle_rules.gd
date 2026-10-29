@@ -771,12 +771,20 @@ static func finish(state: ExplorationState, outcome: String, events: Array[Dicti
 		state.wiped = true
 	else:
 		state.encounter.roll_threshold(state.rng, state.floor_def.threshold_min, state.floor_def.threshold_max)
+	# 쓰러뜨린 적의 정의 ID(M3 A8 의뢰 갈고리 kill): 승리일 때만, 칸 차례, 하나도 없으면 키가 없다(foes_defeated 와 같다).
+	var kills: Array[String] = []
+	if outcome == "victory":
+		for u in b.enemies:
+			if not u.kill.is_empty():
+				kills.append(u.def_id)
 	var end := {"type": "battle_end", "outcome": outcome, "turn": b.turn, "enemy_hp": enemy_hp, "drops": drops}
 	end.merge(growth)
 	if not reason.is_empty():
 		end["reason"] = reason
 	if not foes_defeated.is_empty():
 		end["foes_defeated"] = foes_defeated  # 쓰러뜨린 FOE(M3 A6 설계 §4.5, 의뢰 갈고리). 인카운트 전투의 battle_end 는 그대로다.
+	if not kills.is_empty():
+		end["kills"] = kills
 	events.append(end)
 	state.battle = null
 	return true

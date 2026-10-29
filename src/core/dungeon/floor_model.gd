@@ -14,6 +14,8 @@ class Stair:
 	var exit := Dir.N
 	var to_floor := ""
 	var to_at := Vector2i.ZERO
+	## 내려가는 계단을 막는 진행 플래그(M3 A8, 관리국 탐사 허가). 없으면 "".
+	var needs := ""
 
 
 ## 보물상자 하나(M3 A3). 내용은 item(소재 item.·장비 equip.·열쇠 key.) count 개, 또는 money 엔(item 이 "" 이면 money).

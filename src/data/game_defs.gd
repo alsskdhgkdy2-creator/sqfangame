@@ -25,6 +25,8 @@ var party: PartyData
 var battle: BattleDb
 ## 은퇴한 층 묶음(M3 A3, 층 묶음의 "retired"): 옛 저장이 가리키는 층(f1_test 등)을 읽어 새 미궁으로 옮길 때만 쓴다(SaveCodec). 없으면 null.
 var retired: GameDefs
+## 의뢰·주요 임무 정의(M3 A8, 층 묶음의 "quests"). 의뢰가 없는 묶음(시험 묶음)은 빈 QuestDb.
+var quests := QuestDb.new()
 
 
 ## 층 묶음 파일·파티 파일·전투 정의 폴더(res://data)를 읽는다. text_db 가 있으면 name_key 가 거기 있는지 본다.
@@ -32,7 +34,8 @@ static func load_paths(labyrinth_path: String, party_path: String, data_dir: Str
 	var fr := FloorLoader.load_set(labyrinth_path)
 	var party := PartyData.read_path(party_path)
 	var db := BattleDb.load_dir(data_dir)
-	var r := from_parts(fr.floors, party, db, text_db, true, fr.entrance)
+	var quests: QuestDb = QuestDb.load_path(fr.quests) if not fr.quests.is_empty() else null
+	var r := from_parts(fr.floors, party, db, text_db, true, fr.entrance, quests)
 	var errs: Array[String] = []
 	errs.append_array(fr.errors)
 	if fr.ok():
@@ -71,8 +74,9 @@ static func _load_retired(path: String, party_path: String, db: BattleDb, text_d
 ## 이미 읽은 조각을 묶고 참조를 본다. floors 는 깊이 차례의 층 묶음(층 사이 검사 check_set 도 여기서 한다).
 ## require_table 이 참이면(게임용) 층마다 출현 표가 있어야 한다. party 는 이 함수가 resolve 한다(같은 PartyData 를 두 GameDefs 에 넘기지 않는다).
 ## entrance(M3 A2)는 마을 문이 있는 층 ID 이고, 있으면 첫 층이어야 한다.
+## quests(M3 A8)는 묶음의 의뢰 정의(없으면 null = 빈 정의). 참조를 보고, 층 계단의 needs 플래그를 주는 의뢰가 있는지 본다.
 static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: BattleDb, text_db: TextDb = null, require_table: bool = true,
-		entrance: String = "") -> Result:
+		entrance: String = "", quests: QuestDb = null) -> Result:
 	var r := Result.new()
 	r.errors.append_array(db.errors)
 	r.warnings.append_array(db.warnings)
@@ -97,6 +101,12 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 		r.errors.append_array(check_chests_and_locks(floor_list, db))
 		r.errors.append_array(check_gathering(floor_list, db))
 		r.errors.append_array(check_foes(floor_list, db))
+	if quests == null:
+		quests = QuestDb.new()
+	if db.ok() and quests.ok() and not quests.is_empty():
+		quests.resolve(db, floor_list, text_db)
+	r.errors.append_array(quests.errors)
+	r.errors.append_array(check_needs(floor_list, quests))
 	if text_db != null and db.ok():
 		var keys := db.name_keys()
 		keys.append_array(party.name_keys)
@@ -113,8 +123,29 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 		d.entrance = entrance
 		d.party = party
 		d.battle = db
+		d.quests = quests
 		r.defs = d
 	return r
+
+
+## 계단 needs(M3 A8): 플래그마다 그것을 주는 의뢰가 묶음에 있어야 한다(막힌 계단이 영영 열리지 않는 일이 없게).
+static func check_needs(floor_list: Array[FloorModel], quests: QuestDb) -> Array[String]:
+	var out: Array[String] = []
+	for f in floor_list:
+		for st in f.stair_list():
+			if not st.needs.is_empty() and not quests.knows_flag(st.needs):
+				out.append("%s: stairs %d:%d: needs %s 를 주는 의뢰가 없다" % [f.id, st.at.x, st.at.y, st.needs])
+	return out
+
+
+## 묶음의 계단이 요구하는 진행 플래그(층 차례, 겹치지 않음). 미궁 안에서 시작하는 새 게임이 처음부터 가진다(M3 A8 설계 §5.3).
+func gate_flags() -> Array[String]:
+	var out: Array[String] = []
+	for id in floor_ids:
+		for st in floors[id].stair_list():
+			if not st.needs.is_empty() and not out.has(st.needs):
+				out.append(st.needs)
+	return out
 
 
 ## FOE 참조(M3 A6, 설계 §2.3): 층 FOE 의 정의가 있는지, 문지기가 진행(계단·열쇠 상자·잠긴 문)을 막지 않는지.

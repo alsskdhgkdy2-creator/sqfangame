@@ -45,7 +45,7 @@ func test_v5_roundtrip_two_floors() -> void:
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
 	# 지금 쓰는 판은 9판(층 기록 짜임은 5판 그대로, M3 A2 가 장소·날을, M3 A3 이 귀중품과 world 의 문·상자 목록을, M3 A4 가 소모품을, M3 A5 가 world 의 채집 기록을 더했다).
 	check_eq([doc["schema"], doc["rules"], doc["state"]["floor"], doc["state"]["location"], doc["state"]["day"]],
-		[11.0, "m3r", "f2_test", "labyrinth", 1.0], "11판 머리·지금 층·장소·날")
+		[12.0, "m3q", "f2_test", "labyrinth", 1.0], "12판 머리·지금 층·장소·날")
 	check_eq(doc["state"]["floor_states"].keys(), ["f1_test", "f2_test"], "층 기록 둘(키 정렬)")
 	for k in ["world", "knowledge", "annotation"]:
 		check(not doc["state"].has(k), "%s 는 state 바로 아래에 없다" % k)
@@ -55,7 +55,7 @@ func test_v5_roundtrip_two_floors() -> void:
 	check(r.ok(), "읽기 %s" % r.error)
 	if not r.ok():
 		return
-	check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.state.floor_def.id, r.state.party.at], [SaveCodec.state_hash(s), 11, "f2_test", Vector2i(3, 1)], "같은 해시·지금 층·위치")
+	check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.state.floor_def.id, r.state.party.at], [SaveCodec.state_hash(s), 12, "f2_test", Vector2i(3, 1)], "같은 해시·지금 층·위치")
 	check(r.state.world == r.state.floor_states["f2_test"].world, "지금 층 기록이 f2")
 	check_eq(r.state.annotation.memos, {Vector2i(4, 1): "아래층"}, "f2 메모")
 	# 읽은 상태로 계단을 올라가면 f1 기록이 이어진다.
@@ -141,9 +141,9 @@ func _migrates(text: String, from: int, label: String) -> SaveCodec.LoadResult:
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
 	# M3 A2: 지금 판은 6판. 옛 저장은 미궁(층 기록 짜임은 5판 그대로)·1일째로 옮긴다.
 	check_eq([doc["schema"], doc["rules"], doc["state"]["floor"], doc["state"]["floor_states"].keys(), doc["state"]["location"], doc["state"]["day"]],
-		[11.0, "m3r", "f1_test", ["f1_test"], "labyrinth", 1.0], "%s: 11판으로 쓴다(층 하나, 미궁·1일째)" % label)
+		[12.0, "m3q", "f1_test", ["f1_test"], "labyrinth", 1.0], "%s: 12판으로 쓴다(층 하나, 미궁·1일째)" % label)
 	var again := SaveCodec.decode(JSON.stringify(doc), _defs())
-	check(again.ok() and again.from_schema == 11 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 11판 다시 읽기 같은 해시" % label)
+	check(again.ok() and again.from_schema == 12 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 12판 다시 읽기 같은 해시" % label)
 	if from >= 2:
 		# 층 기록은 옛 문서의 world·knowledge·annotation 그대로(정규화해 견줌).
 		var o: Dictionary = orig["state"]

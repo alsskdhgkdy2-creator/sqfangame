@@ -467,15 +467,15 @@ func _j7_text(defs: GameDefs, seed_value: int) -> String:
 	for k in 3:
 		s.encounter.danger = s.encounter.threshold
 		var st := BattleRules.start(s, BattleRules.pick_formation(s))
-		text += Fx.events_text(st)
+		text += Fx.events_text(_no_kills(st))
 		var turns := 0
 		while s.battle != null and turns < 60:
-			text += Fx.events_text(BattleRules.submit(s, BattlePolicy.choose(s, "default")))
+			text += Fx.events_text(_no_kills(BattleRules.submit(s, BattlePolicy.choose(s, "default"))))
 			turns += 1
 		if s.battle != null:
 			var fe: Array[Dictionary] = []
 			BattleRules.finish(s, "escaped", fe)
-			text += Fx.events_text(fe)
+			text += Fx.events_text(_no_kills(fe))
 		text += "|rng=%s|wiped=%s|" % [str(s.rng.get_state()), str(s.wiped)]
 		if s.wiped:
 			break
@@ -483,6 +483,17 @@ func _j7_text(defs: GameDefs, seed_value: int) -> String:
 			m.hp = m.max_hp
 			m.tp = m.max_tp
 	return text
+
+
+## M3 A8a: battle_end 의 kills(의뢰 세기용, 조정자 답 seq=3 의 예외)는 HEAD 에 없던 키라 빼고 잇는다. kills 자체는 test_quests J8 이 본다.
+func _no_kills(events: Array[Dictionary]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for ev in events:
+		var c := ev.duplicate(true)
+		if c["type"] == "battle_end":
+			c.erase("kills")
+		out.append(c)
+	return out
 
 
 ## A6 (M-A9 띠가 혼란 줄 대신 행동 줄): 전투 층의 카드 딱지(그린 칸)와 띠 한 줄. 혼란 대원은 「교란 3」, 맹목은 「차단 3」,

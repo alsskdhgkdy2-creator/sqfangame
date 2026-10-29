@@ -6,7 +6,7 @@ extends RefCounted
 
 ## 층 ID(파일 이름이 된다).
 const FLOOR_ID_PATTERN := "^[a-z][a-z0-9_]*$"
-const SET_KEYS := ["id", "floors", "entrance", "retired"]
+const SET_KEYS := ["id", "floors", "entrance", "retired", "quests"]
 ## 층 파일 맨 위 키(M3 A3부터 모르는 키는 오류: 오타로 상자·잠긴 문이 소리 없이 빠지지 않게).
 const FLOOR_KEYS := ["id", "name_key", "theme", "size", "grid", "start", "stairs", "shortcuts", "encounter", "zones", "damage_floor",
 	"locks", "chests", "reserved", "gathering", "foes"]
@@ -50,6 +50,8 @@ class SetResult:
 	var entrance := ""
 	## 옛 저장이 가리킬 수 있는 은퇴한 층 묶음 파일 경로(M3 A3, "retired": 같은 폴더의 파일 이름). 없으면 "".
 	var retired := ""
+	## 의뢰 정의 파일 경로(M3 A8, "quests": res://….json 경로). 없으면 ""(시험 묶음은 의뢰가 없다).
+	var quests := ""
 	var errors: Array[String] = []
 
 	func ok() -> bool:
@@ -85,6 +87,12 @@ static func load_set(path: String) -> SetResult:
 			r.errors.append("%s: retired 는 같은 폴더의 다른 층 묶음 파일 이름(….json)이어야 한다" % file)
 		else:
 			r.retired = path.get_base_dir().path_join(rv)
+	if data.has("quests"):
+		var qv: Variant = data["quests"]
+		if typeof(qv) != TYPE_STRING or not str(qv).begins_with("res://") or not str(qv).ends_with(".json"):
+			r.errors.append("%s: quests 는 의뢰 정의 파일 경로(res://….json)여야 한다" % file)
+		else:
+			r.quests = qv
 	if typeof(data.get("floors")) != TYPE_ARRAY or data["floors"].is_empty():
 		r.errors.append("%s: floors 는 층 ID 가 하나 이상인 배열이어야 한다" % file)
 		return r
@@ -1070,6 +1078,13 @@ static func _read_stairs(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 			bad = true
 		else:
 			to_at = ctx.cell_value(to.get("at"), "stairs", label + ".to.at")
+		var needs: Variant = item.get("needs", "")
+		if item.has("needs") and (typeof(needs) != TYPE_STRING or RegEx.create_from_string(QuestDb.FLAG_PATTERN).search(needs) == null):
+			ctx.fail_key("stairs", "%s.needs 는 진행 플래그(%s)여야 한다" % [label, QuestDb.FLAG_PATTERN])
+			bad = true
+		elif item.has("needs") and way != "down":
+			ctx.fail_key("stairs", "%s.needs 는 내려가는 계단에만 둔다" % label)
+			bad = true
 		if bad or at == GridKey.BAD_CELL or to_at == GridKey.BAD_CELL:
 			continue
 		var where := "%s %d:%d" % [label, at.x, at.y]
@@ -1091,6 +1106,7 @@ static func _read_stairs(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 			st.exit = exit
 			st.to_floor = to["floor"]
 			st.to_at = to_at
+			st.needs = needs
 			f.stairs[at] = st
 	for st in f.stair_list():
 		var step: Vector2i = st.at + Dir.vec(st.exit)

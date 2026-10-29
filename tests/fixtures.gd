@@ -117,9 +117,11 @@ static func strip_guild(d: Dictionary) -> void:
 ## 옛 판 저장을 11판으로 옮긴 state 사전(state_to_dict)에서 M3 A7 이 더한 것(맨 위 guild, 대원의 name·class·look·row)을 빼고 돌려준다.
 ## 더한 것이 기본값인지 함께 본다: 길드는 비고 serial 0, 대원 칸 i 는 기본 다섯 칸 i 의 직업·열, 이름 null, 외형 0. 맞지 않으면 문자열 하나에 까닭을 담는다.
 ## 돌려주는 사전: {"state": 뺀 사전, "bad": "" 또는 까닭}.
+## M3 A8: 12판이 더한 맨 위 quests·flags 도 먼저 뺀다(strip_v12, 옛 판에서 옮긴 기록이어야 한다).
 static func strip_v11(now: Dictionary, defs: GameDefs) -> Dictionary:
-	var d := now.duplicate(true)
-	var bad := ""
+	var v12 := strip_v12(now, defs)
+	var d: Dictionary = v12["state"]
+	var bad: String = v12["bad"]
 	if d.get("guild") != {"members": [], "serial": 0}:
 		bad = "guild 가 빈 길드가 아니다: %s" % str(d.get("guild"))
 	d.erase("guild")
@@ -132,6 +134,27 @@ static func strip_v11(now: Dictionary, defs: GameDefs) -> Dictionary:
 			if bad.is_empty() and str(m.get(k)) != str(want[k]):
 				bad = "party.members[%d].%s = %s, 기본값 %s 이 아니다" % [i, k, str(m.get(k)), str(want[k])]
 			m.erase(k)
+	return {"state": d, "bad": bad}
+
+
+## 옛 판 저장을 12판으로 옮긴 state 사전에서 M3 A8 이 더한 맨 위 quests·flags 를 빼고 돌려준다. 더한 값이 옮긴 값인지 함께 본다:
+## quests 는 비고, flags 는 계단 needs 가운데 도착 층 기록(floor_states)이 있는 것만(정렬, 층 자료로 셈 — 규칙 함수를 부르지 않는다).
+## 돌려주는 사전: {"state": 뺀 사전, "bad": "" 또는 까닭}.
+static func strip_v12(now: Dictionary, defs: GameDefs) -> Dictionary:
+	var d := now.duplicate(true)
+	var bad := ""
+	var want: Array = []
+	for fid in defs.floor_ids:
+		for st in defs.floors[fid].stair_list():
+			if not st.needs.is_empty() and d.get("floor_states", {}).has(st.to_floor) and not want.has(st.needs):
+				want.append(st.needs)
+	want.sort()
+	if d.get("quests") != {}:
+		bad = "quests 가 비지 않았다: %s" % str(d.get("quests"))
+	elif str(d.get("flags")) != str(want):
+		bad = "flags %s 가 옮긴 허가 %s 가 아니다" % [str(d.get("flags")), str(want)]
+	d.erase("quests")
+	d.erase("flags")
 	return {"state": d, "bad": bad}
 
 

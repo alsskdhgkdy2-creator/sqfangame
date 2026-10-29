@@ -51,7 +51,7 @@ func _roundtrip(s: ExplorationState, label: String) -> SaveCodec.LoadResult:
 	var r := SaveCodec.decode(SaveCodec.encode(s), s.defs)
 	check(r.ok(), "%s: 읽기 %s" % [label, r.error])
 	if r.ok():
-		check_eq([SaveCodec.state_hash(r.state), r.from_schema], [SaveCodec.state_hash(s), 11], "%s: 같은 해시, 11판" % label)
+		check_eq([SaveCodec.state_hash(r.state), r.from_schema], [SaveCodec.state_hash(s), 12], "%s: 같은 해시, 12판" % label)
 	return r
 
 
@@ -75,7 +75,7 @@ func _gm(d: Dictionary) -> Array:
 func test_v11_roundtrip_guild() -> void:
 	var s := _guild_town()
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	check_eq([doc["schema"], doc["rules"]], [11.0, "m3r"], "11판 머리")
+	check_eq([doc["schema"], doc["rules"]], [12.0, "m3q"], "12판 머리")
 	for list in [_pm(doc), _gm(doc)]:
 		for m in list:
 			var ks: Array = m.keys()
@@ -189,8 +189,8 @@ func test_fixed_v10_strings_migrate() -> void:
 		check_eq(now.keys().filter(func(k: String) -> bool: return not o.has(k)), [], "%s: 맨 위에 더한 필드는 guild 뿐(뺀 뒤 없음)" % x[0])
 		var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
 		var again := SaveCodec.decode(JSON.stringify(doc), x[2])
-		check(doc["schema"] == 11.0 and again.ok() and again.from_schema == 11 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state),
-			"%s: 11판으로 쓰고 다시 읽기 같은 해시 %s" % [x[0], again.error])
+		check(doc["schema"] == 12.0 and again.ok() and again.from_schema == 12 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state),
+			"%s: 12판으로 쓰고 다시 읽기 같은 해시 %s" % [x[0], again.error])
 	var town := SaveCodec.decode(V10_TOWN, Fx.arbor()).state
 	if town != null:
 		check_eq([town.party.members[1].equip[0], town.party.members[1].class_id, town.party.members[4].skills.has("skill.glyph_wizard.glyph_mastery"),
@@ -216,8 +216,8 @@ func test_v10_rules_apply_to_v10() -> void:
 				m.erase(k)
 	var r := SaveCodec.decode(JSON.stringify(_with(s, v10_guild)), s.defs)
 	check(r.ok() and r.from_schema == 10, "10판: 남은 맨 위 guild 는 보지 않는다(10판은 그 키를 읽지 않음) %s" % r.error)
-	_reject(s, func(d): d["schema"] = 12, "지원하지 않는 schema 다", "12판")
-	_reject(s, func(d): d["rules"] = "m3o", "규칙 판(rules)이 schema 11 와 맞지 않다", "11판 머리에 m3o")
+	_reject(s, func(d): d["schema"] = 13, "지원하지 않는 schema 다", "13판")
+	_reject(s, func(d): d["rules"] = "m3o", "규칙 판(rules)이 schema 12 와 맞지 않다", "12판 머리에 m3o")
 
 
 func _with(s: ExplorationState, mutate: Callable) -> Dictionary:
@@ -253,7 +253,7 @@ func test_v11_relocation_keeps_guild() -> void:
 		check_eq(nd["guild"], od["guild"], "%s: 길드(대원·장비·HP·번호) 그대로" % x[0])
 		check_eq(nd["party"]["members"], od["party"]["members"], "%s: 파티 차례·열·이름 그대로" % x[0])
 		var again := SaveCodec.decode(SaveCodec.encode(r.state), defs)
-		check(again.ok() and not again.relocated and again.from_schema == 11 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state),
+		check(again.ok() and not again.relocated and again.from_schema == 12 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state),
 			"%s: 다시 쓰고 읽으면 옮김 없이 같은 해시 %s" % [x[0], again.error])
 	var rr := SaveCodec.decode(SaveCodec.encode(reserve), defs)
 	check(rr.ok() and rr.state.guild.members.size() == 1 and rr.state.guild.members[0].equip == reserve.guild.members[0].equip and rr.state.guild.members[0].hp == 3,

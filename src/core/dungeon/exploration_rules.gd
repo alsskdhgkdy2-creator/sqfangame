@@ -41,6 +41,10 @@ static func new_game(defs: GameDefs, seed_value: int, automap: String, in_town: 
 		s.location = ExplorationState.TOWN
 	else:
 		record_cell(s, floor_def.start_at, automap)
+		# M3 A8(설계 §5.3): 미궁 안에서 시작하는 새 게임(규칙 시험·시뮬레이션·장면 도구의 미궁 시작)은 탐사 허가를 내는 마을을 건너뛰었으므로
+		# 계단이 요구하는 플래그를 처음부터 가진다. 화면의 진짜 새 게임(마을 시작)은 플래그 없이 시작한다.
+		for f in defs.gate_flags():
+			s.flags[f] = true
 	return s
 
 
@@ -302,11 +306,14 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 
 
 ## 서 있는 칸의 계단: {way, to}(계단이면 짝 층 ID, B1F 마을 문이면 to = "town", M3 A2). 아니면 빈 사전.
+## 진행 플래그가 없어 막힌 계단(M3 A8, needs)도 빈 사전이다(물음을 띄우지 않는다, stair_locked).
 static func stair_here(s: ExplorationState) -> Dictionary:
 	if s.in_town():
 		return {}
 	var st := s.floor_def.stair_at(s.party.at)
 	if st != null:
+		if stair_locked(s, st):
+			return {}
 		return {"way": st.way, "to": st.to_floor}
 	if s.defs != null and s.defs.is_gate(s.floor_def, s.party.at):
 		return {"way": "up", "to": ExplorationState.TOWN}
@@ -360,8 +367,17 @@ static func _open_chest(s: ExplorationState, events: Array[Dictionary]) -> void:
 	events.append({"type": "chest_opened", "chest": chest.id, "item": item, "count": chest.count})
 
 
+## 계단 st 가 진행 플래그(needs)를 요구하는데 상태에 없는지(M3 A8 설계 §5.3, 관리국 탐사 허가).
+static func stair_locked(s: ExplorationState, st: FloorModel.Stair) -> bool:
+	return st != null and not st.needs.is_empty() and not s.flags.has(st.needs)
+
+
 ## 서 있는 칸이 계단(마을 문 포함)이면 stairs 이벤트(way·to)를 더하고 true.
+## 진행 플래그가 없어 막힌 계단이면 물음 대신 blocked no_permit 을 더하고 true(M3 A8: 칸에는 설 수 있고, 상자·지점과 겹치지 않는다).
 static func _stairs_event(s: ExplorationState, events: Array[Dictionary]) -> bool:
+	if not s.in_town() and stair_locked(s, s.floor_def.stair_at(s.party.at)):
+		events.append({"type": "blocked", "reason": "no_permit"})
+		return true
 	var st := stair_here(s)
 	if st.is_empty():
 		return false
@@ -380,6 +396,9 @@ static func _take_stairs(s: ExplorationState, events: Array[Dictionary], automap
 	var st := s.floor_def.stair_at(s.party.at)
 	if st == null:
 		events.append({"type": "blocked", "reason": "not_stairs"})
+		return
+	if stair_locked(s, st):
+		events.append({"type": "blocked", "reason": "no_permit"})
 		return
 	var from := s.floor_def.id
 	var target := s.defs.floor_by_id(st.to_floor)

@@ -69,6 +69,17 @@ static func add(s: ExplorationState, item: String, n: int) -> int:
 	return k
 
 
+## item 을 n 개 꺼낸다(M3 A8 의뢰 건네기). 가진 수보다 많으면 아무것도 하지 않고 false. 0 개가 되면 키를 지운다.
+static func take(s: ExplorationState, item: String, n: int) -> bool:
+	var d: Variant = store(s, item)
+	if d == null or n <= 0 or int(d.get(item, 0)) < n:
+		return false
+	d[item] = int(d[item]) - n
+	if d[item] == 0:
+		d.erase(item)
+	return true
+
+
 ## 정의에 있는 가방 물건(소모품·장비·소재)인지.
 static func known(s: ExplorationState, item: String) -> bool:
 	if s.defs == null:

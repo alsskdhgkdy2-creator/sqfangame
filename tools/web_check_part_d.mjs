@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import {
   W, H, outDir, KEYS, page, check, log, snap, waitFor, waitReady, clickButton, enterLabyrinth, openRecords, finishBattle,
-  waitIdb, VICTORY_SAVE,
+  waitIdb, VICTORY_SAVE, request,
 } from './web_check_common.mjs';
 
 const routeD = JSON.parse(fs.readFileSync('data/floors/arbor_route.json', 'utf8'));
@@ -55,6 +55,9 @@ export async function partD() {
   let s = await waitReady();
   check(s.set === 'game' && s.save_dir === 'user://saves' && s.location === 'town', '실제 미궁(주소에 set 없음)·저장 폴더 saves·마을 광장',
     { set: s.set, save_dir: s.save_dir, location: s.location });
+  // M3 A8a(준비 한 단계): 새 게임은 관리국 탐사 허가 없이 시작해 B1F 내려가는 계단이 막힌다. 공략은 B3F 까지 걸으므로 디버그로 허가를 더한다.
+  const permit = await request({ op: 'quest_flag', flag: 'permit.b2f' });
+  check(permit.ok === true, '준비: 디버그 quest_flag permit.b2f(관리국 탐사 허가, M3 A8a)', permit);
   s = await enterLabyrinth();
   check(s.floor === 'b1f' && s.at[0] === 9 && s.at[1] === 18 && s.toast === '네온 이끼숲 / B1F' && s.modal === '',
     'B1F 시작 칸, 장소 글 「네온 이끼숲 / B1F」', { floor: s.floor, at: s.at, toast: s.toast });

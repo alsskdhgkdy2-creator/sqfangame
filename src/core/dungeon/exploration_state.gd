@@ -58,6 +58,10 @@ var annotation: MapAnnotation:
 var party := PartyState.new()
 ## 모험가 길드(M3 A7): 등록했지만 파티에 없는 대원과 등록 번호. 길드 규칙(GuildRules)만 바꾼다.
 var guild := GuildState.new()
+## 의뢰·주요 임무(M3 A8): 받거나 보고한 의뢰의 기록. QuestRules 만 바꾼다.
+var quests := QuestState.new()
+## 진행 플래그(M3 A8, 집합 플래그 → true): 의뢰 보고가 더하고(관리국 탐사 허가 등) 지우지 않는다. 층 계단(needs)·A9 봉인이 읽는다.
+var flags := {}
 var encounter := EncounterState.new()
 var rng := GameRng.new()
 var steps := 0

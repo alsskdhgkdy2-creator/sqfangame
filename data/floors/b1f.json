@@ -47,7 +47,7 @@
     "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+"
   ],
   "start": {"at": [9, 18], "facing": "N"},
-  "stairs": [{"at": [17, 1], "way": "down", "exit": "W", "to": {"floor": "b2f", "at": [17, 1]}}],
+  "stairs": [{"at": [17, 1], "way": "down", "exit": "W", "to": {"floor": "b2f", "at": [17, 1]}, "needs": "permit.b2f"}],
   "shortcuts": [{"at": [11, 17], "dir": "W"}],
   "chests": [
     {"id": "c1", "at": [10, 16], "item": "item.neon_rat_tail", "count": 3},

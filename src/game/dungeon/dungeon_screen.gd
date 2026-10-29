@@ -115,6 +115,8 @@ var save_pending := SavePending.new()
 ## 자동 저장에 성공한 횟수와 마지막 실패 이유(시험·디버그용).
 var autosave_count := 0
 var last_autosave_error := ""
+## 마지막 의뢰 진행 세기(QuestRules.observe, M3 A8)가 낸 의뢰 이벤트(탐색 행동 또는 전투 제출). A8b 의 알림이 읽는다.
+var quest_events: Array[Dictionary] = []
 ## 디버그 상태 요약을 낸 횟수(시험: 타이틀에서도 입력마다 다시 내는지).
 var debug_publishes := 0
 
@@ -533,6 +535,8 @@ func _do_action(action: int) -> void:
 	var events := ExplorationRules.apply(state, action, settings.automap)
 	if events.size() == 1 and events[0]["type"] == "rejected":
 		return
+	# 의뢰 진행(M3 A8 설계 §4.3): 행동 이벤트와 그 뒤 상태를 읽어 받은 의뢰를 센다. 아래 자동 저장에 함께 실린다.
+	quest_events = QuestRules.observe(state, events)
 	_action_frame = Engine.get_process_frames()
 	_stairs_ask = false  # 새 행동이 받아들여졌으면 앞의 물음은 낡았다(이 행동의 이벤트가 다시 세운다)
 	var rebuild := false
@@ -821,6 +825,27 @@ func _inn_stay() -> Array[Dictionary]:
 	return events
 
 
+## 의뢰 받기·포기·보고 입구(M3 A8 설계 §4.4·§4.6): A8b 의 정보상 바·관리국 화면과 시험·디버그 요청이 부른다. kind = accept·abandon·report.
+## 창(물음 포함)이 열렸거나 연출 중이면 busy 로 거부하고, 규칙(QuestRules)이 받아들이면 자동 저장을 한 번 한다(보고의 모든 보수가 이 저장 하나에 실린다).
+func quest_action(kind: String, id: String, giver: String) -> Array[Dictionary]:
+	if state == null or modal.is_open() or _is_busy():
+		return [{"type": "rejected", "reason": "busy"}]
+	var events: Array[Dictionary]
+	match kind:
+		"accept":
+			events = QuestRules.accept(state, id, giver)
+		"abandon":
+			events = QuestRules.abandon(state, id, giver)
+		"report":
+			events = QuestRules.report(state, id, giver)
+		_:
+			return [{"type": "rejected", "reason": "bad_kind"}]
+	if events[0]["type"] != "rejected":
+		_autosave()
+		_debug_dirty = true
+	return events
+
+
 ## 대열 바꾸기 입구(M3 A7 설계 §4.1b): 캠프 「대열」 판(A7c)과 시험이 부른다. 창(물음 포함)이 열렸거나 연출 중이면 busy 로 거부하고,
 ## 규칙(GuildRules.arrange)이 받아들이면 자동 저장한다. 시간은 가지 않는다(걸음·위험도·FOE 그대로).
 func arrange_party(front: Array, back: Array) -> Array[Dictionary]:
@@ -1077,6 +1102,11 @@ func _hud_hidden() -> bool:
 ## 전투 층 저장 갈고리(제출 결과가 정해진 직후, 연출 전).
 func _on_battle_save() -> void:
 	_autosave()
+
+
+## 전투 층 제출 갈고리(M3 A8): 저장 갈고리보다 먼저, 전투 끝(kills·foes_defeated)으로 받은 의뢰를 센다(설계 §4.3).
+func _on_battle_commit(events: Array[Dictionary]) -> void:
+	quest_events = QuestRules.observe(state, events)
 
 
 ## 캠프를 연다(07 §9.1): 전투·전멸이 아니고, 다른 창(메뉴·메모·파일 고르기·전멸·전투)이 없고, 연출 중이 아닐 때만.
@@ -1601,6 +1631,7 @@ func _build_ui() -> void:
 	windows_root.add_child(battle_layer)
 	battle_layer.build(texts)
 	battle_layer.save_hook = _on_battle_save
+	battle_layer.commit_hook = _on_battle_commit
 	battle_layer.blocked_hook = func() -> bool: return modal.is_open()
 	battle_layer.closed.connect(_on_battle_closed)
 	battle_layer.opened.connect(func() -> void:
@@ -2326,6 +2357,8 @@ func debug_snapshot() -> Dictionary:
 		"plan_ms_total_max": view.max_anim_plan_ms, "plan_count_max": view.max_anim_plan_count,
 		# 성장(07 §8.6): 대원마다 레벨·경험치·남은 SP·스킬·장비와 §6 묶음의 능력치·공격·방어, 가방, 파티 메뉴.
 		"members": _debug_members(), "guild": _debug_guild(), "gear_bag": state.gear_bag.duplicate(), "party_menu": party,
+		# 의뢰(M3 A8): 의뢰마다 표시 상태·진행·목표·보고 수·마지막 보고 날, 진행 플래그(정렬), 마지막 observe 의 의뢰 이벤트.
+		"quests": _debug_quests(), "flags": SaveCodec._str_set(state.flags), "quest_events": quest_events.duplicate(true),
 		# 상점(08 §8.11): 소지금·상점 상태(판 소재·한정 재고·산 물건)와 상점 화면.
 		"money": state.money, "shop_state": {"sold": state.shop.sold.duplicate(), "pool": state.shop.pool.duplicate(),
 			"bought": state.shop.bought_list()}, "shop": shop,
@@ -2447,6 +2480,32 @@ func _debug_guild() -> Dictionary:
 	return {"serial": state.guild.serial, "members": list}
 
 
+## 의뢰(M3 A8): 의뢰 ID → {giver, status, progress, target, reports, day, opens}(자료 차례).
+func _debug_quests() -> Dictionary:
+	var out := {}
+	for id in state.defs.quests.order:
+		var q: QuestDb.QuestDef = state.defs.quests.quests[id]
+		var e := state.quests.entry(id)
+		out[id] = {"giver": q.giver, "status": QuestRules.status_of(state, q), "progress": QuestRules.progress_of(state, q), "target": q.count,
+			"reports": e.reports if e != null else 0, "day": e.day if e != null else 0, "opens": QuestRules.opens_on(state, q)}
+	return out
+
+
+## 디버그 진행 플래그(M3 A8, 웹 확인 D·F 의 준비 한 단계): 묶음의 의뢰가 주는 플래그 하나를 더한다(의뢰 기록·다른 보수는 그대로) → 자동 저장.
+## 마을이나 미궁 어디서든, 창·전투·연출이 없을 때만. 거부: 모르는 플래그 unknown_flag, 이미 있음 already, 바쁨 busy. 받으면 {"ok": true}.
+func _debug_quest_flag(flag: Variant) -> Dictionary:
+	if typeof(flag) != TYPE_STRING or not state.defs.quests.knows_flag(flag):
+		return {"ok": false, "reason": "unknown_flag"}
+	if state.flags.has(flag):
+		return {"ok": false, "reason": "already"}
+	if state.wiped or state.encounter.pending or state.battle != null or modal.is_open() or _is_busy():
+		return {"ok": false, "reason": "busy"}
+	state.flags[flag] = true
+	_autosave()
+	_debug_dirty = true
+	return {"ok": true}
+
+
 ## 연출 중(시야 이동·미리 받은 행동·전투 연출).
 func _is_busy() -> bool:
 	return view.is_busy() or _queued >= 0 or battle_layer.is_busy()
@@ -2464,7 +2523,10 @@ func _is_busy() -> bool:
 ##   자동 저장 → 전투 층. 탐색 중이고 창·전투·연출이 없을 때만. {"op": "battle_start"}
 ## battle_commands(M3 A6c): {"op": "battle_commands", "commands": [대원 칸마다 명령 또는 null]} 을 전투 층의 명령 입구로 제출한다(같은 검사·저장·연출).
 ##   JSON 수의 정수 값(표적 등)은 int 로 바꾼다. 명령 입력 단계에서만 받고, 규칙이 거부하면 {"ok": false, "reason", "slot"}(턴·저장은 그대로).
-## 상태를 바꾸는 요청(battle_auto·battle_finish·battle_start·battle_commands·supply·grant_exp)은 디버그 주소(?debug=1)에서만 받는다.
+## quest_flag(M3 A8): {"op": "quest_flag", "flag": 진행 플래그} 그 플래그만 더한다(웹 확인 D·F 의 준비).
+## quest(M3 A8): {"op": "quest", "action": accept·abandon·report, "quest": 의뢰 ID, "giver": pub·council} → quest_action. 거부면 {"ok": false, "reason"}.
+##   모르는 플래그·이미 있음·바쁨은 {"ok": false, "reason"}.
+## 상태를 바꾸는 요청(battle_auto·battle_finish·battle_start·battle_commands·supply·grant_exp·quest_flag·quest)은 디버그 주소(?debug=1)에서만 받는다.
 ## 타이틀(상태 없음)에서는 snapshot·hash_save 만 받는다. 상점은 마을 광장으로 연다(M3 A2: open_shop 요청은 없앴다).
 func _on_debug_request(json_text: String) -> String:
 	var req: Variant = JSON.parse_string(json_text)
@@ -2493,7 +2555,7 @@ func _on_debug_request(json_text: String) -> String:
 				var a := ExplorationRules.action_from_name(str(name))
 				if a < 0:
 					return JSON.stringify({"error": "unknown action " + str(name)})
-				ExplorationRules.apply(s, a, settings.automap)
+				QuestRules.observe(s, ExplorationRules.apply(s, a, settings.automap))
 				hashes.append(SaveCodec.state_hash(s))
 			return JSON.stringify({"hashes": hashes})
 		"battle_auto", "battle_finish":
@@ -2538,6 +2600,17 @@ func _on_debug_request(json_text: String) -> String:
 				var rej: Dictionary = battle_layer.last_rejected
 				return JSON.stringify({"ok": false, "reason": str(rej.get("reason", "")), "slot": rej.get("slot", -1), "phase": battle_layer.phase})
 			return JSON.stringify({"ok": ok, "phase": battle_layer.phase})
+		"quest_flag":
+			if not _debug:
+				return JSON.stringify({"error": "debug only"})
+			return JSON.stringify(_debug_quest_flag(req.get("flag")))
+		"quest":
+			if not _debug:
+				return JSON.stringify({"error": "debug only"})
+			var qe := quest_action(str(req.get("action", "")), str(req.get("quest", "")), str(req.get("giver", "")))
+			if qe[0]["type"] == "rejected":
+				return JSON.stringify({"ok": false, "reason": qe[0]["reason"]})
+			return JSON.stringify({"ok": true, "events": qe})
 		"supply", "grant_exp":
 			if not _debug:
 				return JSON.stringify({"error": "debug only"})
@@ -2559,10 +2632,14 @@ func _on_debug_request(json_text: String) -> String:
 
 
 ## 전투 중이면 battle_finish 와 같이 규칙의 finish(승리)로 끝낸다(디버그 simulate). 끝내지 못하면 false.
+## 전투 끝 이벤트로 받은 의뢰도 센다(M3 A8, 진짜 화면의 전투 제출 갈고리와 같은 해시가 되게).
 static func finish_battle(s: ExplorationState) -> bool:
 	if not s.encounter.pending or s.battle == null:
 		return true
-	return BattleRules.finish(s, "victory")
+	var events: Array[Dictionary] = []
+	var ok := BattleRules.finish(s, "victory", events)
+	QuestRules.observe(s, events)
+	return ok
 
 
 # ---- 시작 오류 (06 §5.6) ----

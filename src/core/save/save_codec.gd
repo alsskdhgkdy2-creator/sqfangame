@@ -3,12 +3,12 @@ class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 11
-const RULES := "m3r"
+const SCHEMA := 12
+const RULES := "m3q"
 ## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~10판은 읽을 때 11판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1~A7).
 ## 가방 합계(공용 60칸, D31)는 어느 판에서도 검사하지 않는다: 옛 저장이 60을 넘어도 그대로 읽고(지우지 않는다), 새로 얻는 길만
 ## BagRules 가 막는다(M3 A4 설계 §3.3). 종류마다의 범위(소모품·장비 1~99, 소재 1~9999)만 본다.
-const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i", 9: "m3g", 10: "m3o", 11: "m3r"}
+const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i", 9: "m3g", 10: "m3o", 11: "m3r", 12: "m3q"}
 ## 7·8판 층 기록의 world 키(M3 A3: 연 잠긴 문·연 보물상자가 더해졌다). 6판까지는 앞의 둘만 보고 다른 키는 보지 않는다.
 const WORLD_KEYS_V7 := ["shortcuts_open", "passages_found", "locks_open", "chests_opened"]
 ## 9판 층 기록의 world 키(M3 A5: 오늘 쓴 채집 횟수 gather_used 가 더해졌다). 정확히 이 다섯이다.
@@ -34,6 +34,9 @@ const MEMBER_KEYS := ["id", "hp", "tp", "level", "exp", "skills", "equip"]
 const MEMBER_KEYS_V11 := ["id", "name", "class", "look", "row", "hp", "tp", "level", "exp", "skills", "equip"]
 ## 11판 guild 객체의 키.
 const GUILD_KEYS := ["members", "serial"]
+## 12판 quests 의 의뢰 기록 하나(M3 A8 설계 §3.2): 정확히 이 넷.
+const QUEST_ENTRY_KEYS := ["status", "progress", "reports", "day"]
+const QUEST_REPORTS_MAX := QuestState.REPORTS_MAX
 ## 4판 shop 객체의 키(08 §4).
 const SHOP_KEYS := ["sold", "pool", "bought"]
 const MAX_SAFE_INT := 9007199254740992  # 2^53
@@ -160,7 +163,18 @@ static func state_to_dict(s: ExplorationState) -> Dictionary:
 		"rng": {"state": str(s.rng.get_state())},
 		"steps": s.steps,
 		"wiped": s.wiped,
+		"quests": quests_to_dict(s),
+		"flags": _str_set(s.flags),
 	}
+
+
+## 12판 quests(M3 A8): 의뢰 ID → {status, progress, reports, day}.
+static func quests_to_dict(s: ExplorationState) -> Dictionary:
+	var out := {}
+	for id in s.quests.entries:
+		var e: QuestState.Entry = s.quests.entries[id]
+		out[id] = {"status": e.status, "progress": e.progress, "reports": e.reports, "day": e.day}
+	return out
 
 
 ## 11판 대원 하나(M3 A7). 이름은 등록한 이름, 없으면 null(기본 다섯의 이름 키는 정의에서 온다).
@@ -260,6 +274,27 @@ static func _decode_doc(doc: Dictionary, defs: GameDefs) -> LoadResult:
 		return r
 	if _names_retired(doc, defs):
 		return _relocate(doc, defs)
+	var moved := _migrate(doc, defs)
+	if moved != null:
+		# M3 A8(설계 §3.3): 옛 판에서 옮긴 저장은 이미 내려가 본 층의 계단 허가를 받는다(진행이 막히지 않게).
+		if moved.ok():
+			for f in QuestRules.migrated_flags(moved.state):
+				moved.state.flags[f] = true
+		return moved
+	var s := ExplorationState.new()
+	r.error = _read_state(doc["state"], defs, [], SCHEMA, s)
+	if not r.error.is_empty():
+		return r
+	s.generation = to_int(doc["generation"])
+	r.state = s
+	r.saved_at = doc["saved_at"]
+	r.generation = s.generation
+	r.from_schema = SCHEMA
+	return r
+
+
+## 옛 판(1~11)이면 그 판의 이전 결과, 지금 판이면 null.
+static func _migrate(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	match to_int(doc["schema"]):
 		1:
 			return migrate_v1(doc, defs)
@@ -281,16 +316,9 @@ static func _decode_doc(doc: Dictionary, defs: GameDefs) -> LoadResult:
 			return migrate_v9(doc, defs)
 		10:
 			return migrate_v10(doc, defs)
-	var s := ExplorationState.new()
-	r.error = _read_state(doc["state"], defs, [], SCHEMA, s)
-	if not r.error.is_empty():
-		return r
-	s.generation = to_int(doc["generation"])
-	r.state = s
-	r.saved_at = doc["saved_at"]
-	r.generation = s.generation
-	r.from_schema = SCHEMA
-	return r
+		11:
+			return migrate_v11(doc, defs)
+	return null
 
 
 ## 1판 → 5판(07 §8.4·08 §4·M3 A1, 2~4판 문서를 거치지 않는다). doc 은 머리 검사를 통과한 1판 문서.
@@ -496,6 +524,23 @@ static func migrate_v10(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
+## 11판 → 12판(M3 A8 설계 §3.3): 11판 규칙으로 다 검사 → 원본 saved_at·generation 으로 12판 encode(빈 quests·flags) →
+## 12판 읽기를 그대로 거친 결과만 돌려준다. 이미 내려가 본 층의 계단 허가는 _decode_doc 이 이전 결과 모두에 붙인다.
+static func migrate_v11(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, [], 11, old)
+	if not err.is_empty():
+		r.error = "11판 검사 실패: " + err
+		return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "11판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 11
+	return again
+
+
 ## 문서의 지금 층이 지금 묶음에는 없고 은퇴한 묶음(defs.retired)에 있는지(M3 A3). 두 묶음의 층 ID 는 겹치지 않는다(GameDefs 가 본다).
 static func _names_retired(doc: Dictionary, defs: GameDefs) -> bool:
 	if defs.retired == null:
@@ -665,7 +710,100 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 	if schema < 10:
 		FoeRules.settle(s)
 		return ""
-	return _check_foes(s)
+	err = _check_foes(s)
+	if err.is_empty() and schema >= 12:
+		err = _read_quests(d, s)
+	return err
+
+
+## 12판 quests·flags(M3 A8 설계 §3.2). 의뢰 ID 는 묶음 정의의 것만(엄격), 수는 정수(1.0 은 1). 기록 사이 맞물림:
+## reported 면 reports ≥ 1, 반복하지 않으면 reports ≤ 1(받은 채면 0), day 는 0~state.day 이고 0 ⇔ reports 0, progress 는 0~목표
+## (deliver·reported 는 0, reach 는 0~1), 처음 받은 의뢰(reports 0)는 발급 조건이 맞아야 한다(level 조건은 보지 않는다: 편성으로 내려갈 수 있다).
+## flags 는 겹치지 않는 아는 플래그(묶음의 의뢰가 주는 것)다. 주는 의뢰를 보고했는지는 보지 않는다: 미궁 안에서 시작한 새 게임과
+## 옛 저장 이전은 보고 없이 허가를 가진다(설계 §5.3·§3.3, A8a 에서 설계 §3.2 의 「보고한 의뢰」 검사를 뺐다).
+static func _read_quests(d: Dictionary, s: ExplorationState) -> String:
+	if not d.has("quests"):
+		return "quests 가 없다"
+	if typeof(d["quests"]) != TYPE_DICTIONARY:
+		return "quests 는 사전이어야 한다"
+	if not d.has("flags"):
+		return "flags 가 없다"
+	if typeof(d["flags"]) != TYPE_ARRAY:
+		return "flags 는 배열이어야 한다"
+	var qdb := s.defs.quests
+	for id in d["quests"]:
+		var q: QuestDb.QuestDef = qdb.get_def(id) if typeof(id) == TYPE_STRING else null
+		if q == null:
+			return "quests 의 %s 는 모르는 의뢰다" % str(id)
+		var rec: Variant = d["quests"][id]
+		var label := "quests.%s" % id
+		if typeof(rec) != TYPE_DICTIONARY:
+			return "%s 는 객체여야 한다" % label
+		var err := _exact_keys(rec, QUEST_ENTRY_KEYS, label)
+		if not err.is_empty():
+			return err
+		if typeof(rec["status"]) != TYPE_STRING or not QuestState.STATUSES.has(rec["status"]):
+			return "%s.status 는 accepted·reported 가운데 하나여야 한다" % label
+		var hi := 0 if q.kind == "deliver" or rec["status"] == QuestState.REPORTED else q.count
+		var progress: Variant = _int_field(rec["progress"], 0, hi)
+		if progress == null:
+			return "%s.progress 는 정수 0~%d 이어야 한다" % [label, hi]
+		var reports: Variant = _int_field(rec["reports"], 0, QUEST_REPORTS_MAX if q.repeats() else (0 if rec["status"] == QuestState.ACCEPTED else 1))
+		if reports == null or (rec["status"] == QuestState.REPORTED and reports < 1):
+			return "%s.reports 가 상태·반복과 맞지 않다" % label
+		var day: Variant = _int_field(rec["day"], 0, s.day)
+		if day == null or (day == 0) != (reports == 0):
+			return "%s.day 는 정수 0~%d 이고 보고한 적이 없을 때만 0 이어야 한다" % [label, s.day]
+		var e := QuestState.Entry.new()
+		e.status = rec["status"]
+		e.progress = progress
+		e.reports = reports
+		e.day = day
+		s.quests.entries[id] = e
+	for id in s.quests.entries:
+		var e: QuestState.Entry = s.quests.entries[id]
+		var q := qdb.get_def(id)
+		if e.status == QuestState.ACCEPTED and e.reports == 0 and not _unlock_met(s, q):
+			return "quests.%s 를 받았는데 발급 조건이 맞지 않다" % id
+		# 반복 의뢰를 다시 받은 기록은 다시 열린 날(마지막 보고 날 + days) 이후여야 한다(M3 A8a 검토).
+		if e.status == QuestState.ACCEPTED and e.reports > 0 and q.repeats() and s.day < e.day + q.repeat_days:
+			return "quests.%s 를 다시 받았는데 아직 다시 열리지 않았다(%d일째부터)" % [id, e.day + q.repeat_days]
+	for f in d["flags"]:
+		if typeof(f) != TYPE_STRING or not qdb.knows_flag(f):
+			return "flags 의 %s 는 모르는 플래그다" % str(f)
+		if s.flags.has(f):
+			return "flags 에 %s 가 두 번 있다" % f
+		s.flags[f] = true
+	# 보고한 적이 있는 의뢰의 보수 플래그는 있어야 한다(M3 A8a 검토). 반대(보고 없는 플래그: 미궁 시작·옛 저장 이전)는 받는다.
+	for id in s.quests.entries:
+		var q := qdb.get_def(id)
+		if s.quests.entries[id].reports > 0:
+			for f in q.flags:
+				if not s.flags.has(f):
+					return "quests.%s 를 보고했는데 보수 플래그 %s 가 없다" % [id, f]
+	return ""
+
+
+## 발급 조건(level 은 빼고, 편성으로 내려갈 수 있다): 저장 검사용.
+static func _unlock_met(s: ExplorationState, q: QuestDb.QuestDef) -> bool:
+	for c in q.unlock:
+		if c["kind"] == "level":
+			continue
+		var one := QuestDb.QuestDef.new()
+		one.unlock.append(c)
+		if not QuestRules.conditions_met(s, one):
+			return false
+	return true
+
+
+## 정수 lo~hi(정수와 같은 실수도 받는다, 참·거짓은 아니다). 아니면 null.
+static func _int_field(v: Variant, lo: int, hi: int) -> Variant:
+	if typeof(v) == TYPE_BOOL:
+		return null
+	var n: Variant = to_int(v)
+	if n == null or n < lo or n > hi:
+		return null
+	return n
 
 
 ## 10판 battle 이 접촉 전투(foe 가 있다)인지(M3 A6). 위험도가 한계값 아래여도 전투 대기다(접촉은 위험도를 더하지 않는다).
