@@ -17,7 +17,7 @@ const RANGES_KIND := ["melee", "ranged"]
 const PRIORITIES := ["first", "normal", "last"]
 const USERS := ["party", "enemy"]
 const ON_BOUND := ["switch", "fail"]
-const AI_TARGETS := ["random", "lowest_hp"]
+const AI_TARGETS := ["random", "lowest_hp", "lowest_hp_ratio"]
 const ROWS := ["front", "back"]
 const SKILL_COMMON := ["id", "name_key", "user", "effect", "range", "target", "parts", "priority", "speed", "levels"]
 ## 패시브(07 §4.3·§7.4)는 이 다섯 필드만 갖는다. 대상이 없어 EFFECT_TARGETS 에 넣지 않는다.
@@ -74,7 +74,7 @@ const USER_EFFECTS := {
 ## 혼란한 적의 내장 공격 스킬 id(confused_attack).
 const CONFUSED := "confused"
 const DROP_CONDS := ["killed_by_element", "killed_while_bound", "killed_while_ailment"]
-const AI_CONDS := ["charging", "turn_mod", "hp_below"]
+const AI_CONDS := ["charging", "turn_mod", "hp_below", "ally_hp_below"]
 
 
 ## 규칙 상수(06 §5.2). 모든 값은 BattleLimits 범위 안이다.
@@ -1251,6 +1251,11 @@ func _read_ai_rule(ck: _Ck, v: Variant, path: String, last: bool) -> Dictionary:
 					var h: Variant = ck.int_of(c, k, path + ".if", "hp_below")
 					if h != null:
 						out["if"]["hp_below"] = h
+				"ally_hp_below":
+					# M3 A3c: 같은 편(자기 포함) 살아 있는 유닛 중 하나라도 HP 가 이 값(‰) 미만. 범위는 hp_below 와 같다.
+					var ah: Variant = ck.int_of(c, k, path + ".if", "hp_below")
+					if ah != null:
+						out["if"]["ally_hp_below"] = ah
 				_:
 					ck.err(cp, "모르는 조건(%s 중 하나)" % ", ".join(AI_CONDS))
 	var up := path + ".use"

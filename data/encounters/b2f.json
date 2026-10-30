@@ -90,6 +90,42 @@
           "row": "back"
         }
       ]
+    },
+    {
+      "id": "formation.b2.firefly_serpents",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.wire_serpent",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.sap_firefly",
+          "row": "back"
+        }
+      ]
+    },
+    {
+      "id": "formation.b2.wisp_moles",
+      "no_escape": false,
+      "enemies": [
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.drill_mole",
+          "row": "front"
+        },
+        {
+          "enemy": "enemy.flicker_wisp",
+          "row": "back"
+        }
+      ]
     }
   ],
   "table": [
@@ -112,6 +148,14 @@
     {
       "formation": "formation.b2.beetles",
       "weight": 15
+    },
+    {
+      "formation": "formation.b2.firefly_serpents",
+      "weight": 18
+    },
+    {
+      "formation": "formation.b2.wisp_moles",
+      "weight": 12
     }
   ]
 }

@@ -17,13 +17,15 @@ const ENEMY_COLORS := {
 	"enemy.neon_rat": Color(0.62, 0.27, 0.22), "enemy.cable_moth": Color(0.47, 0.5, 0.2),
 	"enemy.spore_bloom": Color(0.28, 0.46, 0.27), "enemy.wire_serpent": Color(0.7, 0.42, 0.14),
 	"enemy.drill_mole": Color(0.45, 0.33, 0.24), "enemy.clamp_beetle": Color(0.36, 0.38, 0.42),
+	"enemy.sap_firefly": Color(0.64, 0.56, 0.18), "enemy.flicker_wisp": Color(0.24, 0.40, 0.52),
 }
 const ENEMY_DEFAULT := Color(0.5, 0.3, 0.3)
 const POPUP_SEC := 0.9
 const HP_GLIDE := 3.0
 const POPUP_SIZE := 32
 ## 상태 딱지(06 §9.1): 작은 글자 딱지를 줄을 바꿔 가며 놓는다. 아군 칸은 세 줄(상태이상 1 + 봉인 3 + 강화·약화 칸 3·3 =
-## 최대 10개가 1280×720 에서도 다 들어간다), 적 칸은 두 줄(적은 강화·약화를 받지 않아 최대 4개).
+## 최대 10개가 1280×720 에서도 다 들어간다), 적 칸은 두 줄(상태이상 1 + 봉인 3 + 강화·약화는 아군과 같은 칸 수. 적도 강화를 받는다: 보스 자기 강화 M3 A9,
+## 일반 적의 아군 강화 M3 A3c. 두 줄에 다 못 놓으면 「+N」).
 ## 그래도 넘치면(규칙 상수의 칸 수를 늘린 경우 등) 마지막 자리에 「+N」을 두고, 전체는 로그 창 위 상태 목록에서 본다.
 const CHIP_FS := 13
 const CHIP_H := 21.0
@@ -168,6 +170,11 @@ func _draw_popups() -> void:
 			draw_string(font, Vector2(0, y - 32.0), p["sub"], HORIZONTAL_ALIGNMENT_CENTER, size.x, 20, sc)
 
 
+## 적 카드 이름 글자 크기: 앞 칸(160 px 이상) 20, 뒤 칸(150 px) 17. 이름 너비 맞춤 시험(M3 A3c)이 같은 값을 쓴다.
+static func enemy_name_fs(card_width: float) -> int:
+	return 20 if card_width >= 160.0 else 17
+
+
 func _draw_enemy(u: BattleDisplay.DUnit) -> void:
 	var font := get_theme_default_font()
 	var r := Rect2(Vector2.ZERO, size)
@@ -189,7 +196,7 @@ func _draw_enemy(u: BattleDisplay.DUnit) -> void:
 	if cursor and target_mark != "invalid":
 		_box(r.grow(-7), Color(0, 0, 0, 0), Color(1, 1, 1, 0.9), 2)
 	var fg := Color(0.96, 0.96, 0.96) if not dim else Color(0.6, 0.6, 0.6)
-	var fs := 20 if size.x >= 160.0 else 17
+	var fs := enemy_name_fs(size.x)
 	draw_string_outline(font, Vector2(0, 34), u.name, HORIZONTAL_ALIGNMENT_CENTER, size.x, fs, 5, Color(0, 0, 0, 0.8))
 	draw_string(font, Vector2(0, 34), u.name, HORIZONTAL_ALIGNMENT_CENTER, size.x, fs, fg)
 	# HP 막대는 칸 안에 없다: 대상 고르기 중 커서가 있는 적 위에 뜬다(EnemyArea 의 HP 표, 원작 jp_guide5_img1).

@@ -48,7 +48,7 @@ func test_real_data_loads_without_errors_or_warnings() -> void:
 	check(r.ok(), "defs 있음")
 	var db := r.defs.battle
 	check_eq(db.class_ids.size(), 6, "직업 여섯(M3 A7: 레일 레인저·헥스 해커)")
-	check_eq(db.enemy_ids.size(), 10, "적 열(일반 여섯 + FOE 셋, M3 A6 + 보스 하나, M3 A9)")
+	check_eq(db.enemy_ids.size(), 12, "적 열둘(일반 여덟: 여섯 + 수액 반딧불·명멸 도깨비불 M3 A3c, FOE 셋 M3 A6, 보스 하나 M3 A9)")
 	check_eq(db.table_formations("encounter.f1_test").size(), 6, "편성 여섯")
 	check_eq(r.defs.first_floor().encounter_table, "encounter.f1_test", "층 출현 표")
 	check_eq(r.defs.party.ids, ["holo_knight", "blade_duelist", "blade_duelist_2", "nano_medic", "glyph_wizard"] as Array[String], "D12 파티")
@@ -273,7 +273,7 @@ func test_relation_checks() -> void:
 	_rejects("필중이 아닌 ailment 에 accuracy 없음", func(f): f[ES]["skills"][2]["sure_hit"] = false, "%s: skills[2].levels[0].accuracy: 필수 필드가 없다" % ES)
 	# 쓰는 쪽과 effect 조합(USER_EFFECTS): M2 가 수명 주기를 정하지 않은 조합은 읽기에서 막는다.
 	var revive := Fx.enemy_skill("skill.enemy.t_revive", "revive", "ally_dead", {}, {"hp_permille": 500})
-	_rejects("적 revive", func(f): f[ES]["skills"].append(revive), "%s: skills[13].effect: user enemy 에는 effect revive 를 쓸 수 없다" % ES)
+	_rejects("적 revive", func(f): f[ES]["skills"].append(revive), "%s: skills[18].effect: user enemy 에는 effect revive 를 쓸 수 없다" % ES)
 	var bd_next: int = Fx.data_files()["skills/blade_duelist.json"]["skills"].size()  # 듀얼리스트 파일에 덧붙인 스킬의 칸
 	var charge: Dictionary = Fx.data_files()[ES]["skills"][11].duplicate(true)
 	charge.merge({"id": "skill.blade_duelist.t_charge", "user": "party", "levels": [{"tp": 1}]}, true)
@@ -283,9 +283,9 @@ func test_relation_checks() -> void:
 		"skills/blade_duelist.json: skills[%d].levels[0].value: debuff phys_def 는" % bd_next)
 	# M3 A9(설계 §2.3): 적 buff(보스 자기 강화)는 받는다. 값은 파티 buff 와 같은 범위로 본다: 약화 쪽 값(공격 700)은 거부.
 	_rejects("적 buff 에 약화 값", func(f): f[ES]["skills"].append(Fx.effect_skill("skill.enemy.t_pump", true, [["phys_atk", 700, 3]]).merged({"effect": "buff", "target": "self"}, true)),
-		"%s: skills[13].levels[0].value: buff phys_atk 는" % ES)
+		"%s: skills[18].levels[0].value: buff phys_atk 는" % ES)
 	_rejects("적 revive", func(f): f[ES]["skills"].append(Fx.effect_skill("skill.enemy.t_raise", true, [["phys_atk", 1300, 3]]).merged({"effect": "revive", "target": "ally_dead"}, true)),
-		"%s: skills[13].effect: user enemy 에는 effect revive 를" % ES)
+		"%s: skills[18].effect: user enemy 에는 effect revive 를" % ES)
 	for e in ["cure", "cover", "front_guard"]:
 		var d: Dictionary = {}
 		for sk in Fx.data_files()["skills/nano_medic.json"]["skills"] + Fx.data_files()["skills/holo_knight.json"]["skills"]:
@@ -294,12 +294,12 @@ func test_relation_checks() -> void:
 		d.merge({"id": "skill.enemy.t_" + e, "user": "enemy"}, true)
 		for row in d["levels"]:
 			row["tp"] = 0
-		_rejects("적 " + e, func(f): f[ES]["skills"].append(d), "%s: skills[13].effect: user enemy 에는 effect %s 를" % [ES, e])
+		_rejects("적 " + e, func(f): f[ES]["skills"].append(d), "%s: skills[18].effect: user enemy 에는 effect %s 를" % [ES, e])
 	# 강화·약화는 모든 줄의 kind 가 같아야 한다(06 §5.4).
 	var mixed := Fx.effect_skill("skill.t.mixed", false, [["phys_atk", 1300, 3], ["phys_def", 500, 3]])
 	_rejects("강화 줄마다 다른 kind", func(f): f["skills/blade_duelist.json"]["skills"].append(mixed), "skills/blade_duelist.json: skills[%d].levels[1].kind: buff 스킬은 모든 줄의 kind 가 같아야 한다" % bd_next)
 	var mixed_d := Fx.effect_skill("skill.enemy.t_mixed", true, [["phys_def", 1300, 3], ["elem_def", 1300, 3], ["phys_def", 1200, 3]])
-	_rejects("약화 줄마다 다른 kind", func(f): f[ES]["skills"].append(mixed_d), "%s: skills[13].levels[1].kind: debuff 스킬은" % ES)
+	_rejects("약화 줄마다 다른 kind", func(f): f[ES]["skills"].append(mixed_d), "%s: skills[18].levels[1].kind: debuff 스킬은" % ES)
 	var same := Fx.effect_skill("skill.t.same", false, [["phys_atk", 1300, 3], ["phys_atk", 1100, 5]])
 	check(not "\n".join(_errors_after(func(f): f["skills/blade_duelist.json"]["skills"].append(same))).contains("kind"), "같은 kind 여러 줄은 받음")
 	_has(_party_errors(func(p): p["members"].pop_back()), "test_party.json: members: 대원은 5명", "파티 넷")

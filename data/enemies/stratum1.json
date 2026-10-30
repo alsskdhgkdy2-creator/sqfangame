@@ -392,6 +392,144 @@
           }
         }
       ]
+    },
+    {
+      "id": "enemy.sap_firefly",
+      "name_key": "enemy.sap_firefly",
+      "max_hp": 72,
+      "stats": {
+        "STR": 18,
+        "INT": 22,
+        "VIT": 8,
+        "WIS": 20,
+        "AGI": 17,
+        "LUC": 12
+      },
+      "resist": {
+        "slash": 1000,
+        "pierce": 1000,
+        "bash": 1000,
+        "fire": 1500,
+        "ice": 1000,
+        "volt": 500
+      },
+      "ailment_vuln": {
+        "poison": 1000,
+        "paralysis": 1000,
+        "sleep": 1500,
+        "confusion": 1000,
+        "blind": 1000
+      },
+      "bind_vuln": {
+        "head": 1500,
+        "arm": 1000,
+        "leg": 1000
+      },
+      "on_bound": "switch",
+      "exp": 18,
+      "ai": [
+        {
+          "if": {
+            "ally_hp_below": 600
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.sap_drip",
+              "weight": 1,
+              "target": "lowest_hp_ratio"
+            }
+          ]
+        },
+        {
+          "if": {
+            "turn_mod": [
+              3,
+              0
+            ]
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.glow_signal",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.glow_sting",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.glow_scale",
+          "chance": 500
+        }
+      ]
+    },
+    {
+      "id": "enemy.flicker_wisp",
+      "name_key": "enemy.flicker_wisp",
+      "max_hp": 60,
+      "stats": {
+        "STR": 8,
+        "INT": 30,
+        "VIT": 6,
+        "WIS": 16,
+        "AGI": 20,
+        "LUC": 14
+      },
+      "resist": {
+        "slash": 700,
+        "pierce": 700,
+        "bash": 700,
+        "fire": 0,
+        "ice": 1500,
+        "volt": 1000
+      },
+      "ailment_vuln": {
+        "poison": 500,
+        "paralysis": 1000,
+        "sleep": 500,
+        "confusion": 1000,
+        "blind": 1000
+      },
+      "bind_vuln": {
+        "head": 1500,
+        "arm": 500,
+        "leg": 500
+      },
+      "on_bound": "switch",
+      "exp": 22,
+      "ai": [
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.will_fire",
+              "weight": 3,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.flicker_jam",
+              "weight": 2,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.glow_scale",
+          "chance": 400
+        }
+      ]
     }
   ]
 }

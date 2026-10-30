@@ -158,6 +158,24 @@ static func strip_v12(now: Dictionary, defs: GameDefs) -> Dictionary:
 	return {"state": d, "bad": bad}
 
 
+## 편성에서 오는 사건 필드를 이름으로 뺀 복사본(M3 A3c): encounter.formation, battle_start.formation·enemies, battle_end.enemy_hp.
+## 출현 표에 새 편성이 늘면 같은 난수가 다른 편성을 뽑아 이 세 필드만 달라진다. HEAD 비교(test_boss_route T2)가 나머지 사건·상태의 바이트 동일을 지키려 쓴다.
+static func strip_picks(events: Array) -> Array:
+	var out := []
+	for e in events:
+		var c: Dictionary = e.duplicate(true)
+		match c["type"]:
+			"encounter":
+				c.erase("formation")
+			"battle_start":
+				c.erase("formation")
+				c.erase("enemies")
+			"battle_end":
+				c.erase("enemy_hp")
+		out.append(c)
+	return out
+
+
 ## 13판(M3 A9) 상태 사전(SaveCodec.state_to_dict 또는 읽은 JSON)에서 보스 FOE 기록만 이름으로 뺀다. 빼기 전에 그 기록이 처음 상태
 ## (그 층 정의의 자리·방향, idle, path_i 0, dir 1, stun 0, day 0)인지 본다. 보스 자리가 있는 층의 기록이 있으면 보스 기록도 꼭 있어야 한다.
 ## {state: 뺀 사본, bad: 어긋남 설명("" 이면 처음 상태)}. 보스를 만나지 않은 옛 경로·HEAD 비교(J7·J8)가 쓴다.

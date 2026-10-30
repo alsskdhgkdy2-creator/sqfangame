@@ -316,6 +316,115 @@
           "accuracy": 1000
         }
       ]
+    },
+    {
+      "id": "skill.enemy.sap_drip",
+      "name_key": "skill.enemy.sap_drip",
+      "user": "enemy",
+      "effect": "heal",
+      "range": "ranged",
+      "target": "ally_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 0,
+          "base": 18,
+          "wis_pct": 100
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.glow_signal",
+      "name_key": "skill.enemy.glow_signal",
+      "user": "enemy",
+      "effect": "buff",
+      "range": "ranged",
+      "target": "ally_all",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 0,
+          "kind": "phys_atk",
+          "value": 1250,
+          "turns": 2
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.glow_sting",
+      "name_key": "skill.enemy.glow_sting",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 70,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.will_fire",
+      "name_key": "skill.enemy.will_fire",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_row",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "INT",
+      "element": "fire",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 60,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.flicker_jam",
+      "name_key": "skill.enemy.flicker_jam",
+      "user": "enemy",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 0,
+          "ailment": {
+            "id": "confusion",
+            "chance": 300,
+            "turns": 2
+          }
+        }
+      ]
     }
   ]
 }

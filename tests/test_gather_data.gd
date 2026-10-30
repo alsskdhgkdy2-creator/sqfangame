@@ -214,7 +214,7 @@ func test_real_materials_and_unlocks() -> void:
 	var mw := db.equip("equip.moss_weave")
 	check(mw != null and mw.kind == "body" and [mw.gear["def"], mw.gear["mdef"]] == [6, 4], "이끼 짜임 외투")
 	# 적 드롭은 그대로다(시뮬레이션 결과 해시를 지킨다): 드롭 소재는 앞 여덟뿐. FOE 셋(M3 A6, enemy.foe_*)은 시뮬레이션이 만나지 않고
-	# 조건 드롭으로 채집 소재를 주므로 뺀다. 본 적은 일반 적 여섯이다.
+	# 조건 드롭으로 채집 소재를 주므로 뺀다. 본 적은 일반 적 여덟이다(M3 A3c: 수액 반딧불·명멸 도깨비불은 앞 여덟 소재 중 발광 인분만 떨어뜨린다).
 	var normal := 0
 	for eid in db.enemy_ids:
 		if eid.begins_with("enemy.foe_") or eid.begins_with("enemy.boss_"):
@@ -222,4 +222,4 @@ func test_real_materials_and_unlocks() -> void:
 		normal += 1
 		for d in db.enemies[eid].drops:
 			check(not NEW_MATERIALS.has(d["item"]), "%s 드롭에 새 소재가 없다" % eid)
-	check_eq(normal, 6, "드롭을 본 일반 적 여섯")
+	check_eq(normal, 8, "드롭을 본 일반 적 여덟")

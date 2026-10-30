@@ -1,17 +1,25 @@
 ## 보스 공략(M3 A9a 설계 §4.5·§8, A10 갈고리): 마을 새 게임 → 관리국 임무 둘(실제 의뢰 규칙) → arbor_route.json → arbor_boss_route.json
 ## → 봉인 열기 → 보스에 부딪힘(boss) → FIGHT → 승리 → 클리어(T1). HEAD 와 같은 공략 걷기(조정자 조건 4, T2). 시험마다 죽이는 변이(M-T…)를 적는다.
 ##
-## T2 의 기준 값은 HEAD 77190fd 코드(git archive → /tmp/sqf_a9/head, 먼저 --import)로 저장소 밖 생성기(/tmp/sqf_a9/gen_route_head.gd)가 만들었다:
-##   cd /tmp && GODOT_SILENCE_ROOT_WARNING=1 flock /tmp/sqfangame-godot.lock timeout 300 godot --headless --path /tmp/sqf_a9/head -s /tmp/sqf_a9/gen_route_head.gd
+## T2 의 기준 값은 HEAD 77190fd 코드(git archive → /tmp/sqf_a9/head, 먼저 --import)로 저장소 밖 생성기가 만들었다(M3 A3c 에서 다시 만듦):
+##   cd /tmp && GODOT_SILENCE_ROOT_WARNING=1 flock /tmp/sqfangame-godot.lock timeout 300 godot --headless --path /tmp/sqf_a9/head -s /tmp/sqf_a3c/gen_route_head_a3c.gd
 ## 미궁 새 게임(시드 31·41)으로 arbor_route.json 행동마다 이벤트 글(전투 대기면 승리로 끝낸 이벤트, battle_end.kills 는 뺌)과 상태 사전 해시를 이은 글의
 ## sha256·길이다. 지금 코드는 상태 사전에서 B3F 보스 기록만 이름으로 빼고(Fx.strip_v13, 처음 상태인지 본다) 같은 글을 만든다.
+## M3 A3c: B2F/B3F 출현 표에 새 편성이 늘어 같은 난수가 다른 편성을 뽑는다. 편성에서 오는 세 사건 필드(Fx.strip_picks)만 양쪽에서 이름으로 빼고 해시를 다시 만들었다
+## (사건 나머지와 상태 해시, 난수는 HEAD 와 바이트까지 같다). 새 뽑기 열은 NEW_PICKS 에 리터럴로 따로 박았다.
 extends TestCase
 
 const Fx := preload("res://tests/fixtures.gd")
 const BOSS_ROUTE := "res://data/floors/arbor_boss_route.json"
 const ROUTE := "res://data/floors/arbor_route.json"
-const HEAD_ROUTE := {31: ["e60d444e23e56beedd615c38dde72cce3ec0318cc51699e5ae728eee3592da72", 32043],
-	41: ["8927c21a4e50fed43a394d203ed8be3a54b703d0ad5fe046ec77abd477ab70dc", 32813]}
+const HEAD_ROUTE := {31: ["57858354f07c65b0687010e1550ae05eb9690bada41de6f5da43e5b8dbb25b4e", 31527],
+	41: ["2debc3e124a7ce22068e7b05c84cc0cca2fcd1c6bde69ef1513d594a4d331e85", 32230]}
+## 고정 공략의 새 뽑기(M3 A3c, 출현 표 B1F 100 그대로, B2F·B3F 130): 시드 31·41 의 encounter 사건 편성 열. B1F 뽑기(첫 칸)는 HEAD 와 같다.
+const NEW_PICKS := {
+	31: ["formation.b1.serpent_rat", "formation.b2.serpent_moles", "formation.b2.serpent_moles", "formation.b2.moths_beetle", "formation.b2.moths_beetle",
+		"formation.b3.beetle_moles", "formation.b3.moles_moths", "formation.b3.wisps_moles"],
+	41: ["formation.b1.rats_moth", "formation.b2.moles_bloom", "formation.b2.serpent_moles", "formation.b2.moles_bloom", "formation.b2.firefly_serpents",
+		"formation.b2.wisp_moles", "formation.b3.wisps_moles", "formation.b3.moles_moths", "formation.b3.beetle_moles"]}
 
 var _defs: GameDefs
 
@@ -78,21 +86,29 @@ func test_route_matches_head() -> void:
 		var s := ExplorationRules.new_game(defs, sd, "full")
 		var text := ""
 		var bad := ""
+		var picks: Array[String] = []
 		for a in acts:
-			text += Fx.events_text(ExplorationRules.apply(s, ExplorationRules.action_from_name(a), "full"))
+			var step := ExplorationRules.apply(s, ExplorationRules.action_from_name(a), "full")
+			for e in step:
+				if e["type"] == "encounter":
+					picks.append(e["formation"])
+			text += Fx.events_text(Fx.strip_picks(step))
 			if s.encounter.pending:
 				var fe: Array[Dictionary] = []
 				BattleRules.finish(s, "victory", fe)
 				for ev in fe:
 					if ev["type"] == "battle_end":
 						ev.erase("kills")
-				text += Fx.events_text(fe)
+				text += Fx.events_text(Fx.strip_picks(fe))
 			var st := Fx.strip_v13(SaveCodec.state_to_dict(s), defs)
 			if bad.is_empty() and not st["bad"].is_empty():
 				bad = st["bad"]
 			text += "|%s|" % JSON.stringify(st["state"], "", true).sha256_text()
 		check_eq(bad, "", "시드 %d: 보스 기록은 늘 처음 상태" % sd)
-		check_eq([text.sha256_text(), text.length()], HEAD_ROUTE[sd], "시드 %d: HEAD 77190fd 와 같은 이벤트·상태" % sd)
+		check_eq([text.sha256_text(), text.length()], HEAD_ROUTE[sd], "시드 %d: HEAD 77190fd 와 같은 이벤트·상태(편성에서 오는 세 필드만 뺌)" % sd)
+		check_eq(picks, NEW_PICKS[sd], "시드 %d: 새 표의 뽑기 열(리터럴)" % sd)
+		for p in picks:
+			check(s.defs.battle.table_formations("encounter." + p.split(".")[1] + "f").has(p), "시드 %d: %s 는 그 층 출현 표의 편성" % [sd, p])
 
 
 ## T4 (M-T4 고정 저장이 봉인 앞이 아님, M-T5 한 값이 어긋남): 웹 확인 J 의 고정 저장(tools/web_check_boss_save.json, tools/make_boss_save.gd 가 실제 공략으로 만든다)이

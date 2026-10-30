@@ -61,10 +61,20 @@ static func matches(cond: Dictionary, u: BattleUnit, b: BattleState) -> bool:
 		return false
 	if cond.has("hp_below") and not (u.hp * 1000 < int(cond["hp_below"]) * u.max_hp):
 		return false
+	if cond.has("ally_hp_below") and not _ally_below(u, b, int(cond["ally_hp_below"])):
+		return false
 	return true
 
 
-## 대상 정책(06 §3.16). 단일: 유효 대상 칸 오름차순에서 random = pick, lowest_hp = HP 최소(같으면 작은 칸).
+## ally_hp_below(M3 A3c): 살아 있는 같은 편 유닛(자기 자신 포함) 가운데 HP 가 permille 미만인 유닛이 있는지. 난수 없음.
+static func _ally_below(u: BattleUnit, b: BattleState, permille: int) -> bool:
+	for a in b.allies_of(u):
+		if a.alive() and a.hp * 1000 < permille * a.max_hp:
+			return true
+	return false
+
+
+## 대상 정책(06 §3.16). 단일: 유효 대상 칸 오름차순에서 random = pick, lowest_hp = HP 최소(같으면 작은 칸), lowest_hp_ratio = HP 비율 최소(같으면 작은 칸, M3 A3c).
 ## 줄: 유효 대상이 있는 실효 열을 전열 → 후열로 놓고 pick, 그 줄의 가장 작은 칸. 전체·자기: -1(뽑지 않음).
 static func choose_target(state: ExplorationState, u: BattleUnit, s: BattleDb.SkillDef, policy: String) -> int:
 	var b := state.battle
@@ -85,4 +95,11 @@ static func choose_target(state: ExplorationState, u: BattleUnit, s: BattleDb.Sk
 			if t.hp < best.hp:
 				best = t
 		return best.slot
+	if policy == "lowest_hp_ratio":
+		# M3 A3c: HP 비율 최소(hp / max_hp 를 곱셈으로 비교), 같으면 작은 칸. 난수 없음.
+		var low: BattleUnit = cands[0]
+		for t in cands:
+			if t.hp * low.max_hp < low.hp * t.max_hp:
+				low = t
+		return low.slot
 	return cands[BattleCalc.pick(state.rng, cands.size())].slot
