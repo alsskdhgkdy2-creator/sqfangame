@@ -1229,6 +1229,7 @@ func debug_info(css: Callable) -> Dictionary:
 			"drop": "on" if items_tab.drop_button.visible else "", "qty": items_tab.qty.qty if items_tab.qty_open() else 0,
 			"qty_pick": items_tab.qty.pick if items_tab.qty_open() else -1, "pick": pick_cursor if items_pick() else -1},
 		"records": {"cursor": [records_tab.cur_row, records_tab.cur_col], "cards": [0, 1, 2].map(records_tab.card_lines),
+			"clear": [0, 1, 2].map(records_tab.card_clear),  # 클리어 표(M3 A9b)
 			"save_ok": records_tab.save_ok(), "help": records_tab.help_text()} if tab == 4 else {},
 		# 대열(M3 A7c): 초안(ID)·커서(6 = 결정)·고른 칸.
 		"arrange": arrange_tab.debug_info() if page == "sub" and tab == 5 else {},

@@ -501,6 +501,7 @@ func debug_info(css: Callable) -> Dictionary:
 	return {
 		"open": true, "page": page, "rows": rows.duplicate(), "cursor": cursor, "continue": can_continue,
 		"dialog": dialog.is_open(), "dialog_pick": dialog.pick,
-		"records": {"rows": records_tab.row_set, "cursor": [records_tab.cur_row, records_tab.cur_col]} if page != "menu" else {},
+		"records": {"rows": records_tab.row_set, "cursor": [records_tab.cur_row, records_tab.cur_col],
+			"clear": [0, 1, 2].map(records_tab.card_clear)} if page != "menu" else {},  # 클리어 표(M3 A9b)
 		"pad": pad_state(), "buttons": buttons,
 	}

@@ -408,6 +408,19 @@ func row_label_lines(k: int) -> Array[String]:
 	return [menu.texts.t("menu.automap")]
 
 
+## 슬롯 i 를 클리어했는지(M3 A9b 설계 §5.5: record_slots 줄의 clear, 클리어한 기록만 키가 있다).
+func card_clear(i: int) -> bool:
+	return i < slots.size() and slots[i]["ok"] and bool(slots[i].get("clear", false))
+
+
+## 줄 k 이름 알약의 줄마다 표 글(M3 A9b): 클리어한 슬롯은 첫째 줄(「n  대표 Lv k」) 오른쪽 끝에 「제1계층 돌파」(두 줄 모두 글자 크기 그대로).
+func row_tags(k: int) -> Array:
+	var kind: String = row_kinds()[k]
+	if not kind.begins_with("slot") or not card_clear(int(kind.substr(4))):
+		return []
+	return [menu.texts.t("menu.slot_clear")]
+
+
 ## 줄 k 이름 알약의 상태: 커서 줄이면 노랑(selected), 아니면 초록.
 func label_state(k: int) -> String:
 	return "selected" if cur_row == k else "normal"
@@ -441,4 +454,4 @@ func _draw_window() -> void:
 	SheetParts._text(window, Vector2(HELP.position.x, HELP.get_center().y + HELP_FS * 0.36), help_text(), HELP_FS, ListParts.PANEL_OPT_TEXT,
 		HELP.size.x, HORIZONTAL_ALIGNMENT_CENTER)
 	for k in track_count():
-		ListParts.draw_option_row(window, track_rect(k), LABEL_W, row_label_lines(k), label_state(k))
+		ListParts.draw_option_row(window, track_rect(k), LABEL_W, row_label_lines(k), label_state(k), row_tags(k))

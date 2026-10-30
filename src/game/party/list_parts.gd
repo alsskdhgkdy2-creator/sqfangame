@@ -97,6 +97,13 @@ const OPT_TRACK_INSET := 3.0
 const OPT_LABEL_FS := 20
 const OPT_LABEL_SUB_FS := 16
 const OPT_LABEL_PAD := 24.0
+## 기록 클리어 표(M3 A9b): 짙은 남색 알약에 흰 글(초록·노랑 이름 알약 위 모두 읽힌다).
+const OPT_TAG := Color("001f37")
+const OPT_TAG_TEXT := Color.WHITE
+const OPT_TAG_PAD := 8.0
+const OPT_TAG_GAP := 8.0
+## 표 글자 크기(이름 알약 둘째 줄과 같은 작은 글씨). 줄 글자 크기는 표와 상관없이 그대로다.
+const OPT_TAG_FS := 16
 
 # ---- 크기 ----
 ## 굽은 끝 폭(테 양쪽).
@@ -560,15 +567,32 @@ static func option_label_lines(label: Rect2, n: int) -> Array:
 
 
 ## OPTION 줄 하나의 길과 이름 알약(값 알약은 ListButton 이 길 위에 그린다). st: 이름 알약 상태(normal · selected).
-static func draw_option_row(ci: Control, track: Rect2, label_w: float, lines: Array, st: String) -> void:
+## tags(M3 A9b 기록 클리어 표): 줄마다 오른쪽 끝에 붙일 표 글(빈 글이면 없음). 표가 있는 줄은 글 폭(자르기 폭)만 표 앞까지로 줄이고 글자 크기는 그대로다.
+static func draw_option_row(ci: Control, track: Rect2, label_w: float, lines: Array, st: String, tags: Array = []) -> void:
 	SheetParts._fill_round(ci, track, OPT_TRACK, int(track.size.y / 2.0))
 	var lr := option_label_rect(track, label_w)
 	var cols := pill_colors(st, "option")
 	SheetParts._fill_round(ci, lr, cols[0], int(lr.size.y / 2.0))
 	var spots := option_label_lines(lr, lines.size())
 	for i in mini(lines.size(), spots.size()):
-		SheetParts._text(ci, Vector2(lr.position.x + OPT_LABEL_PAD, spots[i][1]), str(lines[i]), spots[i][0], cols[1],
-			lr.size.x - 2.0 * OPT_LABEL_PAD)
+		var room := lr.size.x - 2.0 * OPT_LABEL_PAD
+		var tag := str(tags[i]) if i < tags.size() else ""
+		if not tag.is_empty():
+			var t := option_tag_rect(ci, lr, spots[i], tag)
+			SheetParts._fill_round(ci, t, OPT_TAG, int(t.size.y / 2.0))
+			SheetParts._text(ci, Vector2(t.position.x, t.get_center().y + OPT_TAG_FS * 0.36), tag, OPT_TAG_FS, OPT_TAG_TEXT, t.size.x,
+				HORIZONTAL_ALIGNMENT_CENTER)
+			room = t.position.x - OPT_TAG_GAP - (lr.position.x + OPT_LABEL_PAD)
+		SheetParts._text(ci, Vector2(lr.position.x + OPT_LABEL_PAD, spots[i][1]), str(lines[i]), spots[i][0], cols[1], room)
+
+
+## 이름 알약 줄 spot([글자 크기, 기준선 y]) 오른쪽 끝의 표 사각형(M3 A9b 클리어 표). 폭 = OPT_TAG_FS 표 글 폭 + 양쪽 OPT_TAG_PAD,
+## 높이 = OPT_TAG_FS + 6, 세로 가운데 = 그 줄 글의 가운데(기준선 − 글자 크기 × 0.36).
+static func option_tag_rect(ci: Control, lr: Rect2, spot: Array, tag: String) -> Rect2:
+	var w := SheetParts.text_width(ci, tag, OPT_TAG_FS) + 2.0 * OPT_TAG_PAD
+	var h := OPT_TAG_FS + 6.0
+	var cy := float(spot[1]) - int(spot[0]) * 0.36
+	return Rect2(lr.end.x - OPT_LABEL_PAD * 0.5 - w, cy - h / 2.0, w, h)
 
 
 # ---- J 명령 알약 ----

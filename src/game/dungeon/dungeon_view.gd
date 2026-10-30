@@ -219,6 +219,8 @@ func sync_foes(s: ExplorationState) -> void:
 				foes_root.add_child(node)
 				m = {"node": node, "color": Color(0, 0, 0, 0)}
 				_foe_marks[id] = m
+			m["scale"] = FoeLook.scale_of(s, id)  # 보스(M3 A9b)는 표지 전체(그림자 포함)를 키운다
+			m["boss"] = FoeLook.is_boss(s, id)
 			if m["color"] != col:
 				m["color"] = col
 				(m["node"] as MeshInstance3D).mesh = _foe_mesh(col)
@@ -249,7 +251,7 @@ func _foe_mesh(col: Color) -> ArrayMesh:
 
 static func _place_foe(m: Dictionary, pos: Vector3, yaw: float) -> void:
 	var node: MeshInstance3D = m["node"]
-	node.transform = Transform3D(Basis(Vector3.UP, yaw), pos)
+	node.transform = Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * float(m.get("scale", 1.0))), pos)
 
 
 ## 표지 id → {"pos": 칸 가운데 세계 좌표, "yaw", "color"}(시험·디버그: 지금 그려진 자리).
@@ -257,8 +259,16 @@ func foe_marks() -> Dictionary:
 	var out := {}
 	for id in _foe_marks:
 		var node: MeshInstance3D = _foe_marks[id]["node"]
-		out[id] = {"pos": node.transform.origin, "yaw": node.transform.basis.get_euler().y, "color": _foe_marks[id]["color"]}
+		out[id] = {"pos": node.transform.origin, "yaw": node.transform.basis.orthonormalized().get_euler().y, "color": _foe_marks[id]["color"]}
 	return out
+
+
+## 디버그 스냅숏(M3 A9b): 그려진 표지 [{id, boss, scale}](id 차례).
+func foe_mark_list() -> Array:
+	var ids := _foe_marks.keys()
+	ids.sort()
+	return ids.map(func(id: String) -> Dictionary: return {"id": id, "boss": bool(_foe_marks[id].get("boss", false)),
+		"scale": float(_foe_marks[id].get("scale", 1.0))})
 
 
 func foe_busy() -> bool:

@@ -66,6 +66,8 @@ const SAVE_CHIP_H := 26.0
 ## 알림 줄 높이, 창 판과 띄우는 틈(창이 열린 동안 판 위·아래 빈 띠에 둔다).
 const TOAST_H := 36.0
 const TOAST_GAP := 8.0
+## 보스 물음의 둘째 줄(「이 싸움에서는 도망칠 수 없다」) 경고 색(M3 A9b, 공용 경고 색).
+const BOSS_WARN := UiTheme.CAMP_NOTICE_WARN
 ## 저장 실패 안내가 보이는 시간(알림 줄 한 번과 같다), 탐색 중 그 띠와 일반 알림 줄 사이 틈.
 const WARN_SEC := 2.0
 const WARN_GAP := 4.0
@@ -142,6 +144,10 @@ var windows_root: Control
 var toast_area: Control
 var layers := {}  # 이름 → CanvasLayer
 var modal: ModalLayer
+## 클리어 이야기 상자(M3 A9b 설계 §5.3): 창 층이 kind "clear" 로 띄우는 공용 부품(StoryBox). 보이기만 하고 저장하지 않는다.
+var story_box: StoryBox
+## 이번 전투가 쓰러뜨린 보스 FOE id(전투 제출 갈고리가 적고, 승리로 전투 층이 닫히면 이야기 상자를 연다). 없으면 "".
+var _clear_foe := ""
 var battle_layer: BattleLayer
 var party_menu: PartyMenu
 ## 상점(08 §8): 마을 광장 「정크 공방」으로 연다(M3 A2, R4 S4).
@@ -339,6 +345,7 @@ func _new_state(in_town: bool = false) -> ExplorationState:
 func _set_state(s: ExplorationState) -> void:
 	state = s
 	_epoch += 1
+	_clear_foe = ""  # 앞 상태의 보스 승리는 이야기 상자를 열지 않는다
 	if battle_layer.is_open():
 		# 다른 상태로 바뀌었다: 앞 상태의 전투 층은 알리지 않고 닫는다(새 상태의 전투는 _check_windows 가 연다).
 		battle_layer.close_layer(false)
@@ -550,8 +557,8 @@ func _do_action(action: int) -> void:
 	var located := false
 	for ev in events:
 		match ev["type"]:
-			"stairs", "chest", "gather":
-				_stairs_ask = true
+			"stairs", "chest", "gather", "boss":
+				_stairs_ask = true  # 보스(M3 A9b): 부딪힘·조사 뒤에만 묻는다(남은 물음 규칙은 계단·상자와 같다)
 			"floor_changed":
 				changed = true
 			"to_town", "entered":
@@ -567,7 +574,6 @@ func _do_action(action: int) -> void:
 			"seal_opened":
 				rebuild = true  # 봉인 문(M3 A9): 빨간 봉인 → 문
 				_show_toast(texts.t("msg.seal_opened"))
-			# M3 A9a 임시 상태(설계 §9.1): boss 이벤트(보스에 부딪힘·조사)는 아직 아무것도 보이지 않는다. 보스 물음 창과 FIGHT 는 A9b 가 단다.
 			"chest_opened":
 				rebuild = true  # 상자 겉모습(닫힘 → 열림)
 				_show_toast(chest_text(ev))
@@ -712,14 +718,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		return  # 상점·길드·의뢰 화면이 키를 받는다(08 §8: 열린 동안 캠프·지도·이동은 열리거나 움직이지 않는다)
 	if _title_open() or _in_town():
 		return  # 타이틀·마을 화면이 키를 받는다(마을에서는 이동·지도·Esc 캠프가 없다, P 는 마을 화면이 캠프로)
-	if modal.kind in ["stairs", "chest", "gather"]:
-		# 계단 확인·상자 물음(M3 A3)·채집 물음(M3 A5): Esc·Backspace = 「아니오」. Enter·Space·방향 키는 창 안의 포커스 단추가 받는다(05 §9.3).
+	if modal.kind in ["stairs", "chest", "gather", "boss"]:
+		# 계단 확인·상자 물음(M3 A3)·채집 물음(M3 A5)·보스 물음(M3 A9b): Esc·Backspace = 「아니오」. Enter·Space·방향 키는 창 안의 포커스 단추가 받는다(05 §9.3).
 		if event.is_action_pressed("open_menu") or k.keycode == KEY_BACKSPACE or k.physical_keycode == KEY_BACKSPACE:
 			get_viewport().set_input_as_handled()
 			if modal.kind == "chest":
 				_answer_chest(false)
 			elif modal.kind == "gather":
 				_answer_gather(false)
+			elif modal.kind == "boss":
+				_answer_boss(false)
 			else:
 				_answer_stairs(false)
 		return
@@ -1085,7 +1093,7 @@ func _open_battle() -> void:
 
 
 ## 전투 층이 닫혔다(승리·도주 결과 창을 닫음, 또는 전멸). 탐색 화면을 되돌리고 전멸이면 전멸 창.
-func _on_battle_closed(_outcome: String) -> void:
+func _on_battle_closed(outcome: String) -> void:
 	_set_battle_view(false)
 	_clear_input()
 	var note := _battle_quest_note
@@ -1097,7 +1105,28 @@ func _on_battle_closed(_outcome: String) -> void:
 	map.refresh()
 	_refresh_hud()
 	_debug_dirty = true
+	# 클리어 이야기 상자는 다른 창보다 먼저(의뢰 안내 뒤, 설계 §4.5). 승리로 닫혔을 때만, 보이기만 한다(저장 없음, O6).
+	var cleared := _clear_foe
+	_clear_foe = ""
+	if not cleared.is_empty() and outcome == "victory" and not state.wiped:
+		_open_clear(cleared)
 	_check_windows()
+
+
+## 클리어 이야기 상자(M3 A9b 설계 §5.3, kind "clear"): 말하는 사람 「관리국 통신」, 쪽 셋(첫 쪽에 보스 이름). 층 주제마다 글 키 clear.<theme>.*.
+func _open_clear(foe: String) -> void:
+	var prefix := "clear." + state.floor_def.theme
+	var boss_name := FoeLook.name_of(state, texts, foe)
+	var list: Array[String] = [texts.t(prefix + ".1", {"name": boss_name}), texts.t(prefix + ".2"), texts.t(prefix + ".3")]
+	story_box.start(texts.t(prefix + ".speaker"), list)
+	modal.open_part("clear", story_box)
+	_layout()
+
+
+## 이야기 상자의 마지막 쪽을 넘겼다: 닫기만 한다(상태 그대로).
+func _on_story_finished() -> void:
+	if modal.kind == "clear":
+		modal.close()
 
 
 ## 전투 층이 열린 동안 HUD·지도 판을 감춘다(3D 시야는 언제나 화면 전체, 06 §9.1, M2.6 U1).
@@ -1116,7 +1145,7 @@ func _set_battle_view(on: bool) -> void:
 func _hud_hidden() -> bool:
 	return _battle_view or (party_menu != null and party_menu.is_open()) or (shop_screen != null and shop_screen.is_open()) \
 		or (guild_screen != null and guild_screen.is_open()) or (quest_screen != null and quest_screen.is_open()) \
-		or _in_town() or _title_open()
+		or _in_town() or _title_open() or (modal != null and modal.kind == "clear")  # 클리어 이야기 상자(M3 A9b): 원작처럼 시야만
 
 
 ## 전투 층 저장 갈고리(제출 결과가 정해진 직후, 연출 전).
@@ -1127,6 +1156,13 @@ func _on_battle_save() -> void:
 ## 전투 층 제출 갈고리(M3 A8): 저장 갈고리보다 먼저, 전투 끝(kills·foes_defeated)으로 받은 의뢰를 센다(설계 §4.3).
 func _on_battle_commit(events: Array[Dictionary]) -> void:
 	quest_events = QuestRules.observe(state, events)
+	# 클리어(M3 A9b 설계 §4.5): 승리한 battle_end 의 foes_defeated 에 보스 종류 FOE 가 있으면 전투 층이 닫힐 때 이야기 상자를 연다.
+	for ev in events:
+		if ev["type"] == "battle_end" and ev["outcome"] == "victory":
+			for id in ev.get("foes_defeated", []):
+				var sp: FloorModel.FoeSpawn = state.floor_def.foes.get(str(id))
+				if sp != null and sp.kind == "boss":
+					_clear_foe = str(id)
 	var note := quest_note(quest_events)
 	if not note.is_empty():
 		_battle_quest_note = note  # 전투 동안은 띄우지 않는다(전투 층이 안내를 지운다): 닫힐 때 _on_battle_closed 가 띄운다
@@ -1330,6 +1366,9 @@ func _open_stairs() -> bool:
 	if q.get("kind") == "gather":
 		_open_gather_question()
 		return true
+	if q.get("kind") == "boss":
+		_open_boss_question(str(q["foe"]))
+		return true
 	var st := ExplorationRules.stair_here(state)
 	if st.is_empty():
 		return false
@@ -1382,6 +1421,29 @@ func _answer_gather(yes: bool) -> void:
 	modal.close()
 	if yes:
 		request_action(A.GATHER)
+
+
+## 보스 물음(M3 A9b 설계 §5.2, 층 3 kind "boss"). 원작에 보스 물음 프레임이 없어 계단·상자 물음과 같은 창이다(이름 붙은 차이, D28 물음 창 하나).
+## 글 두 줄: 「{name}이(가) 버티고 서 있다. 싸울까?」 · 경고 색 「이 싸움에서는 도망칠 수 없다」. 처음 커서는 「아니오」(O7: 도망칠 수 없는 싸움은
+## 되돌릴 수 없는 행동, D25). 「예」면 규칙 행동 FIGHT(전투 시작 자동 저장 → 전투 층), 「아니오」·Esc·Backspace 면 닫기만(저장 없음). 다시 부딪히면 다시 묻는다.
+func _open_boss_question(foe: String) -> void:
+	var yes := _named(ModalLayer.button(texts.t("ui.yes"), _answer_boss.bind(true)), "BossYes")
+	var no := _named(ModalLayer.button(texts.t("ui.no"), _answer_boss.bind(false)), "BossNo")
+	var warn := ModalLayer.label(texts.t("boss.no_escape"))
+	warn.name = "BossNoEscape"
+	warn.add_theme_color_override("font_color", BOSS_WARN)
+	var rows: Array[Control] = [ModalLayer.label(texts.t("boss.ask", {"name": FoeLook.name_of(state, texts, foe)})), warn,
+		ModalLayer.row([yes, no] as Array[Control])]
+	_open_question("boss", texts.t("boss.title"), rows)
+	no.grab_focus.call_deferred()
+
+
+func _answer_boss(yes: bool) -> void:
+	if modal.kind != "boss":
+		return
+	modal.close()
+	if yes:
+		request_action(A.FIGHT)
 
 
 ## 층 3 물음 창(계단·마을 문·상자·전멸·지도 물음)을 연다. 알림 줄과 창의 규칙은 modal.opened 한곳에 있다(_on_modal_toast).
@@ -1476,6 +1538,8 @@ func record_slots() -> Array:
 			"level": texts.t("party.level", {"level": st.party.members[0].level}),
 			"where": texts.t("menu.slot_where", {"floor": _place_of(st), "steps": st.steps}),
 			"time": _local_time(l.result.saved_at)})
+		if not FoeRules.cleared(st).is_empty():
+			out[-1]["clear"] = true  # 클리어 표(M3 A9b 설계 §5.5): 클리어한 기록만 키가 있다(아닌 줄은 그대로)
 	return out
 
 
@@ -1826,7 +1890,14 @@ func _build_ui() -> void:
 	modal = ModalLayer.new()
 	modal.name = "ModalLayer"
 	modal.theme = theme
+	story_box = StoryBox.new()
+	story_box.theme = theme
+	story_box.build(texts)
+	story_box.finished.connect(_on_story_finished)
+	modal.adopt_part(story_box)  # 주인 = 창 층(감춘 채): 화면과 함께 사라진다
 	modal.opened.connect(func(_k: String) -> void:
+		if _k == "clear":
+			_layout()  # 이야기 상자: HUD·지도 판을 감춘다(_hud_hidden)
 		_settle_toast("modal")
 		_clear_input()
 		party_menu.cancel_pointers()  # 캠프에서 누르고 있던 단추는 창이 덮은 뒤 떼도 일하지 않는다
@@ -1839,6 +1910,9 @@ func _build_ui() -> void:
 		_debug_dirty = true
 		_debug_settle = 2)
 	modal.closed.connect(func(_k: String) -> void:
+		if _k == "clear":
+			_layout()  # 이야기 상자가 닫혔다(마지막 쪽·불러오기·새 게임): HUD 를 되돌린다
+			_refresh_hud()
 		_settle_toast()
 		_clear_input()  # 창 안에서 누른 키·단추는 닫힌 뒤에도 승인되지 않는다
 		_retry_stairs.call_deferred()  # 이 창 때문에 띄우지 못한 계단 물음
@@ -2238,7 +2312,7 @@ func _toast_window() -> Control:
 ## 위쪽 한계는 저장 칩 아래. 위에 자리가 없으면 판 아래부터, 그것도 없으면 -1. 판 크기는 컨테이너 정렬 뒤에 맞으므로 매 프레임 다시 잰다.
 func _modal_band_y(n: int) -> float:
 	var area := toast_area.get_global_rect()
-	var panel: Rect2 = modal._panel.get_global_rect().merge(modal.title_plate.get_global_rect())
+	var panel: Rect2 = modal.band_rect()
 	var top_min := SAVE_CHIP_TOP + SAVE_CHIP_H + TOAST_GAP
 	var bottom_max := area.end.y - EDGE
 	var above := panel.position.y - (n + 1) * (TOAST_GAP + TOAST_H)
@@ -2313,6 +2387,9 @@ func _debug_publish() -> void:
 		title_screen.accepted_inputs, party_menu.notice + "|" + guild_screen.notice + "|%s|%d|%s" % [str(guild_screen.is_open()),
 		guild_screen.accepted_inputs, str(guild_screen.covered)] + "|%s|%d|%s|%s" % [str(quest_screen.is_open()), quest_screen.accepted_inputs,
 		str(quest_screen.covered), quest_screen.notice]]
+	sig += "|%d" % (story_box.page if modal.kind == "clear" else -1)  # 이야기 상자 쪽(M3 A9b, 웹 J: 쪽이 바뀐 요약)
+	# 전투 띠(M3 A9b 보완, 웹 J 가 찾은 것): 못 고르는 명령의 이유 같은 알림은 단계·커서를 바꾸지 않아도 띠를 바꾼다(바뀐 띠의 요약).
+	sig += "|" + "/".join(battle_layer.banner_lines().map(str)) if battle_layer.is_open() else ""
 	if sig != _debug_battle_sig:
 		_debug_battle_sig = sig
 		_debug_dirty = true
@@ -2430,9 +2507,14 @@ func debug_snapshot() -> Dictionary:
 		# 채집(M3 A5): 발밑 지점(남은 횟수가 있든 없든)과 지금 층의 오늘 쓴 횟수.
 		"gather_here": _gather_here(), "gather_used": state.world.gather_used.duplicate(),
 		# FOE(M3 A6c 설계 §5.7): 지금 층의 FOE [{id, kind, at, facing, state, stun, threat}](쓰러진 것도, 층 자료 차례)와
-		# 미니맵이 마지막으로 그린 FOE 원 [{id, cell, color, facing}](쓰러진 것은 그리지 않는다), 3D 표지 수, 표지가 보이는지(전투 중 감춤).
+		# 미니맵이 마지막으로 그린 FOE 원 [{id, cell, color, facing, boss}](쓰러진 것은 그리지 않는다), 3D 표지 수, 표지가 보이는지(전투 중 감춤).
 		"foes": _debug_foes(), "minimap_foes": minimap.foes_info(), "foe_marks": view.foe_marks().size() if _view_on else 0,
 		"foe_marks_shown": view.foes_root.visible,
+		# 보스(M3 A9b 설계 §5.6): 맞닿은 살아 있는 보스 id(""), 보스를 쓰러뜨린 층(정렬), 3D 표지 목록 [{id, boss, scale}], 이야기 상자(열렸을 때).
+		"boss_near": FoeRules.boss_near(state), "cleared": FoeRules.cleared(state), "foe_mark_list": view.foe_mark_list() if _view_on else [],
+		"story": story_box.debug_info() if modal.kind == "clear" else {},
+		# 창 안 키보드 포커스 단추 이름(M3 A9b, 웹 J: 보스 물음의 처음 커서 「아니오」). 창이 없거나 포커스가 창 밖이면 "".
+		"modal_focus": _modal_focus(),
 		# 소모품·공용 가방(M3 A4b): 소모품 ID → 개수, 가방 칸 수(BagRules.used).
 		"consumables": state.consumables, "bag_used": BagRules.used(state), "toast": _toast.text if _toast.modulate.a > 0.0 else "", "warning": warning_shown(),
 		"set": _set_name(), "save_dir": save_dir,
@@ -2532,6 +2614,12 @@ func _modal_text() -> String:
 		if (l as Label).is_visible_in_tree() and not modal.title_plate.is_ancestor_of(l) and l != modal.title_plate:
 			out.append((l as Label).text)
 	return "\n".join(out)
+
+
+## 창 안에서 키보드 포커스를 가진 단추 이름(스냅숏 modal_focus). 창이 없거나 포커스가 창 밖이면 "".
+func _modal_focus() -> String:
+	var f := get_viewport().gui_get_focus_owner()
+	return str(f.name) if modal.is_open() and f != null and modal.is_ancestor_of(f) else ""
 
 
 ## 떠 있는 층 3 창의 제목(계단·마을 문 물음을 가른다, M3 A2).

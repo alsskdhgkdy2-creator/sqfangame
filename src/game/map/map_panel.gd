@@ -447,16 +447,19 @@ const FOE_RADIUS := 0.36
 const FOE_RIM := Color(1, 1, 1)
 const FOE_RIM_W := 1.5
 const FOE_TRI_SCALE := 0.8
+## 보스 원(M3 A9b 설계 §5.4): 반지름 0.45 칸, 바깥에 흰 고리 하나 더(0.52 칸, 1.5px). 앞 삼각형은 같다.
+const BOSS_RADIUS := 0.45
+const BOSS_RING := 0.52
 
-## 마지막 그리기의 층 차례와 그린 FOE(시험·디버그, 교훈 2): [{id, cell, color, facing}].
+## 마지막 그리기의 층 차례와 그린 FOE(시험·디버그, 교훈 2): [{id, cell, color, facing, boss}](boss = 큰 원 + 바깥 고리, M3 A9b).
 var drawn_layers: Array[String] = []
 var drawn_foes: Array[Dictionary] = []
 
 
-## drawn_foes 를 JSON 으로 옮길 수 있게(디버그 스냅숏): [{id, cell: [x, y], color: "rrggbb", facing}].
+## drawn_foes 를 JSON 으로 옮길 수 있게(디버그 스냅숏): [{id, cell: [x, y], color: "rrggbb", facing, boss}].
 func foes_info() -> Array:
 	return drawn_foes.map(func(d: Dictionary) -> Dictionary: return {"id": d["id"], "cell": [d["cell"].x, d["cell"].y],
-		"color": (d["color"] as Color).to_html(false), "facing": d["facing"]})
+		"color": (d["color"] as Color).to_html(false), "facing": d["facing"], "boss": d["boss"]})
 
 
 func _draw() -> void:
@@ -564,11 +567,16 @@ func _draw_foes() -> void:
 		var fs: WorldState.FoeState = state.world.foes[id]
 		var col := FoeLook.color(state, id)
 		var center := geo.cell_rect(fs.at).get_center()
-		var r := geo.cell_px * FOE_RADIUS
+		var boss := FoeLook.is_boss(state, id)
+		var r := geo.cell_px * (BOSS_RADIUS if boss else FOE_RADIUS)
 		draw_circle(center, r, col)
 		draw_arc(center, r, 0.0, TAU, 24, FOE_RIM, FOE_RIM_W, true)
+		var ringed := false  # 기록의 boss = 바깥 고리를 실제로 그렸는지
+		if boss:
+			draw_arc(center, geo.cell_px * BOSS_RING, 0.0, TAU, 32, FOE_RIM, FOE_RIM_W, true)
+			ringed = true
 		draw_colored_polygon(_arrow(fs.at, fs.facing, FOE_TRI_SCALE), FOE_RIM)
-		drawn_foes.append({"id": id, "cell": fs.at, "color": col, "facing": fs.facing})
+		drawn_foes.append({"id": id, "cell": fs.at, "color": col, "facing": fs.facing, "boss": ringed})
 
 
 # ---- 디버그·시험용 위치(이 컨트롤 안 좌표) ----

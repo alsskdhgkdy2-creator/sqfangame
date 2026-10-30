@@ -362,12 +362,26 @@ func open(s: ExplorationState) -> void:
 	if s.battle.turn == 0:
 		if s.battle.foe.is_empty():
 			_show_notice(texts.t("msg.encounter"))
+		elif music_cue() == "boss":
+			# 보스 전투(M3 A9b 설계 §5.4): 알림 「봉인 너머의 주인이 깨어났다!」, 그 알림 동안 띠 첫 줄은 「{name}이(가) 앞을 막아선다!」.
+			_show_notice(texts.t("msg.boss_contact"))
+			_foe_start = texts.t("battle.boss_start", {"name": FoeLook.name_of(s, texts, s.battle.foe)})
 		else:
 			# FOE 접촉 전투(M3 A6c 설계 §5.3·§5.5): 「적이 나타났다!」 자리에 「FOE와 마주쳤다!」, 그 알림 동안 띠 첫 줄은 「FOE {name}!」.
 			_show_notice(texts.t("msg.foe_contact"))
 			_foe_start = texts.t("battle.foe_start", {"name": FoeLook.name_of(s, texts, s.battle.foe)})
 	_layout()
 	opened.emit()
+
+
+## 음악 갈고리(M3 A9b 설계 §4.4 B6/C): 보스 FOE 와의 접촉 전투면 "boss", 다른 FOE 접촉이면 "foe", 인카운트면 "normal". 닫혔으면 "".
+## 소리는 C 가 단다(지금은 스냅숏 music_cue 로만 보인다).
+func music_cue() -> String:
+	if phase == "closed" or state == null or state.battle == null:  # 닫힌 층은 옛 상태를 들고 있을 수 있다(상태 바꾸기)
+		return ""
+	if state.battle.foe.is_empty():
+		return "normal"
+	return "boss" if FoeLook.is_boss(state, state.battle.foe) else "foe"
 
 
 ## 층을 닫는다(전투 끝). 결과 창·연출을 버린다. notify 가 거짓이면 closed 를 내지 않는다(상태를 통째로 바꿀 때).
@@ -1635,6 +1649,8 @@ func debug_info(css: Callable) -> Dictionary:
 		"foe": state.battle.foe if state.battle != null else "", "joined": state.battle.joined.duplicate(true) if state.battle != null else [],
 		"joins": FoeRules.join_eta(state), "enemy_count": state.battle.enemies.size() if state.battle != null else 0,
 		"join_pill": join_pill.text if join_pill.visible else "", "minimap_foes": minimap.foes_info(),
+		# 보스(M3 A9b 설계 §5.6): 보스 전투인지와 음악 갈고리.
+		"boss": music_cue() == "boss", "music_cue": music_cue(),
 		# 대원마다 명령을 받는지(웹 확인이 battle_commands 의 방어 명령을 만든다).
 		"can_command": range(state.battle.party.size()).map(func(i: int) -> bool: return BattleRules.can_command(state, i)) if state.battle != null else []}
 

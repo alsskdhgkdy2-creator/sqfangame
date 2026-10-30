@@ -315,7 +315,8 @@ static func _seg_dist(p: Vector3, a: Vector3, b: Vector3) -> float:
 ## 가장 짧은 거리. 카메라 = 시야의 구간 자세(DungeonView._segment_pose, play 와 같은 구간) + 눈높이 + 앞 방향 보정 δ 의 모든 값
 ## (|δ| ≤ CameraGuard.WIDE_LIMIT, 보정이 고를 수 있는 전부라 실제 보정 계획과 상관없다). 표지 = DungeonView.foe_pose(시야와 같은 함수).
 ## 파티는 (0,0) 동쪽: 시야·표지 모양은 y 축 90° 돌림에 같으므로(표지는 FOE yaw 로 돈다) 다른 바라봄은 같은 경우의 돌림이다.
-static func _clearance(act: String, s: Vector2i, f0: int, n: Vector2i, f1: int, verts: PackedVector3Array) -> float:
+## scale: 표지 배율(M3 A9b 보스 FoeLook.BOSS_SCALE, 보통 1).
+static func _clearance(act: String, s: Vector2i, f0: int, n: Vector2i, f1: int, verts: PackedVector3Array, scale: float = 1.0) -> float:
 	var p0 := DungeonMeshBuilder.cell_center(Vector2i.ZERO)
 	var y0 := DungeonView.yaw_of(Dir.E)
 	var seg: Dictionary
@@ -339,7 +340,7 @@ static func _clearance(act: String, s: Vector2i, f0: int, n: Vector2i, f1: int, 
 		var a := eye - fwd * CameraGuard.WIDE_LIMIT
 		var b := eye + fwd * CameraGuard.WIDE_LIMIT
 		var fpose := DungeonView.foe_pose(fp, tp, fy, ty, time, DungeonView.MOVE_TIME)
-		var tr := Transform3D(Basis(Vector3.UP, fpose[1]), fpose[0])
+		var tr := Transform3D(Basis(Vector3.UP, fpose[1]).scaled(Vector3.ONE * scale), fpose[0])
 		for v in verts:
 			least = minf(least, _seg_dist(tr * v, a, b))
 	return least
@@ -435,7 +436,7 @@ func test_map_discs() -> void:
 	var s := await _open()
 	await kit.open_map()
 	await kit.frames(2)
-	var want := [{"id": "f1", "cell": Vector2i(12, 9), "color": RED, "facing": Dir.E}]
+	var want := [{"id": "f1", "cell": Vector2i(12, 9), "color": RED, "facing": Dir.E, "boss": false}]  # M3 A9b: drawn_foes 에 boss 키가 더해졌다
 	for v in [["지도", s.map], ["층 전체", s.map_window.overview]]:
 		check_eq(v[1].drawn_foes, want, v[0] + ": 숫양 원")
 		check_eq(v[1].drawn_layers, MAP_ORDER, v[0] + ": 메모 뒤·파티 앞")
@@ -524,6 +525,8 @@ func test_contact_victory_and_respawn() -> void:
 	await kit.press_key(KEY_ENTER)
 	await kit.frames(3)
 	check_eq([layer.is_open(), s.state.world.foes["f1"].state, _marker(s, "f1") == null, s.minimap.drawn_foes], [false, "defeated", true, []], "쓰러짐: 표지·원 없음")
+	# M3 A9b (M-U2 보스가 아닌 FOE 승리에도 이야기 상자): 보통 FOE 를 이겨도 클리어 이야기 상자는 열리지 않는다.
+	check_eq([s.modal.kind, s.debug_snapshot()["story"], s.debug_snapshot()["cleared"]], ["", {}, []], "보통 FOE 승리: 이야기 상자 없음")
 	# U9 (M-U9b 닫혀도 다시 보이지 않음): 전투가 닫히면 표지 층이 다시 보인다.
 	check_eq([s.view.foes_root.visible, s.debug_snapshot()["foe_marks_shown"]], [true, true], "전투 뒤 표지 층 보임")
 	r = SaveCodec.decode(FileAccess.get_file_as_string(s.store.main_path(SaveStore.AUTO)), s.state.defs)

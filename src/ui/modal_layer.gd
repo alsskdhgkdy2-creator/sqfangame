@@ -20,6 +20,11 @@ var _panel := PanelContainer.new()
 var _box := VBoxContainer.new()
 ## 제목 문패(창 위 가장자리에 걸친다, 누르기를 받지 않는다). 창보다 뒤에 붙여 위에 그린다.
 var title_plate := UiPlate.new()
+## 가운데 창 대신 띄운 부품(open_part, M3 A9b 이야기 상자). 없으면 null. 어두운 판·가운데 창·제목 문패는 그동안 감춘다.
+## 부품은 이 층의 자식으로 남고(닫히면 감춤) 층과 함께 사라진다: 주인은 하나(창 층)다.
+var part: Control = null
+var _dim: ColorRect
+var _center: CenterContainer
 
 
 func _init() -> void:
@@ -32,7 +37,9 @@ func _init() -> void:
 	dim.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	dim.mouse_filter = MOUSE_FILTER_STOP
 	add_child(dim)
+	_dim = dim
 	var center := CenterContainer.new()
+	_center = center
 	center.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	center.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(center)
@@ -56,6 +63,7 @@ func is_open() -> bool:
 func open(new_kind: String, title: String, rows: Array[Control]) -> void:
 	if is_open():
 		close()
+	_show_window(true)
 	for c in _box.get_children():
 		_box.remove_child(c)
 		c.queue_free()
@@ -68,6 +76,23 @@ func open(new_kind: String, title: String, rows: Array[Control]) -> void:
 	opened.emit(kind)
 
 
+## 가운데 창 대신 부품 하나를 화면 전체에 띄운다(M3 A9b: 클리어 이야기 상자 kind "clear"). 열린 동안 다른 창과 같이 뒤 화면 입력을 막고
+## (is_open·kind), 어두운 판·가운데 창·제목 문패는 감춘다(부품이 스스로 그린다). 부품은 이 층에 맡겨 둔다(adopt_part): 닫으면 감추기만 하고
+## 층과 함께 사라진다(떼어 두면 주인이 없어 화면이 사라져도 남는다).
+func open_part(new_kind: String, p: Control) -> void:
+	if is_open():
+		close()
+	adopt_part(p)
+	_show_window(false)
+	title_plate.text = ""
+	part = p
+	move_child(p, get_child_count() - 1)  # 제목 문패보다 위
+	p.visible = true
+	kind = new_kind
+	visible = true
+	opened.emit(kind)
+
+
 func close() -> void:
 	if not is_open():
 		return
@@ -77,7 +102,33 @@ func close() -> void:
 	for c in _box.get_children():
 		_box.remove_child(c)
 		c.queue_free()
+	if part != null:
+		part.visible = false  # 감추기만(층이 주인이다), 다음 open 은 부품 없이 연다
+		part = null
+	_show_window(true)
 	closed.emit(was)
+
+
+## 부품을 이 층의 자식으로 맡긴다(감춘 채, 화면 전체). 이미 자식이면 그대로. 화면을 만들 때 불러 두면 한 번도 열지 않은 부품도 층과 함께 사라진다.
+func adopt_part(p: Control) -> void:
+	if p.get_parent() == self:
+		return
+	p.visible = false
+	p.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	add_child(p)
+
+
+## 알림 띠가 비켜 갈 창의 화면 사각형: 가운데 창과 제목 문패, 부품이면 그 band_rect()(없으면 화면 전체).
+func band_rect() -> Rect2:
+	if part != null:
+		return part.call("band_rect") if part.has_method("band_rect") else get_global_rect()
+	return _panel.get_global_rect().merge(title_plate.get_global_rect())
+
+
+func _show_window(on: bool) -> void:
+	_dim.visible = on
+	_center.visible = on
+	title_plate.visible = on
 
 
 ## 창 단추(키보드 포커스 허용: 창 안에서는 이동 입력을 받지 않는다). 누를 수 있는지는 만들 때 정한다(모양이 그에 맞춰진다).

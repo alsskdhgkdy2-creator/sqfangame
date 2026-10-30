@@ -4,6 +4,9 @@
 class_name FoeLook
 extends RefCounted
 
+## 보스(M3 A9b 설계 §5.4) 표지 배율: 3D 표지 전체(공·가시·차양·그림자)를 이만큼 키운다. 지도 원은 MapPanel.BOSS_RADIUS·BOSS_RING.
+## 원작 프레임에 보스 모양이 없고 그림은 B6 몫이다(이름 붙은 차이).
+const BOSS_SCALE := 1.25
 const THREAT_COLORS := {
 	"red": Color(1.0, 0.16, 0.12),
 	"orange": Color(1.0, 0.55, 0.1),
@@ -34,3 +37,14 @@ static func living(s: ExplorationState) -> Array[String]:
 		if fs != null and fs.alive():
 			out.append(sp.id)
 	return out
+
+
+## 지금 층 FOE id 가 보스 종류인지(M3 A9b).
+static func is_boss(s: ExplorationState, id: String) -> bool:
+	var sp: FloorModel.FoeSpawn = s.floor_def.foes.get(id) if s != null and s.floor_def != null else null
+	return sp != null and sp.kind == "boss"
+
+
+## 3D 표지 배율(보스 BOSS_SCALE, 나머지 1).
+static func scale_of(s: ExplorationState, id: String) -> float:
+	return BOSS_SCALE if is_boss(s, id) else 1.0

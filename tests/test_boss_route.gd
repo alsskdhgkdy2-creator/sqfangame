@@ -93,3 +93,29 @@ func test_route_matches_head() -> void:
 			text += "|%s|" % JSON.stringify(st["state"], "", true).sha256_text()
 		check_eq(bad, "", "시드 %d: 보스 기록은 늘 처음 상태" % sd)
 		check_eq([text.sha256_text(), text.length()], HEAD_ROUTE[sd], "시드 %d: HEAD 77190fd 와 같은 이벤트·상태" % sd)
+
+
+## T4 (M-T4 고정 저장이 봉인 앞이 아님, M-T5 한 값이 어긋남): 웹 확인 J 의 고정 저장(tools/web_check_boss_save.json, tools/make_boss_save.gd 가 실제 공략으로 만든다)이
+## 지금 정의로 읽히고(13판), B3F (9,2) 서쪽 = 봉인 앞, 봉인 임무 보고(permit.boss), 봉인 닫힘, 보스 idle, 대원 모두 Lv 10 이다(조용히 낡지 않게).
+## 파일 전체가 만드는 쪽(tools/make_boss_save.gd)이 지금 코드로 다시 만든 글과 바이트까지 같다(HP·TP·경험치·돈·가방 등이 어긋나지 않게).
+func test_web_boss_fixture() -> void:
+	timeout_sec = 60.0
+	var defs := _arbor()
+	var text := FileAccess.get_file_as_string("res://tools/web_check_boss_save.json")
+	var r := SaveCodec.decode(text, defs)
+	check(r.ok(), "고정 저장이 읽힌다 %s" % r.error)
+	if not r.ok():
+		return
+	var s := r.state
+	var doc: Dictionary = JSON.parse_string(text)
+	check_eq([doc["schema"], doc["rules"], r.from_schema], [13.0, "m3b", 13], "13판 m3b")
+	check_eq([s.location, s.floor_def.id, s.party.at, s.party.facing], [ExplorationState.LABYRINTH, "b3f", Vector2i(9, 2), Dir.W], "B3F (9,2) 서쪽 = 봉인 앞")
+	check_eq([s.flags.has("permit.boss"), s.quests.reports_of("mission.boss_seal"), s.world.is_lock_open(Vector3i(9, 2, 1))], [true, 1, false],
+		"봉인 임무 보고, 봉인 닫힘")
+	check_eq([s.world.foes["boss"].state, s.world.foes["boss"].stun, FoeRules.cleared(s)], ["idle", 0, []], "보스 idle, 클리어 없음")
+	check_eq(s.party.members.map(func(m: PartyState.Member) -> int: return m.level), [10, 10, 10, 10, 10], "대원 모두 Lv 10")
+	# M3 A9b 보완 F5 (M-T5 고정 저장의 한 값이 만드는 쪽과 어긋남): 파일 전체 = 만드는 쪽(tools/make_boss_save.gd)이 지금 코드로 다시 만든 글(바이트).
+	# 뺀 칸 없음: 저장 시각·세대도 만드는 쪽이 고정한다.
+	var maker: GDScript = load("res://tools/make_boss_save.gd")
+	var again: String = maker.save_text()
+	check(again == text, "고정 저장 = 다시 만든 글(%d / %d 바이트). 다르면 다시 만든다: %s" % [text.length(), again.length(), maker.COMMAND])
