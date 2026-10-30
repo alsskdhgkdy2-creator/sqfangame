@@ -1,0 +1,19 @@
+{
+  "foes": [
+    {
+      "id": "foe.fenrir",
+      "level": 12,
+      "boss": true,
+      "formation": {
+        "id": "formation.boss.fenrir",
+        "no_escape": true,
+        "enemies": [
+          {
+            "enemy": "enemy.boss_fenrir",
+            "row": "front"
+          }
+        ]
+      }
+    }
+  ]
+}

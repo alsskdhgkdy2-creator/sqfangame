@@ -86,9 +86,12 @@ var points := {}
 var foes := {}
 ## 예약 구역(M3 A3, A9 보스 방 자리): 아직 닿지 않아도 되는 칸들의 사각형(Rect2i). 분석이 「닿을 수 없다」를 내지 않는다.
 var reserved: Array[Rect2i] = []
-## 귀환 비콘을 쓸 수 없는 칸(M3 A4 갈고리, A9 보스 방): 칸 Vector2i → true. 지금 층 파일에는 키가 없어 늘 비어 있다.
-## A9 가 층 키로 채운다. ItemRules.return_block 이 「sealed」로 막는다.
+## 귀환 비콘을 쓸 수 없는 칸(M3 A4 갈고리, A9 보스 방): 칸 Vector2i → true. 층 키 no_return(사각형들, M3 A9)이 채운다.
+## ItemRules.return_block 이 「sealed」로 막는다.
 var no_return := {}
+## 봉인 문 뒤 칸(M3 A9 설계 조건 1): needs 가 있는 봉인 경계 Vector3i → {칸 Vector2i: true}. 그 봉인만 닫고 다른 세계 비트는 모두 열 수 있다고 칠 때
+## 들어오는 곳(시작 칸·계단)에서 닿지 못하는 칸이다(FloorLoader 가 읽을 때 한 번 센다). 닫힌 봉인 뒤에 선 저장은 영영 나오지 못하므로 저장 검사가 거부한다.
+var behind_seal := {}
 
 var _cells := PackedByteArray()
 var _h := PackedByteArray()
@@ -97,6 +100,7 @@ var _oneway_dir := {}  # Vector3i → 지나갈 수 있는 방향
 var _shortcut_opener := {}  # Vector3i → 열 수 있는 쪽 칸 Vector2i
 var _lock_key := {}  # Vector3i → 열쇠 ID(봉인 문은 "")
 var _lock_seal := {}  # Vector3i → 봉인 이유(열쇠 문에는 없다)
+var _seal_needs := {}  # Vector3i → 봉인을 여는 진행 플래그(M3 A9, needs 가 있는 봉인만)
 var _chest_cells := {}  # Vector2i → 상자 id
 var _point_cells := {}  # Vector2i → 채집 지점 id
 
@@ -238,11 +242,14 @@ func cells() -> Array[Vector2i]:
 	return out
 
 
-## 잠긴 문을 둔다(M3 A3): key 가 비어 있지 않으면 열쇠 문, 아니면 seal 이유의 봉인 문.
-func set_lock(e: Vector3i, key: String, seal: String = "") -> void:
+## 잠긴 문을 둔다(M3 A3): key 가 비어 있지 않으면 열쇠 문, 아니면 seal 이유의 봉인 문. needs(M3 A9)는 봉인 문을 여는 진행 플래그.
+func set_lock(e: Vector3i, key: String, seal: String = "", needs: String = "") -> void:
 	_lock_key[e] = key
+	_seal_needs.erase(e)
 	if key.is_empty():
 		_lock_seal[e] = seal
+		if not needs.is_empty():
+			_seal_needs[e] = needs
 	else:
 		_lock_seal.erase(e)
 
@@ -265,6 +272,20 @@ func is_sealed(e: Vector3i) -> bool:
 ## 봉인 이유("boss" 등). 봉인 문이 아니면 "".
 func seal_of(e: Vector3i) -> String:
 	return _lock_seal.get(e, "")
+
+
+## 봉인 문을 여는 진행 플래그(M3 A9). needs 가 없는 봉인·봉인이 아닌 경계는 "".
+func seal_needs(e: Vector3i) -> String:
+	return _seal_needs.get(e, "")
+
+
+## needs 가 있는 봉인 경계들(경계 순서, M3 A9).
+func needs_seals() -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	for e in edges_of_kind(Edge.LOCK):
+		if _seal_needs.has(e):
+			out.append(e)
+	return out
 
 
 ## 상자를 둔다. 같은 칸·id 검사는 읽는 쪽(FloorLoader)이 한다.

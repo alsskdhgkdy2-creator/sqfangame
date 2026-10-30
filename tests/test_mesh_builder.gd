@@ -294,8 +294,9 @@ func test_lock_styles() -> void:
 		if b3.is_sealed(e):
 			seal = e
 	var w3 := WorldState.new()
-	w3.open_lock(seal)  # 규칙은 열지 않지만 겉모습은 세계 상태와 상관없다
 	check_eq(DungeonMeshBuilder.edge_style(b3, w3, seal), "sealed", "봉인 문")
+	w3.open_lock(seal)  # M3 A9: needs 플래그로 연 봉인은 문으로 보인다(그 전까지 A3 의 「겉모습은 세계 상태와 상관없다」였다)
+	check_eq(DungeonMeshBuilder.edge_style(b3, w3, seal), "door", "연 봉인 문 = 문(M3 A9)")
 	var sealed := DungeonMeshBuilder.build(b3, WorldState.new())
 	check(_colors(sealed, "plate").has(DungeonMeshBuilder.SEAL_PLATE[0]) and _colors(sealed, "plate").has(DungeonMeshBuilder.SEAL_BAR)
 		and _colors(sealed, "glow").has(DungeonMeshBuilder.LAMP_SEALED), "봉인 문판·빗장·등 색")

@@ -391,6 +391,20 @@ func test_wipe_leaves_foes() -> void:
 	check_eq([s.wiped, _rec(s, "g"), s.world.foes["g"].stun], [true, [Vector2i(3, 0), Dir.N, 0, "idle"], 0], "자리 그대로, battle 에서 빠짐")
 	var r := SaveCodec.decode(SaveCodec.encode(s), s.defs)
 	check(r.ok() and SaveCodec.state_hash(r.state) == SaveCodec.state_hash(s), "전멸 상태 저장·읽기 %s" % r.error)
+	# M3 A9a 검토 L1 (M-R5w 전멸이 남은 쉼을 둔다): 턴 상한으로 쉬는 FOE 에 부딪혀 연 전투에서 전멸해도 쉬지 않는다(남은 쉼 0).
+	var t := _bumped([_patrol("p", [3, 0], "W", [[3, 0], [2, 0]])])
+	BattleRules.finish(t, "escaped", [] as Array[Dictionary], "turn_cap")
+	check_eq(t.world.foes["p"].stun, FoeRules.ESCAPE_STUN, "준비: 턴 상한으로 쉼 2")
+	check_eq(_foe_events(_act(t, A.FORWARD)), [{"type": "foe_contact", "foe": "p", "by": "party", "side": "front"}], "준비: 쉬는 FOE 에 부딪혀 다시 전투")
+	check_eq([t.world.foes["p"].state, t.world.foes["p"].stun], ["battle", FoeRules.ESCAPE_STUN], "준비: 쉼이 남은 채 전투")
+	for u in t.battle.party:
+		u.hp = 0
+	for m in t.party.members:
+		m.hp = 0
+	check(BattleRules.finish(t, "wiped"), "전멸(쉼이 남은 FOE)")
+	check_eq([_rec(t, "p"), t.world.foes["p"].stun], [[Vector2i(3, 0), Dir.W, 0, "return"], 0], "전멸: 순회는 return, 남은 쉼도 0")
+	var tr := SaveCodec.decode(SaveCodec.encode(t), t.defs)
+	check(tr.ok() and SaveCodec.state_hash(tr.state) == SaveCodec.state_hash(t), "저장·읽기 %s" % tr.error)
 
 
 # ---- R6 되살아남·층 들어서기 ----

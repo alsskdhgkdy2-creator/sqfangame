@@ -1,0 +1,12 @@
+{
+  "note": "게임 묶음(arbor) 보스 공략(M3 A9). arbor_route.json 끝(B3F 봉인 문 앞 9:2, 서쪽을 봄)에서 permit.boss 를 가진 채 출발한다. 봉인을 열고 보스 방으로 들어가 보스에 부딪혀(boss 물음) 싸운다(fight). checkpoints 의 after 는 그때까지 한 행동 수, floor·at 은 그 뒤 층과 파티 위치.",
+  "from": {"floor": "b3f", "at": [9, 2], "facing": "W"},
+  "needs_flags": ["permit.boss"],
+  "actions": ["forward", "forward", "forward", "forward", "forward", "forward", "fight"],
+  "checkpoints": [
+    {"after": 1, "floor": "b3f", "at": [9, 2], "note": "봉인을 연다(움직이지 않음)"},
+    {"after": 5, "floor": "b3f", "at": [5, 2], "note": "보스 앞(맞닿음)"},
+    {"after": 6, "floor": "b3f", "at": [5, 2], "note": "보스에 부딪힘(boss 물음, 움직이지 않음)"},
+    {"after": 7, "floor": "b3f", "at": [5, 2], "note": "싸운다(전투 시작)"}
+  ]
+}

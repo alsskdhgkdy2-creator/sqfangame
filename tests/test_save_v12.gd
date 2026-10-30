@@ -65,7 +65,7 @@ func _qd(d: Dictionary) -> Dictionary:
 func test_v12_roundtrip() -> void:
 	var s := _quest_town()
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	check_eq([doc["schema"], doc["rules"]], [12.0, "m3q"], "12판 머리")
+	check_eq([doc["schema"], doc["rules"]], [13.0, "m3b"], "13판 머리")
 	check_eq(_qd(doc), {
 		M1: {"status": "reported", "progress": 0.0, "reports": 1.0, "day": 1.0},
 		SOUP: {"status": "accepted", "progress": 0.0, "reports": 0.0, "day": 0.0},
@@ -74,7 +74,7 @@ func test_v12_roundtrip() -> void:
 	var r := SaveCodec.decode(SaveCodec.encode(s), s.defs)
 	check(r.ok(), "읽기 %s" % r.error)
 	if r.ok():
-		check_eq([SaveCodec.state_hash(r.state), r.from_schema], [SaveCodec.state_hash(s), 12], "같은 해시, 12판")
+		check_eq([SaveCodec.state_hash(r.state), r.from_schema], [SaveCodec.state_hash(s), 13], "같은 해시, 13판")
 		check_eq([QuestRules.status_of(r.state, s.defs.quests.quests[MOTH]), QuestRules.progress_of(r.state, s.defs.quests.quests[MOTH]),
 			QuestRules.status_of(r.state, s.defs.quests.quests[M1]), r.state.flags], ["accepted", 2, "finished", {"permit.b2f": true}], "읽은 의뢰 상태·진행·플래그")
 	var t := ExplorationRules.new_game(Fx.defs(), 9, "full", true)
@@ -115,8 +115,8 @@ func test_v12_rejects() -> void:
 	var t := ExplorationRules.new_game(Fx.defs(), 9, "full", true)
 	_reject(t, func(d): _qd(d)[SOUP] = {"status": "accepted", "progress": 0, "reports": 0, "day": 0}, "모르는 의뢰", "시험 묶음에 의뢰 기록")
 	_reject(t, func(d): d["state"]["flags"] = ["permit.b2f"], "모르는 플래그", "시험 묶음에 플래그")
-	_reject(s, func(d): d["schema"] = 13, "지원하지 않는 schema 다", "13판")
-	_reject(s, func(d): d["rules"] = "m3r", "규칙 판(rules)이 schema 12 와 맞지 않다", "12판 머리에 m3r")
+	_reject(s, func(d): d["schema"] = 14, "지원하지 않는 schema 다", "14판")
+	_reject(s, func(d): d["rules"] = "m3r", "규칙 판(rules)이 schema 13 와 맞지 않다", "13판 머리에 m3r")
 	# 검토(M3 A8a) 1: 보고한 임무는 보수 플래그를 가진다(첫 임무 permit.b2f, 둘째 임무 permit.boss). 반대(보고 없는 플래그)는 받는다.
 	_reject(s, func(d): d["state"]["flags"] = [], "quests.mission.permit_b2f 를 보고했는데 보수 플래그 permit.b2f 가 없다", "첫 임무 보고, 허가 없음")
 	_reject(s, func(d): _qd(d)[M2] = {"status": "reported", "progress": 0, "reports": 1, "day": 3},
@@ -157,7 +157,9 @@ func test_fixed_v11_to_v12() -> void:
 			"%s: 11판·옮김 없음·saved_at·generation·장소" % x[0])
 		var now := SaveCodec.state_to_dict(r.state)
 		check_eq([now["quests"], now["flags"]], [{}, x[3]], "%s: 빈 quests, flags %s" % [x[0], str(x[3])])
-		var sv := Fx.strip_v12(now, x[2])
+		var s13 := Fx.strip_v13(now, x[2])  # M3 A9: 13판이 더한 B3F 보스 기록은 처음 상태여야 하고, 견주기에서는 뺀다
+		check_eq(s13["bad"], "", "%s: 더한 보스 기록은 처음 상태" % x[0])
+		var sv := Fx.strip_v12(s13["state"], x[2])
 		check_eq(sv["bad"], "", "%s: 더한 12판 값은 옮긴 값" % x[0])
 		var o: Dictionary = orig["state"]
 		for k in o:
@@ -165,7 +167,7 @@ func test_fixed_v11_to_v12() -> void:
 		check_eq(sv["state"].keys().filter(func(k: String) -> bool: return not o.has(k)), [], "%s: 맨 위에 더한 필드는 quests·flags 뿐" % x[0])
 		var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
 		var again := SaveCodec.decode(JSON.stringify(doc), x[2])
-		check(doc["schema"] == 12.0 and again.ok() and again.from_schema == 12 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state),
+		check(doc["schema"] == 13.0 and again.ok() and again.from_schema == 13 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state),
 			"%s: 12판으로 쓰고 다시 읽기 같은 해시 %s" % [x[0], again.error])
 	var rel := SaveCodec.decode(V11_TEST, game)
 	check(rel.ok() and rel.relocated and rel.from_schema == 11 and rel.state.quests.entries.is_empty() and rel.state.flags.is_empty(),

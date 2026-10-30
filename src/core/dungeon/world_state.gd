@@ -5,7 +5,7 @@ extends RefCounted
 
 var shortcuts_open := {}  # Vector3i → true
 var passages_found := {}  # Vector3i → true
-var locks_open := {}  # Vector3i → true (열쇠 문만, 봉인 문은 열리지 않는다)
+var locks_open := {}  # Vector3i → true (열쇠 문, M3 A9 부터 needs 플래그로 연 봉인 문도. 다시 닫히지 않는다)
 var chests_opened := {}  # 상자 id String → true
 var gather_used := {}  # 채집 지점 id String → 오늘 쓴 횟수(1~9, 0 이면 키가 없다)
 var foes := {}  # FOE id String → FoeState(M3 A6). 층 기록을 만들 때(FloorState) 층의 모든 FOE 가 처음 상태로 들어간다.

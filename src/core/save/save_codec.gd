@@ -1,14 +1,15 @@
-## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3, 8판 M3 A4, 9판 M3 A5, 10판 M3 A6, 11판 M3 A7). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
+## 저장 JSON 변환·검사·이전(06 §8.4~§8.6, 3판 07 §8, 4판 08 §4, 5판 05 §8 M3 A1, 6판 M3 A2, 7판 M3 A3, 8판 M3 A4, 9판 M3 A5, 10판 M3 A6, 11판 M3 A7,
+## 12판 M3 A8, 13판 M3 A9). 읽기는 새 상태 객체에서 모든 검사를 끝낸 뒤에만 돌려준다.
 class_name SaveCodec
 extends RefCounted
 
 const FORMAT := "sqfangame-save"
-const SCHEMA := 12
-const RULES := "m3q"
+const SCHEMA := 13
+const RULES := "m3b"
 ## 받는 (schema, rules) 쌍(06 §8.5, 07 §8.2, 08 §4). 1~10판은 읽을 때 11판으로 바로 옮긴다(07 §8.4, 08 §4, M3 A1~A7).
 ## 가방 합계(공용 60칸, D31)는 어느 판에서도 검사하지 않는다: 옛 저장이 60을 넘어도 그대로 읽고(지우지 않는다), 새로 얻는 길만
 ## BagRules 가 막는다(M3 A4 설계 §3.3). 종류마다의 범위(소모품·장비 1~99, 소재 1~9999)만 본다.
-const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i", 9: "m3g", 10: "m3o", 11: "m3r", 12: "m3q"}
+const ACCEPTED := {1: "m1", 2: "m2", 3: "m2g", 4: "m3s", 5: "m3f", 6: "m3t", 7: "m3k", 8: "m3i", 9: "m3g", 10: "m3o", 11: "m3r", 12: "m3q", 13: "m3b"}
 ## 7·8판 층 기록의 world 키(M3 A3: 연 잠긴 문·연 보물상자가 더해졌다). 6판까지는 앞의 둘만 보고 다른 키는 보지 않는다.
 const WORLD_KEYS_V7 := ["shortcuts_open", "passages_found", "locks_open", "chests_opened"]
 ## 9판 층 기록의 world 키(M3 A5: 오늘 쓴 채집 횟수 gather_used 가 더해졌다). 정확히 이 다섯이다.
@@ -21,6 +22,7 @@ const FOE_STATES := {
 	"patrol": ["patrol", "return", "join", "battle", "defeated"],
 	"chase": ["idle", "patrol", "alert", "chase", "return", "join", "battle", "defeated"],
 	"guard": ["idle", "battle", "defeated"],
+	"boss": ["idle", "battle", "defeated"],
 }
 ## 5판 층 기록(floor_states.<층 ID>)의 키. 1~4판은 이 셋이 state 바로 아래에 있다(층 하나).
 const FLOOR_STATE_KEYS := ["world", "knowledge", "annotation"]
@@ -293,7 +295,7 @@ static func _decode_doc(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return r
 
 
-## 옛 판(1~11)이면 그 판의 이전 결과, 지금 판이면 null.
+## 옛 판(1~12)이면 그 판의 이전 결과, 지금 판이면 null.
 static func _migrate(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	match to_int(doc["schema"]):
 		1:
@@ -318,6 +320,8 @@ static func _migrate(doc: Dictionary, defs: GameDefs) -> LoadResult:
 			return migrate_v10(doc, defs)
 		11:
 			return migrate_v11(doc, defs)
+		12:
+			return migrate_v12(doc, defs)
 	return null
 
 
@@ -541,6 +545,23 @@ static func migrate_v11(doc: Dictionary, defs: GameDefs) -> LoadResult:
 	return again
 
 
+## 12판 → 13판(M3 A9 설계 §3.2): 12판 규칙으로 다 검사(봉인 문은 열릴 수 없고, 보스 FOE 기록은 없다) → 원본 saved_at·generation 으로
+## 13판 encode(보스는 처음 상태) → 13판 읽기를 그대로 거친 결과만 돌려준다.
+static func migrate_v12(doc: Dictionary, defs: GameDefs) -> LoadResult:
+	var r := LoadResult.new()
+	var old := ExplorationState.new()
+	var err := _read_state(doc["state"], defs, [], 12, old)
+	if not err.is_empty():
+		r.error = "12판 검사 실패: " + err
+		return r
+	var again := decode(encode(old, doc["saved_at"], to_int(doc["generation"])), defs)
+	if not again.ok():
+		r.error = "12판 이전 결과 검사 실패: " + again.error
+		return r
+	again.from_schema = 12
+	return again
+
+
 ## 문서의 지금 층이 지금 묶음에는 없고 은퇴한 묶음(defs.retired)에 있는지(M3 A3). 두 묶음의 층 ID 는 겹치지 않는다(GameDefs 가 본다).
 static func _names_retired(doc: Dictionary, defs: GameDefs) -> bool:
 	if defs.retired == null:
@@ -644,6 +665,8 @@ static func _check_header(doc: Dictionary) -> String:
 ## schema 9: 층 기록 world 의 gather_used(M3 A5, 키가 정확히 WORLD_KEYS_V9 다섯). 7·8판 world 는 정확히 WORLD_KEYS_V7 넷이다.
 ## schema 10: 층 기록 world 의 foes(M3 A6, 키가 정확히 WORLD_KEYS 여섯), battle.foe(접촉 전투). 9판 이하는 FOE 가 처음 상태이고
 ## 다 읽은 뒤 FoeRules.settle 이 파티 칸의 FOE 를 비킨다. 10판은 FOE 와 파티·전투의 맞물림(_check_foes)을 본다.
+## schema 12: quests·flags(M3 A8). schema 13(M3 A9): needs 가 있는 봉인 문이 world.locks_open 에 들 수 있고(그 플래그를 가졌을 때, _check_seals),
+## world.foes 에 보스 기록(idle·battle·defeated, 처음 자리·방향)이 있으며, 닫힌 봉인 뒤 칸에 선 미궁 파티는 거부한다.
 ## 위치(party.at)와 전투 편성은 지금 층(state.floor)으로, 층 기록은 각자 그 층으로 검사한다.
 ## schema 2 의 battle 은 검사만 하고 만들지 않는다(옮긴 대원으로 migrate_v2 가 만든다).
 static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int, s: ExplorationState) -> String:
@@ -713,7 +736,28 @@ static func _read_state(d: Dictionary, defs: GameDefs, table: Array, schema: int
 	err = _check_foes(s)
 	if err.is_empty() and schema >= 12:
 		err = _read_quests(d, s)
+	if err.is_empty() and schema >= 13:
+		err = _check_seals(s)
 	return err
+
+
+## 13판 봉인 문(M3 A9 설계 §3.2·조건 1): 연 봉인(world.locks_open)마다 그 needs 플래그를 가졌고, 미궁의 파티는 닫힌 봉인 뒤 칸
+## (FloorModel.behind_seal: 그 봉인만 닫으면 들어오는 곳에서 닿지 못하는 칸)에 서 있지 않다. 그런 저장은 비콘(no_return)도 봉인도 쓰지 못해 영영 갇힌다.
+## 규칙은 플래그가 있을 때만 봉인을 열고(플래그는 줄지 않는다), 봉인은 다시 닫히지 않으며, 봉인 뒤로는 연 봉인을 지나서만 들어가므로 정상 플레이로는 걸리지 않는다.
+static func _check_seals(s: ExplorationState) -> String:
+	for fid in s.floor_states:
+		var r: FloorState = s.floor_states[fid]
+		for e in r.world.locks_open:
+			var needs := r.floor_def.seal_needs(e)
+			if not needs.is_empty() and not s.flags.has(needs):
+				return "floor_states.%s.world.locks_open: 봉인 %s 를 여는 플래그 %s 가 없다" % [fid, GridKey.edge(e), needs]
+	if s.in_town():
+		return ""
+	var f := s.floor_def
+	for e in f.behind_seal:
+		if not s.world.is_lock_open(e) and f.behind_seal[e].has(s.party.at):
+			return "party.at: %d:%d 는 닫힌 봉인 %s 뒤 칸이라 나올 수 없다" % [s.party.at.x, s.party.at.y, GridKey.edge(e)]
+	return ""
 
 
 ## 12판 quests·flags(M3 A8 설계 §3.2). 의뢰 ID 는 묶음 정의의 것만(엄격), 수는 정수(1.0 은 1). 기록 사이 맞물림:
@@ -1227,7 +1271,8 @@ static func _read_world(d: Dictionary, s: FloorState, schema: int = SCHEMA) -> S
 	if not err.is_empty():
 		return "world.locks_open: " + err
 	for e in s.world.locks_open:
-		if s.floor_def.is_sealed(e):
+		# 13판(M3 A9): needs 가 있는 봉인은 열릴 수 있다(그 플래그를 가졌는지는 의뢰를 읽은 뒤 _check_seals 가 본다). 12판까지는 봉인이 열리지 않았다.
+		if s.floor_def.is_sealed(e) and (schema < 13 or s.floor_def.seal_needs(e).is_empty()):
 			return "world.locks_open: %s 는 봉인 문이라 열릴 수 없다" % GridKey.edge(e)
 	if typeof(w["chests_opened"]) != TYPE_ARRAY:
 		return "world.chests_opened: 배열이 아니다"
@@ -1240,14 +1285,15 @@ static func _read_world(d: Dictionary, s: FloorState, schema: int = SCHEMA) -> S
 	if schema >= 9:
 		err = _read_gather_used(w["gather_used"], s)
 	if err.is_empty() and schema >= 10:
-		err = _read_foes(w["foes"], s)
+		err = _read_foes(w["foes"], s, schema)
 	return err
 
 
 ## 10판 world.foes(M3 A6 설계 §3.3): 이 층 FOE id(엄격) → 정확히 FOE_KEYS 일곱. 없는 id 는 처음 상태로 둔다(자료에 FOE 가 늘어도 읽힌다).
 ## at 은 그 층 FOE 칸, facing N·E·S·W, state 는 종류가 받는 값, path_i 는 경로 안(경로가 없으면 0), dir ±1, stun 0~2(쓰러지면 0),
 ## day 는 쓰러졌으면 1~DAY_MAX(지금 날 이하인지는 _check_foes 가 본다), 아니면 0.
-static func _read_foes(v: Variant, s: FloorState) -> String:
+## 보스(M3 A9, 13판): 받는 state 는 idle·battle·defeated 이고 처음 자리·방향 그대로다(보스는 움직이지도 돌지도 않는다). 12판 이하에는 보스 기록이 없었다.
+static func _read_foes(v: Variant, s: FloorState, schema: int = SCHEMA) -> String:
 	if typeof(v) != TYPE_DICTIONARY:
 		return "world.foes: 객체가 아니다"
 	for id in v:
@@ -1255,6 +1301,8 @@ static func _read_foes(v: Variant, s: FloorState) -> String:
 			return "world.foes: %s 는 이 층의 FOE 가 아니다" % str(id)
 		var sp: FloorModel.FoeSpawn = s.floor_def.foes[id]
 		var path := "world.foes.%s" % id
+		if sp.kind == "boss" and schema < 13:
+			return "%s: %d판 저장에는 보스 기록이 있을 수 없다" % [path, schema]
 		var rv: Variant = v[id]
 		if typeof(rv) != TYPE_DICTIONARY:
 			return "%s: 객체가 아니다" % path
@@ -1296,6 +1344,8 @@ static func _read_foes(v: Variant, s: FloorState) -> String:
 		elif dy != 0:
 			return "%s.day: 쓰러지지 않은 FOE 는 0 이어야 한다" % path
 		fs.day = dy
+		if sp.kind == "boss" and (fs.at != sp.at or fs.facing != sp.facing):
+			return "%s: 보스는 처음 자리 %d:%d·방향 %s 그대로여야 한다" % [path, sp.at.x, sp.at.y, Dir.name_of(sp.facing)]
 		s.world.foes[id] = fs
 	return ""
 
@@ -1360,6 +1410,8 @@ static func _check_keys(s: ExplorationState) -> String:
 			if c.item.begins_with("key.") and not s.key_items.has(c.item):
 				return "floor_states.%s.world.chests_opened 의 %s 를 열었는데 열쇠 %s 가 없다" % [id, cid, c.item]
 		for e in rec.world.locks_open:
+			if rec.floor_def.is_sealed(e):
+				continue  # 연 봉인 문(M3 A9, 13판)은 열쇠가 아니라 needs 플래그로 열었다: _check_seals 가 본다
 			var k := rec.floor_def.lock_key(e)
 			if not s.key_items.has(k):
 				return "floor_states.%s.world.locks_open 의 %s 가 열렸는데 열쇠 %s 가 없다" % [id, GridKey.edge(e), k]

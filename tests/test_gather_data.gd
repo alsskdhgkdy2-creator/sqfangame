@@ -181,7 +181,7 @@ func test_real_materials_and_unlocks() -> void:
 		return
 	var db := defs.battle
 	var texts := TextDb.load_path("res://data/text/ko.json")
-	check_eq(db.material_ids.size(), 18, "소재 열여덟(D29 ②, M3 A6 FOE 소재 셋)")
+	check_eq(db.material_ids.size(), 20, "소재 스물(D29 ②, M3 A6 FOE 소재 셋, M3 A9 보스 소재 둘)")
 	for id in db.material_ids:
 		check_eq(db.material_desc.get(id), id + ".desc", "%s 설명 키" % id)
 		check(texts.has(id + ".desc") and texts.has(db.materials[id]), "%s 이름·설명 문구" % id)
@@ -217,8 +217,8 @@ func test_real_materials_and_unlocks() -> void:
 	# 조건 드롭으로 채집 소재를 주므로 뺀다. 본 적은 일반 적 여섯이다.
 	var normal := 0
 	for eid in db.enemy_ids:
-		if eid.begins_with("enemy.foe_"):
-			continue
+		if eid.begins_with("enemy.foe_") or eid.begins_with("enemy.boss_"):
+			continue  # M3 A9: 보스 적(enemy.boss_*)도 일반 적이 아니다(자기 소재를 떨어뜨린다)
 		normal += 1
 		for d in db.enemies[eid].drops:
 			check(not NEW_MATERIALS.has(d["item"]), "%s 드롭에 새 소재가 없다" % eid)

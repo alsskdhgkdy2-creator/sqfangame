@@ -45,9 +45,9 @@ func _check_kept(label: String, text: String, defs: GameDefs) -> SaveCodec.LoadR
 	check_eq(now.keys().filter(func(k: String) -> bool: return not o.has(k)), ["consumables"], "%s: 더해진 필드는 consumables 뿐" % label)
 	check_eq(now["consumables"], {}, "%s: 빈 소모품" % label)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
-	check_eq([doc["schema"], doc["rules"]], [12.0, "m3q"], "%s: 12판으로 쓴다" % label)
+	check_eq([doc["schema"], doc["rules"]], [13.0, "m3b"], "%s: 13판으로 쓴다" % label)
 	var again := SaveCodec.decode(JSON.stringify(doc), defs)
-	check(again.ok() and again.from_schema == 12 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 12판 다시 읽기 같은 해시 %s" % [label, again.error])
+	check(again.ok() and again.from_schema == 13 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 13판 다시 읽기 같은 해시 %s" % [label, again.error])
 	return r
 
 
@@ -67,11 +67,11 @@ func test_v8_roundtrip_with_consumables() -> void:
 	var s := ExplorationRules.new_game(Fx.defs(), 5, "floor")
 	s.consumables = {"use.medica": 3, "use.ariadne_beacon": 1, "use.theriaca_b": 99}
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	check_eq([doc["schema"], doc["rules"], doc["state"]["consumables"]], [12.0, "m3q", {"use.medica": 3.0, "use.ariadne_beacon": 1.0, "use.theriaca_b": 99.0}], "12판 머리·consumables")
+	check_eq([doc["schema"], doc["rules"], doc["state"]["consumables"]], [13.0, "m3b", {"use.medica": 3.0, "use.ariadne_beacon": 1.0, "use.theriaca_b": 99.0}], "13판 머리·consumables")
 	var r := SaveCodec.decode(SaveCodec.encode(s), s.defs)
 	check(r.ok(), "읽기 %s" % r.error)
 	if r.ok():
-		check_eq([r.state.consumables, r.from_schema, SaveCodec.state_hash(r.state)], [s.consumables, 12, SaveCodec.state_hash(s)], "같은 소모품·12판·같은 해시")
+		check_eq([r.state.consumables, r.from_schema, SaveCodec.state_hash(r.state)], [s.consumables, 13, SaveCodec.state_hash(s)], "같은 소모품·13판·같은 해시")
 
 
 ## M-S5(shop.bought 가 장비 ID 만 받음): 상점에서 소모품을 사면(ShopRules.buy, NEW 를 끄려고 bought 에 남는다) 그 상태를 쓰고 다시 읽을 수 있다.
@@ -128,7 +128,7 @@ func test_over_capacity_v7_save_is_kept_and_blocks_gains() -> void:
 	var s := SaveCodec.decode(V7_OVER, Fx.arbor()).state
 	check_eq([BagRules.used(s), BagRules.free_slots(s), s.materials, s.gear_bag], [75, 0, {RAT: 40, GLOW: 20}, {TWIN: 10, PADDED: 5}], "75칸 그대로·빈 칸 0")
 	var r := SaveCodec.decode(SaveCodec.encode(s), s.defs)
-	check(r.ok() and BagRules.used(r.state) == 75 and r.from_schema == 12, "12판 왕복도 75 %s" % r.error)
+	check(r.ok() and BagRules.used(r.state) == 75 and r.from_schema == 13, "13판 왕복도 75 %s" % r.error)
 	check_eq(ShopRules.buy(s, JUNK, "use.medica", 1)[0].get("reason"), "bag_full", "사기: bag_full")
 	check_eq(GrowthRules.equip(s, 0, 2, "")[0].get("reason"), "bag_full", "빼기: bag_full")
 	check_eq(GrowthRules.supply(s, "use.medica", 1)[0]["amount"], 0, "보급: 0")
@@ -147,7 +147,7 @@ func test_relocation_keeps_consumables_and_an_over_capacity_bag() -> void:
 	s.consumables = {"use.nectar": 2, "use.medica": 7}
 	s.materials = {RAT: 70}
 	var r := SaveCodec.decode(SaveCodec.encode(s, "2026-10-27T09:30:00Z", 90), Fx.arbor())
-	check(r.ok() and r.relocated and r.from_schema == 12, "옮겨 읽음 %s" % r.error)
+	check(r.ok() and r.relocated and r.from_schema == 13, "옮겨 읽음 %s" % r.error)
 	if r.ok():
 		check_eq([r.state.consumables, r.state.materials, BagRules.used(r.state), r.state.floor_def.id], [s.consumables, {RAT: 70}, 79, "b1f"], "소모품·넘친 가방 그대로, B1F")
 

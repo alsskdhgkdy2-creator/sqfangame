@@ -9,7 +9,7 @@ const FLOOR_ID_PATTERN := "^[a-z][a-z0-9_]*$"
 const SET_KEYS := ["id", "floors", "entrance", "retired", "quests"]
 ## 층 파일 맨 위 키(M3 A3부터 모르는 키는 오류: 오타로 상자·잠긴 문이 소리 없이 빠지지 않게).
 const FLOOR_KEYS := ["id", "name_key", "theme", "size", "grid", "start", "stairs", "shortcuts", "encounter", "zones", "damage_floor",
-	"locks", "chests", "reserved", "gathering", "foes"]
+	"locks", "chests", "reserved", "gathering", "foes", "no_return"]
 ## 상자 ID(층 안에서 하나, 저장 키가 된다)·내용 범위(M3 A3, 기능 값).
 const CHEST_ID_PATTERN := "^[a-z0-9_]+$"
 const CHEST_COUNT_MAX := 99
@@ -24,6 +24,7 @@ const FOE_KIND_KEYS := {
 	"patrol": {"required": ["path", "join"], "optional": []},
 	"chase": {"required": ["sight", "chase", "join"], "optional": ["path"]},
 	"guard": {"required": [], "optional": []},
+	"boss": {"required": [], "optional": []},
 }
 
 const MAX_SIZE := 64
@@ -187,8 +188,30 @@ static func parse_text(text: String, source: String) -> Result:
 		return ctx.result
 	var f := _build(ctx, json.data)
 	if ctx.result.ok():
+		_count_behind_seals(ctx, f)
+	if ctx.result.ok():
 		ctx.result.floor_def = f
 	return ctx.result
+
+
+## 봉인 문 뒤 칸(M3 A9 설계 조건 1): needs 가 있는 봉인마다, 그 봉인만 닫고 다른 세계 비트는 켤 수 있다고 칠 때 들어오는 곳에서 닿지 못하는 칸을
+## FloorModel.behind_seal 에 둔다. 저장 검사(SaveCodec)가 「닫힌 봉인 뒤에 선 파티」를 거부하는 데 쓴다(비콘도 봉인도 못 써서 영영 갇힌다).
+## 분석 한도를 넘으면 정확히 셀 수 없으므로 층 오류다(봉인이 없는 층은 탐색하지 않는다).
+static func _count_behind_seals(ctx: _Ctx, f: FloorModel) -> void:
+	for e in f.needs_seals():
+		var bits := _world_bits(f, e)
+		if bits.size() > MAX_WORLD_BITS:
+			ctx.fail_key("locks", "봉인 %s 뒤 칸을 셀 수 없다: 세계 비트가 %d개다" % [GridKey.edge(e), bits.size()])
+			return
+		var g := _explore(f, entries(f), 0, bits, MAX_ANALYSIS_NODES, {})
+		if not g["complete"]:
+			ctx.fail_key("locks", "봉인 %s 뒤 칸을 셀 수 없다: 탐색 노드가 한도 %d 개를 넘었다" % [GridKey.edge(e), MAX_ANALYSIS_NODES])
+			return
+		var behind := {}
+		for c in f.cells():
+			if not g["touched"].has(c):
+				behind[c] = true
+		f.behind_seal[e] = behind
 
 
 # ---- 도달·갇힘 (실제 이동 규칙의 (멈춘 칸, 세계 상태) 전이 그래프) ----
@@ -321,8 +344,9 @@ static func can_return(f: FloorModel, at: Vector2i, world: WorldState, budget: i
 	return Reach.NO if g["complete"] else Reach.UNKNOWN
 
 
-## 세계 상태 비트: 숨은 통로·지름길·열쇠 문(경계 Vector3i) 다음 이 층 열쇠 문들의 열쇠(ID String, 정렬). 봉인 문은 넣지 않는다.
-static func _world_bits(f: FloorModel) -> Array:
+## 세계 상태 비트: 숨은 통로·지름길·열쇠 문과 needs 가 있는 봉인 문(M3 A9, 잠긴 문 경계 차례, 경계 Vector3i) 다음 이 층 열쇠 문들의 열쇠
+## (ID String, 정렬). needs 가 없는 봉인 문은 넣지 않는다(벽이다). skip 봉인은 넣지 않는다(봉인 뒤 칸 세기, _count_behind_seals).
+static func _world_bits(f: FloorModel, skip: Vector3i = Vector3i(-1, -1, -1)) -> Array:
 	var bits: Array = []
 	bits.append_array(f.edges_of_kind(FloorModel.Edge.PASSAGE))
 	bits.append_array(f.edges_of_kind(FloorModel.Edge.SHORTCUT))
@@ -330,6 +354,8 @@ static func _world_bits(f: FloorModel) -> Array:
 	for e in f.edges_of_kind(FloorModel.Edge.LOCK):
 		var k := f.lock_key(e)
 		if k.is_empty():
+			if not f.seal_needs(e).is_empty() and e != skip:
+				bits.append(e)
 			continue
 		bits.append(e)
 		if not keys.has(k):
@@ -430,6 +456,9 @@ static func _can_unlock(f: FloorModel, bits: Array, i: int, c: Vector2i, mask: i
 		FloorModel.Edge.PASSAGE:
 			return FloorModel.cells_of_edge(e).has(c)
 		FloorModel.Edge.LOCK:
+			# needs 가 있는 봉인(M3 A9)은 양쪽 칸에서 연다: 플래그는 의뢰가 주고(GameDefs.check_needs), 분석은 그것을 얻을 수 있다고 본다.
+			if not f.seal_needs(e).is_empty():
+				return FloorModel.cells_of_edge(e).has(c)
 			var k := bits.find(f.lock_key(e))
 			return k >= 0 and mask & (1 << k) != 0 and FloorModel.cells_of_edge(e).has(c)
 	return f.shortcut_opener(e) == c
@@ -510,6 +539,7 @@ static func _build(ctx: _Ctx, d: Dictionary) -> FloorModel:
 	_read_gathering(ctx, d, f)
 	_read_reserved(ctx, d, f)
 	_read_foes(ctx, d, f)
+	_read_no_return(ctx, d, f)
 	_read_encounter(ctx, d, f)
 	_read_zones(ctx, d, f)
 	_read_damage(ctx, d, f)
@@ -626,6 +656,7 @@ static func _read_shortcuts(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 
 ## 잠긴 문(M3 A3): K 경계마다 하나 {"at", "dir", "key": 열쇠 ID} 또는 {"at", "dir", "seal": 이유}. at·dir 은 경계를 가리킬 뿐(어느 쪽 칸이든 된다).
 ## 열쇠가 실제 열쇠 물건인지·같은 층 상자에 있는지는 GameDefs 가 본다(전투 정의가 필요하다).
+## needs(M3 A9, 선택): 봉인 문에만. 진행 플래그(의뢰 보수 플래그 꼴)를 가지면 바라보고 앞으로·조사로 연다. 그 플래그를 주는 의뢰는 GameDefs 가 본다.
 static func _read_locks(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 	var list: Array = []
 	if d.has("locks"):
@@ -642,7 +673,7 @@ static func _read_locks(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 			continue
 		var bad := false
 		for k in item:
-			if not ["at", "dir", "key", "seal"].has(k):
+			if not ["at", "dir", "key", "seal", "needs"].has(k):
 				ctx.fail_key("locks", "%s.%s 는 모르는 필드다" % [label, str(k)])
 				bad = true
 		var at := ctx.cell_value(item.get("at"), "locks", label + ".at")
@@ -669,6 +700,17 @@ static func _read_locks(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 				bad = true
 			else:
 				seal = sv
+		var needs := ""
+		if item.has("needs"):
+			var nv: Variant = item["needs"]
+			if not item.has("seal") or item.has("key"):
+				ctx.fail_key("locks", "%s.needs 는 봉인 문(seal)에만 쓴다" % label)
+				bad = true
+			elif typeof(nv) != TYPE_STRING or RegEx.create_from_string(QuestDb.FLAG_PATTERN).search(nv) == null:
+				ctx.fail_key("locks", "%s.needs 는 진행 플래그(%s) 문자열이어야 한다" % [label, QuestDb.FLAG_PATTERN])
+				bad = true
+			else:
+				needs = nv
 		if bad or at == GridKey.BAD_CELL:
 			continue
 		if not f.in_bounds(at):
@@ -680,12 +722,43 @@ static func _read_locks(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 		elif f.has_lock_entry(e):
 			ctx.fail_key("locks", "%s 의 경계 %s 가 중복이다" % [label, GridKey.edge(e)])
 		else:
-			f.set_lock(e, key, seal)
+			f.set_lock(e, key, seal, needs)
 	for e in f.edges_of_kind(FloorModel.Edge.LOCK):
 		if not f.has_lock_entry(e):
 			var r := 2 * e.y if e.z == 0 else 2 * e.y + 1
 			var c := 2 * e.x + 1 if e.z == 0 else 2 * e.x
 			ctx.fail_grid(r, c, "격자 %d줄 %d열: 잠긴 문 K 에 맞는 locks 항목이 없다" % [r, c])
+
+
+## 비콘이 닿지 않는 칸(M3 A9, ItemRules.return_block): [[x0, y0, x1, y1], …] 양 끝 포함. 모든 칸이 실제 칸(빈 곳 아님)이고 시작 칸·계단을 담지 않는다.
+static func _read_no_return(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
+	if not d.has("no_return"):
+		return
+	if typeof(d["no_return"]) != TYPE_ARRAY:
+		ctx.fail_key("no_return", "no_return는 배열이어야 한다")
+		return
+	var list: Array = d["no_return"]
+	for i in list.size():
+		var rect := ctx.coords(list[i], 4, "no_return", "no_return[%d]" % i)
+		if rect.size() != 4:
+			continue
+		var lo := Vector2i(rect[0], rect[1])
+		var hi := Vector2i(rect[2], rect[3])
+		if not f.in_bounds(lo) or not f.in_bounds(hi) or hi.x < lo.x or hi.y < lo.y:
+			ctx.fail_key("no_return", "no_return[%d] 가 층 범위를 벗어나거나 뒤집혔다" % i)
+			continue
+		var bad := ""
+		for y in range(lo.y, hi.y + 1):
+			for x in range(lo.x, hi.x + 1):
+				var c := Vector2i(x, y)
+				if bad.is_empty() and (not f.is_cell(c) or f.stairs.has(c) or (f.has_start() and c == f.start_at)):
+					bad = "%d:%d" % [x, y]
+		if not bad.is_empty():
+			ctx.fail_key("no_return", "no_return[%d] 의 칸 %s 가 빈 곳·계단·시작 칸이다" % [i, bad])
+			continue
+		for y in range(lo.y, hi.y + 1):
+			for x in range(lo.x, hi.x + 1):
+				f.no_return[Vector2i(x, y)] = true
 
 
 ## 보물상자(M3 A3): [{"id", "at", "item", "count"(선택, 1)} 또는 {"id", "at", "money"}]. id 는 층 안에서 하나(저장 키).
@@ -988,6 +1061,25 @@ static func _read_foes(ctx: _Ctx, d: Dictionary, f: FloorModel) -> void:
 					near = true
 			if near:
 				ctx.fail_key("foes", "%s 문지기가 계단·시작 칸과 맞닿아 있다" % where)
+				continue
+		# 보스(M3 A9 설계 §2.5): 되살아나지 않고 층에 하나뿐이며, 열린 경계로 맞닿은 칸에 계단·시작 칸·상자·채집 지점이 없다
+		# (보스 물음이 서 있는 칸의 물음과 겹치지 않게, ExplorationRules.question_here).
+		if kind == "boss":
+			if s.respawn != "never":
+				ctx.fail_key("foes", "%s 보스의 respawn 은 never 여야 한다" % where)
+				continue
+			if f.foe_list().any(func(o: FloorModel.FoeSpawn) -> bool: return o.kind == "boss"):
+				ctx.fail_key("foes", "%s 보스가 층에 둘이다" % where)
+				continue
+			var busy := ""
+			for dd in 4:
+				var n := s.at + Dir.vec(dd)
+				if f.edge_kind(FloorModel.edge_of(s.at, dd)) != FloorModel.Edge.OPEN:
+					continue
+				if f.stairs.has(n) or (f.has_start() and n == f.start_at) or f.chest_at(n) != null or f.point_at(n) != null:
+					busy = "%d:%d" % [n.x, n.y]
+			if not busy.is_empty():
+				ctx.fail_key("foes", "%s 보스와 맞닿은 칸 %s 에 계단·시작 칸·상자·채집 지점이 있다" % [where, busy])
 				continue
 		f.foes[s.id] = s
 

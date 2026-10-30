@@ -307,7 +307,7 @@ func test_relocation_alert_on_start_and_bak() -> void:
 	s._enter_labyrinth()
 	await kit.frames(2)
 	var doc: Dictionary = JSON.parse_string(_read_slot("auto"))
-	check_eq([doc["schema"], doc["state"]["floor"], doc["state"]["location"]], [12.0, "b1f", "labyrinth"], "다음 자동 저장은 12판")
+	check_eq([doc["schema"], doc["state"]["floor"], doc["state"]["location"]], [13.0, "b1f", "labyrinth"], "다음 자동 저장은 13판")
 	check_eq(_read_slot("auto", "bak"), V7.V6_TOWN, ".bak = 6판 원본")
 
 
@@ -341,7 +341,7 @@ func test_relocation_alert_on_load_import_and_wipe() -> void:
 	check_eq([s.modal.kind, s._toast.modulate.a, s.state.location, s.autosave_count], ["alert", 0.0, "town", saves + 1],
 		"불러오기: 알림(알림 줄은 「확인」을 가리지 않게 쓰지 않는다)·자동 저장")
 	check(_labels(s).has("불러왔다\n" + s.texts.t("msg.relocated")), "불러오기 알림 글 = 안내 + 옮김 %s" % str(_labels(s)))
-	check_eq(JSON.parse_string(_read_slot("auto"))["schema"], 12.0, "자동 저장 12판")
+	check_eq(JSON.parse_string(_read_slot("auto"))["schema"], 13.0, "자동 저장 13판")
 	await kit.click(kit.center_of(s.modal.find_child("AlertOk", true, false)))
 	await kit.frames(1)
 	# 가져오기(전멸한 6판): 알림 → 닫으면 전멸 창.

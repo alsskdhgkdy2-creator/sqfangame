@@ -116,9 +116,9 @@ static func edge_style(f: FloorModel, world: WorldState, e: Vector3i) -> String:
 		FloorModel.Edge.PASSAGE:
 			return "passage" if world.is_passage_found(e) else "wall"
 		FloorModel.Edge.LOCK:
-			if f.is_sealed(e):
-				return "sealed"
-			return "door" if world.is_lock_open(e) else "locked"
+			if world.is_lock_open(e):
+				return "door"  # 연 열쇠 문, needs 플래그로 연 봉인 문(M3 A9)
+			return "sealed" if f.is_sealed(e) else "locked"
 		_:
 			return "wall"
 

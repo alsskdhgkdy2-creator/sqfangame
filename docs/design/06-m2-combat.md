@@ -522,6 +522,7 @@ M2는 **독·마비·수면**을 넣는다(제안). 서로 다른 처리 지점(
   - 편성: 적 1~6, 줄마다 3 이하.
   - 적 AI: 마지막 규칙의 `if`는 빈 객체, 마지막이 아닌 규칙의 `if`는 조건이 하나 이상, 후보 스킬의 `user`가 `enemy`, 후보마다 `skill`·`weight`·`target`이 있음. `charging` 조건 규칙이 있으면 그 적에게 `charge` 스킬이 있고, 그 `charges`가 그 규칙 후보에 있다.
   - 파티 스킬의 `user`는 `party`, `tp`는 1 이상(일반 공격 제외). 적 스킬의 `tp`는 0.
+  - 적 스킬의 `effect`는 `damage`·`ailment`·`debuff`·`heal`·`charge`이고, M3 A9a부터 `buff`(자기·아군 대상, 강화 값만)도 쓴다(05 §22.1).
   - 층의 `encounter.table`이 출현 표 ID로 있음(층 파일은 `floor_loader.gd`가, 참조는 `GameDefs`가 본다, §8.2).
   - `effect`별 필수 필드만 있음(예: `heal`에 `element` 없음).
   - 규칙 상수: 구간은 `[lo, hi]`에서 `lo ≤ hi`, 칸 수 1 이상.

@@ -48,7 +48,7 @@ func test_real_data_loads_without_errors_or_warnings() -> void:
 	check(r.ok(), "defs 있음")
 	var db := r.defs.battle
 	check_eq(db.class_ids.size(), 6, "직업 여섯(M3 A7: 레일 레인저·헥스 해커)")
-	check_eq(db.enemy_ids.size(), 9, "적 아홉(일반 여섯 + FOE 셋, M3 A6)")
+	check_eq(db.enemy_ids.size(), 10, "적 열(일반 여섯 + FOE 셋, M3 A6 + 보스 하나, M3 A9)")
 	check_eq(db.table_formations("encounter.f1_test").size(), 6, "편성 여섯")
 	check_eq(r.defs.first_floor().encounter_table, "encounter.f1_test", "층 출현 표")
 	check_eq(r.defs.party.ids, ["holo_knight", "blade_duelist", "blade_duelist_2", "nano_medic", "glyph_wizard"] as Array[String], "D12 파티")
@@ -281,8 +281,11 @@ func test_relation_checks() -> void:
 	# M3 A7: 파티 debuff(헥스 해커)는 받는다. 값은 적 debuff 와 같은 범위로 본다: 강화 쪽 값(방어 750)은 거부.
 	_rejects("파티 debuff 에 강화 값", func(f): f["skills/blade_duelist.json"]["skills"].append(Fx.effect_skill("skill.blade_duelist.t_howl", false, [["phys_def", 750, 3]]).merged({"user": "party", "effect": "debuff", "target": "enemy_one"}, true)),
 		"skills/blade_duelist.json: skills[%d].levels[0].value: debuff phys_def 는" % bd_next)
-	_rejects("적 buff", func(f): f[ES]["skills"].append(Fx.effect_skill("skill.enemy.t_pump", true, [["phys_atk", 1300, 3]]).merged({"effect": "buff", "target": "self"}, true)),
-		"%s: skills[13].effect: user enemy 에는 effect buff 를" % ES)
+	# M3 A9(설계 §2.3): 적 buff(보스 자기 강화)는 받는다. 값은 파티 buff 와 같은 범위로 본다: 약화 쪽 값(공격 700)은 거부.
+	_rejects("적 buff 에 약화 값", func(f): f[ES]["skills"].append(Fx.effect_skill("skill.enemy.t_pump", true, [["phys_atk", 700, 3]]).merged({"effect": "buff", "target": "self"}, true)),
+		"%s: skills[13].levels[0].value: buff phys_atk 는" % ES)
+	_rejects("적 revive", func(f): f[ES]["skills"].append(Fx.effect_skill("skill.enemy.t_raise", true, [["phys_atk", 1300, 3]]).merged({"effect": "revive", "target": "ally_dead"}, true)),
+		"%s: skills[13].effect: user enemy 에는 effect revive 를" % ES)
 	for e in ["cure", "cover", "front_guard"]:
 		var d: Dictionary = {}
 		for sk in Fx.data_files()["skills/nano_medic.json"]["skills"] + Fx.data_files()["skills/holo_knight.json"]["skills"]:

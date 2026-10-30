@@ -77,7 +77,7 @@ func test_v10_roundtrip() -> void:
 			s.floor_states["b1f"].world.foes["f1"].state = "return"
 			s.floor_states["b2f"].world.foes["f2"].state = "return"
 		var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-		check_eq([doc["schema"], doc["rules"]], [12.0, "m3q"], "%s: 12판 머리" % variant)
+		check_eq([doc["schema"], doc["rules"]], [13.0, "m3b"], "%s: 13판 머리" % variant)
 		for id in ["b1f", "b2f", "b3f"]:
 			var keys: Array = _w(doc, id).keys()
 			keys.sort()
@@ -89,11 +89,12 @@ func test_v10_roundtrip() -> void:
 		if variant == "as built":
 			check_eq(_w(doc, "b1f")["foes"], {"f1": {"at": [14.0, 9.0], "facing": "W", "state": "patrol", "path_i": 2.0, "dir": -1.0, "stun": 1.0, "day": 0.0}}, "숫양 기록")
 			check_eq(_w(doc, "b2f")["foes"]["f2"]["state"], "chase", "탐험가 추적")
-			check_eq(_w(doc, "b3f")["foes"], {"f3": {"at": [16.0, 3.0], "facing": "N", "state": "defeated", "path_i": 0.0, "dir": 1.0, "stun": 0.0, "day": 3.0}}, "경비기 쓰러짐")
+			check_eq(_w(doc, "b3f")["foes"], {"f3": {"at": [16.0, 3.0], "facing": "N", "state": "defeated", "path_i": 0.0, "dir": 1.0, "stun": 0.0, "day": 3.0},
+				"boss": {"at": [4.0, 2.0], "facing": "E", "state": "idle", "path_i": 0.0, "dir": 1.0, "stun": 0.0, "day": 0.0}}, "경비기 쓰러짐, 보스 처음 상태(M3 A9)")
 		var r := SaveCodec.decode(JSON.stringify(doc), s.defs)
 		check(r.ok(), "%s: 읽기 %s" % [variant, r.error])
 		if r.ok():
-			check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.relocated], [SaveCodec.state_hash(s), 12, false], "%s: 같은 해시, 12판" % variant)
+			check_eq([SaveCodec.state_hash(r.state), r.from_schema, r.relocated], [SaveCodec.state_hash(s), 13, false], "%s: 같은 해시, 13판" % variant)
 			var ram: WorldState.FoeState = r.state.floor_states["b1f"].world.foes["f1"]
 			check_eq([ram.at, ram.facing, ram.path_i, ram.dir, ram.stun], [Vector2i(14, 9), Dir.W, 2, -1, 1], "%s: 읽은 숫양" % variant)
 
@@ -153,9 +154,9 @@ func test_v10_rejects() -> void:
 		d.merge({"schema": 9, "rules": "m3g"}, true)
 		Fx.strip_guild(d)  # M3 A7: 11판 길드 값은 걷어 내고 world 의 foes 만 남긴다
 	_reject(s, v9_head, "9판 검사 실패: floor_states.b1f.world.foes 는 모르는 필드다", "9판 world 에 foes")
-	_reject(s, func(d): d["rules"] = "m3g", "규칙 판(rules)이 schema 12 와 맞지 않다", "12판 머리에 m3g")
+	_reject(s, func(d): d["rules"] = "m3g", "규칙 판(rules)이 schema 13 와 맞지 않다", "13판 머리에 m3g")
 	_reject(s, func(d): d.merge({"schema": 9, "rules": "m3o"}, true), "규칙 판(rules)이 schema 9 와 맞지 않다", "9판 머리에 m3o")
-	_reject(s, func(d): d["schema"] = 13, "지원하지 않는 schema 다", "13판")
+	_reject(s, func(d): d["schema"] = 14, "지원하지 않는 schema 다", "14판")
 
 
 ## S2: 한 층에서 살아 있는 FOE 둘이 한 칸에 서면 거부(시험 층, FOE 둘).
@@ -223,9 +224,9 @@ func _check_kept(label: String, text: String, defs: GameDefs, moved: Dictionary 
 		check_eq(V7._norm(now[k]), V7._norm(o[k]), "%s: %s 보존" % [label, k])
 	check_eq(now.keys().filter(func(k: String) -> bool: return not o.has(k)), [], "%s: 맨 위에 더해진 필드 없음" % label)
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
-	check_eq([doc["schema"], doc["rules"]], [12.0, "m3q"], "%s: 12판으로 쓴다" % label)
+	check_eq([doc["schema"], doc["rules"]], [13.0, "m3b"], "%s: 13판으로 쓴다" % label)
 	var again := SaveCodec.decode(JSON.stringify(doc), defs)
-	check(again.ok() and again.from_schema == 12 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 12판 다시 읽기 같은 해시 %s" % [label, again.error])
+	check(again.ok() and again.from_schema == 13 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state), "%s: 13판 다시 읽기 같은 해시 %s" % [label, again.error])
 	return r
 
 
@@ -346,7 +347,7 @@ func test_every_old_schema_has_fresh_foes() -> void:
 				check_eq(V7._norm(now["floor_states"][id]["world"]["foes"]), V7._norm(Fx.fresh_foes(id)), "%s: %s 처음 FOE 기록" % [x[0], id])
 			var doc: Dictionary = JSON.parse_string(SaveCodec.encode(r.state))
 			var again := SaveCodec.decode(JSON.stringify(doc), pair[1])
-			check(doc["schema"] == 12.0 and again.ok() and again.from_schema == 12 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state),
+			check(doc["schema"] == 13.0 and again.ok() and again.from_schema == 13 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(r.state),
 				"%s: 10판으로 쓰고 다시 읽기 같은 해시" % x[0])
 
 
@@ -360,7 +361,7 @@ func test_relocation_fresh_foes() -> void:
 	var n := r.state
 	check_eq([n.floor_states.keys(), n.location, n.day, _rec(n, "f1")], [["b1f"], "town", 6, [Vector2i(12, 9), Dir.E, 0, "patrol", 0]], "B1F 기록 하나, 마을, 6일째, 처음 숫양")
 	var again := SaveCodec.decode(SaveCodec.encode(n), defs)
-	check(again.ok() and not again.relocated and again.from_schema == 12 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(n), "12판으로 다시 쓰고 읽음 %s" % again.error)
+	check(again.ok() and not again.relocated and again.from_schema == 13 and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(n), "13판으로 다시 쓰고 읽음 %s" % again.error)
 
 
 ## S6 (M-S6 모든 FOE id 를 요구): 10판 world.foes 에 없는 FOE 는 처음 상태로 읽는다(자료에 FOE 가 늘어도 옛 10판이 읽힌다).

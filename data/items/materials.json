@@ -107,6 +107,18 @@
       "name_key": "item.warden_core",
       "desc_key": "item.warden_core.desc",
       "sell": 300
+    },
+    {
+      "id": "item.fenrir_core",
+      "name_key": "item.fenrir_core",
+      "desc_key": "item.fenrir_core.desc",
+      "sell": 500
+    },
+    {
+      "id": "item.fenrir_fang",
+      "name_key": "item.fenrir_fang",
+      "desc_key": "item.fenrir_fang.desc",
+      "sell": 800
     }
   ]
 }

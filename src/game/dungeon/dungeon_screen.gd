@@ -564,6 +564,10 @@ func _do_action(action: int) -> void:
 			"lock_opened":
 				rebuild = true
 				_show_toast(texts.t("msg.lock_opened", {"key": item_text(str(ev["key"]))}))
+			"seal_opened":
+				rebuild = true  # 봉인 문(M3 A9): 빨간 봉인 → 문
+				_show_toast(texts.t("msg.seal_opened"))
+			# M3 A9a 임시 상태(설계 §9.1): boss 이벤트(보스에 부딪힘·조사)는 아직 아무것도 보이지 않는다. 보스 물음 창과 FIGHT 는 A9b 가 단다.
 			"chest_opened":
 				rebuild = true  # 상자 겉모습(닫힘 → 열림)
 				_show_toast(chest_text(ev))

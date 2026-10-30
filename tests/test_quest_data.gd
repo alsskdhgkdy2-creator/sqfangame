@@ -24,8 +24,10 @@ func _q(over: Dictionary = {}) -> Dictionary:
 
 
 ## 의뢰 목록을 읽고 게임 묶음 정의로 참조까지 본 오류 목록.
-func _errors(list: Array) -> Array[String]:
+## reserved(M3 A9): 게임 묶음에는 예약 구역이 없어졌으므로(B3F 보스 방이 실제 칸이 됨) 예약 칸 검사는 B3F 에 옛 보스 방 사각형을 다시 얹은 정의로 본다.
+func _errors(list: Array, reserved: Array[Rect2i] = []) -> Array[String]:
 	var d := Fx.arbor()
+	d.floors["b3f"].reserved.append_array(reserved)
 	var q := QuestDb.parse_dict({"quests": list}, "fx.json")
 	if q.ok():
 		q.resolve(d.battle, _floors(d), null)
@@ -104,7 +106,8 @@ func test_relation_rejects() -> void:
 
 ## D4 (M-QD4 비워 둔 자리를 받음, M-QD8 출현 표에 없는 적을 받음): 목표 참조.
 func test_objective_refs() -> void:
-	_expect([_q({"objective": {"kind": "reach", "floor": "b3f", "at": [4, 2], "where_key": "quest.boss_seal.where"}})], "비워 둔 자리", "B3F 보스 방 안")
+	var held := _errors([_q({"objective": {"kind": "reach", "floor": "b3f", "at": [4, 2], "where_key": "quest.boss_seal.where"}})], [Rect2i(3, 1, 6, 3)] as Array[Rect2i])
+	check(held.any(func(e: String) -> bool: return e.contains("비워 둔 자리")), "예약 구역 안(B3F 에 옛 보스 방 사각형을 얹음, M3 A9): 「비워 둔 자리」 오류 %s" % str(held))
 	_expect([_q({"objective": {"kind": "reach", "floor": "b1f", "at": [0, 0], "where_key": "quest.boss_seal.where"}})], "설 수 있는 칸이 아니다", "벽 칸")
 	_expect([_q({"objective": {"kind": "reach", "floor": "f1_test", "at": [1, 1], "where_key": "quest.boss_seal.where"}})], "층 f1_test 가 묶음에 없다", "묶음 밖 층")
 	_expect([_q({"objective": {"kind": "kill", "enemy": "enemy.foe_ether_ram", "count": 1}})], "출현 표에 없다", "FOE 적을 kill 로")

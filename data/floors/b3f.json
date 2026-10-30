@@ -49,7 +49,7 @@
   "stairs": [{"at": [17, 18], "way": "up", "exit": "W", "to": {"floor": "b2f", "at": [17, 17]}}],
   "shortcuts": [{"at": [16, 15], "dir": "S"}],
   "locks": [
-    {"at": [8, 2], "dir": "E", "seal": "boss"},
+    {"at": [8, 2], "dir": "E", "seal": "boss", "needs": "permit.boss"},
     {"at": [12, 3], "dir": "N", "key": "key.relay_fuse"}
   ],
   "chests": [
@@ -62,11 +62,12 @@
     {"id": "g2", "at": [14, 16], "kind": "chop", "uses": 2, "table": "gather.b3f.chop"},
     {"id": "g3", "at": [14, 1], "kind": "mine", "uses": 2, "table": "gather.b3f.mine"}
   ],
-  "reserved": [[3, 1, 8, 3]],
   "foes": [
-    {"id": "f3", "foe": "foe.warden", "kind": "guard", "at": [16, 3], "facing": "N", "respawn": "never"}
+    {"id": "f3", "foe": "foe.warden", "kind": "guard", "at": [16, 3], "facing": "N", "respawn": "never"},
+    {"id": "boss", "foe": "foe.fenrir", "kind": "boss", "at": [4, 2], "facing": "E", "respawn": "never"}
   ],
   "encounter": {"danger_per_step": 12, "threshold_min": 100, "threshold_max": 200, "table": "encounter.b3f"},
-  "zones": [{"id": "ice", "rect": [5, 6, 14, 13], "danger_per_step": 8}],
+  "zones": [{"id": "ice", "rect": [5, 6, 14, 13], "danger_per_step": 8}, {"id": "boss_room", "rect": [3, 1, 8, 3], "danger_per_step": 0}],
+  "no_return": [[3, 1, 8, 3]],
   "damage_floor": {"damage": 3}
 }

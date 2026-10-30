@@ -114,7 +114,7 @@ func test_real_shop_data() -> void:
 		check_eq(db.equip("equip." + row[0]).price, row[1], "%s 값" % row[0])
 	for m in SELL:
 		check_eq(db.material_sell["item." + m], SELL[m], "%s 판매값" % m)
-	check_eq(db.material_ids.size(), 18, "소재 열여덟(M3 A5: 여덟 + 채집 일곱, M3 A6: FOE 셋)")
+	check_eq(db.material_ids.size(), 20, "소재 스물(M3 A5: 여덟 + 채집 일곱, M3 A6: FOE 셋, M3 A9: 보스 둘)")
 	var texts := TextDb.load_path("res://data/text/ko.json")
 	check_eq(texts.t(JUNK), "정크 공방", "상점 이름 문구")
 	check(db.name_keys().has(JUNK), "상점 name_key 도 문구 검사에 들어간다")

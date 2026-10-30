@@ -66,7 +66,7 @@ func test_floor_format() -> void:
 	_expect_error(_floor([_foe(GOOD, {"sight": 3})]), "foes[0].sight 는 patrol FOE 에 쓰지 않는 필드다", "순회에 시야")
 	_expect_error(_floor([_foe(GOOD, {"id": "P1"})]), "foes[0].id 는", "id 꼴")
 	_expect_error(_floor([GOOD, _foe(GUARD, {"id": "p1"})]), "foes[1] 의 id p1 가 중복", "id 중복")
-	_expect_error(_floor([_foe(GOOD, {"kind": "boss"})]), "foes[0].kind 는", "모르는 종류")
+	_expect_error(_floor([_foe(GOOD, {"kind": "ambush"})]), "foes[0].kind 는", "모르는 종류")  # M3 A9: boss 가 아는 종류가 되어 다른 이름으로
 	_expect_error(_floor([_foe(GOOD, {"foe": "enemy.ram"})]), "foes[0].foe 는 foe. 로 시작하는", "정의 ID 꼴")
 	_expect_error(_floor([_foe(GOOD, {"facing": "X"})]), "foes[0].facing 은", "방향")
 	_expect_error(_floor([_foe(GUARD, {"at": [5, 0]})]), "foes[0] 5:0 이 FOE 가 설 수 있는 칸이 아니다", "얼음 칸")
@@ -189,20 +189,23 @@ func test_real_placements() -> void:
 	}
 	for fid in want:
 		var f := defs.floor_by_id(fid)
-		check_eq(f.foe_list().size(), 1, "%s: FOE 하나" % fid)
-		var sp: FloorModel.FoeSpawn = f.foe_list()[0]
+		# M3 A9: B3F 는 문지기 f3 뒤에 보스(boss)가 있다. 보스는 test_boss_data 가 따로 본다. 보스가 아닌 FOE 는 층마다 하나다.
+		var plain := f.foe_list().filter(func(o: FloorModel.FoeSpawn) -> bool: return o.kind != "boss")
+		check_eq([plain.size(), f.foe_list().size() - plain.size()], [1, 1 if fid == "b3f" else 0], "%s: FOE 하나(+ B3F 보스)" % fid)
+		var sp: FloorModel.FoeSpawn = plain[0]
 		check_eq([sp.id, sp.foe, sp.kind, sp.at, sp.facing, sp.path, sp.sight, sp.chase, sp.join, sp.respawn, sp.respawn_days], want[fid], "%s 배치" % fid)
 		check_eq(FloorLoader.guard_progress(f, fid), [] as Array[String], "%s: 문지기 진행 검사 통과" % fid)
 		check_eq(FloorLoader.analyze(f, fid + ".json"), [] as Array[String], "%s: 분석 경고 0" % fid)
 	var db := defs.battle
-	check_eq(db.foe_ids, ["foe.ether_ram", "foe.lost_delver", "foe.warden"] as Array[String], "FOE 정의 셋")
+	check_eq(db.foe_ids, ["foe.ether_ram", "foe.lost_delver", "foe.warden", "foe.fenrir"] as Array[String], "FOE 정의 셋 + 보스 하나(M3 A9, 파일 차례)")
+	check_eq(db.foe_ids.filter(func(id: String) -> bool: return db.foe(id).boss), ["foe.fenrir"], "보스 정의는 펜리르뿐")
 	for x in [["foe.ether_ram", 6, "enemy.foe_ether_ram", 600, 180], ["foe.lost_delver", 10, "enemy.foe_lost_delver", 760, 260],
 			["foe.warden", 14, "enemy.foe_warden", 1100, 360]]:
 		var fd := db.foe(x[0])
 		var form: BattleDb.FormationDef = db.formations[fd.formation]
 		var en: BattleDb.EnemyDef = db.enemies[x[2]]
 		check_eq([fd.level, form.enemies.size(), form.enemies[0]["enemy"], form.no_escape, en.max_hp, en.exp], [x[1], 1, x[2], false, x[3], x[4]], "%s 정의" % x[0])
-	check_eq(db.material_ids.size(), 18, "소재 열여덟")
+	check_eq(db.material_ids.size(), 20, "소재 스물(M3 A9 보스 소재 둘)")
 	var texts := TextDb.load_path("res://data/text/ko.json")
 	for x in [["item.ether_horn", 150, "enemy.foe_ether_ram"], ["item.delver_badge", 200, "enemy.foe_lost_delver"], ["item.warden_core", 300, "enemy.foe_warden"]]:
 		check_eq(db.material_sell.get(x[0]), x[1], "%s 판매값" % x[0])
@@ -348,4 +351,4 @@ func test_route_outside_join_ranges() -> void:
 			nearest[sp.id] = [sp.join, best]
 			if sp.kind != "guard":
 				check(best > sp.join, "%s %s: 가장 가까운 공략 칸 거리 %d > join %d" % [fid, sp.id, best, sp.join])
-	check_eq(nearest, {"f1": [2, 3], "f2": [3, 999], "f3": [0, 999]}, "FOE → [join, 가장 가까운 공략 칸 거리](999 = 닿지 않음)")
+	check_eq(nearest, {"f1": [2, 3], "f2": [3, 999], "f3": [0, 999], "boss": [0, 999]}, "FOE → [join, 가장 가까운 공략 칸 거리](999 = 닿지 않음, M3 A9 보스는 닫힌 봉인 뒤)")

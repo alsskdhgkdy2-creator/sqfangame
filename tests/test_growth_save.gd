@@ -85,7 +85,7 @@ func test_v3_roundtrip_with_growth_mid_battle() -> void:
 	var m0 := s.party.members[0]
 	check(m0.level == 3 and m0.skills.get(SHIELD_M) == 2 and m0.equip[1] == "equip.aegis_plate" and s.gear_bag.has("equip.training_shield") and s.battle != null, "준비: 성장 값·전투")
 	var doc: Dictionary = JSON.parse_string(SaveCodec.encode(s))
-	check_eq([doc["schema"], doc["rules"]], [12.0, "m3q"], "12판 머리(M3 A4)")
+	check_eq([doc["schema"], doc["rules"]], [13.0, "m3b"], "13판 머리(M3 A4)")
 	var v3 := SaveCodec.decode(JSON.stringify(as_v3(doc)), _defs())
 	check(v3.ok(), "3판 문서 읽기(4판으로 이전) %s" % v3.error)
 	if v3.ok():
@@ -336,7 +336,7 @@ func test_v1_migrates_straight_to_v4_with_growth_defaults() -> void:
 			check_eq([m.id, m.level, m.exp, m.skills, m.equip], [defs.party.ids[i], 1, 0, defs.party.skills[i], defs.party.equips[i]], "대원 %d 성장 기본값" % i)
 		check_eq([s.gear_bag, s.materials], [{}, {}], "가방·소재 비어 있음")
 		check_eq([s.money, SaveCodec.state_to_dict(s)["shop"]], [200, {"sold": {}, "pool": {}, "bought": []}], "시작 소지금·빈 상점(08 §4)")
-		check_eq(JSON.parse_string(SaveCodec.encode(s))["schema"], 12.0, "12판으로 쓴다")
+		check_eq(JSON.parse_string(SaveCodec.encode(s))["schema"], 13.0, "13판으로 쓴다")
 		var again := SaveCodec.decode(x[0], defs)
 		check(again.ok() and SaveCodec.state_hash(again.state) == SaveCodec.state_hash(s), "두 번 읽어도 같은 해시")
 

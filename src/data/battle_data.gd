@@ -66,9 +66,10 @@ const EFFECT_TARGETS := {
 ## 쓰는 쪽마다 받는 effect(명세에 없던 관계 검사: M2 데이터·규칙이 쓰는 조합만 받는다).
 ## 적 revive(처치 기록을 지워야 한다)·파티 charge(예고 화면이 없다)처럼 수명 주기를 정하지 않은 조합은 읽기에서 막는다.
 ## 적 heal 은 시험의 「아무것도 안 하는 행동」(자기 대상 0 회복)으로 쓴다.
+## 적 buff(M3 A9 보스 「과부하 구동」): 효과 규칙·저장 검사·화면 사본은 편을 가리지 않으므로 쓰는 쪽 조합만 연다(대상은 EFFECT_TARGETS 의 self·ally_*).
 const USER_EFFECTS := {
 	"party": ["damage", "ailment", "heal", "cure", "revive", "buff", "debuff", "front_guard", "cover", "passive"],
-	"enemy": ["damage", "ailment", "debuff", "heal", "charge"],
+	"enemy": ["damage", "ailment", "debuff", "heal", "charge", "buff"],
 }
 ## 혼란한 적의 내장 공격 스킬 id(confused_attack).
 const CONFUSED := "confused"
@@ -323,6 +324,8 @@ class FoeDef:
 	var id := ""
 	var level := 1
 	var formation := ""
+	## 계층 보스(M3 A9): 무리는 도망칠 수 없고(no_escape 참) 적 1~6. 층의 FOE 종류 boss 만 가리킨다(GameDefs.check_foes).
+	var boss := false
 
 
 class EncounterDef:
@@ -762,25 +765,33 @@ func _read_gather_table(ck: _Ck, d: Dictionary, path: String) -> void:
 	gather_table_ids.append(g.id)
 
 
-## FOE 정의(M3 A6, 설계 §2.2): {id, level, formation}. formation 은 편성 읽기(_read_formation)를 그대로 거쳐 formations 에 들어가고,
-## 적이 정확히 하나, no_escape 거짓이어야 한다(FOE 는 도망칠 수 있다, 보스는 A9 가 따로 정한다). 적이 있는지는 _check_refs 가 본다.
+## FOE 정의(M3 A6, 설계 §2.2): {id, level, formation} + 선택 boss(M3 A9, 참·거짓). formation 은 편성 읽기(_read_formation)를 그대로 거쳐
+## formations 에 들어간다. 보스가 아니면 적이 정확히 하나, no_escape 거짓(FOE 는 도망칠 수 있다). 보스면 no_escape 참, 적 1~6(편성 읽기가 본다).
+## 적이 있는지는 _check_refs 가 본다.
 ## FOE 의 편성은 출현 표에 없어도 경고하지 않고 그 적도 쓰인 것으로 센다.
 func _read_foe(ck: _Ck, d: Dictionary, path: String) -> void:
-	if not ck.keys(d, path, ["id", "level", "formation"], []):
+	if not ck.keys(d, path, ["id", "level", "formation"], ["boss"]):
 		return
 	var fd := FoeDef.new()
 	fd.id = ck.id_of(d, "id", path, "foe.")
 	var lv: Variant = ck.int_of(d, "level", path, "foe_level")
 	fd.level = lv if lv != null else 1
+	if d.has("boss"):
+		fd.boss = ck.bool_of(d, "boss", path)
 	var f := _read_formation(ck, d["formation"], _p(path, "formation"))
 	if f == null:
 		return
-	if f.enemies.size() != 1:
-		ck.err(_p(path, "formation.enemies"), "FOE 의 무리는 적 하나여야 한다")
-		return
-	if f.no_escape:
-		ck.err(_p(path, "formation.no_escape"), "FOE 의 무리는 도망칠 수 있어야 한다(false)")
-		return
+	if fd.boss:
+		if not f.no_escape:
+			ck.err(_p(path, "formation.no_escape"), "보스의 무리는 도망칠 수 없어야 한다(true)")
+			return
+	else:
+		if f.enemies.size() != 1:
+			ck.err(_p(path, "formation.enemies"), "FOE 의 무리는 적 하나여야 한다")
+			return
+		if f.no_escape:
+			ck.err(_p(path, "formation.no_escape"), "FOE 의 무리는 도망칠 수 있어야 한다(false)")
+			return
 	fd.formation = f.id
 	if fd.id.is_empty() or not _claim(ck, fd.id, path):
 		return

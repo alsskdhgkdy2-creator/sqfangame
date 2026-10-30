@@ -9,13 +9,14 @@ extends RefCounted
 ## OPEN(M3 A3): 서 있는 칸의 닫힌 보물상자를 연다(화면이 상자 물음 「예」 뒤에 부른다).
 ## GATHER(M3 A5): 서 있는 채집 지점에서 한 번 채집한다(GatherRules.gather, 화면이 채집 물음 「예」 뒤에 부른다).
 ## FOE(M3 A6, FoeRules): 걸음 수가 오르는 행동(실제로 한 칸 이상 움직인 이동)마다 FOE 가 한 번씩 움직인다. 회전·조사·열기·채집·계단은 시간이 없다.
-enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, STAIRS = 8, ENTER, OPEN, GATHER }
+## FIGHT(M3 A9): 열린 경계로 맞닿은 살아 있는 보스와 접촉 전투를 연다(화면이 보스 물음 「예」 뒤에 부른다). 걸음·위험도·난수가 없다.
+enum Action { FORWARD, BACK, STRAFE_LEFT, STRAFE_RIGHT, TURN_LEFT, TURN_RIGHT, INVESTIGATE, STAIRS = 8, ENTER, OPEN, GATHER, FIGHT }
 
 ## 행동 이름(공략 행동열 파일·디버그용) → Action.
 const ACTION_NAMES := {
 	"forward": Action.FORWARD, "back": Action.BACK, "strafe_left": Action.STRAFE_LEFT, "strafe_right": Action.STRAFE_RIGHT,
 	"turn_left": Action.TURN_LEFT, "turn_right": Action.TURN_RIGHT, "investigate": Action.INVESTIGATE,
-	"stairs": Action.STAIRS, "enter": Action.ENTER, "open": Action.OPEN, "gather": Action.GATHER,
+	"stairs": Action.STAIRS, "enter": Action.ENTER, "open": Action.OPEN, "gather": Action.GATHER, "fight": Action.FIGHT,
 }
 const AUTOMAP_OFF := "off"
 const AUTOMAP_FLOOR := "floor"
@@ -93,6 +94,8 @@ static func apply(s: ExplorationState, action: int, automap: String) -> Array[Di
 			_open_chest(s, events)
 		Action.GATHER:
 			GatherRules.gather(s, events)
+		Action.FIGHT:
+			_fight(s, events)
 		_:
 			_move(s, _move_dir(s.party.facing, action), action == Action.FORWARD, events, automap)
 	return events
@@ -120,8 +123,9 @@ static func look_of(floor_def: FloorModel, world: WorldState, e: Vector3i) -> St
 ## 칸 at에서 d 방향으로 한 칸 나갈 수 있는지. 지나가면 "", 아니면 막힘 사유.
 ## 닫힌 지름길은 열 수 있는 쪽이면 shortcut_closed(정면 전진·조사는 따로 연다), 반대쪽이면 shortcut_locked.
 ## 닫힌 잠긴 문(M3 A3)은 봉인이면 sealed, 그 열쇠를 가졌으면(keys) lock_closed(정면 전진·조사가 연다), 아니면 locked.
-## 지나갈 수 있는지는 keys 와 상관없다(keys 는 사유 글만 가른다).
-static func block_reason(floor_def: FloorModel, world: WorldState, at: Vector2i, d: int, keys: Dictionary = {}) -> String:
+## needs 가 있는 봉인(M3 A9)은 그 플래그를 가졌으면(flags) seal_closed(정면 전진·조사가 연다), 아니면 sealed.
+## 지나갈 수 있는지는 keys·flags 와 상관없다(사유 글만 가른다). flags 는 옛 호출이 그대로 맞게 맨 뒤에 둔다.
+static func block_reason(floor_def: FloorModel, world: WorldState, at: Vector2i, d: int, keys: Dictionary = {}, flags: Dictionary = {}) -> String:
 	var e := FloorModel.edge_of(at, d)
 	if not floor_def.is_cell(at + Dir.vec(d)):
 		return "wall"
@@ -140,7 +144,8 @@ static func block_reason(floor_def: FloorModel, world: WorldState, at: Vector2i,
 			if world.is_lock_open(e):
 				return ""
 			if floor_def.is_sealed(e):
-				return "sealed"
+				var needs := floor_def.seal_needs(e)
+				return "seal_closed" if not needs.is_empty() and flags.has(needs) else "sealed"
 			return "lock_closed" if keys.has(floor_def.lock_key(e)) else "locked"
 		_:
 			return "wall"
@@ -205,9 +210,20 @@ static func _try_open_shortcut(s: ExplorationState, e: Vector3i, events: Array[D
 
 
 ## 바라본 닫힌 열쇠 문을 그 열쇠로 연다(M3 A3, 어느 쪽에서든). 열쇠는 남는다.
+## 바라본 닫힌 봉인 문(M3 A9)은 needs 플래그를 가졌으면 연다(seal_opened). 연 봉인은 world.locks_open 에 남고 다시 닫히지 않는다.
 static func _try_open_lock(s: ExplorationState, e: Vector3i, events: Array[Dictionary], automap: String) -> bool:
 	var f := s.floor_def
-	if f.edge_kind(e) != FloorModel.Edge.LOCK or s.world.is_lock_open(e) or f.is_sealed(e) or not s.key_items.has(f.lock_key(e)):
+	if f.edge_kind(e) != FloorModel.Edge.LOCK or s.world.is_lock_open(e):
+		return false
+	if f.is_sealed(e):
+		var needs := f.seal_needs(e)
+		if needs.is_empty() or not s.flags.has(needs):
+			return false
+		s.world.open_lock(e)
+		_observe(s, e, automap)
+		events.append({"type": "seal_opened", "edge": e, "flag": needs})
+		return true
+	if not s.key_items.has(f.lock_key(e)):
 		return false
 	s.world.open_lock(e)
 	_observe(s, e, automap)
@@ -229,7 +245,12 @@ static func _investigate(s: ExplorationState, events: Array[Dictionary], automap
 		return
 	# 바라본 닫힌 잠긴 문(열쇠가 없거나 봉인)은 그 사유를 알린다(M3 A3).
 	if s.floor_def.edge_kind(e) == FloorModel.Edge.LOCK and not s.world.is_lock_open(e):
-		events.append({"type": "blocked", "reason": block_reason(s.floor_def, s.world, s.party.at, s.party.facing, s.key_items)})
+		events.append({"type": "blocked", "reason": block_reason(s.floor_def, s.world, s.party.at, s.party.facing, s.key_items, s.flags)})
+		return
+	# 바라본 칸의 살아 있는 보스(M3 A9, 열린 경계로 맞닿음)는 보스 물음.
+	var boss := FoeRules.boss_near(s, s.party.facing)
+	if not boss.is_empty():
+		events.append({"type": "boss", "foe": boss})
 		return
 	# 상자 칸에서 조사하면 닫힌 상자는 다시 묻고, 연 상자는 「빈 상자」(M3 A3).
 	var chest := s.floor_def.chest_at(s.party.at)
@@ -264,9 +285,9 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 			break
 	if path.is_empty():
 		if not bump.is_empty():
-			FoeRules.contact(s, bump, "party", events)
+			_bump(s, bump, events)
 			return
-		events.append({"type": "blocked", "reason": block_reason(f, s.world, s.party.at, d, s.key_items)})
+		events.append({"type": "blocked", "reason": block_reason(f, s.world, s.party.at, d, s.key_items, s.flags)})
 		return
 	for i in path.size():
 		var from := s.party.at
@@ -283,7 +304,7 @@ static func _move(s: ExplorationState, d: int, forward: bool, events: Array[Dict
 	# FOE(M3 A6 설계 §4.4 6~8단계): 움직인 뒤 FOE 앞에서 멈췄으면(미끄러짐 끝) 그 FOE 와, 아니면 FOE 차례(tick)에서 난 접촉으로 전투를 연다.
 	# 접촉이 나면 위험도를 더하지 않고 인카운트도 보지 않는다(01 §3.1).
 	if not bump.is_empty():
-		FoeRules.contact(s, bump, "party", events)
+		_bump(s, bump, events)
 		return
 	var hit := FoeRules.tick(s, events)
 	if not hit.is_empty():
@@ -323,6 +344,8 @@ static func stair_here(s: ExplorationState) -> Dictionary:
 ## 서 있는 칸의 물음(M3 A3): 계단(마을 문 포함)이면 {kind: "stairs", way, to}, 닫힌 상자면 {kind: "chest", chest: id},
 ## 오늘 남은 횟수가 있는 채집 지점이면 {kind: "gather", point: id}(M3 A5), 아니면 빈 사전.
 ## 화면이 남은 물음이 아직 맞는지 볼 때 쓴다.
+## 보스(M3 A9)는 서 있는 칸의 물음이 없을 때만: 열린 경계로 맞닿은 살아 있는 보스면 {kind: "boss", foe: id}. 보스 물음은 boss 이벤트 뒤에만 띄우고
+## 여기서는 남은 물음이 아직 맞는지만 본다(층 형식이 보스 옆 칸에 계단·상자·지점을 두지 않는다).
 static func question_here(s: ExplorationState) -> Dictionary:
 	var st := stair_here(s)
 	if not st.is_empty():
@@ -336,7 +359,29 @@ static func question_here(s: ExplorationState) -> Dictionary:
 	var p := s.floor_def.point_at(s.party.at)
 	if p != null and s.world.gather_left(p) > 0:
 		return {"kind": "gather", "point": p.id}
+	var boss := FoeRules.boss_near(s)
+	if not boss.is_empty():
+		return {"kind": "boss", "foe": boss}
 	return {}
+
+
+## 살아 있는 FOE 에 부딪혔다(M3 A6): 보스(M3 A9)면 전투 없이 boss 물음 이벤트, 아니면 접촉 전투.
+static func _bump(s: ExplorationState, id: String, events: Array[Dictionary]) -> void:
+	var sp: FloorModel.FoeSpawn = s.floor_def.foes[id]
+	if sp.kind == "boss":
+		events.append({"type": "boss", "foe": id})
+		return
+	FoeRules.contact(s, id, "party", events)
+
+
+## 보스와 싸운다(M3 A9, FIGHT): 열린 경계로 맞닿은 살아 있는 보스(어느 쪽이든)가 없으면 blocked no_boss. 있으면 접촉 전투(FoeRules.contact).
+## 걸음·위험도·난수를 쓰지 않는다.
+static func _fight(s: ExplorationState, events: Array[Dictionary]) -> void:
+	var boss := FoeRules.boss_near(s)
+	if boss.is_empty():
+		events.append({"type": "blocked", "reason": "no_boss"})
+		return
+	FoeRules.contact(s, boss, "party", events)
 
 
 ## 서 있는 칸의 닫힌 상자를 연다(M3 A3). 상자가 없거나 이미 열었으면 막힘 not_chest. 넣을 자리가 없으면(공용 가방 60칸 BagRules.fit·소지금 상한)

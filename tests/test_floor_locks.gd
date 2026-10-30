@@ -229,7 +229,18 @@ func test_real_floors() -> void:
 	check(b2.edges_of_kind(FloorModel.Edge.ONEWAY).size() >= 3, "B2F 일방통행 주제")
 	var b3: FloorModel = d.floors["b3f"]
 	check_eq([b3.lock_key(Vector3i(12, 3, 0)), b3.is_sealed(Vector3i(9, 2, 1)), b3.seal_of(Vector3i(9, 2, 1))], ["key.relay_fuse", true, "boss"], "B3F 관문·봉인")
-	check(b3.is_reserved(Vector2i(3, 1)) and b3.is_reserved(Vector2i(8, 3)) and not b3.is_reserved(Vector2i(9, 2)), "B3F 보스 방 예약")
+	# M3 A9: 예약 구역이던 보스 방 x3~8·y1~3 이 실제 칸이 되었다(05 §16.7 → §22). 봉인은 permit.boss 로 열리고, 방은 비콘이 닿지 않으며,
+	# 봉인 뒤 칸(behind_seal)은 정확히 그 18칸이다.
+	check(not b3.is_reserved(Vector2i(3, 1)) and not b3.is_reserved(Vector2i(8, 3)) and b3.reserved.is_empty(), "B3F 보스 방은 더 예약 칸이 아니다(M3 A9)")
+	check_eq(b3.seal_needs(Vector3i(9, 2, 1)), "permit.boss", "B3F 봉인 needs")
+	var room := {}
+	for y in range(1, 4):
+		for x in range(3, 9):
+			room[Vector2i(x, y)] = true
+	check_eq(b3.no_return, room, "B3F 비콘이 닿지 않는 칸 = 보스 방 18칸")
+	check_eq(b3.behind_seal.keys(), [Vector3i(9, 2, 1)], "B3F 봉인 하나")
+	check_eq(b3.behind_seal.get(Vector3i(9, 2, 1), {}), room, "B3F 봉인 뒤 칸 = 보스 방 18칸")
+	check_eq(FloorLoader._world_bits(b3).size(), 4, "B3F 세계 비트 넷(지름길·관문·봉인·열쇠)")
 	check(b3.cells().filter(func(c: Vector2i) -> bool: return b3.cell_kind(c) == FloorModel.Cell.ICE).size() >= 40, "B3F 미끄러운 바닥 주제")
 	check_eq(GameDefs.check_chests_and_locks([b1, b2, b3] as Array[FloorModel], d.battle), [] as Array[String], "상자·열쇠 참조")
 	check_eq([d.key_chest("key.moss_card")[0].id, d.key_chest("key.relay_fuse")[0].id], ["b2f", "b3f"], "열쇠가 든 층")

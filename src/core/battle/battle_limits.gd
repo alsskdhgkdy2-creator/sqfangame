@@ -90,7 +90,8 @@ const GATHER_USES_MAX := 9
 const GATHER_COUNT_MAX := 5
 const GATHER_ITEMS_MAX := 8
 ## FOE(M3 A6, 01 §3.5): 종류(순회 patrol·추적 chase·문지기 guard)와 되살아남(Never·AfterDays(n)·OnFloorReload).
-const FOE_KINDS := ["patrol", "chase", "guard"]
+## boss(M3 A9): 움직이지 않고 스스로 전투를 열지 않는 계층 보스. 부딪히거나 조사하면 물음, FIGHT 로 접촉 전투(05 §22). 값이 밀리지 않게 끝에 둔다.
+const FOE_KINDS := ["patrol", "chase", "guard", "boss"]
 const FOE_RESPAWN := ["never", "after_days", "floor_reload"]
 ## 상점(08 §2): 소지금 상한, 누적 판 수(sold·pool) 상한.
 const MONEY_MAX := 9999999

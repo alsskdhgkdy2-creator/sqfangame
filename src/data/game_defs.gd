@@ -128,13 +128,26 @@ static func from_parts(floor_list: Array[FloorModel], party: PartyData, db: Batt
 	return r
 
 
-## 계단 needs(M3 A8): 플래그마다 그것을 주는 의뢰가 묶음에 있어야 한다(막힌 계단이 영영 열리지 않는 일이 없게).
+## 계단 needs(M3 A8)·봉인 문 needs(M3 A9): 플래그마다 그것을 주는 의뢰가 묶음에 있어야 한다(막힌 계단·봉인이 영영 열리지 않는 일이 없게).
 static func check_needs(floor_list: Array[FloorModel], quests: QuestDb) -> Array[String]:
 	var out: Array[String] = []
 	for f in floor_list:
 		for st in f.stair_list():
 			if not st.needs.is_empty() and not quests.knows_flag(st.needs):
 				out.append("%s: stairs %d:%d: needs %s 를 주는 의뢰가 없다" % [f.id, st.at.x, st.at.y, st.needs])
+		for e in f.needs_seals():
+			if not quests.knows_flag(f.seal_needs(e)):
+				out.append("%s: locks %s: needs %s 를 주는 의뢰가 없다" % [f.id, GridKey.edge(e), f.seal_needs(e)])
+	return out
+
+
+## 묶음의 보스 자리(M3 A9): [[층 id, FOE id]] 층 차례(층마다 하나까지).
+func boss_spawns() -> Array:
+	var out := []
+	for id in floor_ids:
+		for sp in floors[id].foe_list():
+			if sp.kind == "boss":
+				out.append([id, sp.id])
 	return out
 
 
@@ -149,12 +162,16 @@ func gate_flags() -> Array[String]:
 
 
 ## FOE 참조(M3 A6, 설계 §2.3): 층 FOE 의 정의가 있는지, 문지기가 진행(계단·열쇠 상자·잠긴 문)을 막지 않는지.
+## 보스(M3 A9): 종류 boss 는 boss 정의(FoeDef.boss)를, 다른 종류는 보스가 아닌 정의를 가리킨다.
 static func check_foes(floor_list: Array[FloorModel], db: BattleDb) -> Array[String]:
 	var out: Array[String] = []
 	for f in floor_list:
 		for s in f.foe_list():
-			if db.foe(s.foe) == null:
+			var fd := db.foe(s.foe)
+			if fd == null:
 				out.append("%s: foes: FOE %s 의 정의 %s 가 없다" % [f.id, s.id, s.foe])
+			elif fd.boss != (s.kind == "boss"):
+				out.append("%s: foes: FOE %s(%s)의 정의 %s 는 %s" % [f.id, s.id, s.kind, s.foe, "보스 정의여야 한다" if s.kind == "boss" else "보스 정의가 아니어야 한다"])
 		out.append_array(FloorLoader.guard_progress(f, f.id))
 	return out
 

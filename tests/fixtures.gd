@@ -158,6 +158,86 @@ static func strip_v12(now: Dictionary, defs: GameDefs) -> Dictionary:
 	return {"state": d, "bad": bad}
 
 
+## 13판(M3 A9) 상태 사전(SaveCodec.state_to_dict 또는 읽은 JSON)에서 보스 FOE 기록만 이름으로 뺀다. 빼기 전에 그 기록이 처음 상태
+## (그 층 정의의 자리·방향, idle, path_i 0, dir 1, stun 0, day 0)인지 본다. 보스 자리가 있는 층의 기록이 있으면 보스 기록도 꼭 있어야 한다.
+## {state: 뺀 사본, bad: 어긋남 설명("" 이면 처음 상태)}. 보스를 만나지 않은 옛 경로·HEAD 비교(J7·J8)가 쓴다.
+static func strip_v13(now: Dictionary, defs: GameDefs) -> Dictionary:
+	var d := now.duplicate(true)
+	var bad := ""
+	for pair in defs.boss_spawns():
+		var fs: Dictionary = d.get("floor_states", {})
+		if not fs.has(pair[0]):
+			continue
+		var foes: Dictionary = fs[pair[0]]["world"]["foes"]
+		var sp: FloorModel.FoeSpawn = defs.floors[pair[0]].foes[pair[1]]
+		var want := {"at": [sp.at.x, sp.at.y], "facing": Dir.name_of(sp.facing), "state": "idle", "path_i": 0, "dir": 1, "stun": 0, "day": 0}
+		if not foes.has(pair[1]):
+			bad = "%s 에 보스 %s 기록이 없다" % [pair[0], pair[1]]
+		elif JSON.stringify(JSON.parse_string(JSON.stringify(foes[pair[1]])), "", true) != JSON.stringify(JSON.parse_string(JSON.stringify(want)), "", true):
+			bad = "%s 보스 %s 기록이 처음 상태가 아니다: %s" % [pair[0], pair[1], str(foes[pair[1]])]
+		foes.erase(pair[1])
+	return {"state": d, "bad": bad}
+
+
+## 미궁 층으로 바로 옮긴다(시험 준비용, M3 A9): 장소 미궁, 층 기록(없으면 만든다), 층 들어서기의 FOE 처음 자리, 위치·방향, 위험도 0, 그 칸 기록.
+## 규칙 행동이 아니다: 걸어서 가는 길이 이미 시험된 자리(공략 끝·봉인 앞)에 다시 설 때만 쓴다.
+static func to_floor(s: ExplorationState, fid: String, at: Vector2i, facing: int) -> void:
+	s.location = ExplorationState.LABYRINTH
+	s.enter_floor(s.defs.floor_by_id(fid))
+	FoeRules.enter_floor(s)
+	s.party.at = at
+	s.party.facing = facing
+	s.encounter.danger = 0
+	ExplorationRules.record_cell(s, at, "full")
+
+
+## 마을로 바로 옮긴다(시험 준비용): 첫 층 시작 칸, 장소 마을, 위험도 0. 비콘·입구 문으로 돌아온 것과 같은 자리다.
+static func to_town(s: ExplorationState) -> void:
+	var first := s.defs.first_floor()
+	s.enter_floor(first)
+	s.party.at = first.start_at
+	s.party.facing = first.start_facing
+	s.location = ExplorationState.TOWN
+	s.encounter.danger = 0
+
+
+## 행동 하나(규칙 + 의뢰 관찰). 전투 대기가 되면 승리로 끝내고 그 끝도 관찰한다. 행동 이벤트를 돌려준다.
+static func act(s: ExplorationState, action: int) -> Array[Dictionary]:
+	var ev := ExplorationRules.apply(s, action, "full")
+	QuestRules.observe(s, ev)
+	if s.encounter.pending:
+		var fin: Array[Dictionary] = []
+		BattleRules.finish(s, "victory", fin)
+		QuestRules.observe(s, fin)
+	return ev
+
+
+## A10 갈고리(M3 A9 설계 §4.5): 마을 새 게임 → 관리국 임무 1 받기 → 미궁 → 고정 공략 전부(B3F 봉인 앞 9:2) → 마을에서 임무 1 보고·임무 2 받기
+## → B3F 10:2 에서 서쪽 한 걸음(임무 2 도착) → 마을에서 임무 2 보고(permit.boss) → 봉인 앞 9:2 서쪽. 공략 중 전투는 이겼다고 친다.
+## 마을 ↔ 미궁 이동은 to_town·to_floor(이미 걸은 길을 다시 걷지 않는다). 받기·보고는 실제 의뢰 규칙이다.
+static func walk_to_boss(defs: GameDefs, seed_value: int) -> ExplorationState:
+	var s := ExplorationRules.new_game(defs, seed_value, "full", true)
+	assert(QuestRules.accept(s, "mission.permit_b2f", "council")[0]["type"] != "rejected")
+	act(s, ExplorationRules.Action.ENTER)
+	var acts: Array = JSON.parse_string(FileAccess.get_file_as_string("res://data/floors/arbor_route.json"))["actions"]
+	for i in acts.size():
+		if acts[i] == "stairs" and not s.flags.has("permit.b2f") and s.floor_def.id == "b1f":
+			var back := [s.party.at, s.party.facing]
+			to_town(s)
+			assert(QuestRules.report(s, "mission.permit_b2f", "council")[0]["type"] != "rejected")
+			to_floor(s, "b1f", back[0], back[1])
+		act(s, ExplorationRules.action_from_name(acts[i]))
+	assert(s.floor_def.id == "b3f" and s.party.at == Vector2i(9, 2))
+	to_town(s)
+	assert(QuestRules.accept(s, "mission.boss_seal", "council")[0]["type"] != "rejected")
+	to_floor(s, "b3f", Vector2i(10, 2), Dir.W)
+	act(s, ExplorationRules.Action.FORWARD)
+	to_town(s)
+	assert(QuestRules.report(s, "mission.boss_seal", "council")[0]["type"] != "rejected")
+	to_floor(s, "b3f", Vector2i(9, 2), Dir.W)
+	return s
+
+
 ## 11판 문서에서 4판 문서를 만든다(머리 4·"m3s", 지금 층 기록을 state 바로 아래로, floor_states 없음, as_v10 의 대원). 층 하나만 들어가 본 상태여야 한다.
 static func as_v4(doc: Dictionary) -> Dictionary:
 	var d := as_v10(doc) if int(doc["schema"]) >= 11 else doc.duplicate(true)
@@ -235,7 +315,8 @@ static func clean_saves() -> void:
 const FRESH_FOES := {
 	"b1f": {"f1": {"at": [12, 9], "facing": "E", "state": "patrol", "path_i": 0, "dir": 1, "stun": 0, "day": 0}},
 	"b2f": {"f2": {"at": [5, 10], "facing": "W", "state": "idle", "path_i": 0, "dir": 1, "stun": 0, "day": 0}},
-	"b3f": {"f3": {"at": [16, 3], "facing": "N", "state": "idle", "path_i": 0, "dir": 1, "stun": 0, "day": 0}},
+	"b3f": {"f3": {"at": [16, 3], "facing": "N", "state": "idle", "path_i": 0, "dir": 1, "stun": 0, "day": 0},
+		"boss": {"at": [4, 2], "facing": "E", "state": "idle", "path_i": 0, "dir": 1, "stun": 0, "day": 0}},  # M3 A9 보스(처음 자리·방향, 움직이지 않음)
 }
 
 

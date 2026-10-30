@@ -1,0 +1,170 @@
+{
+  "enemies": [
+    {
+      "id": "enemy.boss_fenrir",
+      "name_key": "enemy.boss_fenrir",
+      "max_hp": 1800,
+      "stats": {
+        "STR": 48,
+        "INT": 30,
+        "VIT": 30,
+        "WIS": 22,
+        "AGI": 22,
+        "LUC": 14
+      },
+      "resist": {
+        "slash": 1000,
+        "pierce": 1000,
+        "bash": 1000,
+        "fire": 1000,
+        "ice": 1500,
+        "volt": 500
+      },
+      "ailment_vuln": {
+        "poison": 700,
+        "paralysis": 500,
+        "sleep": 300,
+        "confusion": 300,
+        "blind": 700
+      },
+      "bind_vuln": {
+        "head": 700,
+        "arm": 700,
+        "leg": 500
+      },
+      "on_bound": "switch",
+      "exp": 1500,
+      "ai": [
+        {
+          "if": {
+            "charging": true
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.thunder_lunge",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {
+            "hp_below": 500,
+            "turn_mod": [
+              3,
+              1
+            ]
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.coil_charge",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {
+            "hp_below": 500,
+            "turn_mod": [
+              3,
+              0
+            ]
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.overclock",
+              "weight": 1,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.static_howl",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {
+            "hp_below": 500
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.fenrir_fang",
+              "weight": 3,
+              "target": "lowest_hp"
+            },
+            {
+              "skill": "skill.enemy.fenrir_rend",
+              "weight": 2,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {
+            "turn_mod": [
+              5,
+              4
+            ]
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.coil_charge",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {
+            "turn_mod": [
+              5,
+              2
+            ]
+          },
+          "use": [
+            {
+              "skill": "skill.enemy.neon_glare",
+              "weight": 2,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.static_howl",
+              "weight": 1,
+              "target": "random"
+            }
+          ]
+        },
+        {
+          "if": {},
+          "use": [
+            {
+              "skill": "skill.enemy.fenrir_fang",
+              "weight": 3,
+              "target": "random"
+            },
+            {
+              "skill": "skill.enemy.fenrir_rend",
+              "weight": 2,
+              "target": "random"
+            }
+          ]
+        }
+      ],
+      "drops": [
+        {
+          "item": "item.fenrir_core",
+          "chance": 1000
+        },
+        {
+          "item": "item.fenrir_fang",
+          "chance": 1000,
+          "if": {
+            "killed_while_bound": "head"
+          }
+        }
+      ]
+    }
+  ]
+}

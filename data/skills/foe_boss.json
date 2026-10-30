@@ -1,0 +1,163 @@
+{
+  "skills": [
+    {
+      "id": "skill.enemy.fenrir_fang",
+      "name_key": "skill.enemy.fenrir_fang",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_one",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "pierce",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 150,
+          "accuracy": 950
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.fenrir_rend",
+      "name_key": "skill.enemy.fenrir_rend",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "melee",
+      "target": "enemy_row",
+      "parts": [
+        "arm"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "STR",
+      "element": "slash",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 100,
+          "accuracy": 950,
+          "bind": {
+            "part": "leg",
+            "chance": 350,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.static_howl",
+      "name_key": "skill.enemy.static_howl",
+      "user": "enemy",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_all",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 0,
+          "ailment": {
+            "id": "confusion",
+            "chance": 300,
+            "turns": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.neon_glare",
+      "name_key": "skill.enemy.neon_glare",
+      "user": "enemy",
+      "effect": "ailment",
+      "range": "ranged",
+      "target": "enemy_row",
+      "parts": [
+        "head"
+      ],
+      "priority": "normal",
+      "speed": 1000,
+      "sure_hit": true,
+      "levels": [
+        {
+          "tp": 0,
+          "ailment": {
+            "id": "blind",
+            "chance": 500,
+            "turns": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.overclock",
+      "name_key": "skill.enemy.overclock",
+      "user": "enemy",
+      "effect": "buff",
+      "range": "ranged",
+      "target": "self",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "levels": [
+        {
+          "tp": 0,
+          "kind": "phys_atk",
+          "value": 1300,
+          "turns": 3
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.coil_charge",
+      "name_key": "skill.enemy.coil_charge",
+      "user": "enemy",
+      "effect": "charge",
+      "range": "ranged",
+      "target": "self",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "charges": "skill.enemy.thunder_lunge",
+      "levels": [
+        {
+          "tp": 0
+        }
+      ]
+    },
+    {
+      "id": "skill.enemy.thunder_lunge",
+      "name_key": "skill.enemy.thunder_lunge",
+      "user": "enemy",
+      "effect": "damage",
+      "range": "ranged",
+      "target": "enemy_all",
+      "parts": [],
+      "priority": "normal",
+      "speed": 1000,
+      "stat": "INT",
+      "element": "volt",
+      "can_crit": true,
+      "sure_hit": false,
+      "levels": [
+        {
+          "tp": 0,
+          "power": 150,
+          "accuracy": 950
+        }
+      ]
+    }
+  ]
+}

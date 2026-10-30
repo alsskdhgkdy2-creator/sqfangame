@@ -112,6 +112,8 @@ static func tick(s: ExplorationState, events: Array[Dictionary]) -> Dictionary:
 		if fs.stun > 0:
 			fs.stun -= 1
 			continue
+		if sp.kind == "boss":
+			continue  # 보스(M3 A9)는 움직이지도 돌지도 않고 맞닿아도 전투를 열지 않는다(부딪힘·조사 → 물음 → FIGHT)
 		if sp.kind == "guard":
 			fresh_guards.append(sp.id)
 			continue
@@ -212,7 +214,7 @@ static func _join_candidates(s: ExplorationState, dist: Dictionary) -> Array[Dic
 	var out: Array[Dictionary] = []
 	for sp in s.floor_def.foe_list():
 		var fs: WorldState.FoeState = s.world.foes.get(sp.id)
-		if sp.kind == "guard" or sp.join <= 0 or fs == null or not fs.alive() or not JOIN_FROM.has(fs.state) or fs.stun > 0:
+		if sp.kind == "guard" or sp.kind == "boss" or sp.join <= 0 or fs == null or not fs.alive() or not JOIN_FROM.has(fs.state) or fs.stun > 0:
 			continue
 		if dist.has(fs.at) and int(dist[fs.at]) <= sp.join:
 			out.append({"sp": sp, "fs": fs, "d": int(dist[fs.at])})
@@ -276,7 +278,7 @@ static func join_eta(s: ExplorationState) -> Array[Dictionary]:
 
 ## 전투가 끝날 때(BattleRules.finish 가 battle 을 지우기 전에, 설계 §4.5). 승리면 전투의 FOE 는 쓰러짐(day), 도주면 그 자리에서
 ## ESCAPE_STUN 걸음 쉬고 종류대로(순회 return·추적 chase·문지기 idle). 걷던(join) FOE 는 승리·도주 모두 순회 return, 추적은 거리가
-## chase 안이면 chase 아니면 return. 전멸이면 자리·방향은 그대로 두고 전투에서만 빠진다(도주와 같은 상태, 쉬지 않음): 전멸 상태도 저장되므로
+## chase 안이면 chase 아니면 return. 전멸이면 자리·방향은 그대로 두고 전투에서만 빠진다(도주와 같은 상태, 쉬지 않음: 남은 쉼도 0): 전멸 상태도 저장되므로
 ## battle·join 이 전투 없이 남지 않게 한다(finish 의 「받은 끝 상태는 늘 저장할 수 있다」, 설계 §4.5 「그대로」를 고쳐 읽음).
 static func battle_over(s: ExplorationState, outcome: String, events: Array[Dictionary]) -> void:
 	if not enabled or s.battle == null or s.in_town():
@@ -290,7 +292,8 @@ static func battle_over(s: ExplorationState, outcome: String, events: Array[Dict
 			continue
 		if outcome == "wiped":
 			if fs.state == "battle" or fs.state == "join":
-				fs.state = {"patrol": "return", "chase": "chase", "guard": "idle"}[sp.kind]
+				fs.state = {"patrol": "return", "chase": "chase", "guard": "idle", "boss": "idle"}[sp.kind]
+				fs.stun = 0  # 전멸이면 쉬지 않는다(05 §19.3): 앞 도주·턴 상한에서 남은 쉼도 지운다(M3 A9a 검토 L1, 쉬는 FOE 에 부딪혀 연 전투)
 			continue
 		if fs.state == "battle":
 			if outcome == "victory":
@@ -300,7 +303,7 @@ static func battle_over(s: ExplorationState, outcome: String, events: Array[Dict
 				events.append({"type": "foe_defeated", "foe": sp.id})
 			else:
 				fs.stun = ESCAPE_STUN
-				fs.state = {"patrol": "return", "chase": "chase", "guard": "idle"}[sp.kind]
+				fs.state = {"patrol": "return", "chase": "chase", "guard": "idle", "boss": "idle"}[sp.kind]
 		elif fs.state == "join":
 			if sp.kind == "chase":
 				if not have_dist:
@@ -381,6 +384,36 @@ static func _free(s: ExplorationState, c: Vector2i, except: String) -> bool:
 		if id != except and o.alive() and o.at == c:
 			return false
 	return true
+
+
+## 지금 층에서 파티 칸과 열린 경계로 맞닿은 살아 있는(전투에 들지 않은) 보스(M3 A9)의 id. d 가 0~3 이면 그쪽 이웃만 본다. 없으면(마을 포함) "".
+static func boss_near(s: ExplorationState, d: int = -1) -> String:
+	if s.in_town() or s.floor_def == null:
+		return ""
+	var f := s.floor_def
+	for sp in f.foe_list():
+		if sp.kind != "boss":
+			continue
+		var fs: WorldState.FoeState = s.world.foes.get(sp.id)
+		if fs == null or not fs.alive() or fs.state == "battle":
+			continue
+		for dd in 4:
+			if (d < 0 or dd == d) and s.party.at + Dir.vec(dd) == fs.at and f.edge_kind(FloorModel.edge_of(s.party.at, dd)) == FloorModel.Edge.OPEN:
+				return sp.id
+	return ""
+
+
+## 보스를 쓰러뜨린 층(M3 A9 클리어 기록): 층 기록의 보스 FOE 가 defeated 인 층 id(정렬). 보스는 되살아나지 않는다(respawn never).
+static func cleared(s: ExplorationState) -> Array[String]:
+	var out: Array[String] = []
+	for fid in s.floor_states:
+		var r: FloorState = s.floor_states[fid]
+		for sp in r.floor_def.foe_list():
+			var fs: WorldState.FoeState = r.world.foes.get(sp.id)
+			if sp.kind == "boss" and fs != null and fs.state == "defeated" and not out.has(fid):
+				out.append(fid)
+	out.sort()
+	return out
 
 
 ## 위협 색 단계(설계 §5.4): FOE 레벨 − 대원 최고 레벨이 5 이상 red, 0~4 orange, 0 미만 yellow.
