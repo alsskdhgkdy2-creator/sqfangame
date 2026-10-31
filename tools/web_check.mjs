@@ -33,9 +33,12 @@
 // M3 A8b: I = 정보상 바·관리국 의뢰(web_check_part_i.mjs, 실제 미궁): 임무 받기·계단 칸 임무 안내·허가 안내·보고 결과·이끼 수프·새로 고침·숙박 뒤 다시 받기.
 // M3 A9b: J = 제1계층 보스(web_check_part_j.mjs, 실제 미궁): 고정 저장 가져오기·봉인 열기·보스 물음(「아니오」 처음)·보스 전투·전투 중 새로 고침·
 //   이야기 상자 세 쪽·클리어·새로 고침·보스 방 비콘 거부.
-// 실행: flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/web_check.mjs [너비x높이] [a|b|c|d|e|f|g|h|i|j|all]  (기본 all = A, B, C, D, E, F, G, H, I, J 차례)
+// M3 A10a: K1~K4 = 새 게임부터 보스 처치·기록·불러오기까지 한 이야기(web_check_part_k.mjs, 실제 미궁). 네 부분이 이어 돈다 — 한 부분을 5분 안에 끝내려고 나눴고,
+//   부분 사이에 브라우저를 닫아도 크로미움 프로필(KEEP_PROFILE, 기본 /tmp/sqfangame-web-check-profile)의 IndexedDB 가 남아 다음 부분이 실제 새로 열기로 시작한다(k1 이 프로필을 비운다).
+//   차례대로(k1 → k2 → k3 → k4) 따로 돌린다. 걷기 자취는 build/check/k_trace.json, 부분 사이 상태는 build/check/k_state.json.
+// 실행: flock /tmp/voxel-test-heavy.lock xvfb-run -a node tools/web_check.mjs [너비x높이] [a|b|c|d|e|f|g|h|i|j|k1|k2|k3|k4|all]  (기본 all = A, B, C, D, E, F, G, H, I, J, K1, K2, K3, K4 차례)
 // 결과: build/check/ 에 캡처·내보낸 파일, 부분마다 report_a.json·report_b.json, 이번 실행 전체 report.json.
-import { runPart, finish } from './web_check_common.mjs';
+import { runPart, finish, KEEP_PROFILE } from './web_check_common.mjs';
 import { partA } from './web_check_part_a.mjs';
 import { partB } from './web_check_part_b.mjs';
 import { partC } from './web_check_part_c.mjs';
@@ -46,14 +49,17 @@ import { partG } from './web_check_part_g.mjs';
 import { partH } from './web_check_part_h.mjs';
 import { partI } from './web_check_part_i.mjs';
 import { partJ } from './web_check_part_j.mjs';
+import { partK1, partK2, partK3, partK4 } from './web_check_part_k.mjs';
 
 const which = (process.argv[3] ?? 'all').toLowerCase();
 // 부분 이름은 이 목록에만 있다(Map: 「constructor」 같은 객체 기본 이름이 부분으로 통과하지 않는다). 브라우저를 띄우기 전에 거른다.
 // 값 = [본문, 층 묶음].
-const PARTS = new Map([['a', [partA, 'test']], ['b', [partB, 'test']], ['c', [partC, 'test']], ['d', [partD, 'game']], ['e', [partE, 'test']], ['f', [partF, 'game']], ['g', [partG, 'game']], ['h', [partH, 'game']], ['i', [partI, 'game']], ['j', [partJ, 'game']]]);
+const PARTS = new Map([['a', [partA, 'test']], ['b', [partB, 'test']], ['c', [partC, 'test']], ['d', [partD, 'game']], ['e', [partE, 'test']], ['f', [partF, 'game']], ['g', [partG, 'game']], ['h', [partH, 'game']], ['i', [partI, 'game']], ['j', [partJ, 'game']],
+  ['k1', [partK1, 'game', { profile: KEEP_PROFILE, fresh: true }]], ['k2', [partK2, 'game', { profile: KEEP_PROFILE }]],
+  ['k3', [partK3, 'game', { profile: KEEP_PROFILE }]], ['k4', [partK4, 'game', { profile: KEEP_PROFILE }]]]);
 const names = which === 'all' ? [...PARTS.keys()] : [which];
 if (!names.every((n) => PARTS.has(n))) {
-  console.log(`모르는 부분: ${which}\n사용: node tools/web_check.mjs [너비x높이] [a|b|c|d|e|f|g|h|i|all]`);
+  console.log(`모르는 부분: ${which}\n사용: node tools/web_check.mjs [너비x높이] [a|b|c|d|e|f|g|h|i|j|k1|k2|k3|k4|all]`);
   process.exit(2);
 }
 for (const n of names) await runPart(n, ...PARTS.get(n));

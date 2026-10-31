@@ -28,14 +28,14 @@ let baseUrl = '';
 // 부분의 층 묶음(M3 A3): 'test' = 시험 층(f1_test·f2_test, 주소에 &set=test, 저장 폴더 saves_test), 'game' = 실제 미궁(저장 폴더 saves).
 export let saveDir = 'saves';
 export const autoKey = () => `/userfs/sqfangame/${saveDir}/auto.json`;
-async function startServer() {
+async function startServer(port = 0) {
   server = http.createServer((req, res) => {
     const p = path.join(root, decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/$/, '/index.html'));
     if (!p.startsWith(root) || !fs.existsSync(p)) { res.writeHead(404).end(); return; }
     res.writeHead(200, { 'Content-Type': types[path.extname(p)] ?? 'application/octet-stream' });
     fs.createReadStream(p).pipe(res);
   });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  await new Promise((r) => server.listen(port, '127.0.0.1', r));
   baseUrl = `http://127.0.0.1:${server.address().port}/?debug=1&seed=${SEED}`;
 }
 
@@ -302,19 +302,37 @@ export async function finishBattle(s, shotResult) {
   return s;
 }
 
+// 이어 도는 부분(M3 A10 웹 K)의 크로미움 프로필 폴더: 부분 사이에 브라우저를 닫아도 IndexedDB(자동 저장)가 남아, 다음 부분이 실제 새로 열기로 시작한다.
+export const KEEP_PROFILE = process.env.WEB_CHECK_PROFILE ?? '/tmp/sqfangame-web-check-profile';
+const KEEP_PORT = Number(process.env.WEB_CHECK_PORT ?? 38417);
+const launchProfile = (dir) => chromium.launchPersistentContext(dir, {
+  executablePath: '/usr/bin/chromium',
+  headless: false,
+  args: ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote', '--mute-audio',
+    '--ignore-gpu-blocklist', '--use-gl=angle', '--use-angle=gl'],
+  viewport: { width: W, height: H },
+  deviceScaleFactor: 1,
+  acceptDownloads: true,
+});
+
 // 부분 하나를 새 브라우저에서 돌린다. 오류는 그 부분 이름을 붙여 남기고 다음 부분은 그대로 돈다.
 // set = 'test'(시험 층, &set=test) 또는 'game'(실제 미궁).
-export async function runPart(name, body, set = 'test') {
+// opts.profile = 크로미움 프로필 폴더(이어 도는 부분: 브라우저를 닫아도 IndexedDB 가 남는다). opts.fresh 면 시작 전에 그 폴더를 비운다.
+export async function runPart(name, body, set = 'test', opts = {}) {
   part = name;
   saveDir = set === 'test' ? 'saves_test' : 'saves';
   const t0 = Date.now();
   const n0 = report.checks.length;
   const e0 = report.errors.length;
-  if (!server) await startServer();
+  // 이어 도는 부분은 부분마다 새 프로세스라 주소의 포트가 같아야 IndexedDB 의 출처(origin)가 같다.
+  if (!server) await startServer(opts.profile ? KEEP_PORT : 0);
   url = baseUrl + (set === 'test' ? '&set=test' : '');
-  const browser = await launchBrowser();
+  if (opts.profile && opts.fresh) fs.rmSync(opts.profile, { recursive: true, force: true });
+  const ctx = opts.profile ? await launchProfile(opts.profile) : null;
+  const browser = ctx ?? await launchBrowser();
   try {
-    page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1, acceptDownloads: true });
+    page = ctx ? (ctx.pages()[0] ?? await ctx.newPage())
+      : await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1, acceptDownloads: true });
     page.on('console', (m) => { if (m.type() === 'error' || /CONTEXT_LOST/.test(m.text())) report.errors.push(`[${name}] ${m.text()}`); });
     page.on('pageerror', (e) => report.errors.push(`[${name}] ${String(e)}`));
     await page.goto(url);

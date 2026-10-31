@@ -51,7 +51,7 @@ if [ "$force" = 0 ]; then
   done < <(changed_files origin/main)
   if [ ${#sim[@]} -eq 0 ]; then
     echo "origin/main 과 갈라진 곳부터 시뮬레이션 범위 변경이 없어 클라우드 시험 대상이 아닙니다." >&2
-    echo "이 기기에서 바로: timeout 600 godot --headless -s tests/run.gd   (그래도 클라우드로 보내려면 --force)" >&2
+    echo "이 기기에서 바로: timeout 900 godot --headless -s tests/run.gd   (그래도 클라우드로 보내려면 --force)" >&2
     exit 3
   fi
   echo "시뮬레이션 범위 변경 ${#sim[@]}개: ${sim[*]:0:4}$([ ${#sim[@]} -gt 4 ] && echo ' …')"
